@@ -185,13 +185,20 @@ paths:                # subpaths inside .boardown/
 ## MVP roadmap
 
 High-level only — each item will get its own planning round before
-implementation. Order is roughly the order to build, but bottom-up across
-`packages/core` first, then `packages/web`.
+implementation. The build order is bottom-up: `packages/core` (pure logic),
+then `packages/ui` (the React app, platform-agnostic), then `packages/web`
+(the browser shell that wires `ui` to the File System Access API).
+
+The split between `ui` and `web` exists so the same React app can later be
+embedded in a VS Code extension or an Electron build by swapping only the
+shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 ### Bootstrap
 
 - [x] Initialise pnpm workspace, base `tsconfig`, lint/format tooling
 - [x] Set up `packages/core` and `packages/web` with build/test scripts
+- [ ] Add `packages/ui` (React, no DOM-only APIs) with build/test scripts;
+      slim `packages/web` down to a shell that mounts `@boardown/ui`
 
 ### `packages/core`
 
@@ -204,21 +211,31 @@ implementation. Order is roughly the order to build, but bottom-up across
 - [ ] ID generator with config counter + startup verification scan
 - [ ] Config loader/saver with strict validation
 
-### `packages/web`
+### `packages/ui`
 
-- [ ] Vite + React app skeleton
-- [ ] `BrowserFsAdapter` on top of the FS Access API
-- [ ] Zustand store wired to `core`
-- [ ] Folder-picker entry screen
-- [ ] "Create board" dialog (asks ID prefix, writes default config)
+- [ ] App entry component `<App fs={...} />` that takes an `FsAdapter` as a
+      prop / context — no `window`, `document`, or FS Access API imports
+- [ ] Zustand store wired to `core` (loads/saves via the supplied adapter)
 - [ ] Tab bar: Backlog + releases + "+ New release"
 - [ ] Board view with status columns + `@dnd-kit` reordering & status changes
 - [ ] Cross-tab drag & drop (move task to another release / backlog)
 - [ ] Epics view
 - [ ] Task editor (title, description, status, epic)
-- [ ] Refresh on window focus + manual reload button
-- [ ] `lastModified` conflict modal on save
+- [ ] "Create board" dialog (asks ID prefix, asks the shell to write the
+      default config via the adapter)
+- [ ] "Create release" dialog
+- [ ] Generic "external change" conflict modal (Reload / Overwrite),
+      triggered by the shell on save conflicts
+- [ ] Reload button + imperative `reload()` API the shell can call
 - [ ] Error banner + problem-card rendering for parse errors
+
+### `packages/web`
+
+- [ ] Vite + React app skeleton that mounts `@boardown/ui`
+- [ ] `BrowserFsAdapter` on top of the FS Access API, including
+      `lastModified` stat for the conflict-detection flow
+- [ ] Folder-picker entry screen (`showDirectoryPicker`)
+- [ ] Refresh on `window.focus` and `visibilitychange` → calls `ui.reload()`
 
 ### Quality
 
