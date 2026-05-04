@@ -190,8 +190,8 @@ implementation. Order is roughly the order to build, but bottom-up across
 
 ### Bootstrap
 
-- [ ] Initialise pnpm workspace, base `tsconfig`, lint/format tooling
-- [ ] Set up `packages/core` and `packages/web` with build/test scripts
+- [x] Initialise pnpm workspace, base `tsconfig`, lint/format tooling
+- [x] Set up `packages/core` and `packages/web` with build/test scripts
 
 ### `packages/core`
 
