@@ -3,3 +3,7 @@ export * from './problems.js';
 export * from './parser.js';
 export * from './serializer.js';
 export * from './fs-adapter.js';
+export * from './id-generator.js';
+export * from './board-ops.js';
+export * from './config.js';
+export * from './loader.js';

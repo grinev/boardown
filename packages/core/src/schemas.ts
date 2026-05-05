@@ -54,13 +54,17 @@ export const EpicSchema = z.object({
 });
 export type Epic = z.infer<typeof EpicSchema>;
 
-export const BoardConfigSchema = z.object({
-  idPrefix: z.string().min(1),
-  nextId: z.number().int().nonnegative(),
-  statuses: z.array(z.string().min(1)).min(1),
-  paths: z.object({
-    releases: z.string().min(1),
-    epics: z.string().min(1),
-  }),
-});
+export const BoardConfigSchema = z
+  .object({
+    idPrefix: z.string().min(1),
+    nextId: z.number().int().nonnegative(),
+    statuses: z.array(z.string().min(1)).min(1),
+    paths: z
+      .object({
+        releases: z.string().min(1),
+        epics: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict();
 export type BoardConfig = z.infer<typeof BoardConfigSchema>;

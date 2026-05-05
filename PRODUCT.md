@@ -206,10 +206,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] Markdown parser + serializer (frontmatter + H2 sections, lenient)
 - [x] Structured parse-error reporting (per file, per task)
 - [x] `FsAdapter` interface (`read` / `write` / `list` / `stat`)
-- [ ] Board operations: load, move task between releases, change status,
+- [x] Board operations: load, move task between releases, change status,
       reorder, create / edit / delete task
-- [ ] ID generator with config counter + startup verification scan
-- [ ] Config loader/saver with strict validation
+- [x] ID generator with config counter + startup verification scan
+- [x] Config loader/saver with strict validation
 
 ### `packages/ui`
 
