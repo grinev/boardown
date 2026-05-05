@@ -59,6 +59,13 @@ importers:
         version: 2.1.9(@types/node@20.19.39)
 
   packages/ui:
+    dependencies:
+      '@boardown/core':
+        specifier: workspace:*
+        version: link:../core
+      zustand:
+        specifier: ^5.0.0
+        version: 5.0.13(@types/react@18.3.28)(react@18.3.1)
     devDependencies:
       '@types/react':
         specifier: ^18.3.18
@@ -75,6 +82,9 @@ importers:
 
   packages/web:
     dependencies:
+      '@boardown/core':
+        specifier: workspace:*
+        version: link:../core
       '@boardown/ui':
         specifier: workspace:*
         version: link:../ui
@@ -85,6 +95,9 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@types/node':
+        specifier: ^20.17.10
+        version: 20.19.39
       '@types/react':
         specifier: ^18.3.18
         version: 18.3.28
@@ -1960,6 +1973,24 @@ packages:
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
+  zustand@5.0.13:
+    resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -3943,3 +3974,8 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@4.4.3: {}
+
+  zustand@5.0.13(@types/react@18.3.28)(react@18.3.1):
+    optionalDependencies:
+      '@types/react': 18.3.28
+      react: 18.3.1

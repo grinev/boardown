@@ -15,6 +15,10 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
+  "dependencies": {
+    "@boardown/core": "workspace:*",
+    "zustand": "^5.0.0"
+  },
   "devDependencies": {
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

@@ -63,6 +63,13 @@ the MVP and should not be planned for unless explicitly requested. When they
 arrive, each is a sibling shell next to `web` and reuses `@boardown/ui`
 unchanged — only the `FsAdapter` implementation and entry flow differ.
 
+In dev mode `packages/web` ships a small Vite middleware that exposes
+`/api/fs/{read,list,stat,write}` over HTTP, scoped to the repo's own
+`.boardown/` folder, plus a `DevHttpFsAdapter` that talks to those
+endpoints. This is a development shortcut for booting the app from sources
+without a folder picker — it is not part of the production flow. The FS
+Access API adapter (planned) will replace it for production builds.
+
 ## Conventions
 
 - Keep `packages/core` free of any UI / browser / VS Code imports. It must be

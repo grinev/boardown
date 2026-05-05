@@ -213,10 +213,12 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 ### `packages/ui`
 
-- [ ] App entry component `<App fs={...} />` that takes an `FsAdapter` as a
+- [x] App entry component `<App fs={...} />` that takes an `FsAdapter` as a
       prop / context — no `window`, `document`, or FS Access API imports
 - [ ] Zustand store wired to `core` (loads/saves via the supplied adapter)
+      — load is wired; save / mutating actions still pending
 - [ ] Tab bar: Backlog + releases + "+ New release"
+      — basic Backlog + releases tabs landed; "+ New release" still pending
 - [ ] Board view with status columns + `@dnd-kit` reordering & status changes
 - [ ] Cross-tab drag & drop (move task to another release / backlog)
 - [ ] Epics view
@@ -231,9 +233,11 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 ### `packages/web`
 
-- [ ] Vite + React app skeleton that mounts `@boardown/ui`
+- [x] Vite + React app skeleton that mounts `@boardown/ui`
 - [ ] `BrowserFsAdapter` on top of the FS Access API, including
       `lastModified` stat for the conflict-detection flow
+      — dev-only `DevHttpFsAdapter` (Vite middleware over the repo's
+        `.boardown/`) landed as a stopgap; FS Access API adapter still pending
 - [ ] Folder-picker entry screen (`showDirectoryPicker`)
 - [ ] Refresh on `window.focus` and `visibilitychange` → calls `ui.reload()`
 

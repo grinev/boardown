@@ -65,6 +65,17 @@ The browser app needs a Chromium-based browser (Chrome, Edge, Brave, Arc) —
 it relies on the File System Access API, which Firefox and Safari do not
 support yet.
 
+### Sample board for the dev server
+
+The repo ships a `.boardown/` folder at the root with a minimal config and a
+couple of empty releases / epic. While the folder picker is not implemented
+yet, `pnpm dev` reads this folder via a small Vite middleware that exposes
+`/api/fs/{read,list,stat,write}` over HTTP. This is a dev-only shortcut so
+you can boot the app and click around without picking a folder.
+
+The first folder picker pass will replace this bridge with the FS Access API
+in production builds; the dev middleware will stay as the source-tree default.
+
 ## License
 
 [MIT](./LICENSE)

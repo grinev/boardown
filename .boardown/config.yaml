@@ -1,0 +1,9 @@
+idPrefix: BD
+nextId: 1
+statuses:
+  - todo
+  - in-progress
+  - done
+paths:
+  releases: releases
+  epics: epics
