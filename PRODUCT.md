@@ -205,7 +205,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] Zod schemas: `Task`, `Epic`, `Release`, `BoardConfig`
 - [x] Markdown parser + serializer (frontmatter + H2 sections, lenient)
 - [x] Structured parse-error reporting (per file, per task)
-- [ ] `FsAdapter` interface (`read` / `write` / `list` / `stat`)
+- [x] `FsAdapter` interface (`read` / `write` / `list` / `stat`)
 - [ ] Board operations: load, move task between releases, change status,
       reorder, create / edit / delete task
 - [ ] ID generator with config counter + startup verification scan
