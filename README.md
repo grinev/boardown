@@ -26,18 +26,25 @@ Install dependencies once:
 pnpm install
 ```
 
-The repo is a pnpm workspace with two packages:
+The repo is a pnpm workspace with three packages:
 
 - [`packages/core`](./packages/core) — platform-agnostic logic (schemas,
   parser, board operations). Pure TypeScript, runs in Node.
-- [`packages/web`](./packages/web) — React + Vite browser app.
+- [`packages/ui`](./packages/ui) — the React app: components, Zustand store,
+  UI flow. Takes an `FsAdapter` as input, knows nothing about the host.
+  Source-only (consumed directly by the shell's bundler).
+- [`packages/web`](./packages/web) — slim browser shell: Vite app, the FS
+  Access API adapter, folder picker. Mounts `@boardown/ui`.
+
+A future `packages/vscode` and `packages/electron` will be additional shells
+next to `web`, reusing `@boardown/ui` unchanged.
 
 ### Common scripts (run from the repo root)
 
 | Command            | What it does                                              |
 |--------------------|-----------------------------------------------------------|
 | `pnpm dev`         | Start the web dev server (Vite, `http://localhost:5173`)  |
-| `pnpm build`       | Build every package (`tsc` for core, `vite build` for web)|
+| `pnpm build`       | Build every package that has a `build` script (core → `dist/`, web → Vite bundle; `ui` is source-only) |
 | `pnpm test`        | Run Vitest across all packages                            |
 | `pnpm typecheck`   | Run `tsc --noEmit` in every package                       |
 | `pnpm lint`        | Run ESLint over the workspace                             |

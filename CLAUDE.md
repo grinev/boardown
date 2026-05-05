@@ -34,15 +34,19 @@ License: MIT.
 The browser version uses the **File System Access API** (Chromium-only for the
 MVP) to read and write files in a local folder selected by the user.
 
-## Planned repo layout
+## Repo layout
 
 ```
 boardown/
 ├── packages/
 │   ├── core/          # platform-agnostic logic: schemas, md parser, FsAdapter
 │   │                  # interface, board operations, ID generator
-│   └── web/           # React app: BrowserFsAdapter (FS Access API),
-│                      # Zustand store, UI
+│   ├── ui/            # React app: components, Zustand store, UI flow.
+│   │                  # Takes an FsAdapter as a prop. No DOM-only / Node /
+│   │                  # VS Code imports.
+│   └── web/           # Slim browser shell: Vite app, BrowserFsAdapter on
+│                      # top of the FS Access API, folder picker entry,
+│                      # focus/visibility refresh triggers. Mounts @boardown/ui.
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -50,15 +54,30 @@ boardown/
 └── PRODUCT.md
 ```
 
+`@boardown/ui` is consumed source-only: `main`/`exports` point at
+`src/index.ts`, no separate build step. The shell's bundler (Vite for `web`,
+later esbuild/rollup for VS Code / Electron) transpiles it.
+
 A `packages/vscode` extension and an Electron build are explicit non-goals for
-the MVP and should not be planned for unless explicitly requested.
+the MVP and should not be planned for unless explicitly requested. When they
+arrive, each is a sibling shell next to `web` and reuses `@boardown/ui`
+unchanged — only the `FsAdapter` implementation and entry flow differ.
 
 ## Conventions
 
 - Keep `packages/core` free of any UI / browser / VS Code imports. It must be
   consumable from React, an extension host, or Node.
+- Keep `packages/ui` free of platform-specific imports too: no `window.*`,
+  `document.*`, `navigator.*` outside what works in any DOM host (browser
+  tab, VS Code webview, Electron renderer); no Node, no `vscode` API. The
+  `FsAdapter` and any other platform capabilities arrive via props/context
+  from the shell.
+- Shells (`web`, future `vscode`, `electron`) own platform integrations:
+  `FsAdapter` implementation, folder picker / workspace acquisition, refresh
+  triggers, OS dialogs.
 - All file system access goes through the `FsAdapter` interface defined in
-  `packages/core`. Never call `fetch`, `fs`, or browser APIs from `core`.
+  `packages/core`. Never call `fetch`, `fs`, or browser APIs from `core` or
+  `ui`.
 - Validate every parsed `frontmatter` and `config.yaml` through a Zod schema.
   Surface validation errors as structured problems (see "Lenient parsing"
   in PRODUCT.md), never throw away user data.
