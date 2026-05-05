@@ -197,14 +197,14 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 - [x] Initialise pnpm workspace, base `tsconfig`, lint/format tooling
 - [x] Set up `packages/core` and `packages/web` with build/test scripts
-- [ ] Add `packages/ui` (React, no DOM-only APIs) with build/test scripts;
+- [x] Add `packages/ui` (React, no DOM-only APIs) with build/test scripts;
       slim `packages/web` down to a shell that mounts `@boardown/ui`
 
 ### `packages/core`
 
-- [ ] Zod schemas: `Task`, `Epic`, `Release`, `BoardConfig`
-- [ ] Markdown parser + serializer (frontmatter + H2 sections, lenient)
-- [ ] Structured parse-error reporting (per file, per task)
+- [x] Zod schemas: `Task`, `Epic`, `Release`, `BoardConfig`
+- [x] Markdown parser + serializer (frontmatter + H2 sections, lenient)
+- [x] Structured parse-error reporting (per file, per task)
 - [ ] `FsAdapter` interface (`read` / `write` / `list` / `stat`)
 - [ ] Board operations: load, move task between releases, change status,
       reorder, create / edit / delete task
