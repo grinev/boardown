@@ -220,6 +220,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] Tab bar: Backlog + releases + "+ New release"
       — basic Backlog + releases tabs landed; "+ New release" still pending
 - [ ] Board view with status columns + `@dnd-kit` reordering & status changes
+      — read-only board view (status columns, sorted task cards with epic + ID
+        badges) landed for release tabs; drag & drop still pending
+- [ ] Theming foundation (CSS variables + CSS Modules, `data-theme` switch)
+      — light theme landed; dark theme & UI switcher still pending
 - [ ] Cross-tab drag & drop (move task to another release / backlog)
 - [ ] Epics view
 - [ ] Task editor (title, description, status, epic)

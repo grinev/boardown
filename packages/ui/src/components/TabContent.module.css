@@ -1,0 +1,28 @@
+.placeholder {
+  padding: 16px;
+}
+
+.placeholder h2 {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+
+.placeholder p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.releaseHeader {
+  padding: 16px 16px 0;
+}
+
+.releaseHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.error {
+  padding: 16px;
+  color: var(--banner-error-fg);
+}

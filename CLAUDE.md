@@ -90,6 +90,12 @@ Access API adapter (planned) will replace it for production builds.
   in PRODUCT.md), never throw away user data.
 - Never auto-rewrite a file the parser failed to fully understand.
 - No automated backups — git is the safety net.
+- Styling in `packages/ui`: CSS variables for the theme palette (defined in
+  `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
+  CSS Modules for component-specific styles (`Foo.module.css`). Components
+  must reference colors/typography only through `var(--…)` — never hard-code
+  hex values — so a new theme is one extra `[data-theme='dark'] { … }` block.
+  No CSS-in-JS, no Tailwind.
 - TypeScript: prefer `interface` for public shapes, `type` for unions/utility
   types. No `any`. No non-null assertions unless unavoidable and commented.
 - Comments: only when the *why* is non-obvious. Do not narrate what the code
