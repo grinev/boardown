@@ -1,0 +1,52 @@
+.app {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+}
+
+.header {
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.loading,
+.errorScreen {
+  padding: 16px;
+}
+
+.errorMessage {
+  color: var(--banner-error-fg);
+}
+
+.errorDetails {
+  white-space: pre-wrap;
+  background: var(--banner-error-bg);
+  color: var(--banner-error-fg);
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.problems {
+  padding: 16px;
+  background: var(--banner-warn-bg);
+  color: var(--banner-warn-fg);
+  border-top: 1px solid var(--banner-warn-border);
+}
+
+.problems strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.problems ul {
+  margin: 0;
+  padding-left: 20px;
+}

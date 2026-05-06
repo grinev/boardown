@@ -1,5 +1,6 @@
 import type { Release } from '@boardown/core';
 import type { ActiveTab } from '../store';
+import styles from './TabBar.module.css';
 
 interface TabBarProps {
   releases: Release[];
@@ -10,23 +11,17 @@ interface TabBarProps {
 const stripMd = (filename: string): string =>
   filename.endsWith('.md') ? filename.slice(0, -3) : filename;
 
-const tabButtonStyle = (active: boolean): React.CSSProperties => ({
-  padding: '8px 16px',
-  border: '1px solid #ccc',
-  borderBottom: active ? '2px solid #2563eb' : '1px solid #ccc',
-  background: active ? '#eff6ff' : '#fff',
-  cursor: 'pointer',
-  fontWeight: active ? 600 : 400,
-});
+const tabClass = (active: boolean): string =>
+  [styles.tab, active && styles.tabActive].filter(Boolean).join(' ');
 
 export function TabBar({ releases, activeTab, onSelect }: TabBarProps) {
   const sortedReleases = [...releases].sort((a, b) => a.filename.localeCompare(b.filename));
 
   return (
-    <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #ddd', padding: '0 8px' }}>
+    <div className={styles.bar}>
       <button
         type="button"
-        style={tabButtonStyle(activeTab.kind === 'backlog')}
+        className={tabClass(activeTab.kind === 'backlog')}
         onClick={() => onSelect({ kind: 'backlog' })}
       >
         Backlog
@@ -37,7 +32,7 @@ export function TabBar({ releases, activeTab, onSelect }: TabBarProps) {
           <button
             key={release.filename}
             type="button"
-            style={tabButtonStyle(isActive)}
+            className={tabClass(isActive)}
             onClick={() => onSelect({ kind: 'release', filename: release.filename })}
           >
             {stripMd(release.filename)}

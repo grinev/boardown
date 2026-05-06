@@ -1,0 +1,31 @@
+.bar {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
+}
+
+.tab {
+  padding: 8px 16px;
+  border: 1px solid var(--tab-border);
+  border-bottom: none;
+  background: var(--tab-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px 6px 0 0;
+  font-family: inherit;
+}
+
+.tab:hover {
+  background: var(--surface-muted);
+}
+
+.tabActive {
+  background: var(--tab-bg-active);
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px;
+}
