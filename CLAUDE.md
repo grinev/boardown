@@ -6,7 +6,9 @@ Guidance for AI assistants (Claude Code, etc.) working in this repository.
 
 **boardown** is a small open-source task board that stores its data as markdown
 files inside the project repo. It is aimed at solo developers and follows a
-lightweight scrum flow (backlog + releases + epics). The product spec lives in
+lightweight scrum flow: a Backlog plus releases with a `future → current →
+finished` lifecycle, and epics as a cross-release grouping that doubles as
+the storage container for unscheduled tasks. The product spec lives in
 [PRODUCT.md](./PRODUCT.md) — read it before making non-trivial changes.
 
 License: MIT.
@@ -31,8 +33,12 @@ License: MIT.
 - **Drag & drop:** `@dnd-kit/core`
 - **Tests:** Vitest
 
-The browser version uses the **File System Access API** (Chromium-only for the
-MVP) to read and write files in a local folder selected by the user.
+The primary MVP distribution channel is a **VS Code extension** (planned but
+not yet implemented), which reads `.boardown/` from the open workspace. The
+**browser shell (`packages/web`) is a development tool only** — it boots
+`@boardown/ui` against the repo's own `.boardown/` over a Vite middleware,
+and is not a production distribution channel for the MVP. File System Access
+API integration and a folder picker are explicit non-goals for the MVP.
 
 ## Repo layout
 
@@ -44,9 +50,11 @@ boardown/
 │   ├── ui/            # React app: components, Zustand store, UI flow.
 │   │                  # Takes an FsAdapter as a prop. No DOM-only / Node /
 │   │                  # VS Code imports.
-│   └── web/           # Slim browser shell: Vite app, BrowserFsAdapter on
-│                      # top of the FS Access API, folder picker entry,
-│                      # focus/visibility refresh triggers. Mounts @boardown/ui.
+│   └── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
+│                      # over a Vite middleware that serves the repo's own
+│                      # .boardown/, focus/visibility refresh triggers.
+│                      # Mounts @boardown/ui. No production browser deployment
+│                      # in MVP.
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -58,17 +66,19 @@ boardown/
 `src/index.ts`, no separate build step. The shell's bundler (Vite for `web`,
 later esbuild/rollup for VS Code / Electron) transpiles it.
 
-A `packages/vscode` extension and an Electron build are explicit non-goals for
-the MVP and should not be planned for unless explicitly requested. When they
-arrive, each is a sibling shell next to `web` and reuses `@boardown/ui`
+A `packages/vscode` extension is the primary MVP distribution target but
+will be implemented as a separate planning round once `packages/ui` is
+feature-complete enough to host. An Electron build is post-MVP. When either
+arrives, it is a sibling shell next to `web` and reuses `@boardown/ui`
 unchanged — only the `FsAdapter` implementation and entry flow differ.
 
-In dev mode `packages/web` ships a small Vite middleware that exposes
+`packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to the repo's own
 `.boardown/` folder, plus a `DevHttpFsAdapter` that talks to those
-endpoints. This is a development shortcut for booting the app from sources
-without a folder picker — it is not part of the production flow. The FS
-Access API adapter (planned) will replace it for production builds.
+endpoints. This is the **only** browser-side path for the MVP — it is the
+working environment for `@boardown/ui` development, not a stepping stone to
+a production browser app. A production browser shell (with the FS Access
+API or otherwise) is post-MVP and may or may not happen.
 
 ## Conventions
 

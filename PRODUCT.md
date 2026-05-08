@@ -8,52 +8,112 @@ License: MIT.
 
 ## Overview
 
-- **Target user:** solo developer who wants a simple scrum-style board next to
-  their code, with version history coming for free from git.
-- **Workflow:** a long-lived **Backlog**, plus one file per **Release**
-  (sprint), plus one file per **Epic** for cross-release work. Tasks move
-  between these via drag & drop.
+- **Target user:** solo developer who wants a simple scrum-style board next
+  to their code, with version history coming for free from git.
+- **Workflow:** a long-lived **Backlog**, plus one file per **Release**, plus
+  one file per **Epic** for cross-release work. Releases follow a
+  sprint-style lifecycle (`future → current → finished`). Tasks move between
+  these via drag & drop.
 - **Storage:** a `.boardown/` folder in the project root, containing a config
-  file and two subfolders (`releases/`, `epics/`). Everything is committed to
-  git as-is.
-- **Distribution:** browser version first (open the app, point it at a local
-  folder via the File System Access API). VS Code extension and Electron
-  build come later — out of scope for this spec.
+  file, a backlog file, and two subfolders (`releases/`, `epics/`).
+  Everything is committed to git as-is.
+- **Distribution:** the primary MVP target is a **VS Code extension** that
+  reads `.boardown/` from the open workspace. A slim browser shell exists as
+  a development tool for working on the UI from sources. An Electron build
+  is post-MVP. See "Distribution & shells" below.
 
 ## Core concepts
 
 ### Task
 A single unit of work. Fields:
 
-| Field         | Type      | Notes                                                  |
-|---------------|-----------|--------------------------------------------------------|
-| `id`          | string    | `<prefix>-<n>`, e.g. `BD-1`. Stable, never changes.    |
-| `title`       | string    | The H2 heading of the task section in the md file.     |
-| `description` | markdown  | Free-form body below the frontmatter.                  |
-| `status`      | string    | One of the values declared in `config.yaml`.           |
-| `epic`        | string?   | Slug of an epic file (without `.md`), or empty.        |
-| `order`       | integer   | Sort key within a column. Step of 100 between peers.   |
+| Field         | Type      | Notes                                                           |
+|---------------|-----------|-----------------------------------------------------------------|
+| `id`          | string    | `<prefix>-<n>`, e.g. `BD-1`. Stable, never changes.             |
+| `title`       | string    | The H2 heading of the task section in the md file.              |
+| `description` | string    | Plain text body below the frontmatter. No markdown formatting in MVP. |
+| `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
+| `status`      | string    | One of `todo`, `in-progress`, `done`. Hardcoded set.            |
+| `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
+| `order`       | integer   | Sort key within a column / list. Step of 100 between peers.     |
+
+Task types are **hardcoded** in the MVP — no per-project customization.
+Each type has a fixed icon and color baked into the app, used for the badge
+on the task card and as a filter dimension.
 
 ### Release
 A markdown file under `releases/`, e.g. `releases/1.10.md`. Holds tasks
-planned for that release/sprint. Filename (without extension) is the release
-ID shown in the tab bar.
+planned for that release. Filename (without extension) is the release slug
+shown in the UI.
+
+Release lifecycle:
+
+- **`future`** — planned ahead, not yet started. Multiple `future` releases
+  may exist; the user moves tasks into them while planning.
+- **`current`** — actively worked on. **Exactly one** release at a time may
+  be `current`. The Board view shows this release as a kanban.
+- **`finished`** — closed. Read-only by default. Lives in the Archive.
+
+Transitions:
+
+- **Start release** (`future → current`). Disallowed if another release is
+  already `current`; the user is asked to finish that one first.
+- **Complete release** (`current → finished`). If any tasks are not `done`,
+  a modal asks the user where to put each unfinished task: another future
+  release, the Backlog (with a chosen epic, or none), or leave it in the
+  finished release as a record of what did not ship.
+
+Release frontmatter fields:
+
+| Field       | Type    | Notes                                                  |
+|-------------|---------|--------------------------------------------------------|
+| `release`   | string  | The slug, mirrors the filename.                        |
+| `status`    | string  | `future` / `current` / `finished`.                     |
+| `name`      | string? | Optional human-readable name, e.g. "First public beta".|
+| `startDate` | date?   | Optional.                                              |
+| `endDate`   | date?   | Optional.                                              |
 
 ### Epic
-A markdown file under `epics/`, e.g. `epics/ui-foundation.md`. Holds tasks
-that belong to an epic but are not (yet) scheduled to a release. Tasks
-scheduled into a release still reference the epic via the `epic` field.
+A markdown file under `epics/`, e.g. `epics/ui-foundation.md`. An epic groups
+related tasks that may span multiple releases. Filename slug is the stable
+identifier referenced from tasks via the `epic` field.
+
+Each epic file is also the **storage container for that epic's unscheduled
+tasks** — tasks that belong to the epic but are not (yet) assigned to a
+release. When a task is moved into a release, it is physically relocated to
+the release file; the `epic` field on the task preserves the link.
+
+Epic frontmatter fields:
+
+| Field         | Type    | Notes                                                  |
+|---------------|---------|--------------------------------------------------------|
+| `name`        | string  | Human-readable name, e.g. "UI Foundation".             |
+| `description` | string? | Optional plain-text description.                       |
+| `color`       | string  | Hex color used for the epic badge on task cards.       |
+
+There is no separate Epics view in the UI — epics act as a filter dimension
+on the Backlog screen, and have a dedicated edit modal listing their linked
+tasks.
 
 ### Backlog
-The implicit collection of tasks not yet assigned to any release. The Backlog
-tab shows tasks living in epic files (and any future "loose" tasks file).
+The conceptual collection of all unscheduled tasks. It includes:
+
+- Tasks living in any `epics/<slug>.md` file (have an epic but no release).
+- Tasks living in `backlog.md` (have neither an epic nor a release).
+
+A single top-level `backlog.md` holds tasks without an epic, so that
+"uncategorized" tasks have a single home rather than polluting `epics/` with
+a synthetic placeholder.
 
 ## Storage format
+
+By default, everything lives under `.boardown/` at the project root:
 
 ```
 <repo root>/
 └── .boardown/
     ├── config.yaml
+    ├── backlog.md         # tasks without an epic and without a release
     ├── releases/
     │   ├── 1.10.md
     │   └── 1.11.md
@@ -62,18 +122,25 @@ tab shows tasks living in epic files (and any future "loose" tasks file).
         └── parser.md
 ```
 
+The task containers (`backlog.md`, `releases/`, `epics/`) can be relocated
+to a different folder via the `tasksDir` setting in `config.yaml` — see
+"Configuration" below. The `config.yaml` file itself always stays at
+`.boardown/config.yaml` of the project; it is the marker that boardown is
+configured for that project.
+
 ### Markdown file structure
 
-Every release/epic file holds a top-level frontmatter block describing the
-container, followed by zero or more **task sections**. Each task is an `## H2`
-heading, followed by its own frontmatter block, followed by the description
-markdown.
+Every release/epic/backlog file holds an optional top-level frontmatter block
+describing the container, followed by zero or more **task sections**. Each
+task is an `## H2` heading, followed by its own frontmatter block, followed
+by the description text.
 
 Example `releases/1.10.md`:
 
 ```markdown
 ---
 release: "1.10"
+status: current
 startDate: 2026-05-01
 endDate: 2026-05-15
 ---
@@ -84,6 +151,7 @@ endDate: 2026-05-15
 
 ---
 id: BD-1
+type: feature
 status: in-progress
 epic: ui-foundation
 order: 100
@@ -96,18 +164,20 @@ Should also support keyboard reordering for accessibility.
 
 ---
 id: BD-2
+type: tech
 status: done
 epic: parser
 order: 200
 ---
 
-Description in plain markdown. Supports **bold**, lists, `code`, etc.
+Plain-text description, no markdown formatting in MVP.
 ```
 
 Notes:
+
 - The H2 heading text is the task title.
-- The exact disambiguation between H2-as-task and H2-inside-description is an
-  implementation detail to nail down when building the parser.
+- The exact disambiguation between H2-as-task and H2-inside-description is
+  an implementation detail to nail down when building the parser.
 
 ## Configuration
 
@@ -116,78 +186,213 @@ Notes:
 ```yaml
 idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
-statuses:             # column order on the board, left to right
-  - todo
-  - in-progress
-  - done
-paths:                # subpaths inside .boardown/
-  releases: releases
-  epics: epics
+tasksDir: .           # optional, defaults to "." (same folder as config.yaml)
 ```
 
-- `nextId` is fast-path; on startup the app scans existing tasks and bumps it
-  to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
-  by hand).
-- `statuses` is fully user-configurable. Adding `review` or `blocked` is just
-  an edit to this file.
-- An invalid `config.yaml` shows a dedicated error screen — no silent
-  fallback.
+That is the entire MVP config. Statuses, status colors, and task types are
+**hardcoded** in the app; customizing them is post-MVP. Epic colors are
+user-defined per epic (see Epic frontmatter above).
 
-## Browser version
+`nextId` is fast-path; on startup the app scans existing tasks and bumps it
+to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
+by hand).
 
-- The user picks the project root folder via the FS Access API
-  (`showDirectoryPicker`). The app then reads `.boardown/` inside that folder.
-- Chromium-only for the MVP (Chrome, Edge, Brave, Arc). Firefox / Safari
-  support is out of scope.
-- Refresh strategy:
-  - On `window.focus` and `visibilitychange → visible`, reload all files.
-  - A manual **Reload** button is always available in the UI.
-- Conflict handling: before writing, the app re-stat's the file and compares
-  `lastModified` against what it had when the data was last loaded. If the
-  file changed externally, the user gets a modal: **Reload** (drop my edits)
-  or **Overwrite** (drop external edits).
-- Lenient parsing:
-  - A broken file does not block other files.
-  - A broken task does not block other tasks in the same file.
-  - Problems are surfaced in a top banner and rendered as gray "problem
-    cards" on the board.
-  - The app **never** rewrites a file it could not fully parse without an
-    explicit user confirmation.
-- No automated backups — git is the safety net.
+`tasksDir` controls **where the task containers live** (`backlog.md`,
+`releases/`, `epics/`). It is interpreted relative to the directory
+containing `config.yaml` (an absolute path is also accepted). The default
+`.` keeps tasks alongside the config inside `.boardown/`. A common
+non-default use is to keep personal todos out of the project's git history,
+e.g. `tasksDir: ../private-todos`.
+
+When `tasksDir` points outside the project's git repository, the "git is
+the safety net" guarantee no longer applies — tasks then live wherever you
+point at, with no automatic versioning. Back them up some other way if that
+matters to you.
+
+An invalid `config.yaml` shows a dedicated error screen — no silent fallback.
+
+## Distribution & shells
+
+The product is delivered as a React app (`@boardown/ui`) embedded in
+platform-specific shells. Each shell decides how the user gets to a working
+folder and provides an `FsAdapter` to read/write files there.
+
+### VS Code extension (primary MVP target)
+
+The extension reads `.boardown/` from the user's open workspace. No folder
+picker is needed: VS Code already provides the workspace concept. If the
+workspace contains multiple folders with `.boardown/`, the user picks via a
+QuickPick. If none exists, an explicit "Initialize boardown here" command
+creates the default structure.
+
+This is the canonical way to use boardown.
+
+### Browser (`packages/web`)
+
+A slim Vite app that mounts `@boardown/ui` over a small Vite middleware
+exposing the repo's own `.boardown/` over HTTP. **This is a development
+tool**, used for iterating on the UI without booting VS Code each time. It
+is not a production distribution channel for the MVP — there is no folder
+picker, no File System Access API integration. Both are explicit non-goals
+for the MVP and may or may not be added later.
+
+Refresh strategy: on `window.focus` and `visibilitychange → visible`, the
+app reloads all files. A manual **Reload** button is also available in the
+UI.
+
+### Electron (post-MVP)
+
+When it lands, it will follow the standard pattern of an IDE-class desktop
+app: a recent-folders list on launch, an "Open Folder…" menu using the OS
+native dialog, and an optional CLI argument for opening a specific folder.
+Out of scope for the MVP.
+
+## Lenient parsing
+
+- A broken file does not block other files.
+- A broken task does not block other tasks in the same file.
+- Problems are surfaced in a top banner and rendered as gray "problem cards"
+  on the board.
+- The app **never** rewrites a file it could not fully parse without an
+  explicit user confirmation.
+
+## Conflict handling
+
+Before writing, the app re-stat's the file and compares `lastModified`
+against what it had when the data was last loaded. If the file changed
+externally, the user gets a modal: **Reload** (drop my edits) or **Overwrite**
+(drop external edits).
+
+No automated backups — git is the safety net.
 
 ## UI
 
-- **Tab bar:** `Backlog | Release 1.10 | Release 1.11 | … | + New release`
-  plus an **Epics** view toggle.
-- **Board view (release / backlog):** columns by `status`, cards within each
-  column sorted by `order`. Drag & drop between columns updates `status`;
-  drag & drop between tabs/releases moves the task to the other file.
-- **Epics view:** tasks grouped by epic (read-only grouping), useful when
-  planning a new release.
-- **Task editor:** title, status, epic, description (markdown). No assignee,
-  due date, priority, or labels in the MVP.
-- **"Create board" dialog:** appears when `.boardown/` does not exist;
-  prompts for the ID prefix and writes the default `config.yaml`.
-- **"Create release" dialog:** prompts for a release name (free string).
+The app is divided into three top-level views, presented as tabs in the top
+navigation, each showing a counter (`Backlog (15)`, `Board (5/12)`,
+`Archive (4)`).
+
+### Backlog
+
+A vertical, Jira-style stack of collapsible sections (top to bottom):
+
+1. **Current release** (if any) — its tasks listed flat, with a
+   "Complete release" button on the section header.
+2. **Future releases** — one section per `future` release. Each shows a
+   "Start release" button (enabled only when no other release is currently
+   `current`).
+3. **Backlog** — all tasks with no release: tasks from `epics/*.md` and from
+   `backlog.md`, rendered as a flat list with epic badges (no nested
+   grouping).
+
+A narrow filter panel on the left side hosts:
+
+- `+ New epic` button at the top.
+- Checkboxes for each existing epic. The filter applies **globally** to all
+  three sections.
+- Future filter dimensions (type, search) live here too.
+
+Drag and drop:
+
+- Tasks can be dragged between any two sections; the file location of the
+  task changes accordingly.
+- Reordering within a section updates the `order` field.
+
+### Board
+
+A kanban with the three hardcoded status columns (`todo`, `in-progress`,
+`done`), showing **only the current release's tasks**. Drag & drop between
+columns updates the task's status; reordering within a column updates `order`.
+
+If no release is currently `current`, the Board shows an empty state pointing
+the user to start one from Backlog.
+
+### Archive
+
+The same layout as Backlog, but populated only with `finished` releases
+(newest first). No Backlog section, no current section. The epic filter
+panel remains. By default, the archive is **read-only** — tasks cannot be
+dragged out. An explicit "reopen task" action that lifts a task back to
+current/Backlog is post-MVP.
+
+### Task card
+
+Each card shows: type icon (with type color), task ID, title, epic badge
+(with the epic's color and name). The status is **not** rendered on the
+card in Backlog/Archive — it is implicit from the column on Board.
+
+### Task editor
+
+A modal dialog (Jira-style) used for both creating and editing tasks. Fields:
+
+- **Title** — required.
+- **Type** — required, one of `bug`, `feature`, `docs`, `tech`.
+- **Epic** — optional. Dropdown over existing epics; blank = no epic.
+- **Description** — plain text in MVP. No markdown formatting, no preview.
+
+When created, the task is placed in the section the user invoked `+ Create`
+from; the section determines storage location.
+
+### Epic editor
+
+A modal dialog used for both creating and editing epics. Fields:
+
+- **Name** — required, human-readable.
+- **Slug** — auto-generated from name (lowercase kebab-case); user can
+  override at creation time. Stable thereafter (renaming is a manual file
+  move).
+- **Description** — optional, plain text.
+- **Color** — required (hex), used for the epic badge on cards.
+
+Clicking an existing epic in the filter panel opens the editor with the list
+of linked tasks displayed below the form. Tasks in the list are clickable
+and open the task editor. **Delete epic** is allowed only if the epic has
+no tasks; otherwise the user is asked to move them to another epic first.
+
+### Empty states
+
+Empty states are a first-class concern. Every screen has a meaningful
+message and a clear next action when its content is absent (no current
+release, no future releases, no archived releases, no tasks under filter).
+
+## "Create board" flow
+
+When `.boardown/` does not exist, the app prompts for the ID prefix and
+writes the default structure (`config.yaml`, an empty `backlog.md`, and
+empty `releases/` and `epics/` folders).
 
 ## Out of scope (for now)
 
-- VS Code extension and Electron build (planned later, but no code or
-  scaffolding for them in the MVP).
-- AI features of any kind.
-- Real-time sync, server, or multi-user collaboration beyond what git itself
-  provides.
-- Firefox / Safari support, hosted version, mobile.
-- Assignees, due dates, priorities, labels, comments, attachments.
+- Customizable statuses and status colors (hardcoded in MVP).
+- Customizable task types.
+- Markdown formatting inside task descriptions (plain text only).
+- Search / global "list view" across all tasks including finished.
+- Reports, charts, statistics, burndown.
+- Tags / labels, sub-tasks, due dates per task, priority, time tracking,
+  comments, attachments, assignees.
+- Author / owner field on tasks. Add when a multi-user mode lands.
+- Reopening tasks from the archive (manual reopen flow).
+- UI editor for `config.yaml` (edit the file directly).
+- Archiving / hiding old finished releases on a separate screen.
 - Undo / redo history (git is the history).
-- Search across tasks.
+- Real-time sync, server, multi-user collaboration beyond what git itself
+  provides.
+- File System Access API in the browser shell — the browser shell stays
+  dev-only.
+- Firefox / Safari support, hosted version, mobile.
+- AI features of any kind.
+- VS Code extension and Electron build are deferred *implementations* — the
+  product spec covers them, but no extension/Electron code lands in MVP.
+- "Git-managed team task tracker" deployment (web as a deployable artifact
+  with a fixed folder, multi-user via git as the sync layer) — interesting
+  future direction, not in scope for v1.
 
 ## MVP roadmap
 
 High-level only — each item will get its own planning round before
 implementation. The build order is bottom-up: `packages/core` (pure logic),
 then `packages/ui` (the React app, platform-agnostic), then `packages/web`
-(the browser shell that wires `ui` to the File System Access API).
+(the dev shell that wires `ui` to a local `.boardown/` over a Vite
+middleware).
 
 The split between `ui` and `web` exists so the same React app can later be
 embedded in a VS Code extension or an Electron build by swapping only the
@@ -210,43 +415,60 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       reorder, create / edit / delete task
 - [x] ID generator with config counter + startup verification scan
 - [x] Config loader/saver with strict validation
+- [ ] Update schemas to the final concept: hardcoded `status` and `type`
+      enums on `Task`; epic with `name`/`slug`/`description`/`color`;
+      release with `status: future|current|finished` and optional dates;
+      drop user-configurable statuses from `BoardConfig`; add optional
+      `tasksDir` to `BoardConfig`
+- [ ] Resolve `tasksDir` against the config's folder (relative or absolute)
+      when locating `backlog.md`, `releases/`, `epics/`
+- [ ] Add `backlog.md` as the storage container for tasks without an epic
+- [ ] Release lifecycle operations: start release, complete release (with
+      task-relocation handling), guard the one-current-at-a-time invariant
+- [ ] Epic operations: create, edit, delete (with empty-epic guard)
 
-### `packages/ui`
+### `packages/ui` (business features)
 
-- [x] App entry component `<App fs={...} />` that takes an `FsAdapter` as a
-      prop / context — no `window`, `document`, or FS Access API imports
-- [ ] Zustand store wired to `core` (loads/saves via the supplied adapter)
-      — load is wired; save / mutating actions still pending
-- [ ] Tab bar: Backlog + releases + "+ New release"
-      — basic Backlog + releases tabs landed; "+ New release" still pending
-- [ ] Board view with status columns + `@dnd-kit` reordering & status changes
-      — read-only board view (status columns, sorted task cards with epic + ID
-        badges) landed for release tabs; drag & drop still pending
-- [ ] Theming foundation (CSS variables + CSS Modules, `data-theme` switch)
-      — light theme landed; dark theme & UI switcher still pending
-- [ ] Cross-tab drag & drop (move task to another release / backlog)
-- [ ] Epics view
-- [ ] Task editor (title, description, status, epic)
-- [ ] "Create board" dialog (asks ID prefix, asks the shell to write the
-      default config via the adapter)
-- [ ] "Create release" dialog
-- [ ] Generic "external change" conflict modal (Reload / Overwrite),
-      triggered by the shell on save conflicts
-- [ ] Reload button + imperative `reload()` API the shell can call
-- [ ] Error banner + problem-card rendering for parse errors
+- [x] App boot: load and render an existing board from a supplied `FsAdapter`
+- [ ] **Theming foundation** (CSS variables, light + dark, `data-theme` switch)
+- [ ] **Top navigation** with Backlog / Board / Archive tabs and counters
+- [ ] **Backlog screen**: stacked sections (current, future, backlog),
+      collapsible; epic filter panel on the left
+- [ ] **Board screen**: kanban for the current release with status columns;
+      empty state when no release is current
+- [ ] **Archive screen**: finished releases in the same layout as Backlog,
+      read-only by default
+- [ ] **Task editor modal** (create + edit): title, type, epic, plain-text
+      description
+- [ ] **Epic editor modal** (create + edit), with the linked-tasks list
+      shown inside the modal; deletion guard on non-empty epics
+- [ ] **Drag & drop** (`@dnd-kit`): within a kanban column, between columns
+      on Board, between sections on Backlog
+- [ ] **Release lifecycle UI**: Start release / Complete release buttons on
+      section headers; the "where to move unfinished tasks" modal on Complete
+- [ ] **Epic filter** in Backlog/Archive panel (multi-select, applies
+      globally to all sections on the screen)
+- [ ] **Empty states** for every screen and major section
+- [ ] **Initial-board flow**: when no `.boardown/` exists, prompt for ID
+      prefix and create the default structure via the adapter
+- [ ] **External-change conflict modal** (Reload / Overwrite), triggered by
+      the shell on save conflicts
+- [ ] **Reload action** + imperative `reload()` API the shell can call
+- [ ] **Parse-error UX**: top banner + gray "problem cards" for tasks that
+      could not be parsed cleanly
 
-### `packages/web`
+### `packages/web` (dev shell)
 
 - [x] Vite + React app skeleton that mounts `@boardown/ui`
-- [ ] `BrowserFsAdapter` on top of the FS Access API, including
-      `lastModified` stat for the conflict-detection flow
-      — dev-only `DevHttpFsAdapter` (Vite middleware over the repo's
-        `.boardown/`) landed as a stopgap; FS Access API adapter still pending
-- [ ] Folder-picker entry screen (`showDirectoryPicker`)
-- [ ] Refresh on `window.focus` and `visibilitychange` → calls `ui.reload()`
+- [x] `DevHttpFsAdapter` over the Vite middleware that serves the repo's
+      `.boardown/`
+- [ ] Refresh on `window.focus` and `visibilitychange → visible` calls
+      `ui.reload()`
+- [ ] Wire the conflict-detection flow end-to-end against `lastModified`
+      from the dev adapter
 
 ### Quality
 
 - [ ] Vitest smoke tests for `core` (parser round-trip, ID generator,
-      board operations)
+      board operations, lifecycle transitions)
 - [ ] Manual end-to-end pass against a sample `.boardown/` repo

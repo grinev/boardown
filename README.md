@@ -3,13 +3,14 @@
 > 🚧 **Status: work in progress.** Not ready for use yet.
 
 A local-first task board that stores its data as plain markdown files inside
-your project's git repo. Sprints, epics and tasks live in `.boardown/` next
+your project's git repo. Releases, epics and tasks live in `.boardown/` next
 to your code, so they version, branch and diff with the rest of the project —
 no cloud, no server, no account.
 
-The first target is a **browser app** (open a local folder via the File
-System Access API). A **VS Code extension** is planned next, with a possible
-Electron build later.
+The primary MVP target is a **VS Code extension** that reads `.boardown/`
+from the open workspace. The browser app in this repo (`packages/web`) is a
+development shell used to iterate on the UI from sources, not a production
+distribution channel. An Electron build is post-MVP.
 
 See [PRODUCT.md](./PRODUCT.md) for the full spec and the MVP roadmap.
 
@@ -33,11 +34,13 @@ The repo is a pnpm workspace with three packages:
 - [`packages/ui`](./packages/ui) — the React app: components, Zustand store,
   UI flow. Takes an `FsAdapter` as input, knows nothing about the host.
   Source-only (consumed directly by the shell's bundler).
-- [`packages/web`](./packages/web) — slim browser shell: Vite app, the FS
-  Access API adapter, folder picker. Mounts `@boardown/ui`.
+- [`packages/web`](./packages/web) — dev-only browser shell: Vite app that
+  mounts `@boardown/ui` over a Vite middleware which serves the repo's own
+  `.boardown/`. Used for iterating on the UI from sources.
 
-A future `packages/vscode` and `packages/electron` will be additional shells
-next to `web`, reusing `@boardown/ui` unchanged.
+A future `packages/vscode` (the primary MVP distribution target) and
+`packages/electron` (post-MVP) will be additional shells next to `web`,
+reusing `@boardown/ui` unchanged.
 
 ### Common scripts (run from the repo root)
 
@@ -61,20 +64,19 @@ pnpm --filter @boardown/core build   # only the core build
 pnpm --filter @boardown/core test    # only core tests
 ```
 
-The browser app needs a Chromium-based browser (Chrome, Edge, Brave, Arc) —
-it relies on the File System Access API, which Firefox and Safari do not
-support yet.
+The dev server runs in any modern browser — it talks to the repo's
+`.boardown/` over a local Vite middleware, so no File System Access API or
+Chromium-only feature is involved.
 
 ### Sample board for the dev server
 
 The repo ships a `.boardown/` folder at the root with a minimal config and a
-couple of empty releases / epic. While the folder picker is not implemented
-yet, `pnpm dev` reads this folder via a small Vite middleware that exposes
-`/api/fs/{read,list,stat,write}` over HTTP. This is a dev-only shortcut so
-you can boot the app and click around without picking a folder.
-
-The first folder picker pass will replace this bridge with the FS Access API
-in production builds; the dev middleware will stay as the source-tree default.
+couple of empty releases / epics. `pnpm dev` reads this folder via a small
+Vite middleware that exposes `/api/fs/{read,list,stat,write}` over HTTP, and
+`@boardown/ui` mounts on top of a `DevHttpFsAdapter` that talks to those
+endpoints. This is the working environment for UI development; a production
+browser deployment (folder picker, FS Access API or otherwise) is not in the
+MVP scope.
 
 ## License
 
