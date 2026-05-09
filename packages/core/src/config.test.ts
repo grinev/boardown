@@ -80,4 +80,32 @@ describe('serializeConfig', () => {
     expect(idx('statuses')).toBeLessThan(idx('paths'));
     expect(idx('releases')).toBeLessThan(idx('epics'));
   });
+
+  it('omits theme when undefined', () => {
+    const cfg: BoardConfig = {
+      idPrefix: 'BD',
+      nextId: 0,
+      statuses: ['todo'],
+      paths: { releases: 'r', epics: 'e' },
+    };
+    expect(serializeConfig(cfg)).not.toContain('theme');
+  });
+
+  it('round-trips theme when set', () => {
+    const cfg: BoardConfig = {
+      idPrefix: 'BD',
+      nextId: 0,
+      statuses: ['todo'],
+      paths: { releases: 'r', epics: 'e' },
+      theme: 'dark',
+    };
+    const out = serializeConfig(cfg);
+    expect(out).toContain('theme: dark');
+    const idx = (s: string) => out.indexOf(s);
+    expect(idx('nextId')).toBeLessThan(idx('theme'));
+    expect(idx('theme')).toBeLessThan(idx('statuses'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
 });

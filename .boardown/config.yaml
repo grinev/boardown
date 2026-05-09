@@ -1,5 +1,6 @@
 idPrefix: BD
 nextId: 7
+theme: dark
 statuses:
   - todo
   - in-progress

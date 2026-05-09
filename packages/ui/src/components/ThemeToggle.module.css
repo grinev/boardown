@@ -1,0 +1,21 @@
+.toggle {
+  padding: 6px 14px;
+  border: 1px solid var(--tab-border);
+  border-radius: 6px;
+  background: var(--tab-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  align-self: center;
+}
+
+.toggle:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

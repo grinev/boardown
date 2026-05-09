@@ -56,4 +56,26 @@ describe('BoardConfigSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an optional theme', () => {
+    const result = BoardConfigSchema.safeParse({
+      idPrefix: 'BD',
+      nextId: 0,
+      statuses: ['todo'],
+      paths: { releases: 'releases', epics: 'epics' },
+      theme: 'dark',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unknown theme value', () => {
+    const result = BoardConfigSchema.safeParse({
+      idPrefix: 'BD',
+      nextId: 0,
+      statuses: ['todo'],
+      paths: { releases: 'releases', epics: 'epics' },
+      theme: 'sepia',
+    });
+    expect(result.success).toBe(false);
+  });
 });

@@ -31,14 +31,17 @@ export const parseConfig = (text: string, filename = CONFIG_FILENAME): ParseResu
 };
 
 export const serializeConfig = (config: BoardConfig): string => {
-  const ordered = {
+  const ordered: Record<string, unknown> = {
     idPrefix: config.idPrefix,
     nextId: config.nextId,
-    statuses: config.statuses,
-    paths: {
-      releases: config.paths.releases,
-      epics: config.paths.epics,
-    },
+  };
+  if (config.theme !== undefined) {
+    ordered.theme = config.theme;
+  }
+  ordered.statuses = config.statuses;
+  ordered.paths = {
+    releases: config.paths.releases,
+    epics: config.paths.epics,
   };
   return yaml.dump(ordered, {
     lineWidth: -1,

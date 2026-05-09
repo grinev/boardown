@@ -36,6 +36,40 @@
     sans-serif;
 }
 
+[data-theme='dark'] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-muted: #21262d;
+
+  --card-bg: #161b22;
+  --card-border: #30363d;
+  --card-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+
+  --text-primary: #e6edf3;
+  --text-secondary: #c9d1d9;
+  --text-muted: #8b949e;
+
+  --divider: #30363d;
+  --accent: #58a6ff;
+  --accent-bg: #142a4d;
+
+  --tab-bg: #161b22;
+  --tab-bg-active: var(--accent-bg);
+  --tab-border: var(--divider);
+
+  --epic-bg: #0c3650;
+  --epic-fg: #7dd3fc;
+
+  --id-bg: #21262d;
+  --id-fg: #8b949e;
+
+  --banner-warn-bg: #3a2a05;
+  --banner-warn-border: #5a4117;
+  --banner-warn-fg: #f5d68a;
+  --banner-error-bg: #3a1212;
+  --banner-error-fg: #ff8a8a;
+}
+
 html,
 body,
 #root {

@@ -16,6 +16,7 @@ export function App({ fs }: AppProps) {
   const problems = useBoardStore((s) => s.problems);
   const errorMessage = useBoardStore((s) => s.errorMessage);
   const activeTab = useBoardStore((s) => s.activeTab);
+  const theme = useBoardStore((s) => s.theme);
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
 
@@ -23,9 +24,13 @@ export function App({ fs }: AppProps) {
     void load(fs);
   }, [fs, load]);
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   if (status === 'idle' || status === 'loading') {
     return (
-      <main className={styles.app} data-theme="light">
+      <main className={styles.app}>
         <header className={styles.header}>
           <h1>boardown</h1>
         </header>
@@ -36,7 +41,7 @@ export function App({ fs }: AppProps) {
 
   if (status === 'error' || snapshot === null) {
     return (
-      <main className={styles.app} data-theme="light">
+      <main className={styles.app}>
         <header className={styles.header}>
           <h1>boardown</h1>
         </header>
@@ -49,7 +54,7 @@ export function App({ fs }: AppProps) {
   }
 
   return (
-    <main className={styles.app} data-theme="light">
+    <main className={styles.app}>
       <header className={styles.header}>
         <h1>boardown</h1>
       </header>

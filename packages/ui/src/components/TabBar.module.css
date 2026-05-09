@@ -1,9 +1,16 @@
 .bar {
   display: flex;
-  gap: 4px;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 8px;
   background: var(--surface);
   border-bottom: 1px solid var(--divider);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
 }
 
 .tab {

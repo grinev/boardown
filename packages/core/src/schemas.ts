@@ -54,6 +54,9 @@ export const EpicSchema = z.object({
 });
 export type Epic = z.infer<typeof EpicSchema>;
 
+export const ThemeSchema = z.enum(['light', 'dark']);
+export type Theme = z.infer<typeof ThemeSchema>;
+
 export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().min(1),
@@ -65,6 +68,7 @@ export const BoardConfigSchema = z
         epics: z.string().min(1),
       })
       .strict(),
+    theme: ThemeSchema.optional(),
   })
   .strict();
 export type BoardConfig = z.infer<typeof BoardConfigSchema>;

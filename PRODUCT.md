@@ -187,9 +187,12 @@ Notes:
 idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
 tasksDir: .           # optional, defaults to "." (same folder as config.yaml)
+theme: light          # optional, "light" or "dark"; defaults to "light" when absent
 ```
 
-That is the entire MVP config. Statuses, status colors, and task types are
+That is the entire MVP config. The `theme` field is written by the in-app
+theme switcher; it stays absent from `config.yaml` until the user toggles
+it for the first time. Statuses, status colors, and task types are
 **hardcoded** in the app; customizing them is post-MVP. Epic colors are
 user-defined per epic (see Epic frontmatter above).
 
@@ -430,7 +433,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 ### `packages/ui` (business features)
 
 - [x] App boot: load and render an existing board from a supplied `FsAdapter`
-- [ ] **Theming foundation** (CSS variables, light + dark, `data-theme` switch)
+- [x] **Theming foundation** (CSS variables, light + dark, `data-theme` switch)
 - [ ] **Top navigation** with Backlog / Board / Archive tabs and counters
 - [ ] **Backlog screen**: stacked sections (current, future, backlog),
       collapsible; epic filter panel on the left

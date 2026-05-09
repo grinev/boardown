@@ -1,6 +1,7 @@
 import type { Release } from '@boardown/core';
 import type { ActiveTab } from '../store';
 import styles from './TabBar.module.css';
+import { ThemeToggle } from './ThemeToggle';
 
 interface TabBarProps {
   releases: Release[];
@@ -19,26 +20,29 @@ export function TabBar({ releases, activeTab, onSelect }: TabBarProps) {
 
   return (
     <div className={styles.bar}>
-      <button
-        type="button"
-        className={tabClass(activeTab.kind === 'backlog')}
-        onClick={() => onSelect({ kind: 'backlog' })}
-      >
-        Backlog
-      </button>
-      {sortedReleases.map((release) => {
-        const isActive = activeTab.kind === 'release' && activeTab.filename === release.filename;
-        return (
-          <button
-            key={release.filename}
-            type="button"
-            className={tabClass(isActive)}
-            onClick={() => onSelect({ kind: 'release', filename: release.filename })}
-          >
-            {stripMd(release.filename)}
-          </button>
-        );
-      })}
+      <div className={styles.tabs}>
+        <button
+          type="button"
+          className={tabClass(activeTab.kind === 'backlog')}
+          onClick={() => onSelect({ kind: 'backlog' })}
+        >
+          Backlog
+        </button>
+        {sortedReleases.map((release) => {
+          const isActive = activeTab.kind === 'release' && activeTab.filename === release.filename;
+          return (
+            <button
+              key={release.filename}
+              type="button"
+              className={tabClass(isActive)}
+              onClick={() => onSelect({ kind: 'release', filename: release.filename })}
+            >
+              {stripMd(release.filename)}
+            </button>
+          );
+        })}
+      </div>
+      <ThemeToggle />
     </div>
   );
 }
