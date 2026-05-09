@@ -14,9 +14,12 @@ interface BoardState {
   activeTab: ActiveTab;
   theme: Theme;
   fs: FsAdapter | null;
+  selectedTaskId: string | null;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   toggleTheme: () => Promise<void>;
+  openTask: (id: string) => void;
+  closeTask: () => void;
 }
 
 const formatProblems = (problems: ParseProblem[]): string =>
@@ -30,6 +33,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   activeTab: 'board',
   theme: 'light',
   fs: null,
+  selectedTaskId: null,
 
   load: async (fs) => {
     set({ status: 'loading', errorMessage: null, fs });
@@ -80,4 +84,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ theme: previous, snapshot, errorMessage: `Failed to save theme: ${message}` });
     }
   },
+
+  openTask: (id) => set({ selectedTaskId: id }),
+
+  closeTask: () => set({ selectedTaskId: null }),
 }));

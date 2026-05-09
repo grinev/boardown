@@ -5,7 +5,9 @@ import './theme/theme.css';
 import styles from './components/App.module.css';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
+import { TaskDetailsDialog } from './components/TaskDetailsDialog';
 import { useBoardStore } from './store';
+import { findTaskById } from './utils/find-task';
 
 interface AppProps {
   fs: FsAdapter;
@@ -18,8 +20,10 @@ export function App({ fs }: AppProps) {
   const errorMessage = useBoardStore((s) => s.errorMessage);
   const activeTab = useBoardStore((s) => s.activeTab);
   const theme = useBoardStore((s) => s.theme);
+  const selectedTaskId = useBoardStore((s) => s.selectedTaskId);
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
+  const closeTask = useBoardStore((s) => s.closeTask);
 
   useEffect(() => {
     void load(fs);
@@ -54,6 +58,12 @@ export function App({ fs }: AppProps) {
     );
   }
 
+  const selectedTask = selectedTaskId ? findTaskById(snapshot, selectedTaskId) : null;
+  const selectedEpicSlug = selectedTask?.frontmatter.epic;
+  const selectedEpic = selectedEpicSlug
+    ? snapshot.epics.find((e) => e.slug === selectedEpicSlug)
+    : undefined;
+
   return (
     <main className={styles.app}>
       <header className={styles.header}>
@@ -77,6 +87,9 @@ export function App({ fs }: AppProps) {
             ))}
           </ul>
         </section>
+      )}
+      {selectedTask && (
+        <TaskDetailsDialog task={selectedTask} epic={selectedEpic} onClose={closeTask} />
       )}
     </main>
   );

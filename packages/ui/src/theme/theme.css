@@ -7,6 +7,7 @@
   --card-bg: #ffffff;
   --card-border: #e1e4e8;
   --card-shadow: 0 1px 1px rgba(9, 30, 66, 0.08);
+  --inset-bg: #f4f5f7;
 
   --text-primary: #1f2328;
   --text-secondary: #424a53;
@@ -31,6 +32,13 @@
   --type-docs: #3b82f6;
   --type-tech: #8b5cf6;
 
+  --status-todo-bg: #eef0f2;
+  --status-todo-fg: #424a53;
+  --status-in-progress-bg: #dbeafe;
+  --status-in-progress-fg: #1d4ed8;
+  --status-done-bg: #dcfce7;
+  --status-done-fg: #15803d;
+
   --banner-warn-bg: #fffbeb;
   --banner-warn-border: #fde68a;
   --banner-warn-fg: #78350f;
@@ -49,6 +57,7 @@
   --card-bg: #161b22;
   --card-border: #30363d;
   --card-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+  --inset-bg: #11161d;
 
   --text-primary: #e6edf3;
   --text-secondary: #c9d1d9;
@@ -72,6 +81,13 @@
   --type-feature: #22c55e;
   --type-docs: #3b82f6;
   --type-tech: #8b5cf6;
+
+  --status-todo-bg: #21262d;
+  --status-todo-fg: #c9d1d9;
+  --status-in-progress-bg: #142a4d;
+  --status-in-progress-fg: #7dafff;
+  --status-done-bg: #0d2818;
+  --status-done-fg: #4ade80;
 
   --banner-warn-bg: #3a2a05;
   --banner-warn-border: #5a4117;

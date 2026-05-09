@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
+import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
@@ -68,6 +69,7 @@ function TaskCard({ task, epic }: TaskCardProps) {
   const { id, type } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
+  const openTask = useBoardStore((s) => s.openTask);
 
   const epicStyle = epic
     ? ({
@@ -78,7 +80,15 @@ function TaskCard({ task, epic }: TaskCardProps) {
 
   return (
     <article className={styles.card}>
-      <h3 className={styles.cardTitle}>{task.title}</h3>
+      <h3 className={styles.cardTitle}>
+        <button
+          type="button"
+          className={styles.cardTitleButton}
+          onClick={() => openTask(id)}
+        >
+          {task.title}
+        </button>
+      </h3>
       {epic && (
         <span className={styles.epicBadge} style={epicStyle}>
           {epic.frontmatter.name}
