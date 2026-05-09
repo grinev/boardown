@@ -1,6 +1,6 @@
 import type { ActiveTab } from '../store';
+import { SettingsButton } from './SettingsButton';
 import styles from './TabBar.module.css';
-import { ThemeToggle } from './ThemeToggle';
 
 interface TabBarProps {
   activeTab: ActiveTab;
@@ -31,7 +31,7 @@ export function TabBar({ activeTab, onSelect }: TabBarProps) {
           </button>
         ))}
       </div>
-      <ThemeToggle />
+      <SettingsButton />
     </div>
   );
 }

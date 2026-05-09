@@ -37,15 +37,18 @@ interface BoardState {
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
+  settingsOpen: boolean;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
-  toggleTheme: () => Promise<void>;
+  setTheme: (theme: Theme) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
   closeEpic: () => void;
   openCreateTask: (releaseFilename: string) => void;
   closeCreateTask: () => void;
+  openSettings: () => void;
+  closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
 }
 
@@ -63,6 +66,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   selectedTaskId: null,
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
+  settingsOpen: false,
 
   load: async (fs) => {
     set({ status: 'loading', errorMessage: null, fs });
@@ -97,10 +101,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  toggleTheme: async () => {
+  setTheme: async (next) => {
     const { snapshot, fs, theme: previous } = get();
     if (!snapshot || !fs) return;
-    const next: Theme = previous === 'light' ? 'dark' : 'light';
+    if (next === previous) return;
     const nextSnapshot: BoardSnapshot = {
       ...snapshot,
       config: { ...snapshot.config, theme: next },
@@ -126,6 +130,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ createTaskForReleaseFilename: releaseFilename }),
 
   closeCreateTask: () => set({ createTaskForReleaseFilename: null }),
+
+  openSettings: () => set({ settingsOpen: true }),
+
+  closeSettings: () => set({ settingsOpen: false }),
 
   createTask: async (input) => {
     const { snapshot, fs } = get();

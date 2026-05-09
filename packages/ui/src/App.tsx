@@ -5,6 +5,7 @@ import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
+import { SettingsDialog } from './components/SettingsDialog';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { TaskDetailsDialog } from './components/TaskDetailsDialog';
@@ -29,6 +30,7 @@ export function App({ fs }: AppProps) {
   const createTaskForReleaseFilename = useBoardStore(
     (s) => s.createTaskForReleaseFilename,
   );
+  const settingsOpen = useBoardStore((s) => s.settingsOpen);
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
@@ -36,6 +38,7 @@ export function App({ fs }: AppProps) {
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
   const closeCreateTask = useBoardStore((s) => s.closeCreateTask);
+  const closeSettings = useBoardStore((s) => s.closeSettings);
 
   useEffect(() => {
     void load(fs);
@@ -136,6 +139,7 @@ export function App({ fs }: AppProps) {
           onClose={closeCreateTask}
         />
       )}
+      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
     </main>
   );
 }

@@ -1,21 +1,29 @@
-.toggle {
-  padding: 6px 14px;
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 1px solid var(--tab-border);
   border-radius: 6px;
   background: var(--tab-bg);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
   align-self: center;
 }
 
-.toggle:hover:not(:disabled) {
+.button:hover:not(:disabled) {
   background: var(--surface-muted);
   color: var(--text-primary);
 }
 
-.toggle:disabled {
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
