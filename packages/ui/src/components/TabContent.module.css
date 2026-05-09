@@ -12,6 +12,11 @@
   color: var(--text-muted);
 }
 
+.placeholder p + p.hint {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
 .releaseHeader {
   padding: 16px 16px 0;
 }

@@ -9,11 +9,8 @@ interface TabContentProps {
   statuses: readonly TaskStatus[];
 }
 
-const stripMd = (filename: string): string =>
-  filename.endsWith('.md') ? filename.slice(0, -3) : filename;
-
 export function TabContent({ activeTab, releases, statuses }: TabContentProps) {
-  if (activeTab.kind === 'backlog') {
+  if (activeTab === 'backlog') {
     return (
       <section className={styles.placeholder}>
         <h2>Backlog</h2>
@@ -22,21 +19,37 @@ export function TabContent({ activeTab, releases, statuses }: TabContentProps) {
     );
   }
 
-  const release = releases.find((r) => r.filename === activeTab.filename);
-  if (!release) {
+  if (activeTab === 'archive') {
     return (
-      <section className={styles.error}>
-        Release not found: {activeTab.filename}
+      <section className={styles.placeholder}>
+        <h2>Archive</h2>
+        <p>No archived releases yet</p>
       </section>
     );
   }
 
+  const current = releases.find((r) => r.frontmatter.status === 'current');
+  if (!current) {
+    return (
+      <section className={styles.placeholder}>
+        <h2>Board</h2>
+        <p>No current release.</p>
+        <p className={styles.hint}>Start one from Backlog to begin work.</p>
+      </section>
+    );
+  }
+
+  const slug = current.frontmatter.release;
+  const heading = current.frontmatter.name
+    ? `Release ${slug} — ${current.frontmatter.name}`
+    : `Release ${slug}`;
+
   return (
     <section>
       <header className={styles.releaseHeader}>
-        <h2>Release {stripMd(release.filename)}</h2>
+        <h2>{heading}</h2>
       </header>
-      <BoardView release={release} statuses={statuses} />
+      <BoardView release={current} statuses={statuses} />
     </section>
   );
 }

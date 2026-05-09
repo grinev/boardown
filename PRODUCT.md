@@ -434,7 +434,9 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 - [x] App boot: load and render an existing board from a supplied `FsAdapter`
 - [x] **Theming foundation** (CSS variables, light + dark, `data-theme` switch)
-- [ ] **Top navigation** with Backlog / Board / Archive tabs and counters
+- [x] **Top navigation** with Backlog / Board / Archive tabs
+- [ ] **Tab counters** on the top navigation (`Backlog (n)`, `Board
+      (done/total)`, `Archive (n)`)
 - [ ] **Backlog screen**: stacked sections (current, future, backlog),
       collapsible; epic filter panel on the left
 - [ ] **Board screen**: kanban for the current release with status columns;

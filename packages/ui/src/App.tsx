@@ -59,7 +59,7 @@ export function App({ fs }: AppProps) {
       <header className={styles.header}>
         <h1>boardown</h1>
       </header>
-      <TabBar releases={snapshot.releases} activeTab={activeTab} onSelect={setActiveTab} />
+      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
       <TabContent
         activeTab={activeTab}
         releases={snapshot.releases}

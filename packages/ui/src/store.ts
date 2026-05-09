@@ -4,7 +4,7 @@ import { create } from 'zustand';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export type ActiveTab = { kind: 'backlog' } | { kind: 'release'; filename: string };
+export type ActiveTab = 'backlog' | 'board' | 'archive';
 
 interface BoardState {
   status: BoardStatus;
@@ -27,7 +27,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   snapshot: null,
   problems: [],
   errorMessage: null,
-  activeTab: { kind: 'backlog' },
+  activeTab: 'board',
   theme: 'light',
   fs: null,
 
