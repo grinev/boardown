@@ -6,9 +6,10 @@ interface ModalProps {
   onClose: () => void;
   ariaLabel: string;
   children: ReactNode;
+  className?: string | undefined;
 }
 
-export function Modal({ open, onClose, ariaLabel, children }: ModalProps) {
+export function Modal({ open, onClose, ariaLabel, children, className }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function Modal({ open, onClose, ariaLabel, children }: ModalProps) {
   return (
     <dialog
       ref={dialogRef}
-      className={styles.dialog}
+      className={className ? `${styles.dialog} ${className}` : styles.dialog}
       aria-label={ariaLabel}
       onMouseDown={handleBackdropMouseDown}
     >

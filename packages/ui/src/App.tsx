@@ -3,11 +3,13 @@ import { TASK_STATUSES } from '@boardown/core';
 import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
+import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { TaskDetailsDialog } from './components/TaskDetailsDialog';
 import { useBoardStore } from './store';
+import { findReleaseOfTask } from './utils/find-release-of-task';
 import { findTaskById } from './utils/find-task';
 import { findTasksByEpic } from './utils/find-tasks-by-epic';
 
@@ -24,12 +26,16 @@ export function App({ fs }: AppProps) {
   const theme = useBoardStore((s) => s.theme);
   const selectedTaskId = useBoardStore((s) => s.selectedTaskId);
   const selectedEpicSlug = useBoardStore((s) => s.selectedEpicSlug);
+  const createTaskForReleaseFilename = useBoardStore(
+    (s) => s.createTaskForReleaseFilename,
+  );
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
   const closeEpic = useBoardStore((s) => s.closeEpic);
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
+  const closeCreateTask = useBoardStore((s) => s.closeCreateTask);
 
   useEffect(() => {
     void load(fs);
@@ -69,12 +75,18 @@ export function App({ fs }: AppProps) {
   const selectedTaskEpic = selectedTaskEpicSlug
     ? snapshot.epics.find((e) => e.slug === selectedTaskEpicSlug)
     : undefined;
+  const selectedTaskRelease = selectedTaskId
+    ? findReleaseOfTask(snapshot, selectedTaskId)
+    : undefined;
   const selectedEpic = selectedEpicSlug
     ? snapshot.epics.find((e) => e.slug === selectedEpicSlug)
     : undefined;
   const selectedEpicTasks = selectedEpic
     ? findTasksByEpic(snapshot, selectedEpic.slug)
     : [];
+  const createTaskRelease = createTaskForReleaseFilename
+    ? snapshot.releases.find((r) => r.filename === createTaskForReleaseFilename)
+    : undefined;
 
   return (
     <main className={styles.app}>
@@ -104,6 +116,7 @@ export function App({ fs }: AppProps) {
         <TaskDetailsDialog
           task={selectedTask}
           epic={selectedTaskEpic}
+          release={selectedTaskRelease}
           onClose={closeTask}
           onEpicClick={openEpic}
         />
@@ -114,6 +127,13 @@ export function App({ fs }: AppProps) {
           tasks={selectedEpicTasks}
           onClose={closeEpic}
           onTaskClick={openTask}
+        />
+      )}
+      {createTaskRelease && (
+        <CreateTaskDialog
+          release={createTaskRelease}
+          epics={snapshot.epics}
+          onClose={closeCreateTask}
         />
       )}
     </main>

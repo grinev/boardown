@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -31,11 +32,13 @@ const groupTasksByStatus = (
 export function BoardView({ release, epics, statuses }: BoardViewProps) {
   const buckets = groupTasksByStatus(release.tasks, statuses);
   const epicsBySlug = new Map(epics.map((e) => [e.slug, e]));
+  const openCreateTask = useBoardStore((s) => s.openCreateTask);
 
   return (
     <div className={styles.board}>
-      {statuses.map((status) => {
+      {statuses.map((status, index) => {
         const tasks = buckets.get(status) ?? [];
+        const isFirstColumn = index === 0;
         return (
           <div key={status} className={styles.column}>
             <div className={styles.columnHeader}>
@@ -53,6 +56,16 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
                 })
               )}
             </div>
+            {isFirstColumn && (
+              <button
+                type="button"
+                className={styles.addTaskButton}
+                onClick={() => openCreateTask(release.filename)}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>Create task</span>
+              </button>
+            )}
           </div>
         );
       })}

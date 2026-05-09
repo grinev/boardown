@@ -16,6 +16,7 @@
   --divider: #d8dee4;
   --accent: #2563eb;
   --accent-bg: #eff6ff;
+  --accent-fg: #ffffff;
 
   --tab-bg: #ffffff;
   --tab-bg-active: var(--accent-bg);
@@ -67,6 +68,7 @@
   --divider: #30363d;
   --accent: #58a6ff;
   --accent-bg: #142a4d;
+  --accent-fg: #0d1117;
 
   --tab-bg: #161b22;
   --tab-bg-active: var(--accent-bg);

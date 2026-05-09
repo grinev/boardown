@@ -1,10 +1,30 @@
-import type { BoardSnapshot, FsAdapter, ParseProblem, Theme } from '@boardown/core';
-import { CONFIG_FILENAME, loadBoard, serializeConfig } from '@boardown/core';
+import type {
+  BoardSnapshot,
+  FsAdapter,
+  ParseProblem,
+  TaskType,
+  Theme,
+} from '@boardown/core';
+import {
+  CONFIG_FILENAME,
+  createTask as createTaskInContainer,
+  loadBoard,
+  serializeConfig,
+  serializeRelease,
+} from '@boardown/core';
 import { create } from 'zustand';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export type ActiveTab = 'backlog' | 'board' | 'archive';
+
+export interface CreateTaskInput {
+  releaseFilename: string;
+  title: string;
+  description?: string;
+  type: TaskType;
+  epic?: string;
+}
 
 interface BoardState {
   status: BoardStatus;
@@ -16,6 +36,7 @@ interface BoardState {
   fs: FsAdapter | null;
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
+  createTaskForReleaseFilename: string | null;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   toggleTheme: () => Promise<void>;
@@ -23,6 +44,9 @@ interface BoardState {
   closeTask: () => void;
   openEpic: (slug: string) => void;
   closeEpic: () => void;
+  openCreateTask: (releaseFilename: string) => void;
+  closeCreateTask: () => void;
+  createTask: (input: CreateTaskInput) => Promise<void>;
 }
 
 const formatProblems = (problems: ParseProblem[]): string =>
@@ -38,6 +62,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   fs: null,
   selectedTaskId: null,
   selectedEpicSlug: null,
+  createTaskForReleaseFilename: null,
 
   load: async (fs) => {
     set({ status: 'loading', errorMessage: null, fs });
@@ -96,4 +121,50 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   openEpic: (slug) => set({ selectedEpicSlug: slug, selectedTaskId: null }),
 
   closeEpic: () => set({ selectedEpicSlug: null }),
+
+  openCreateTask: (releaseFilename) =>
+    set({ createTaskForReleaseFilename: releaseFilename }),
+
+  closeCreateTask: () => set({ createTaskForReleaseFilename: null }),
+
+  createTask: async (input) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const releaseIndex = snapshot.releases.findIndex(
+      (r) => r.filename === input.releaseFilename,
+    );
+    if (releaseIndex === -1) {
+      set({ errorMessage: `Release not found: ${input.releaseFilename}` });
+      return;
+    }
+    const release = snapshot.releases[releaseIndex]!;
+
+    const result = createTaskInContainer(release, snapshot.config, {
+      title: input.title,
+      type: input.type,
+      status: 'todo',
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.epic !== undefined ? { epic: input.epic } : {}),
+    });
+
+    const nextReleases = [...snapshot.releases];
+    nextReleases[releaseIndex] = result.container;
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      config: result.config,
+      releases: nextReleases,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(result.container.filename, serializeRelease(result.container));
+      await fs.write(CONFIG_FILENAME, serializeConfig(result.config));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+      throw err;
+    }
+  },
 }));

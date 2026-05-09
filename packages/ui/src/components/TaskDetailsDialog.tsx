@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import type { Epic, Task, TaskStatus } from '@boardown/core';
+import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
@@ -10,6 +10,7 @@ import styles from './TaskDetailsDialog.module.css';
 interface TaskDetailsDialogProps {
   task: Task;
   epic: Epic | undefined;
+  release: Release | undefined;
   onClose: () => void;
   onEpicClick?: (slug: string) => void;
 }
@@ -17,6 +18,7 @@ interface TaskDetailsDialogProps {
 export function TaskDetailsDialog({
   task,
   epic,
+  release,
   onClose,
   onEpicClick,
 }: TaskDetailsDialogProps) {
@@ -107,6 +109,16 @@ export function TaskDetailsDialog({
                         {epic.frontmatter.name}
                       </span>
                     )
+                  ) : (
+                    <span className={styles.detailEmpty}>—</span>
+                  )}
+                </dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt className={styles.detailLabel}>Release</dt>
+                <dd className={styles.detailValue}>
+                  {release ? (
+                    <span>{release.frontmatter.release}</span>
                   ) : (
                     <span className={styles.detailEmpty}>—</span>
                   )}

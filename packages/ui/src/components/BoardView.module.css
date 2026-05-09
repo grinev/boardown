@@ -55,6 +55,34 @@
   text-align: center;
 }
 
+.addTaskButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 8px 8px 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--card-border), var(--text-muted));
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.addTaskButton:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.addTaskButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);

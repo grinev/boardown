@@ -1,0 +1,181 @@
+import { X } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
+import type { Epic, Release, TaskType } from '@boardown/core';
+import { TASK_TYPES } from '@boardown/core';
+import { useBoardStore } from '../store';
+import { TASK_TYPE_META } from '../task-types';
+import { IconSelect, type IconSelectOption } from './IconSelect';
+import { Modal } from './Modal';
+import styles from './CreateTaskDialog.module.css';
+
+interface CreateTaskDialogProps {
+  release: Release;
+  epics: Epic[];
+  canChangeRelease?: boolean;
+  onClose: () => void;
+}
+
+export function CreateTaskDialog({
+  release,
+  epics,
+  canChangeRelease = false,
+  onClose,
+}: CreateTaskDialogProps) {
+  const createTask = useBoardStore((s) => s.createTask);
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState<TaskType>('feature');
+  const [epicSlug, setEpicSlug] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const trimmedTitle = title.trim();
+  const canSubmit = trimmedTitle.length > 0 && !submitting;
+
+  const sortedEpics = [...epics].sort((a, b) =>
+    a.frontmatter.name.localeCompare(b.frontmatter.name),
+  );
+
+  const typeOptions = useMemo<IconSelectOption[]>(
+    () =>
+      TASK_TYPES.map((t) => {
+        const meta = TASK_TYPE_META[t];
+        const Icon = meta.icon;
+        return {
+          value: t,
+          label: meta.label,
+          icon: (
+            <Icon
+              size={14}
+              style={{ color: meta.colorVar }}
+              aria-hidden="true"
+            />
+          ),
+        };
+      }),
+    [],
+  );
+
+  const releaseLabel = release.frontmatter.name
+    ? `${release.frontmatter.release} — ${release.frontmatter.name}`
+    : release.frontmatter.release;
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const trimmedDescription = description.trim();
+      await createTask({
+        releaseFilename: release.filename,
+        title: trimmedTitle,
+        type,
+        ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
+        ...(epicSlug.length > 0 ? { epic: epicSlug } : {}),
+      });
+      onClose();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSubmitError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} ariaLabel="Create task" className={styles.dialog}>
+      <header className={styles.header}>
+        <h2 className={styles.title}>Create task</h2>
+        <button
+          type="button"
+          className={styles.closeButton}
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+      </header>
+      <form className={styles.form} onSubmit={handleSubmit}>
+        <label className={styles.field}>
+          <span className={styles.label}>Title</span>
+          <input
+            type="text"
+            className={styles.input}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+            required
+          />
+        </label>
+        <label className={styles.field}>
+          <span className={styles.label}>Description</span>
+          <textarea
+            className={styles.textarea}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+          />
+        </label>
+        <div className={styles.field}>
+          <span className={styles.label}>Type</span>
+          <IconSelect
+            value={type}
+            options={typeOptions}
+            onChange={(v) => setType(v as TaskType)}
+            ariaLabel="Type"
+          />
+        </div>
+        <label className={styles.field}>
+          <span className={styles.label}>Epic</span>
+          <select
+            className={styles.select}
+            value={epicSlug}
+            onChange={(e) => setEpicSlug(e.target.value)}
+          >
+            <option value="">— No epic —</option>
+            {sortedEpics.map((epic) => (
+              <option key={epic.slug} value={epic.slug}>
+                {epic.frontmatter.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={styles.field}>
+          <span className={styles.label}>Release</span>
+          <select
+            className={styles.select}
+            value={release.filename}
+            disabled={!canChangeRelease}
+            onChange={() => undefined}
+          >
+            <option value={release.filename}>{releaseLabel}</option>
+          </select>
+        </label>
+        {submitError !== null && (
+          <p className={styles.error} role="alert">
+            {submitError}
+          </p>
+        )}
+        <footer className={styles.footer}>
+          <button
+            type="button"
+            className={styles.cancelButton}
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className={styles.createButton}
+            disabled={!canSubmit}
+          >
+            Create
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
