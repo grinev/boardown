@@ -1,14 +1,17 @@
-import type { Release, Task } from '@boardown/core';
+import type { Release, Task, TaskStatus } from '@boardown/core';
 import { formatStatusLabel } from '../utils/format-status';
 import styles from './BoardView.module.css';
 
 interface BoardViewProps {
   release: Release;
-  statuses: string[];
+  statuses: readonly TaskStatus[];
 }
 
-const groupTasksByStatus = (tasks: Task[], statuses: string[]): Map<string, Task[]> => {
-  const buckets = new Map<string, Task[]>();
+const groupTasksByStatus = (
+  tasks: Task[],
+  statuses: readonly TaskStatus[],
+): Map<TaskStatus, Task[]> => {
+  const buckets = new Map<TaskStatus, Task[]>();
   for (const status of statuses) buckets.set(status, []);
   for (const task of tasks) {
     const list = buckets.get(task.frontmatter.status);

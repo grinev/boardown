@@ -196,7 +196,11 @@ export const parseRelease = (text: string, filename: string): ParseResult<Releas
   };
 };
 
-export const parseEpic = (text: string, filename: string): ParseResult<Epic> => {
+export const parseEpic = (
+  text: string,
+  filename: string,
+  slug: string,
+): ParseResult<Epic> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
 
@@ -232,6 +236,7 @@ export const parseEpic = (text: string, filename: string): ParseResult<Epic> => 
   return {
     value: {
       filename,
+      slug,
       frontmatter: fmResult.data,
       preamble,
       tasks,

@@ -3,6 +3,7 @@ import { parseEpic, parseRelease } from './parser.js';
 
 const RELEASE_OK = `---
 release: "1.10"
+status: current
 startDate: 2026-05-01
 endDate: 2026-05-15
 ---
@@ -13,6 +14,7 @@ endDate: 2026-05-15
 
 ---
 id: BD-1
+type: feature
 status: in-progress
 epic: ui-foundation
 order: 100
@@ -25,6 +27,7 @@ Should also support keyboard reordering for accessibility.
 
 ---
 id: BD-2
+type: tech
 status: done
 epic: parser
 order: 200
@@ -39,11 +42,13 @@ describe('parseRelease', () => {
     expect(result.problems).toEqual([]);
     expect(result.value).not.toBeNull();
     expect(result.value!.frontmatter.release).toBe('1.10');
+    expect(result.value!.frontmatter.status).toBe('current');
     expect(result.value!.preamble).toBe('# Release 1.10');
     expect(result.value!.tasks).toHaveLength(2);
     expect(result.value!.tasks[0]!.title).toBe('Implement card drag & drop');
     expect(result.value!.tasks[0]!.frontmatter).toEqual({
       id: 'BD-1',
+      type: 'feature',
       status: 'in-progress',
       epic: 'ui-foundation',
       order: 100,
@@ -53,7 +58,7 @@ describe('parseRelease', () => {
   });
 
   it('reports a file-level problem when the file frontmatter is missing', () => {
-    const text = '## Some task\n\n---\nid: BD-1\nstatus: todo\norder: 100\n---\n\nbody\n';
+    const text = '## Some task\n\n---\nid: BD-1\ntype: feature\nstatus: todo\norder: 100\n---\n\nbody\n';
     const result = parseRelease(text, 'releases/x.md');
     expect(result.value).toBeNull();
     expect(result.problems).toHaveLength(1);
@@ -63,12 +68,14 @@ describe('parseRelease', () => {
   it('skips a single broken task and keeps the rest', () => {
     const text = `---
 release: "1.0"
+status: future
 ---
 
 ## Good one
 
 ---
 id: BD-1
+type: feature
 status: todo
 order: 100
 ---
@@ -78,6 +85,7 @@ ok
 ## Bad one
 
 ---
+type: feature
 status: todo
 order: 200
 ---
@@ -96,12 +104,14 @@ missing id
   it('keeps an H2 inside a description when no frontmatter follows it', () => {
     const text = `---
 release: "1.0"
+status: future
 ---
 
 ## Real task
 
 ---
 id: BD-1
+type: feature
 status: todo
 order: 100
 ---
@@ -123,8 +133,9 @@ more description here
 describe('parseEpic', () => {
   it('parses an epic file', () => {
     const text = `---
-slug: ui-foundation
-title: UI foundation
+name: UI Foundation
+color: "#1f6feb"
+description: Foundational UI work.
 ---
 
 Notes about the epic.
@@ -133,15 +144,18 @@ Notes about the epic.
 
 ---
 id: BD-7
+type: feature
 status: todo
 order: 100
 ---
 
 body
 `;
-    const result = parseEpic(text, 'epics/ui-foundation.md');
+    const result = parseEpic(text, 'epics/ui-foundation.md', 'ui-foundation');
     expect(result.problems).toEqual([]);
-    expect(result.value!.frontmatter.slug).toBe('ui-foundation');
+    expect(result.value!.slug).toBe('ui-foundation');
+    expect(result.value!.frontmatter.name).toBe('UI Foundation');
+    expect(result.value!.frontmatter.color).toBe('#1f6feb');
     expect(result.value!.preamble).toBe('Notes about the epic.');
     expect(result.value!.tasks).toHaveLength(1);
   });

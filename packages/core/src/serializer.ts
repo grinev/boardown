@@ -11,6 +11,7 @@ const dumpYaml = (data: object): string =>
 const orderedTaskFrontmatter = (fm: TaskFrontmatter): Record<string, unknown> => {
   const out: Record<string, unknown> = {
     id: fm.id,
+    type: fm.type,
     status: fm.status,
   };
   if (fm.epic !== undefined) out.epic = fm.epic;
@@ -39,14 +40,21 @@ const buildFile = (
 };
 
 export const serializeRelease = (release: Release): string => {
-  const fm: Record<string, unknown> = { release: release.frontmatter.release };
+  const fm: Record<string, unknown> = {
+    release: release.frontmatter.release,
+    status: release.frontmatter.status,
+  };
+  if (release.frontmatter.name !== undefined) fm.name = release.frontmatter.name;
   if (release.frontmatter.startDate !== undefined) fm.startDate = release.frontmatter.startDate;
   if (release.frontmatter.endDate !== undefined) fm.endDate = release.frontmatter.endDate;
   return buildFile(fm, release.preamble, release.tasks);
 };
 
 export const serializeEpic = (epic: Epic): string => {
-  const fm: Record<string, unknown> = { slug: epic.frontmatter.slug };
-  if (epic.frontmatter.title !== undefined) fm.title = epic.frontmatter.title;
+  const fm: Record<string, unknown> = {
+    name: epic.frontmatter.name,
+    color: epic.frontmatter.color,
+  };
+  if (epic.frontmatter.description !== undefined) fm.description = epic.frontmatter.description;
   return buildFile(fm, epic.preamble, epic.tasks);
 };

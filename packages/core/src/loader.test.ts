@@ -31,22 +31,18 @@ class InMemoryFs implements FsAdapter {
 
 const CONFIG = `idPrefix: BD
 nextId: 5
-statuses:
-  - todo
-  - done
-paths:
-  releases: releases
-  epics: epics
 `;
 
 const RELEASE_OK = `---
 release: "1.10"
+status: current
 ---
 
 ## Task one
 
 ---
 id: BD-1
+type: feature
 status: todo
 order: 100
 ---
@@ -55,13 +51,15 @@ body
 `;
 
 const EPIC_OK = `---
-slug: parser
+name: Parser
+color: "#8957e5"
 ---
 
 ## Epic task
 
 ---
 id: BD-2
+type: tech
 status: done
 order: 100
 ---
@@ -81,6 +79,7 @@ describe('loadBoard', () => {
     expect(result.value!.config.idPrefix).toBe('BD');
     expect(result.value!.releases).toHaveLength(1);
     expect(result.value!.epics).toHaveLength(1);
+    expect(result.value!.epics[0]!.slug).toBe('parser');
   });
 
   it('returns a file problem when config is missing', async () => {
@@ -93,7 +92,7 @@ describe('loadBoard', () => {
 
   it('returns a file problem when config fails validation', async () => {
     const fs = new InMemoryFs();
-    await fs.write('config.yaml', 'idPrefix: BD\nstatuses: []\n');
+    await fs.write('config.yaml', 'idPrefix: BD\n');
     const result = await loadBoard(fs);
     expect(result.value).toBeNull();
     expect(result.problems).toHaveLength(1);

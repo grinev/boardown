@@ -7,24 +7,27 @@ import {
   moveTaskBetweenContainers,
   reorderTask,
 } from './board-ops.js';
-import type { BoardConfig, Release, Task } from './schemas.js';
+import type { BoardConfig, Release, Task, TaskStatus } from './schemas.js';
 
 const config: BoardConfig = {
   idPrefix: 'BD',
   nextId: 10,
-  statuses: ['todo', 'in-progress', 'done'],
-  paths: { releases: 'releases', epics: 'epics' },
 };
 
-const task = (id: string, status: string, order: number, title = id): Task => ({
+const task = (
+  id: string,
+  status: TaskStatus,
+  order: number,
+  title = id,
+): Task => ({
   title,
   description: '',
-  frontmatter: { id, status, order },
+  frontmatter: { id, type: 'feature', status, order },
 });
 
 const release = (...tasks: Task[]): Release => ({
   filename: 'releases/1.10.md',
-  frontmatter: { release: '1.10' },
+  frontmatter: { release: '1.10', status: 'current' },
   preamble: '',
   tasks,
 });
@@ -32,8 +35,13 @@ const release = (...tasks: Task[]): Release => ({
 describe('createTask', () => {
   it('assigns sequential id, places at end of column, bumps config.nextId', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const result = createTask(r0, config, { title: 'New', status: 'todo' });
+    const result = createTask(r0, config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+    });
     expect(result.task.frontmatter.id).toBe('BD-10');
+    expect(result.task.frontmatter.type).toBe('feature');
     expect(result.task.frontmatter.order).toBe(200);
     expect(result.config.nextId).toBe(11);
     expect(result.container.tasks).toHaveLength(2);
@@ -41,8 +49,13 @@ describe('createTask', () => {
 
   it('starts column from 100 when empty', () => {
     const r0 = release(task('BD-1', 'todo', 500));
-    const result = createTask(r0, config, { title: 'X', status: 'in-progress' });
+    const result = createTask(r0, config, {
+      title: 'X',
+      type: 'tech',
+      status: 'in-progress',
+    });
     expect(result.task.frontmatter.order).toBe(100);
+    expect(result.task.frontmatter.type).toBe('tech');
   });
 });
 
@@ -61,6 +74,12 @@ describe('editTask', () => {
     const r0 = release(t);
     const r1 = editTask(r0, 'BD-1', { epic: null });
     expect(r1.tasks[0]!.frontmatter.epic).toBeUndefined();
+  });
+
+  it('updates type', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, 'BD-1', { type: 'bug' });
+    expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
   });
 });
 

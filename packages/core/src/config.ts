@@ -35,14 +35,12 @@ export const serializeConfig = (config: BoardConfig): string => {
     idPrefix: config.idPrefix,
     nextId: config.nextId,
   };
+  if (config.tasksDir !== undefined) {
+    ordered.tasksDir = config.tasksDir;
+  }
   if (config.theme !== undefined) {
     ordered.theme = config.theme;
   }
-  ordered.statuses = config.statuses;
-  ordered.paths = {
-    releases: config.paths.releases,
-    epics: config.paths.epics,
-  };
   return yaml.dump(ordered, {
     lineWidth: -1,
     noRefs: true,

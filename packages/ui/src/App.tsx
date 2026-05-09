@@ -1,4 +1,5 @@
 import type { FsAdapter } from '@boardown/core';
+import { TASK_STATUSES } from '@boardown/core';
 import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
@@ -62,7 +63,7 @@ export function App({ fs }: AppProps) {
       <TabContent
         activeTab={activeTab}
         releases={snapshot.releases}
-        statuses={snapshot.config.statuses}
+        statuses={TASK_STATUSES}
       />
       {problems.length > 0 && (
         <section className={styles.problems}>

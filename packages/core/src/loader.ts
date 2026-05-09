@@ -16,6 +16,9 @@ export interface BoardSnapshot {
   problems: ParseProblem[];
 }
 
+const RELEASES_DIR = 'releases';
+const EPICS_DIR = 'epics';
+
 const safeList = async (fs: FsAdapter, dir: string): Promise<string[]> => {
   try {
     return await fs.list(dir);
@@ -53,12 +56,14 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   }
   let config = configResult.value;
 
-  const releaseFiles = (await safeList(fs, config.paths.releases)).filter(isMarkdownFile);
-  const epicFiles = (await safeList(fs, config.paths.epics)).filter(isMarkdownFile);
+  // tasksDir resolution against the config folder lands in the next roadmap item;
+  // for now task containers live alongside config.yaml under their hardcoded names.
+  const releaseFiles = (await safeList(fs, RELEASES_DIR)).filter(isMarkdownFile);
+  const epicFiles = (await safeList(fs, EPICS_DIR)).filter(isMarkdownFile);
 
   const releases: Release[] = [];
   for (const name of releaseFiles) {
-    const path = `${config.paths.releases}/${name}`;
+    const path = `${RELEASES_DIR}/${name}`;
     let text: string;
     try {
       text = await fs.read(path);
@@ -74,7 +79,8 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
 
   const epics: Epic[] = [];
   for (const name of epicFiles) {
-    const path = `${config.paths.epics}/${name}`;
+    const path = `${EPICS_DIR}/${name}`;
+    const slug = name.replace(/\.md$/, '');
     let text: string;
     try {
       text = await fs.read(path);
@@ -83,7 +89,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
-    const parsed = parseEpic(text, path);
+    const parsed = parseEpic(text, path, slug);
     problems.push(...parsed.problems);
     if (parsed.value !== null) epics.push(parsed.value);
   }

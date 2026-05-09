@@ -418,7 +418,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       reorder, create / edit / delete task
 - [x] ID generator with config counter + startup verification scan
 - [x] Config loader/saver with strict validation
-- [ ] Update schemas to the final concept: hardcoded `status` and `type`
+- [x] Update schemas to the final concept: hardcoded `status` and `type`
       enums on `Task`; epic with `name`/`slug`/`description`/`color`;
       release with `status: future|current|finished` and optional dates;
       drop user-configurable statuses from `BoardConfig`; add optional

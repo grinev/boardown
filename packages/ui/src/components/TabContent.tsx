@@ -1,4 +1,4 @@
-import type { Release } from '@boardown/core';
+import type { Release, TaskStatus } from '@boardown/core';
 import type { ActiveTab } from '../store';
 import { BoardView } from './BoardView';
 import styles from './TabContent.module.css';
@@ -6,7 +6,7 @@ import styles from './TabContent.module.css';
 interface TabContentProps {
   activeTab: ActiveTab;
   releases: Release[];
-  statuses: string[];
+  statuses: readonly TaskStatus[];
 }
 
 const stripMd = (filename: string): string =>

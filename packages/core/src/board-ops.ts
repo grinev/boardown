@@ -1,5 +1,12 @@
 import { nextTaskId } from './id-generator.js';
-import type { BoardConfig, Epic, Release, Task } from './schemas.js';
+import type {
+  BoardConfig,
+  Epic,
+  Release,
+  Task,
+  TaskStatus,
+  TaskType,
+} from './schemas.js';
 
 export const DEFAULT_EPIC_SLUG = 'no-epic';
 
@@ -22,7 +29,7 @@ const sortByOrder = (tasks: Task[]): Task[] =>
   [...tasks].sort((a, b) => a.frontmatter.order - b.frontmatter.order);
 
 interface PlaceArgs {
-  status: string;
+  status: TaskStatus;
   beforeTaskId: string | null;
 }
 
@@ -92,7 +99,7 @@ const placeTaskInColumn = (
   return [...otherTasks, ...finalColumn];
 };
 
-const lastOrderForStatus = (tasks: Task[], status: string): number => {
+const lastOrderForStatus = (tasks: Task[], status: TaskStatus): number => {
   const orders = tasks
     .filter((t) => t.frontmatter.status === status)
     .map((t) => t.frontmatter.order);
@@ -102,7 +109,8 @@ const lastOrderForStatus = (tasks: Task[], status: string): number => {
 
 export interface NewTaskInput {
   title: string;
-  status: string;
+  type: TaskType;
+  status: TaskStatus;
   description?: string;
   epic?: string;
 }
@@ -119,6 +127,7 @@ export const createTask = <C extends Container>(
     description: input.description ?? '',
     frontmatter: {
       id,
+      type: input.type,
       status: input.status,
       ...(input.epic !== undefined ? { epic: input.epic } : {}),
       order,
@@ -135,6 +144,7 @@ export interface TaskPatch {
   title?: string;
   description?: string;
   epic?: string | null;
+  type?: TaskType;
 }
 
 export const editTask = <C extends Container>(
@@ -149,6 +159,9 @@ export const editTask = <C extends Container>(
       delete nextFrontmatter.epic;
     } else if (patch.epic !== undefined) {
       nextFrontmatter.epic = patch.epic;
+    }
+    if (patch.type !== undefined) {
+      nextFrontmatter.type = patch.type;
     }
     return {
       ...t,
@@ -169,7 +182,7 @@ export const deleteTask = <C extends Container>(container: C, taskId: string): C
 export const changeTaskStatus = <C extends Container>(
   container: C,
   taskId: string,
-  newStatus: string,
+  newStatus: TaskStatus,
 ): C =>
   replaceTasks(
     container,
@@ -195,7 +208,7 @@ export const reorderTask = <C extends Container>(
 };
 
 export interface MoveAcrossArgs {
-  newStatus: string;
+  newStatus: TaskStatus;
   beforeTaskId: string | null;
 }
 

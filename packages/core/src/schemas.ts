@@ -1,8 +1,20 @@
 import { z } from 'zod';
 
+export const TASK_STATUSES = ['todo', 'in-progress', 'done'] as const;
+export const TASK_TYPES = ['bug', 'feature', 'docs', 'tech'] as const;
+export const RELEASE_STATUSES = ['future', 'current', 'finished'] as const;
+
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export type TaskType = (typeof TASK_TYPES)[number];
+export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
+
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
+const HEX_COLOR_MESSAGE = 'color must be a 6-digit hex like #1f6feb';
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
-  status: z.string().min(1),
+  type: z.enum(TASK_TYPES),
+  status: z.enum(TASK_STATUSES),
   epic: z.string().min(1).optional(),
   order: z.number().int(),
 });
@@ -27,6 +39,8 @@ const dateString = z.preprocess((value) => {
 
 export const ReleaseFrontmatterSchema = z.object({
   release: z.string().min(1),
+  status: z.enum(RELEASE_STATUSES),
+  name: z.string().min(1).optional(),
   startDate: dateString.optional(),
   endDate: dateString.optional(),
 });
@@ -41,13 +55,15 @@ export const ReleaseSchema = z.object({
 export type Release = z.infer<typeof ReleaseSchema>;
 
 export const EpicFrontmatterSchema = z.object({
-  slug: z.string().min(1),
-  title: z.string().optional(),
+  name: z.string().min(1),
+  description: z.string().min(1).optional(),
+  color: z.string().regex(HEX_COLOR_REGEX, HEX_COLOR_MESSAGE),
 });
 export type EpicFrontmatter = z.infer<typeof EpicFrontmatterSchema>;
 
 export const EpicSchema = z.object({
   filename: z.string().min(1),
+  slug: z.string().min(1),
   frontmatter: EpicFrontmatterSchema,
   preamble: z.string(),
   tasks: z.array(TaskSchema),
@@ -61,13 +77,7 @@ export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().min(1),
     nextId: z.number().int().nonnegative(),
-    statuses: z.array(z.string().min(1)).min(1),
-    paths: z
-      .object({
-        releases: z.string().min(1),
-        epics: z.string().min(1),
-      })
-      .strict(),
+    tasksDir: z.string().min(1).optional(),
     theme: ThemeSchema.optional(),
   })
   .strict();

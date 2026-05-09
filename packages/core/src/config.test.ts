@@ -4,13 +4,6 @@ import type { BoardConfig } from './schemas.js';
 
 const VALID = `idPrefix: BD
 nextId: 47
-statuses:
-  - todo
-  - in-progress
-  - done
-paths:
-  releases: releases
-  epics: epics
 `;
 
 describe('parseConfig', () => {
@@ -20,8 +13,22 @@ describe('parseConfig', () => {
     expect(result.value).toEqual({
       idPrefix: 'BD',
       nextId: 47,
-      statuses: ['todo', 'in-progress', 'done'],
-      paths: { releases: 'releases', epics: 'epics' },
+    });
+  });
+
+  it('parses a config with optional fields', () => {
+    const text = `idPrefix: BD
+nextId: 47
+tasksDir: ../private-todos
+theme: dark
+`;
+    const result = parseConfig(text);
+    expect(result.problems).toEqual([]);
+    expect(result.value).toEqual({
+      idPrefix: 'BD',
+      nextId: 47,
+      tasksDir: '../private-todos',
+      theme: 'dark',
     });
   });
 
@@ -32,15 +39,14 @@ describe('parseConfig', () => {
     expect(result.problems).toHaveLength(1);
   });
 
-  it('rejects unknown keys inside paths', () => {
-    const text = `idPrefix: BD
-nextId: 0
-statuses: [todo]
-paths:
-  releases: releases
-  epics: epics
-  somethingElse: oops
-`;
+  it('rejects legacy statuses key', () => {
+    const text = `${VALID}statuses: [todo, done]\n`;
+    const result = parseConfig(text);
+    expect(result.value).toBeNull();
+  });
+
+  it('rejects legacy paths key', () => {
+    const text = `${VALID}paths:\n  releases: releases\n  epics: epics\n`;
     const result = parseConfig(text);
     expect(result.value).toBeNull();
   });
@@ -70,40 +76,47 @@ describe('serializeConfig', () => {
     const cfg: BoardConfig = {
       idPrefix: 'XX',
       nextId: 0,
-      statuses: ['todo'],
-      paths: { releases: 'r', epics: 'e' },
+      tasksDir: '.',
+      theme: 'dark',
     };
     const out = serializeConfig(cfg);
     const idx = (s: string) => out.indexOf(s);
     expect(idx('idPrefix')).toBeLessThan(idx('nextId'));
-    expect(idx('nextId')).toBeLessThan(idx('statuses'));
-    expect(idx('statuses')).toBeLessThan(idx('paths'));
-    expect(idx('releases')).toBeLessThan(idx('epics'));
+    expect(idx('nextId')).toBeLessThan(idx('tasksDir'));
+    expect(idx('tasksDir')).toBeLessThan(idx('theme'));
   });
 
-  it('omits theme when undefined', () => {
+  it('omits optional fields when undefined', () => {
     const cfg: BoardConfig = {
       idPrefix: 'BD',
       nextId: 0,
-      statuses: ['todo'],
-      paths: { releases: 'r', epics: 'e' },
     };
-    expect(serializeConfig(cfg)).not.toContain('theme');
+    const out = serializeConfig(cfg);
+    expect(out).not.toContain('theme');
+    expect(out).not.toContain('tasksDir');
   });
 
   it('round-trips theme when set', () => {
     const cfg: BoardConfig = {
       idPrefix: 'BD',
       nextId: 0,
-      statuses: ['todo'],
-      paths: { releases: 'r', epics: 'e' },
       theme: 'dark',
     };
     const out = serializeConfig(cfg);
     expect(out).toContain('theme: dark');
-    const idx = (s: string) => out.indexOf(s);
-    expect(idx('nextId')).toBeLessThan(idx('theme'));
-    expect(idx('theme')).toBeLessThan(idx('statuses'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+
+  it('round-trips tasksDir when set', () => {
+    const cfg: BoardConfig = {
+      idPrefix: 'BD',
+      nextId: 0,
+      tasksDir: '../private-todos',
+    };
+    const out = serializeConfig(cfg);
+    expect(out).toContain('tasksDir');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
     expect(back.value).toEqual(cfg);

@@ -5,14 +5,12 @@ import type { BoardConfig, Task } from './schemas.js';
 const baseConfig: BoardConfig = {
   idPrefix: 'BD',
   nextId: 7,
-  statuses: ['todo'],
-  paths: { releases: 'releases', epics: 'epics' },
 };
 
 const task = (id: string): Task => ({
   title: id,
   description: '',
-  frontmatter: { id, status: 'todo', order: 100 },
+  frontmatter: { id, type: 'feature', status: 'todo', order: 100 },
 });
 
 describe('nextTaskId', () => {
