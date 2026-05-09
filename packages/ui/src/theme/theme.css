@@ -18,6 +18,8 @@
   --accent-bg: #eff6ff;
   --accent-fg: #ffffff;
 
+  --inline-edit-hover-bg: #ebecf0;
+
   --tab-bg: #ffffff;
   --tab-bg-active: var(--accent-bg);
   --tab-border: var(--divider);
@@ -69,6 +71,8 @@
   --accent: #58a6ff;
   --accent-bg: #142a4d;
   --accent-fg: #0d1117;
+
+  --inline-edit-hover-bg: #21262d;
 
   --tab-bg: #161b22;
   --tab-bg-active: var(--accent-bg);

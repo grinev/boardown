@@ -328,7 +328,7 @@ card in Backlog/Archive — it is implicit from the column on Board.
 
 ### Task editor
 
-A modal dialog (Jira-style) used for both creating and editing tasks. Fields:
+**Creation** uses a dedicated modal dialog with all required fields:
 
 - **Title** — required.
 - **Type** — required, one of `bug`, `feature`, `docs`, `tech`.
@@ -338,9 +338,16 @@ A modal dialog (Jira-style) used for both creating and editing tasks. Fields:
 When created, the task is placed in the section the user invoked `+ Create`
 from; the section determines storage location.
 
+**Editing** happens **inline inside the task details dialog** (Jira-style):
+hovering a field highlights it, clicking turns it into an input/textarea
+focused with the cursor; changes save on blur or Enter (Cmd/Ctrl+Enter for
+the multiline description) and revert on Escape. Currently only the
+text fields are inline-editable: **title** and **description**. Inline
+editing of selects (type, status, epic, release) is the next step.
+
 ### Epic editor
 
-A modal dialog used for both creating and editing epics. Fields:
+**Creation** uses a dedicated modal dialog (planned) with:
 
 - **Name** — required, human-readable.
 - **Slug** — auto-generated from name (lowercase kebab-case); user can
@@ -349,10 +356,17 @@ A modal dialog used for both creating and editing epics. Fields:
 - **Description** — optional, plain text.
 - **Color** — required (hex), used for the epic badge on cards.
 
-Clicking an existing epic in the filter panel opens the editor with the list
-of linked tasks displayed below the form. Tasks in the list are clickable
-and open the task editor. **Delete epic** is allowed only if the epic has
-no tasks; otherwise the user is asked to move them to another epic first.
+**Editing** happens inline inside the epic details dialog, same UX as
+the task editor. Currently only **name** and **description** (the file
+preamble) are inline-editable; **color** stays editable through a future
+control. The epic's slug never changes through editing — renaming the
+underlying file is a manual operation outside this UI.
+
+Clicking an existing epic in the filter panel opens the details dialog with
+the list of linked tasks displayed below the description. Tasks in the
+list are clickable and open the task details dialog. **Delete epic** is
+allowed only if the epic has no tasks; otherwise the user is asked to move
+them to another epic first.
 
 ### Empty states
 
@@ -446,10 +460,12 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       empty state when no release is current
 - [ ] **Archive screen**: finished releases in the same layout as Backlog,
       read-only by default
-- [ ] **Task editor modal** (create + edit): title, type, epic, plain-text
-      description
-- [ ] **Epic editor modal** (create + edit), with the linked-tasks list
-      shown inside the modal; deletion guard on non-empty epics
+- [x] **Task creation modal**: title, type, epic, plain-text description
+- [x] **Task inline editing** in the details dialog: `title`,
+      `description` (selects — type, status, epic, release — still TODO)
+- [ ] **Epic creation modal** (with deletion guard on non-empty epics)
+- [x] **Epic inline editing** in the details dialog: `name`,
+      `description` / preamble (color — still TODO)
 - [ ] **Drag & drop** (`@dnd-kit`): within a kanban column, between columns
       on Board, between sections on Backlog
 - [ ] **Release lifecycle UI**: Start release / Complete release buttons on

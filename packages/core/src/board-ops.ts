@@ -173,6 +173,20 @@ export const editTask = <C extends Container>(
   return replaceTasks(container, tasks);
 };
 
+export interface EpicPatch {
+  name?: string;
+  preamble?: string;
+}
+
+export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
+  ...epic,
+  preamble: patch.preamble ?? epic.preamble,
+  frontmatter: {
+    ...epic.frontmatter,
+    name: patch.name ?? epic.frontmatter.name,
+  },
+});
+
 export const deleteTask = <C extends Container>(container: C, taskId: string): C =>
   replaceTasks(
     container,

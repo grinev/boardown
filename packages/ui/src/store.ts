@@ -1,15 +1,20 @@
 import type {
   BoardSnapshot,
+  EpicPatch,
   FsAdapter,
   ParseProblem,
+  TaskPatch,
   TaskType,
   Theme,
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
   createTask as createTaskInContainer,
+  editEpic,
+  editTask,
   loadBoard,
   serializeConfig,
+  serializeEpic,
   serializeRelease,
 } from '@boardown/core';
 import { create } from 'zustand';
@@ -50,6 +55,8 @@ interface BoardState {
   openSettings: () => void;
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
+  updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
+  updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
 }
 
 const formatProblems = (problems: ParseProblem[]): string =>
@@ -172,6 +179,77 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+      throw err;
+    }
+  },
+
+  updateTask: async (taskId, patch) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const releaseIndex = snapshot.releases.findIndex((r) =>
+      r.tasks.some((t) => t.frontmatter.id === taskId),
+    );
+    if (releaseIndex !== -1) {
+      const release = snapshot.releases[releaseIndex]!;
+      const nextRelease = editTask(release, taskId, patch);
+      const nextReleases = [...snapshot.releases];
+      nextReleases[releaseIndex] = nextRelease;
+      const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(nextRelease.filename, serializeRelease(nextRelease));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
+      return;
+    }
+
+    const epicIndex = snapshot.epics.findIndex((e) =>
+      e.tasks.some((t) => t.frontmatter.id === taskId),
+    );
+    if (epicIndex !== -1) {
+      const epic = snapshot.epics[epicIndex]!;
+      const nextEpic = editTask(epic, taskId, patch);
+      const nextEpics = [...snapshot.epics];
+      nextEpics[epicIndex] = nextEpic;
+      const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(nextEpic.filename, serializeEpic(nextEpic));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
+      return;
+    }
+
+    set({ errorMessage: `Task not found: ${taskId}` });
+  },
+
+  updateEpic: async (slug, patch) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const epicIndex = snapshot.epics.findIndex((e) => e.slug === slug);
+    if (epicIndex === -1) {
+      set({ errorMessage: `Epic not found: ${slug}` });
+      return;
+    }
+    const epic = snapshot.epics[epicIndex]!;
+    const nextEpic = editEpic(epic, patch);
+    const nextEpics = [...snapshot.epics];
+    nextEpics[epicIndex] = nextEpic;
+    const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+    try {
+      await fs.write(nextEpic.filename, serializeEpic(nextEpic));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save epic: ${message}` });
       throw err;
     }
   },

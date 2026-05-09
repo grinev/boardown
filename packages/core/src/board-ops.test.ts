@@ -3,11 +3,12 @@ import {
   changeTaskStatus,
   createTask,
   deleteTask,
+  editEpic,
   editTask,
   moveTaskBetweenContainers,
   reorderTask,
 } from './board-ops.js';
-import type { BoardConfig, Release, Task, TaskStatus } from './schemas.js';
+import type { BoardConfig, Epic, Release, Task, TaskStatus } from './schemas.js';
 
 const config: BoardConfig = {
   idPrefix: 'BD',
@@ -80,6 +81,45 @@ describe('editTask', () => {
     const r0 = release(task('BD-1', 'todo', 100));
     const r1 = editTask(r0, 'BD-1', { type: 'bug' });
     expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
+  });
+});
+
+describe('editEpic', () => {
+  const baseEpic = (): Epic => ({
+    filename: 'epics/parser.md',
+    slug: 'parser',
+    frontmatter: { name: 'Parser', color: '#1f6feb' },
+    preamble: 'old preamble',
+    tasks: [task('BD-1', 'todo', 100)],
+  });
+
+  it('updates name only', () => {
+    const e = editEpic(baseEpic(), { name: 'New Parser' });
+    expect(e.frontmatter.name).toBe('New Parser');
+    expect(e.preamble).toBe('old preamble');
+    expect(e.frontmatter.color).toBe('#1f6feb');
+    expect(e.slug).toBe('parser');
+    expect(e.filename).toBe('epics/parser.md');
+    expect(e.tasks).toHaveLength(1);
+  });
+
+  it('updates preamble only', () => {
+    const e = editEpic(baseEpic(), { preamble: 'fresh notes' });
+    expect(e.preamble).toBe('fresh notes');
+    expect(e.frontmatter.name).toBe('Parser');
+  });
+
+  it('updates name and preamble together', () => {
+    const e = editEpic(baseEpic(), { name: 'X', preamble: 'Y' });
+    expect(e.frontmatter.name).toBe('X');
+    expect(e.preamble).toBe('Y');
+  });
+
+  it('empty patch returns equivalent epic', () => {
+    const e = editEpic(baseEpic(), {});
+    expect(e.frontmatter.name).toBe('Parser');
+    expect(e.preamble).toBe('old preamble');
+    expect(e.tasks).toHaveLength(1);
   });
 });
 

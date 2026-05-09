@@ -1,8 +1,10 @@
 import { Layers, X } from 'lucide-react';
 import { Fragment } from 'react';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
+import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
+import { InlineEditText } from './InlineEditText';
 import { Modal } from './Modal';
 import styles from './EpicDetailsDialog.module.css';
 
@@ -25,14 +27,20 @@ export function EpicDetailsDialog({
   onClose,
   onTaskClick,
 }: EpicDetailsDialogProps) {
-  const description = epic.preamble.trim();
+  const updateEpic = useBoardStore((s) => s.updateEpic);
 
   return (
     <Modal open onClose={onClose} ariaLabel={`Epic ${epic.frontmatter.name}`}>
       <header className={styles.header}>
         <div className={styles.headerName}>
           <Layers className={styles.headerIcon} aria-hidden="true" />
-          <span className={styles.nameText}>{epic.frontmatter.name}</span>
+          <InlineEditText
+            value={epic.frontmatter.name}
+            required
+            ariaLabel="Epic name"
+            className={styles.nameText}
+            onSave={(next) => updateEpic(epic.slug, { name: next })}
+          />
         </div>
         <button
           type="button"
@@ -46,11 +54,14 @@ export function EpicDetailsDialog({
       <div className={styles.body}>
         <section className={styles.section}>
           <h3 className={styles.sectionHeading}>Description</h3>
-          {description.length === 0 ? (
-            <p className={styles.descriptionEmpty}>No description</p>
-          ) : (
-            <p className={styles.descriptionBody}>{description}</p>
-          )}
+          <InlineEditText
+            value={epic.preamble}
+            multiline
+            placeholder="No description"
+            ariaLabel="Epic description"
+            className={styles.descriptionBody}
+            onSave={(next) => updateEpic(epic.slug, { preamble: next })}
+          />
         </section>
         <section className={styles.section}>
           <h3 className={styles.sectionHeading}>Tasks ({tasks.length})</h3>

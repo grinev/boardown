@@ -1,9 +1,11 @@
 import { X } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
+import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
+import { InlineEditText } from './InlineEditText';
 import { Modal } from './Modal';
 import styles from './TaskDetailsDialog.module.css';
 
@@ -25,8 +27,7 @@ export function TaskDetailsDialog({
   const { id, type, status } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
-
-  const description = task.description.trim();
+  const updateTask = useBoardStore((s) => s.updateTask);
 
   const statusPillClass: Record<TaskStatus, string | undefined> = {
     todo: styles.statusTodo,
@@ -63,14 +64,23 @@ export function TaskDetailsDialog({
       </header>
       <div className={styles.body}>
         <main className={styles.main}>
-          <h2 className={styles.title}>{task.title}</h2>
+          <InlineEditText
+            value={task.title}
+            required
+            ariaLabel="Task title"
+            className={styles.title}
+            onSave={(next) => updateTask(id, { title: next })}
+          />
           <section className={styles.descriptionSection}>
             <h3 className={styles.sectionHeading}>Description</h3>
-            {description.length === 0 ? (
-              <p className={styles.descriptionEmpty}>No description</p>
-            ) : (
-              <p className={styles.descriptionBody}>{description}</p>
-            )}
+            <InlineEditText
+              value={task.description}
+              multiline
+              placeholder="No description"
+              ariaLabel="Task description"
+              className={styles.descriptionBody}
+              onSave={(next) => updateTask(id, { description: next })}
+            />
           </section>
         </main>
         <aside className={styles.sidebar}>
