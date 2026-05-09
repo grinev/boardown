@@ -1,9 +1,13 @@
-import type { Release, Task, TaskStatus } from '@boardown/core';
+import type { CSSProperties } from 'react';
+import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
+import { TASK_TYPE_META } from '../task-types';
+import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
 import styles from './BoardView.module.css';
 
 interface BoardViewProps {
   release: Release;
+  epics: Epic[];
   statuses: readonly TaskStatus[];
 }
 
@@ -23,8 +27,9 @@ const groupTasksByStatus = (
   return buckets;
 };
 
-export function BoardView({ release, statuses }: BoardViewProps) {
+export function BoardView({ release, epics, statuses }: BoardViewProps) {
   const buckets = groupTasksByStatus(release.tasks, statuses);
+  const epicsBySlug = new Map(epics.map((e) => [e.slug, e]));
 
   return (
     <div className={styles.board}>
@@ -40,7 +45,11 @@ export function BoardView({ release, statuses }: BoardViewProps) {
               {tasks.length === 0 ? (
                 <div className={styles.empty}>No tasks</div>
               ) : (
-                tasks.map((task) => <TaskCard key={task.frontmatter.id} task={task} />)
+                tasks.map((task) => {
+                  const slug = task.frontmatter.epic;
+                  const epic = slug ? epicsBySlug.get(slug) : undefined;
+                  return <TaskCard key={task.frontmatter.id} task={task} epic={epic} />;
+                })
               )}
             </div>
           </div>
@@ -50,19 +59,39 @@ export function BoardView({ release, statuses }: BoardViewProps) {
   );
 }
 
-function TaskCard({ task }: { task: Task }) {
-  const { id, epic } = task.frontmatter;
+interface TaskCardProps {
+  task: Task;
+  epic: Epic | undefined;
+}
+
+function TaskCard({ task, epic }: TaskCardProps) {
+  const { id, type } = task.frontmatter;
+  const typeMeta = TASK_TYPE_META[type];
+  const TypeIcon = typeMeta.icon;
+
+  const epicStyle = epic
+    ? ({
+        '--epic-bg': epic.frontmatter.color,
+        '--epic-fg': pickContrastText(epic.frontmatter.color),
+      } as CSSProperties)
+    : undefined;
+
   return (
     <article className={styles.card}>
-      <div className={styles.cardHeader}>
-        <span className={styles.idBadge}>{id}</span>
-        <span className={styles.cardTitle}>{task.title}</span>
-      </div>
+      <h3 className={styles.cardTitle}>{task.title}</h3>
       {epic && (
-        <div className={styles.cardMeta}>
-          <span className={styles.epicBadge}>{epic}</span>
-        </div>
+        <span className={styles.epicBadge} style={epicStyle}>
+          {epic.frontmatter.name}
+        </span>
       )}
+      <footer className={styles.cardFooter}>
+        <TypeIcon
+          className={styles.typeIcon}
+          style={{ color: typeMeta.colorVar }}
+          aria-label={typeMeta.label}
+        />
+        <span className={styles.idText}>{id}</span>
+      </footer>
     </article>
   );
 }

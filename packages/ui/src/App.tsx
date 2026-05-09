@@ -63,6 +63,7 @@ export function App({ fs }: AppProps) {
       <TabContent
         activeTab={activeTab}
         releases={snapshot.releases}
+        epics={snapshot.epics}
         statuses={TASK_STATUSES}
       />
       {problems.length > 0 && (
