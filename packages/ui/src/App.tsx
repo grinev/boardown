@@ -3,11 +3,13 @@ import { TASK_STATUSES } from '@boardown/core';
 import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
+import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { TaskDetailsDialog } from './components/TaskDetailsDialog';
 import { useBoardStore } from './store';
 import { findTaskById } from './utils/find-task';
+import { findTasksByEpic } from './utils/find-tasks-by-epic';
 
 interface AppProps {
   fs: FsAdapter;
@@ -21,9 +23,13 @@ export function App({ fs }: AppProps) {
   const activeTab = useBoardStore((s) => s.activeTab);
   const theme = useBoardStore((s) => s.theme);
   const selectedTaskId = useBoardStore((s) => s.selectedTaskId);
+  const selectedEpicSlug = useBoardStore((s) => s.selectedEpicSlug);
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
+  const closeEpic = useBoardStore((s) => s.closeEpic);
+  const openTask = useBoardStore((s) => s.openTask);
+  const openEpic = useBoardStore((s) => s.openEpic);
 
   useEffect(() => {
     void load(fs);
@@ -59,10 +65,16 @@ export function App({ fs }: AppProps) {
   }
 
   const selectedTask = selectedTaskId ? findTaskById(snapshot, selectedTaskId) : null;
-  const selectedEpicSlug = selectedTask?.frontmatter.epic;
+  const selectedTaskEpicSlug = selectedTask?.frontmatter.epic;
+  const selectedTaskEpic = selectedTaskEpicSlug
+    ? snapshot.epics.find((e) => e.slug === selectedTaskEpicSlug)
+    : undefined;
   const selectedEpic = selectedEpicSlug
     ? snapshot.epics.find((e) => e.slug === selectedEpicSlug)
     : undefined;
+  const selectedEpicTasks = selectedEpic
+    ? findTasksByEpic(snapshot, selectedEpic.slug)
+    : [];
 
   return (
     <main className={styles.app}>
@@ -89,7 +101,20 @@ export function App({ fs }: AppProps) {
         </section>
       )}
       {selectedTask && (
-        <TaskDetailsDialog task={selectedTask} epic={selectedEpic} onClose={closeTask} />
+        <TaskDetailsDialog
+          task={selectedTask}
+          epic={selectedTaskEpic}
+          onClose={closeTask}
+          onEpicClick={openEpic}
+        />
+      )}
+      {selectedEpic && (
+        <EpicDetailsDialog
+          epic={selectedEpic}
+          tasks={selectedEpicTasks}
+          onClose={closeEpic}
+          onTaskClick={openTask}
+        />
       )}
     </main>
   );

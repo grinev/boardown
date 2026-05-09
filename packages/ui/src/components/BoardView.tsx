@@ -70,6 +70,7 @@ function TaskCard({ task, epic }: TaskCardProps) {
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
   const openTask = useBoardStore((s) => s.openTask);
+  const openEpic = useBoardStore((s) => s.openEpic);
 
   const epicStyle = epic
     ? ({
@@ -90,9 +91,17 @@ function TaskCard({ task, epic }: TaskCardProps) {
         </button>
       </h3>
       {epic && (
-        <span className={styles.epicBadge} style={epicStyle}>
+        <button
+          type="button"
+          className={styles.epicBadge}
+          style={epicStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            openEpic(epic.slug);
+          }}
+        >
           {epic.frontmatter.name}
-        </span>
+        </button>
       )}
       <footer className={styles.cardFooter}>
         <TypeIcon

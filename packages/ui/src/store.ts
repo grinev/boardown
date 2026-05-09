@@ -15,11 +15,14 @@ interface BoardState {
   theme: Theme;
   fs: FsAdapter | null;
   selectedTaskId: string | null;
+  selectedEpicSlug: string | null;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   toggleTheme: () => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
+  openEpic: (slug: string) => void;
+  closeEpic: () => void;
 }
 
 const formatProblems = (problems: ParseProblem[]): string =>
@@ -34,6 +37,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   theme: 'light',
   fs: null,
   selectedTaskId: null,
+  selectedEpicSlug: null,
 
   load: async (fs) => {
     set({ status: 'loading', errorMessage: null, fs });
@@ -85,7 +89,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
-  openTask: (id) => set({ selectedTaskId: id }),
+  openTask: (id) => set({ selectedTaskId: id, selectedEpicSlug: null }),
 
   closeTask: () => set({ selectedTaskId: null }),
+
+  openEpic: (slug) => set({ selectedEpicSlug: slug, selectedTaskId: null }),
+
+  closeEpic: () => set({ selectedEpicSlug: null }),
 }));

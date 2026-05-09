@@ -55,6 +55,5 @@ export const serializeEpic = (epic: Epic): string => {
     name: epic.frontmatter.name,
     color: epic.frontmatter.color,
   };
-  if (epic.frontmatter.description !== undefined) fm.description = epic.frontmatter.description;
   return buildFile(fm, epic.preamble, epic.tasks);
 };

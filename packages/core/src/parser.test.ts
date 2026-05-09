@@ -135,7 +135,6 @@ describe('parseEpic', () => {
     const text = `---
 name: UI Foundation
 color: "#1f6feb"
-description: Foundational UI work.
 ---
 
 Notes about the epic.

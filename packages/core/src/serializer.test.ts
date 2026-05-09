@@ -123,17 +123,14 @@ color: "#8957e5"
 
   it('orders epic frontmatter keys canonically', () => {
     const text = `---
-name: Parser
 color: "#8957e5"
-description: Markdown parser and serializer.
+name: Parser
 ---
 `;
     const first = parseEpic(text, 'epics/parser.md', 'parser');
     const out = serializeEpic(first.value!);
     const nameIdx = out.indexOf('name: ');
     const colorIdx = out.indexOf('color: ');
-    const descIdx = out.indexOf('description: ');
     expect(nameIdx).toBeLessThan(colorIdx);
-    expect(colorIdx).toBeLessThan(descIdx);
   });
 });

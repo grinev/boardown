@@ -56,7 +56,6 @@ export type Release = z.infer<typeof ReleaseSchema>;
 
 export const EpicFrontmatterSchema = z.object({
   name: z.string().min(1),
-  description: z.string().min(1).optional(),
   color: z.string().regex(HEX_COLOR_REGEX, HEX_COLOR_MESSAGE),
 });
 export type EpicFrontmatter = z.infer<typeof EpicFrontmatterSchema>;

@@ -88,8 +88,11 @@ Epic frontmatter fields:
 | Field         | Type    | Notes                                                  |
 |---------------|---------|--------------------------------------------------------|
 | `name`        | string  | Human-readable name, e.g. "UI Foundation".             |
-| `description` | string? | Optional plain-text description.                       |
 | `color`       | string  | Hex color used for the epic badge on task cards.       |
+
+The epic's optional **description** lives in the body of the file, between
+the frontmatter and the first task — same shape as `Release` preamble.
+Plain text in MVP, no markdown rendering.
 
 There is no separate Epics view in the UI — epics act as a filter dimension
 on the Backlog screen, and have a dedicated edit modal listing their linked

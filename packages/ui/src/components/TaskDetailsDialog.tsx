@@ -11,9 +11,15 @@ interface TaskDetailsDialogProps {
   task: Task;
   epic: Epic | undefined;
   onClose: () => void;
+  onEpicClick?: (slug: string) => void;
 }
 
-export function TaskDetailsDialog({ task, epic, onClose }: TaskDetailsDialogProps) {
+export function TaskDetailsDialog({
+  task,
+  epic,
+  onClose,
+  onEpicClick,
+}: TaskDetailsDialogProps) {
   const { id, type, status } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
@@ -87,9 +93,20 @@ export function TaskDetailsDialog({ task, epic, onClose }: TaskDetailsDialogProp
                 <dt className={styles.detailLabel}>Epic</dt>
                 <dd className={styles.detailValue}>
                   {epic ? (
-                    <span className={styles.epicBadge} style={epicStyle}>
-                      {epic.frontmatter.name}
-                    </span>
+                    onEpicClick ? (
+                      <button
+                        type="button"
+                        className={styles.epicBadge}
+                        style={epicStyle}
+                        onClick={() => onEpicClick(epic.slug)}
+                      >
+                        {epic.frontmatter.name}
+                      </button>
+                    ) : (
+                      <span className={styles.epicBadge} style={epicStyle}>
+                        {epic.frontmatter.name}
+                      </span>
+                    )
                   ) : (
                     <span className={styles.detailEmpty}>—</span>
                   )}

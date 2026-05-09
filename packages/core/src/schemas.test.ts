@@ -116,15 +116,6 @@ describe('EpicFrontmatterSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts optional description', () => {
-    const result = EpicFrontmatterSchema.safeParse({
-      name: 'Parser',
-      description: 'Markdown parser and serializer.',
-      color: '#8957e5',
-    });
-    expect(result.success).toBe(true);
-  });
-
   it('rejects when name is missing', () => {
     const result = EpicFrontmatterSchema.safeParse({ color: '#1f6feb' });
     expect(result.success).toBe(false);
