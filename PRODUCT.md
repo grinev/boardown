@@ -118,6 +118,7 @@ By default, everything lives under `.boardown/` at the project root:
     ├── config.yaml
     ├── backlog.md         # tasks without an epic and without a release
     ├── releases/
+    │   ├── v0.1.md
     │   ├── 1.10.md
     │   └── 1.11.md
     └── epics/
@@ -125,11 +126,9 @@ By default, everything lives under `.boardown/` at the project root:
         └── parser.md
 ```
 
-The task containers (`backlog.md`, `releases/`, `epics/`) can be relocated
-to a different folder via the `tasksDir` setting in `config.yaml` — see
-"Configuration" below. The `config.yaml` file itself always stays at
-`.boardown/config.yaml` of the project; it is the marker that boardown is
-configured for that project.
+The shell chooses which `.boardown/` directory to open. The `config.yaml` file
+stays inside that directory and is the marker that boardown is configured
+there.
 
 ### Markdown file structure
 
@@ -189,7 +188,6 @@ Notes:
 ```yaml
 idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
-tasksDir: .           # optional, defaults to "." (same folder as config.yaml)
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
 ```
 
@@ -202,18 +200,6 @@ user-defined per epic (see Epic frontmatter above).
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
 by hand).
-
-`tasksDir` controls **where the task containers live** (`backlog.md`,
-`releases/`, `epics/`). It is interpreted relative to the directory
-containing `config.yaml` (an absolute path is also accepted). The default
-`.` keeps tasks alongside the config inside `.boardown/`. A common
-non-default use is to keep personal todos out of the project's git history,
-e.g. `tasksDir: ../private-todos`.
-
-When `tasksDir` points outside the project's git repository, the "git is
-the safety net" guarantee no longer applies — tasks then live wherever you
-point at, with no automatic versioning. Back them up some other way if that
-matters to you.
 
 An invalid `config.yaml` shows a dedicated error screen — no silent fallback.
 
@@ -236,11 +222,13 @@ This is the canonical way to use boardown.
 ### Browser (`packages/web`)
 
 A slim Vite app that mounts `@boardown/ui` over a small Vite middleware
-exposing the repo's own `.boardown/` over HTTP. **This is a development
-tool**, used for iterating on the UI without booting VS Code each time. It
-is not a production distribution channel for the MVP — there is no folder
-picker, no File System Access API integration. Both are explicit non-goals
-for the MVP and may or may not be added later.
+exposing a local `.boardown/` over HTTP. Without arguments it opens the repo's
+own `.boardown/`; from sources it can also open another data directory with
+`pnpm dev -- --data-dir /path/to/project/.boardown`. **This is a development
+and local-from-sources shell**, useful inside VS Code's built-in browser panel,
+but it is not a production browser distribution channel for the MVP — there is
+no folder picker, no File System Access API integration. Both are explicit
+non-goals for the MVP and may or may not be added later.
 
 Refresh strategy: on `window.focus` and `visibilitychange → visible`, the
 app reloads all files. A manual **Reload** button is also available in the
@@ -382,9 +370,11 @@ release, no future releases, no archived releases, no tasks under filter).
 
 ## "Create board" flow
 
-When `.boardown/` does not exist, the app prompts for the ID prefix and
-writes the default structure (`config.yaml`, an empty `backlog.md`, and
-empty `releases/` and `epics/` folders).
+When `.boardown/` does not exist, the shell writes the default structure
+(`config.yaml`, an empty `backlog.md`, empty `epics/`, and a starter
+`releases/v0.1.md` with `status: current`). The VS Code extension can prompt
+for the ID prefix; the local web shell uses `TASK` by default unless the user
+creates `config.yaml` manually before first launch.
 
 ## Out of scope (for now)
 
@@ -444,10 +434,8 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] Update schemas to the final concept: hardcoded `status` and `type`
       enums on `Task`; epic with `name`/`slug`/`description`/`color`;
       release with `status: future|current|finished` and optional dates;
-      drop user-configurable statuses from `BoardConfig`; add optional
-      `tasksDir` to `BoardConfig`
-- [ ] Resolve `tasksDir` against the config's folder (relative or absolute)
-      when locating `backlog.md`, `releases/`, `epics/`
+      drop user-configurable statuses and data-path settings from
+      `BoardConfig`
 - [ ] Add `backlog.md` as the storage container for tasks without an epic
 - [ ] Release lifecycle operations: start release, complete release (with
       task-relocation handling), guard the one-current-at-a-time invariant
@@ -490,8 +478,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 ### `packages/web` (dev shell)
 
 - [x] Vite + React app skeleton that mounts `@boardown/ui`
-- [x] `DevHttpFsAdapter` over the Vite middleware that serves the repo's
+- [x] `DevHttpFsAdapter` over the Vite middleware that serves the selected
       `.boardown/`
+- [x] Optional `--data-dir` for local use from sources, with default
+      structure initialization when `config.yaml` is missing
 - [ ] Refresh on `window.focus` and `visibilitychange → visible` calls
       `ui.reload()`
 - [ ] Wire the conflict-detection flow end-to-end against `lastModified`

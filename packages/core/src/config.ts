@@ -35,9 +35,6 @@ export const serializeConfig = (config: BoardConfig): string => {
     idPrefix: config.idPrefix,
     nextId: config.nextId,
   };
-  if (config.tasksDir !== undefined) {
-    ordered.tasksDir = config.tasksDir;
-  }
   if (config.theme !== undefined) {
     ordered.theme = config.theme;
   }

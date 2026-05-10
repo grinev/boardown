@@ -35,10 +35,11 @@ License: MIT.
 
 The primary MVP distribution channel is a **VS Code extension** (planned but
 not yet implemented), which reads `.boardown/` from the open workspace. The
-**browser shell (`packages/web`) is a development tool only** — it boots
-`@boardown/ui` against the repo's own `.boardown/` over a Vite middleware,
-and is not a production distribution channel for the MVP. File System Access
-API integration and a folder picker are explicit non-goals for the MVP.
+**browser shell (`packages/web`) is a development and local-from-sources tool**
+— it boots `@boardown/ui` against a selected `.boardown/` over a Vite
+middleware, and is not a production distribution channel for the MVP. File
+System Access API integration and a folder picker are explicit non-goals for
+the MVP.
 
 ## Repo layout
 
@@ -51,7 +52,7 @@ boardown/
 │   │                  # Takes an FsAdapter as a prop. No DOM-only / Node /
 │   │                  # VS Code imports.
 │   └── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
-│                      # over a Vite middleware that serves the repo's own
+│                      # over a Vite middleware that serves a selected
 │                      # .boardown/, focus/visibility refresh triggers.
 │                      # Mounts @boardown/ui. No production browser deployment
 │                      # in MVP.
@@ -73,8 +74,8 @@ arrives, it is a sibling shell next to `web` and reuses `@boardown/ui`
 unchanged — only the `FsAdapter` implementation and entry flow differ.
 
 `packages/web` ships a small Vite middleware that exposes
-`/api/fs/{read,list,stat,write}` over HTTP, scoped to the repo's own
-`.boardown/` folder, plus a `DevHttpFsAdapter` that talks to those
+`/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
+folder, plus a `DevHttpFsAdapter` that talks to those
 endpoints. This is the **only** browser-side path for the MVP — it is the
 working environment for `@boardown/ui` development, not a stepping stone to
 a production browser app. A production browser shell (with the FS Access

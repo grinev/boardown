@@ -76,7 +76,6 @@ export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().min(1),
     nextId: z.number().int().nonnegative(),
-    tasksDir: z.string().min(1).optional(),
     theme: ThemeSchema.optional(),
   })
   .strict();

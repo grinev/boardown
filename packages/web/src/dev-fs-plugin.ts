@@ -3,8 +3,7 @@ import path from 'node:path';
 import type { Connect, Plugin } from 'vite';
 
 interface DevFsPluginOptions {
-  root: string;
-  boardDir?: string;
+  boardRoot: string;
 }
 
 interface ResolvedTarget {
@@ -19,7 +18,27 @@ interface RejectedTarget {
 }
 type Resolved = ResolvedTarget | RejectedTarget;
 
-const sendJson = (res: Parameters<Connect.NextHandleFunction>[1], status: number, body: unknown) => {
+const CONFIG_FILENAME = 'config.yaml';
+const DEFAULT_CONFIG = `idPrefix: TASK
+nextId: 1
+`;
+const BACKLOG_FILENAME = 'backlog.md';
+const RELEASES_DIR = 'releases';
+const STARTER_RELEASE_FILENAME = 'v0.1.md';
+const STARTER_RELEASE = `---
+release: "v0.1"
+status: current
+---
+
+# Release v0.1
+`;
+const EPICS_DIR = 'epics';
+
+const sendJson = (
+  res: Parameters<Connect.NextHandleFunction>[1],
+  status: number,
+  body: unknown,
+) => {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
@@ -39,8 +58,42 @@ const readBody = (req: Connect.IncomingMessage): Promise<string> =>
     req.on('error', reject);
   });
 
+const writeFileIfMissing = async (filename: string, content: string): Promise<boolean> => {
+  try {
+    await fs.writeFile(filename, content, { encoding: 'utf-8', flag: 'wx' });
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw err;
+    }
+    return false;
+  }
+};
+
+export const ensureBoardRoot = async (boardRoot: string): Promise<void> => {
+  await fs.mkdir(boardRoot, { recursive: true });
+  const stat = await fs.stat(boardRoot);
+  if (!stat.isDirectory()) {
+    throw new Error(`Board data path is not a directory: ${boardRoot}`);
+  }
+
+  await fs.mkdir(path.join(boardRoot, RELEASES_DIR), { recursive: true });
+  await fs.mkdir(path.join(boardRoot, EPICS_DIR), { recursive: true });
+  await writeFileIfMissing(path.join(boardRoot, BACKLOG_FILENAME), '');
+  const createdConfig = await writeFileIfMissing(
+    path.join(boardRoot, CONFIG_FILENAME),
+    DEFAULT_CONFIG,
+  );
+  if (createdConfig) {
+    await writeFileIfMissing(
+      path.join(boardRoot, RELEASES_DIR, STARTER_RELEASE_FILENAME),
+      STARTER_RELEASE,
+    );
+  }
+};
+
 export function devFsPlugin(options: DevFsPluginOptions): Plugin {
-  const boardRoot = path.resolve(options.root, options.boardDir ?? '.boardown');
+  const boardRoot = path.resolve(options.boardRoot);
 
   const resolveTarget = (userPath: string | null): Resolved => {
     if (userPath === null || userPath === '') {
@@ -61,7 +114,10 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
   return {
     name: 'boardown-dev-fs',
     apply: 'serve',
-    configureServer(server) {
+    async configureServer(server) {
+      await ensureBoardRoot(boardRoot);
+      server.config.logger.info(`boardown data dir: ${boardRoot}`);
+
       server.middlewares.use(async (req, res, next) => {
         if (!req.url || !req.url.startsWith('/api/fs/')) {
           next();

@@ -2,11 +2,7 @@ import { CONFIG_FILENAME, parseConfig, serializeConfig } from './config.js';
 import type { FsAdapter } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
 import { parseEpic, parseRelease } from './parser.js';
-import {
-  fileProblem,
-  type ParseProblem,
-  type ParseResult,
-} from './problems.js';
+import { fileProblem, type ParseProblem, type ParseResult } from './problems.js';
 import type { BoardConfig, Epic, Release, Task } from './schemas.js';
 
 export interface BoardSnapshot {
@@ -56,8 +52,6 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   }
   let config = configResult.value;
 
-  // tasksDir resolution against the config folder lands in the next roadmap item;
-  // for now task containers live alongside config.yaml under their hardcoded names.
   const releaseFiles = (await safeList(fs, RELEASES_DIR)).filter(isMarkdownFile);
   const epicFiles = (await safeList(fs, EPICS_DIR)).filter(isMarkdownFile);
 

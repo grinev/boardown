@@ -160,13 +160,13 @@ describe('BoardConfigSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts an optional tasksDir', () => {
+  it('rejects tasksDir because data location belongs to the shell', () => {
     const result = BoardConfigSchema.safeParse({
       idPrefix: 'BD',
       nextId: 0,
       tasksDir: '../private-todos',
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it('accepts an optional theme', () => {

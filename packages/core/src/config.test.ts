@@ -19,7 +19,6 @@ describe('parseConfig', () => {
   it('parses a config with optional fields', () => {
     const text = `idPrefix: BD
 nextId: 47
-tasksDir: ../private-todos
 theme: dark
 `;
     const result = parseConfig(text);
@@ -27,9 +26,15 @@ theme: dark
     expect(result.value).toEqual({
       idPrefix: 'BD',
       nextId: 47,
-      tasksDir: '../private-todos',
       theme: 'dark',
     });
+  });
+
+  it('rejects tasksDir because data location belongs to the shell', () => {
+    const text = `${VALID}tasksDir: ../private-todos\n`;
+    const result = parseConfig(text);
+    expect(result.value).toBeNull();
+    expect(result.problems).toHaveLength(1);
   });
 
   it('rejects unknown keys (strict mode)', () => {
@@ -76,14 +81,12 @@ describe('serializeConfig', () => {
     const cfg: BoardConfig = {
       idPrefix: 'XX',
       nextId: 0,
-      tasksDir: '.',
       theme: 'dark',
     };
     const out = serializeConfig(cfg);
     const idx = (s: string) => out.indexOf(s);
     expect(idx('idPrefix')).toBeLessThan(idx('nextId'));
-    expect(idx('nextId')).toBeLessThan(idx('tasksDir'));
-    expect(idx('tasksDir')).toBeLessThan(idx('theme'));
+    expect(idx('nextId')).toBeLessThan(idx('theme'));
   });
 
   it('omits optional fields when undefined', () => {
@@ -93,7 +96,6 @@ describe('serializeConfig', () => {
     };
     const out = serializeConfig(cfg);
     expect(out).not.toContain('theme');
-    expect(out).not.toContain('tasksDir');
   });
 
   it('round-trips theme when set', () => {
@@ -104,19 +106,6 @@ describe('serializeConfig', () => {
     };
     const out = serializeConfig(cfg);
     expect(out).toContain('theme: dark');
-    const back = parseConfig(out);
-    expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
-  });
-
-  it('round-trips tasksDir when set', () => {
-    const cfg: BoardConfig = {
-      idPrefix: 'BD',
-      nextId: 0,
-      tasksDir: '../private-todos',
-    };
-    const out = serializeConfig(cfg);
-    expect(out).toContain('tasksDir');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
     expect(back.value).toEqual(cfg);
