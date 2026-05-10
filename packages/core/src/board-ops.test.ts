@@ -82,6 +82,25 @@ describe('editTask', () => {
     const r1 = editTask(r0, 'BD-1', { type: 'bug' });
     expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
   });
+
+  it('changes status and places task at end of new column', () => {
+    const r0 = release(
+      task('BD-1', 'todo', 100),
+      task('BD-2', 'done', 100),
+      task('BD-3', 'done', 200),
+    );
+    const r1 = editTask(r0, 'BD-1', { status: 'done' });
+    const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
+    expect(moved.frontmatter.status).toBe('done');
+    expect(moved.frontmatter.order).toBe(300);
+  });
+
+  it('keeps order untouched when status patch matches current status', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, 'BD-1', { status: 'todo', title: 'Same column' });
+    expect(r1.tasks[0]!.frontmatter.order).toBe(100);
+    expect(r1.tasks[0]!.title).toBe('Same column');
+  });
 });
 
 describe('editEpic', () => {

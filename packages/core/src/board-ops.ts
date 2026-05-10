@@ -145,6 +145,7 @@ export interface TaskPatch {
   description?: string;
   epic?: string | null;
   type?: TaskType;
+  status?: TaskStatus;
 }
 
 export const editTask = <C extends Container>(
@@ -152,7 +153,16 @@ export const editTask = <C extends Container>(
   taskId: string,
   patch: TaskPatch,
 ): C => {
-  const tasks = container.tasks.map((t) => {
+  const current = findTask(container.tasks, taskId);
+  const workingTasks =
+    patch.status !== undefined && patch.status !== current.frontmatter.status
+      ? placeTaskInColumn(container.tasks, taskId, {
+          status: patch.status,
+          beforeTaskId: null,
+        })
+      : container.tasks;
+
+  const tasks = workingTasks.map((t) => {
     if (t.frontmatter.id !== taskId) return t;
     const nextFrontmatter = { ...t.frontmatter };
     if (patch.epic === null) {

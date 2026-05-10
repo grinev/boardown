@@ -134,7 +134,7 @@ export function CreateTaskDialog({
             value={epicSlug}
             onChange={(e) => setEpicSlug(e.target.value)}
           >
-            <option value="">— No epic —</option>
+            <option value="">—</option>
             {sortedEpics.map((epic) => (
               <option key={epic.slug} value={epic.slug}>
                 {epic.frontmatter.name}

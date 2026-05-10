@@ -341,9 +341,15 @@ from; the section determines storage location.
 **Editing** happens **inline inside the task details dialog** (Jira-style):
 hovering a field highlights it, clicking turns it into an input/textarea
 focused with the cursor; changes save on blur or Enter (Cmd/Ctrl+Enter for
-the multiline description) and revert on Escape. Currently only the
-text fields are inline-editable: **title** and **description**. Inline
-editing of selects (type, status, epic, release) is the next step.
+the multiline description) and revert on Escape. **Title** and
+**description** are inline-editable as text fields; **status**, **type**,
+**epic**, and **release** are inline-editable via a dropdown that opens
+on click and commits on selection (Escape / outside-click cancels). The
+epic badge stays clickable to navigate to the epic — the surrounding row
+opens the dropdown, and a "—" option clears the epic. Changing release
+moves the task between containers (release-to-release, release-to-epic
+when "—" is chosen, epic-to-release); the "—" option only appears when
+the task has an epic to fall back to.
 
 ### Epic editor
 
@@ -462,7 +468,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       read-only by default
 - [x] **Task creation modal**: title, type, epic, plain-text description
 - [x] **Task inline editing** in the details dialog: `title`,
-      `description` (selects — type, status, epic, release — still TODO)
+      `description`, `type`, `status`, `epic`, `release`
 - [ ] **Epic creation modal** (with deletion guard on non-empty epics)
 - [x] **Epic inline editing** in the details dialog: `name`,
       `description` / preamble (color — still TODO)

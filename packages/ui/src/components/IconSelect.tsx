@@ -2,12 +2,19 @@ import { ChevronDown } from 'lucide-react';
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import styles from './IconSelect.module.css';
+
+interface ListboxPosition {
+  top: number;
+  left: number;
+  minWidth: number;
+}
 
 export interface IconSelectOption {
   value: string;
@@ -19,8 +26,14 @@ interface IconSelectProps {
   value: string;
   options: IconSelectOption[];
   onChange: (value: string) => void;
-  ariaLabel?: string;
-  disabled?: boolean;
+  ariaLabel?: string | undefined;
+  disabled?: boolean | undefined;
+  triggerClassName?: string | undefined;
+  listboxClassName?: string | undefined;
+  hideChevron?: boolean | undefined;
+  hideTriggerIcon?: boolean | undefined;
+  autoOpen?: boolean | undefined;
+  onClose?: (() => void) | undefined;
 }
 
 export function IconSelect({
@@ -29,12 +42,19 @@ export function IconSelect({
   onChange,
   ariaLabel,
   disabled = false,
+  triggerClassName,
+  listboxClassName,
+  hideChevron = false,
+  hideTriggerIcon = false,
+  autoOpen = false,
+  onClose,
 }: IconSelectProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(() => {
     const idx = options.findIndex((o) => o.value === value);
     return idx === -1 ? 0 : idx;
   });
+  const [position, setPosition] = useState<ListboxPosition | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
@@ -43,16 +63,47 @@ export function IconSelect({
 
   const selectedOption = options.find((o) => o.value === value);
 
+  const closeWithCallback = () => {
+    setOpen(false);
+    onClose?.();
+  };
+
   useEffect(() => {
     if (!open) return;
     const handler = (event: MouseEvent) => {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
+      const target = event.target as Node | null;
+      if (target == null) return;
+      if (containerRef.current?.contains(target)) return;
+      if (listboxRef.current?.contains(target)) return;
+      closeWithCallback();
     };
     window.addEventListener('mousedown', handler);
     return () => window.removeEventListener('mousedown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    const update = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: rect.width,
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -66,6 +117,7 @@ export function IconSelect({
   const closeAndFocusTrigger = () => {
     setOpen(false);
     triggerRef.current?.focus();
+    onClose?.();
   };
 
   const selectAt = (index: number) => {
@@ -116,6 +168,7 @@ export function IconSelect({
     }
     if (event.key === 'Tab') {
       setOpen(false);
+      onClose?.();
     }
   };
 
@@ -124,7 +177,7 @@ export function IconSelect({
       <button
         ref={triggerRef}
         type="button"
-        className={styles.trigger}
+        className={triggerClassName ?? styles.trigger}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
@@ -134,21 +187,33 @@ export function IconSelect({
         onKeyDown={handleTriggerKeyDown}
       >
         <span className={styles.value}>
-          {selectedOption?.icon && (
+          {!hideTriggerIcon && selectedOption?.icon && (
             <span className={styles.icon} aria-hidden="true">
               {selectedOption.icon}
             </span>
           )}
           <span className={styles.label}>{selectedOption?.label ?? ''}</span>
         </span>
-        <ChevronDown size={16} className={styles.chevron} aria-hidden="true" />
+        {!hideChevron && (
+          <ChevronDown size={16} className={styles.chevron} aria-hidden="true" />
+        )}
       </button>
-      {open && (
+      {open && position && (
         <ul
           id={listboxId}
           role="listbox"
           aria-activedescendant={`${optionIdPrefix}-${highlightedIndex}`}
-          className={styles.listbox}
+          className={
+            listboxClassName
+              ? `${styles.listbox} ${listboxClassName}`
+              : styles.listbox
+          }
+          style={{
+            position: 'fixed',
+            top: position.top,
+            left: position.left,
+            minWidth: position.minWidth,
+          }}
           tabIndex={-1}
           ref={listboxRef}
           onKeyDown={handleListKeyDown}

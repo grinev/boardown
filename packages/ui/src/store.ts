@@ -1,8 +1,11 @@
 import type {
   BoardSnapshot,
+  Epic,
   EpicPatch,
   FsAdapter,
   ParseProblem,
+  Release,
+  Task,
   TaskPatch,
   TaskType,
   Theme,
@@ -13,6 +16,7 @@ import {
   editEpic,
   editTask,
   loadBoard,
+  moveTaskBetweenContainers,
   serializeConfig,
   serializeEpic,
   serializeRelease,
@@ -56,6 +60,10 @@ interface BoardState {
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
+  moveTaskToRelease: (
+    taskId: string,
+    targetReleaseFilename: string | null,
+  ) => Promise<void>;
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
 }
 
@@ -228,6 +236,135 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     set({ errorMessage: `Task not found: ${taskId}` });
+  },
+
+  moveTaskToRelease: async (taskId, targetReleaseFilename) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    let sourceKind: 'release' | 'epic' | null = null;
+    let sourceIndex = -1;
+    let task: Task | null = null;
+
+    for (let i = 0; i < snapshot.releases.length; i++) {
+      const found = snapshot.releases[i]!.tasks.find(
+        (t) => t.frontmatter.id === taskId,
+      );
+      if (found) {
+        sourceKind = 'release';
+        sourceIndex = i;
+        task = found;
+        break;
+      }
+    }
+    if (!task) {
+      for (let i = 0; i < snapshot.epics.length; i++) {
+        const found = snapshot.epics[i]!.tasks.find(
+          (t) => t.frontmatter.id === taskId,
+        );
+        if (found) {
+          sourceKind = 'epic';
+          sourceIndex = i;
+          task = found;
+          break;
+        }
+      }
+    }
+    if (!task || sourceKind === null) {
+      set({ errorMessage: `Task not found: ${taskId}` });
+      return;
+    }
+
+    let destKind: 'release' | 'epic';
+    let destIndex: number;
+
+    if (targetReleaseFilename !== null) {
+      destIndex = snapshot.releases.findIndex(
+        (r) => r.filename === targetReleaseFilename,
+      );
+      if (destIndex === -1) {
+        set({ errorMessage: `Release not found: ${targetReleaseFilename}` });
+        return;
+      }
+      destKind = 'release';
+    } else {
+      const epicSlug = task.frontmatter.epic;
+      if (!epicSlug) {
+        set({
+          errorMessage: 'Cannot remove release: task has no epic to fall back to',
+        });
+        return;
+      }
+      destIndex = snapshot.epics.findIndex((e) => e.slug === epicSlug);
+      if (destIndex === -1) {
+        set({ errorMessage: `Epic not found: ${epicSlug}` });
+        return;
+      }
+      destKind = 'epic';
+    }
+
+    if (sourceKind === destKind && sourceIndex === destIndex) return;
+
+    const source =
+      sourceKind === 'release'
+        ? snapshot.releases[sourceIndex]!
+        : snapshot.epics[sourceIndex]!;
+    const dest =
+      destKind === 'release'
+        ? snapshot.releases[destIndex]!
+        : snapshot.epics[destIndex]!;
+
+    const moved = moveTaskBetweenContainers(source, dest, taskId, {
+      newStatus: task.frontmatter.status,
+      beforeTaskId: null,
+    });
+
+    const nextReleases = [...snapshot.releases];
+    const nextEpics = [...snapshot.epics];
+
+    if (sourceKind === 'release') {
+      nextReleases[sourceIndex] = moved.source as Release;
+    } else {
+      nextEpics[sourceIndex] = moved.source as Epic;
+    }
+    if (destKind === 'release') {
+      nextReleases[destIndex] = moved.dest as Release;
+    } else {
+      nextEpics[destIndex] = moved.dest as Epic;
+    }
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: nextReleases,
+      epics: nextEpics,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      if (sourceKind === 'release') {
+        await fs.write(
+          moved.source.filename,
+          serializeRelease(moved.source as Release),
+        );
+      } else {
+        await fs.write(
+          moved.source.filename,
+          serializeEpic(moved.source as Epic),
+        );
+      }
+      if (destKind === 'release') {
+        await fs.write(
+          moved.dest.filename,
+          serializeRelease(moved.dest as Release),
+        );
+      } else {
+        await fs.write(moved.dest.filename, serializeEpic(moved.dest as Epic));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to move task: ${message}` });
+      throw err;
+    }
   },
 
   updateEpic: async (slug, patch) => {
