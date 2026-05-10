@@ -4,6 +4,8 @@
   padding: 16px;
   align-items: flex-start;
   overflow-x: auto;
+  flex: 1 1 auto;
+  min-height: 280px;
 }
 
 .column {
@@ -13,7 +15,7 @@
   background: var(--surface-muted);
   border: 1px solid var(--card-border);
   border-radius: 8px;
-  max-height: calc(100vh - 140px);
+  max-height: 100%;
 }
 
 .columnHeader {
@@ -46,6 +48,7 @@
   gap: 8px;
   padding: 8px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1 1 auto;
   min-height: 60px;
   border-radius: 6px;

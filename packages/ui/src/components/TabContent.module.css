@@ -17,6 +17,13 @@
   font-size: 13px;
 }
 
+.boardSection {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .releaseHeader {
   padding: 16px 16px 0;
 }

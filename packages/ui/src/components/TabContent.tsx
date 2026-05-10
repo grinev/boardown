@@ -46,7 +46,7 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
     : `Release ${slug}`;
 
   return (
-    <section>
+    <section className={styles.boardSection}>
       <header className={styles.releaseHeader}>
         <h2>{heading}</h2>
       </header>

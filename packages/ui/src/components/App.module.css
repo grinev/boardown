@@ -1,5 +1,7 @@
 .app {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-family);

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
@@ -32,15 +33,32 @@ const groupTasksByStatus = (
 };
 
 export function BoardView({ release, epics, statuses }: BoardViewProps) {
-  const buckets = groupTasksByStatus(release.tasks, statuses);
-  const epicsBySlug = new Map(epics.map((e) => [e.slug, e]));
+  const sourceBuckets = useMemo(
+    () => groupTasksByStatus(release.tasks, statuses),
+    [release.tasks, statuses],
+  );
+  const [overlayBuckets, setOverlayBuckets] =
+    useState<Map<TaskStatus, Task[]>>(sourceBuckets);
+
+  useEffect(() => {
+    setOverlayBuckets(sourceBuckets);
+  }, [sourceBuckets]);
+
+  const epicsBySlug = useMemo(
+    () => new Map(epics.map((e) => [e.slug, e])),
+    [epics],
+  );
   const openCreateTask = useBoardStore((s) => s.openCreateTask);
 
   return (
-    <BoardDndContext buckets={buckets} epics={epics}>
+    <BoardDndContext
+      buckets={overlayBuckets}
+      setBuckets={setOverlayBuckets}
+      epics={epics}
+    >
       <div className={styles.board}>
         {statuses.map((status, index) => {
-          const tasks = buckets.get(status) ?? [];
+          const tasks = overlayBuckets.get(status) ?? [];
           const isFirstColumn = index === 0;
           return (
             <BoardColumn
