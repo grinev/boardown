@@ -231,6 +231,13 @@ export const reorderTask = <C extends Container>(
   );
 };
 
+export const moveTaskInContainer = <C extends Container>(
+  container: C,
+  taskId: string,
+  args: { status: TaskStatus; beforeTaskId: string | null },
+): C =>
+  replaceTasks(container, placeTaskInColumn(container.tasks, taskId, args));
+
 export interface MoveAcrossArgs {
   newStatus: TaskStatus;
   beforeTaskId: string | null;

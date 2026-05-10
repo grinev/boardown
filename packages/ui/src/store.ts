@@ -7,6 +7,7 @@ import type {
   Release,
   Task,
   TaskPatch,
+  TaskStatus,
   TaskType,
   Theme,
 } from '@boardown/core';
@@ -17,6 +18,7 @@ import {
   editTask,
   loadBoard,
   moveTaskBetweenContainers,
+  moveTaskInContainer,
   serializeConfig,
   serializeEpic,
   serializeRelease,
@@ -60,6 +62,11 @@ interface BoardState {
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
+  moveTask: (
+    taskId: string,
+    status: TaskStatus,
+    beforeTaskId: string | null,
+  ) => Promise<void>;
   moveTaskToRelease: (
     taskId: string,
     targetReleaseFilename: string | null,
@@ -230,6 +237,59 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
+      return;
+    }
+
+    set({ errorMessage: `Task not found: ${taskId}` });
+  },
+
+  moveTask: async (taskId, status, beforeTaskId) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const releaseIndex = snapshot.releases.findIndex((r) =>
+      r.tasks.some((t) => t.frontmatter.id === taskId),
+    );
+    if (releaseIndex !== -1) {
+      const release = snapshot.releases[releaseIndex]!;
+      const nextRelease = moveTaskInContainer(release, taskId, {
+        status,
+        beforeTaskId,
+      });
+      const nextReleases = [...snapshot.releases];
+      nextReleases[releaseIndex] = nextRelease;
+      const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(nextRelease.filename, serializeRelease(nextRelease));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to move task: ${message}` });
+        throw err;
+      }
+      return;
+    }
+
+    const epicIndex = snapshot.epics.findIndex((e) =>
+      e.tasks.some((t) => t.frontmatter.id === taskId),
+    );
+    if (epicIndex !== -1) {
+      const epic = snapshot.epics[epicIndex]!;
+      const nextEpic = moveTaskInContainer(epic, taskId, {
+        status,
+        beforeTaskId,
+      });
+      const nextEpics = [...snapshot.epics];
+      nextEpics[epicIndex] = nextEpic;
+      const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(nextEpic.filename, serializeEpic(nextEpic));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to move task: ${message}` });
         throw err;
       }
       return;

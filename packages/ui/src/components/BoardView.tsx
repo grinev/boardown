@@ -1,10 +1,12 @@
 import { Plus } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { TASK_TYPE_META } from '../task-types';
-import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
+import { BoardDndContext } from '../dnd/BoardDndContext';
+import { useDroppableColumn } from '../dnd/useBoardSortable';
+import { taskDragId } from '../dnd/ids';
+import { SortableTaskCard } from './SortableTaskCard';
 import styles from './BoardView.module.css';
 
 interface BoardViewProps {
@@ -35,95 +37,83 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
   const openCreateTask = useBoardStore((s) => s.openCreateTask);
 
   return (
-    <div className={styles.board}>
-      {statuses.map((status, index) => {
-        const tasks = buckets.get(status) ?? [];
-        const isFirstColumn = index === 0;
-        return (
-          <div key={status} className={styles.column}>
-            <div className={styles.columnHeader}>
-              <span>{formatStatusLabel(status)}</span>
-              <span className={styles.columnCount}>{tasks.length}</span>
-            </div>
-            <div className={styles.cards}>
-              {tasks.length === 0 ? (
-                <div className={styles.empty}>No tasks</div>
-              ) : (
-                tasks.map((task) => {
-                  const slug = task.frontmatter.epic;
-                  const epic = slug ? epicsBySlug.get(slug) : undefined;
-                  return <TaskCard key={task.frontmatter.id} task={task} epic={epic} />;
-                })
-              )}
-            </div>
-            {isFirstColumn && (
-              <button
-                type="button"
-                className={styles.addTaskButton}
-                onClick={() => openCreateTask(release.filename)}
-              >
-                <Plus size={14} aria-hidden="true" />
-                <span>Create task</span>
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <BoardDndContext buckets={buckets} epics={epics}>
+      <div className={styles.board}>
+        {statuses.map((status, index) => {
+          const tasks = buckets.get(status) ?? [];
+          const isFirstColumn = index === 0;
+          return (
+            <BoardColumn
+              key={status}
+              status={status}
+              tasks={tasks}
+              epicsBySlug={epicsBySlug}
+              showCreateButton={isFirstColumn}
+              onCreate={() => openCreateTask(release.filename)}
+            />
+          );
+        })}
+      </div>
+    </BoardDndContext>
   );
 }
 
-interface TaskCardProps {
-  task: Task;
-  epic: Epic | undefined;
+interface BoardColumnProps {
+  status: TaskStatus;
+  tasks: Task[];
+  epicsBySlug: Map<string, Epic>;
+  showCreateButton: boolean;
+  onCreate: () => void;
 }
 
-function TaskCard({ task, epic }: TaskCardProps) {
-  const { id, type } = task.frontmatter;
-  const typeMeta = TASK_TYPE_META[type];
-  const TypeIcon = typeMeta.icon;
-  const openTask = useBoardStore((s) => s.openTask);
-  const openEpic = useBoardStore((s) => s.openEpic);
-
-  const epicStyle = epic
-    ? ({
-        '--epic-bg': epic.frontmatter.color,
-        '--epic-fg': pickContrastText(epic.frontmatter.color),
-      } as CSSProperties)
-    : undefined;
+function BoardColumn({
+  status,
+  tasks,
+  epicsBySlug,
+  showCreateButton,
+  onCreate,
+}: BoardColumnProps) {
+  const { setNodeRef, isOver } = useDroppableColumn(status);
+  const items = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
-    <article className={styles.card}>
-      <h3 className={styles.cardTitle}>
+    <div className={styles.column}>
+      <div className={styles.columnHeader}>
+        <span>{formatStatusLabel(status)}</span>
+        <span className={styles.columnCount}>{tasks.length}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`${styles.cards} ${isOver ? styles.cardsOver : ''}`}
+      >
+        <SortableContext items={items} strategy={verticalListSortingStrategy}>
+          {tasks.length === 0 ? (
+            <div className={styles.empty}>No tasks</div>
+          ) : (
+            tasks.map((task) => {
+              const slug = task.frontmatter.epic;
+              const epic = slug ? epicsBySlug.get(slug) : undefined;
+              return (
+                <SortableTaskCard
+                  key={task.frontmatter.id}
+                  task={task}
+                  epic={epic}
+                />
+              );
+            })
+          )}
+        </SortableContext>
+      </div>
+      {showCreateButton && (
         <button
           type="button"
-          className={styles.cardTitleButton}
-          onClick={() => openTask(id)}
+          className={styles.addTaskButton}
+          onClick={onCreate}
         >
-          {task.title}
-        </button>
-      </h3>
-      {epic && (
-        <button
-          type="button"
-          className={styles.epicBadge}
-          style={epicStyle}
-          onClick={(e) => {
-            e.stopPropagation();
-            openEpic(epic.slug);
-          }}
-        >
-          {epic.frontmatter.name}
+          <Plus size={14} aria-hidden="true" />
+          <span>Create task</span>
         </button>
       )}
-      <footer className={styles.cardFooter}>
-        <TypeIcon
-          className={styles.typeIcon}
-          style={{ color: typeMeta.colorVar }}
-          aria-label={typeMeta.label}
-        />
-        <span className={styles.idText}>{id}</span>
-      </footer>
-    </article>
+    </div>
   );
 }
