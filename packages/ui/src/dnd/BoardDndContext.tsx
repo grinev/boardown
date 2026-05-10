@@ -1,4 +1,11 @@
-import { useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -20,12 +27,7 @@ import { useBoardStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import boardStyles from '../components/BoardView.module.css';
 import { isTaskDragId, parseTaskDragId } from './ids';
-import {
-  applyCrossColumnDragOver,
-  findOverlayPlacement,
-  findStatusOf,
-} from './applyDragOver';
-import { resolveDrop } from './resolveDrop';
+import { applyDragOver, findOverlayPlacement } from './applyDragOver';
 
 interface BoardDndContextProps {
   buckets: Map<TaskStatus, Task[]>;
@@ -43,6 +45,11 @@ export function BoardDndContext({
   const moveTask = useBoardStore((s) => s.moveTask);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const originalBucketsRef = useRef<Map<TaskStatus, Task[]> | null>(null);
+  const bucketsRef = useRef(buckets);
+
+  useEffect(() => {
+    bucketsRef.current = buckets;
+  }, [buckets]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -67,7 +74,11 @@ export function BoardDndContext({
   const onDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
-    setBuckets((prev) => applyCrossColumnDragOver(active, over, prev));
+    setBuckets((prev) => {
+      const next = applyDragOver(active, over, prev);
+      bucketsRef.current = next;
+      return next;
+    });
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -79,36 +90,47 @@ export function BoardDndContext({
     if (!isTaskDragId(activeId)) return;
     const taskId = parseTaskDragId(activeId);
 
-    const overlayStatus = findStatusOf(buckets, taskId);
-    const originalStatus = original ? findStatusOf(original, taskId) : null;
-    const crossedColumns =
-      overlayStatus !== null &&
-      originalStatus !== null &&
-      overlayStatus !== originalStatus;
-
-    if (crossedColumns) {
-      const placement = findOverlayPlacement(buckets, taskId);
-      if (!placement) {
-        if (original) setBuckets(original);
-        return;
+    let finalBuckets = bucketsRef.current;
+    if (event.over) {
+      const next = applyDragOver(event.active, event.over, finalBuckets);
+      if (next !== finalBuckets) {
+        finalBuckets = next;
+        bucketsRef.current = next;
+        setBuckets(next);
       }
-      void moveTask(taskId, placement.status, placement.beforeTaskId);
+    }
+
+    const placement = findOverlayPlacement(finalBuckets, taskId);
+    if (!placement) {
+      if (original) {
+        bucketsRef.current = original;
+        setBuckets(original);
+      }
       return;
     }
 
-    const move = resolveDrop(event, buckets);
-    if (!move) {
-      if (original) setBuckets(original);
+    const originalPlacement = original
+      ? findOverlayPlacement(original, taskId)
+      : null;
+    if (
+      originalPlacement &&
+      originalPlacement.status === placement.status &&
+      originalPlacement.beforeTaskId === placement.beforeTaskId
+    ) {
       return;
     }
-    void moveTask(move.taskId, move.status, move.beforeTaskId);
+
+    void moveTask(taskId, placement.status, placement.beforeTaskId);
   };
 
   const onDragCancel = () => {
     setActiveTaskId(null);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
-    if (original) setBuckets(original);
+    if (original) {
+      bucketsRef.current = original;
+      setBuckets(original);
+    }
   };
 
   const activeTask = activeTaskId
