@@ -91,7 +91,7 @@ function BoardColumn({
   showCreateButton,
   onCreate,
 }: BoardColumnProps) {
-  const { setNodeRef, isOver } = useDroppableColumn(status);
+  const { setNodeRef } = useDroppableColumn(status);
   const items = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
@@ -100,10 +100,7 @@ function BoardColumn({
         <span>{formatStatusLabel(status)}</span>
         <span className={styles.columnCount}>{tasks.length}</span>
       </div>
-      <div
-        ref={setNodeRef}
-        className={`${styles.cards} ${isOver ? styles.cardsOver : ''}`}
-      >
+      <div ref={setNodeRef} className={styles.cards}>
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? (
             <div className={styles.empty}>No tasks</div>
