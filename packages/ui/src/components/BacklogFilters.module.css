@@ -2,13 +2,8 @@
   display: flex;
   gap: 12px;
   align-items: flex-end;
-  padding: 10px 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  padding: 16px 16px 16px 16px;
+  background: var(--bg);
 }
 
 .field {

@@ -129,26 +129,28 @@ export function BacklogView() {
         onTypeChange={setTypeFilter}
         onEpicChange={setEpicFilter}
       />
-      {sections.map((section) => {
-        const displayedTasks = filtersActive
-          ? section.tasks.filter(matchesFilters)
-          : section.tasks;
-        return (
-          <BacklogSection
-            key={section.key}
-            title={section.title}
-            statusLabel={section.statusLabel}
-            tasks={displayedTasks}
-            totalCount={section.tasks.length}
-            filtersActive={filtersActive}
-            collapsed={collapsedKeys.has(section.key)}
-            onToggle={() => toggleCollapsed(section.key)}
-            epicsBySlug={epicsBySlug}
-            onOpenTask={openTask}
-            onOpenEpic={openEpic}
-          />
-        );
-      })}
+      <div className={styles.scrollArea}>
+        {sections.map((section) => {
+          const displayedTasks = filtersActive
+            ? section.tasks.filter(matchesFilters)
+            : section.tasks;
+          return (
+            <BacklogSection
+              key={section.key}
+              title={section.title}
+              statusLabel={section.statusLabel}
+              tasks={displayedTasks}
+              totalCount={section.tasks.length}
+              filtersActive={filtersActive}
+              collapsed={collapsedKeys.has(section.key)}
+              onToggle={() => toggleCollapsed(section.key)}
+              epicsBySlug={epicsBySlug}
+              onOpenTask={openTask}
+              onOpenEpic={openEpic}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
