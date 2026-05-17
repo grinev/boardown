@@ -1,0 +1,80 @@
+.bar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  padding-left: 2px;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  min-width: 140px;
+}
+
+.trigger:hover {
+  background: var(--surface-muted);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.epicSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.statusDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.statusDotTodo {
+  background: var(--status-todo-fg);
+}
+
+.statusDotInProgress {
+  background: var(--status-in-progress-fg);
+}
+
+.statusDotDone {
+  background: var(--status-done-fg);
+}

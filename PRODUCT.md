@@ -280,12 +280,16 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
    `epics/no_epic.md`, rendered as a flat list with epic badges (no nested
    grouping).
 
-A narrow filter panel on the left side hosts:
+A compact filter bar sits at the very top of the screen with three
+single-select dropdowns, each labelled (`status`, `type`, `epic`) above the
+control so the controls themselves stay narrow. The default value of every
+filter is "All" — nothing is filtered out. There is no reset button:
+switching a filter back to "All" is the reset. When any filter is non-default,
+each section's count pill switches from `5` to `1 of 5` (matching of total).
+The filter applies **globally** to all three sections.
 
-- `+ New epic` button at the top.
-- Checkboxes for each existing epic. The filter applies **globally** to all
-  three sections.
-- Future filter dimensions (type, search) live here too.
+The `epic` filter additionally has a "No epic" option for tasks that live in
+`epics/no_epic.md`. A search dimension may join the bar later.
 
 Drag and drop:
 
@@ -469,8 +473,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       on Board, between sections on Backlog
 - [ ] **Release lifecycle UI**: Start release / Complete release buttons on
       section headers; the "where to move unfinished tasks" modal on Complete
-- [ ] **Epic filter** in Backlog/Archive panel (multi-select, applies
-      globally to all sections on the screen)
+- [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for
+      `status`, `type`, `epic` (with a "No epic" option); applies globally
+      to all sections; counter switches to `N of M` when active. Backlog
+      done; Archive still TODO.
 - [ ] **Empty states** for every screen and major section
 - [ ] **Initial-board flow**: when no `.boardown/` exists, prompt for ID
       prefix and create the default structure via the adapter

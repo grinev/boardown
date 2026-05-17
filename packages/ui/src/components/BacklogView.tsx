@@ -1,9 +1,15 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
+import {
+  BacklogFilters,
+  type EpicFilter,
+  type StatusFilter,
+  type TypeFilter,
+} from './BacklogFilters';
 import styles from './BacklogView.module.css';
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
@@ -38,9 +44,21 @@ export function BacklogView() {
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
 
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
+
+  const epics = snapshot?.epics ?? [];
+
+  useEffect(() => {
+    if (epicFilter === 'all' || epicFilter === 'no-epic') return;
+    const exists = epics.some((e) => e.slug === epicFilter);
+    if (!exists) setEpicFilter('all');
+  }, [epics, epicFilter]);
+
   if (snapshot === null) return null;
 
-  const { releases, epics, backlog } = snapshot;
+  const { releases, backlog } = snapshot;
 
   const epicsBySlug = new Map(epics.map((e) => [e.slug, e]));
 
@@ -53,6 +71,20 @@ export function BacklogView() {
     ...epics.flatMap((e) => e.tasks),
     ...(backlog?.tasks ?? []),
   ].sort(sortBacklogTasks);
+
+  const filtersActive =
+    statusFilter !== 'all' || typeFilter !== 'all' || epicFilter !== 'all';
+
+  const matchesFilters = (task: Task): boolean => {
+    if (statusFilter !== 'all' && task.frontmatter.status !== statusFilter) return false;
+    if (typeFilter !== 'all' && task.frontmatter.type !== typeFilter) return false;
+    if (epicFilter === 'no-epic') {
+      if (task.frontmatter.epic !== undefined) return false;
+    } else if (epicFilter !== 'all') {
+      if (task.frontmatter.epic !== epicFilter) return false;
+    }
+    return true;
+  };
 
   const sections: SectionData[] = [];
   if (current) {
@@ -75,17 +107,33 @@ export function BacklogView() {
 
   return (
     <div className={styles.view}>
-      {sections.map((section) => (
-        <BacklogSection
-          key={section.key}
-          title={section.title}
-          statusLabel={section.statusLabel}
-          tasks={section.tasks}
-          epicsBySlug={epicsBySlug}
-          onOpenTask={openTask}
-          onOpenEpic={openEpic}
-        />
-      ))}
+      <BacklogFilters
+        epics={epics}
+        statusFilter={statusFilter}
+        typeFilter={typeFilter}
+        epicFilter={epicFilter}
+        onStatusChange={setStatusFilter}
+        onTypeChange={setTypeFilter}
+        onEpicChange={setEpicFilter}
+      />
+      {sections.map((section) => {
+        const displayedTasks = filtersActive
+          ? section.tasks.filter(matchesFilters)
+          : section.tasks;
+        return (
+          <BacklogSection
+            key={section.key}
+            title={section.title}
+            statusLabel={section.statusLabel}
+            tasks={displayedTasks}
+            totalCount={section.tasks.length}
+            filtersActive={filtersActive}
+            epicsBySlug={epicsBySlug}
+            onOpenTask={openTask}
+            onOpenEpic={openEpic}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -94,6 +142,8 @@ interface BacklogSectionProps {
   title: string;
   statusLabel: string | null;
   tasks: Task[];
+  totalCount: number;
+  filtersActive: boolean;
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
@@ -103,19 +153,27 @@ function BacklogSection({
   title,
   statusLabel,
   tasks,
+  totalCount,
+  filtersActive,
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
 }: BacklogSectionProps) {
+  const emptyMessage =
+    totalCount === 0
+      ? 'No work items'
+      : 'No tasks match the filters';
   return (
     <section className={styles.section}>
       <header className={styles.sectionHeader}>
         <span className={styles.sectionTitle}>{title}</span>
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
-        <span className={styles.sectionCount}>{tasks.length}</span>
+        <span className={styles.sectionCount}>
+          {filtersActive ? `${tasks.length} of ${totalCount}` : tasks.length}
+        </span>
       </header>
       {tasks.length === 0 ? (
-        <div className={styles.empty}>No work items</div>
+        <div className={styles.empty}>{emptyMessage}</div>
       ) : (
         <ul className={styles.rows}>
           {tasks.map((task) => {
