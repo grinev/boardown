@@ -57,9 +57,7 @@ export function CreateTaskDialog({
     [],
   );
 
-  const releaseLabel = release.frontmatter.name
-    ? `${release.frontmatter.release} — ${release.frontmatter.name}`
-    : release.frontmatter.release;
+  const releaseLabel = release.frontmatter.name ?? release.slug;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();

@@ -41,10 +41,10 @@ const buildFile = (
 
 export const serializeRelease = (release: Release): string => {
   const fm: Record<string, unknown> = {
-    release: release.frontmatter.release,
     status: release.frontmatter.status,
   };
   if (release.frontmatter.name !== undefined) fm.name = release.frontmatter.name;
+  if (release.frontmatter.description !== undefined) fm.description = release.frontmatter.description;
   if (release.frontmatter.startDate !== undefined) fm.startDate = release.frontmatter.startDate;
   if (release.frontmatter.endDate !== undefined) fm.endDate = release.frontmatter.endDate;
   return buildFile(fm, release.preamble, release.tasks);

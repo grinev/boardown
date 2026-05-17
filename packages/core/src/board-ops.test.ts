@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeTaskStatus,
+  createRelease,
   createTask,
   deleteTask,
   editEpic,
@@ -28,7 +29,8 @@ const task = (
 
 const release = (...tasks: Task[]): Release => ({
   filename: 'releases/1.10.md',
-  frontmatter: { release: '1.10', status: 'current' },
+  slug: '1.10',
+  frontmatter: { status: 'current' },
   preamble: '',
   tasks,
 });
@@ -196,6 +198,84 @@ describe('reorderTask', () => {
       .sort((a, b) => a.frontmatter.order - b.frontmatter.order)
       .map((t) => t.frontmatter.order);
     expect(orders).toEqual([100, 200, 300]);
+  });
+});
+
+describe('createRelease', () => {
+  it('stores name and uses it as slug when filename-safe', () => {
+    const r = createRelease([], { name: '2.0' });
+    expect(r.filename).toBe('releases/2.0.md');
+    expect(r.slug).toBe('2.0');
+    expect(r.frontmatter.name).toBe('2.0');
+    expect(r.frontmatter.status).toBe('future');
+    expect(r.frontmatter.description).toBeUndefined();
+    expect(r.tasks).toEqual([]);
+    expect(r.preamble).toBe('');
+  });
+
+  it('lowercases the slug while keeping the name as typed', () => {
+    const r = createRelease([], { name: 'Beta Release' });
+    expect(r.slug).toBe('beta-release');
+    expect(r.frontmatter.name).toBe('Beta Release');
+  });
+
+  it('preserves unicode and emoji in slug but replaces spaces with - and lowercases', () => {
+    const r = createRelease([], { name: 'Бета релиз 🚀' });
+    expect(r.slug).toBe('бета-релиз-🚀');
+    expect(r.filename).toBe('releases/бета-релиз-🚀.md');
+    expect(r.frontmatter.name).toBe('Бета релиз 🚀');
+  });
+
+  it('replaces filesystem-forbidden characters with - in the slug', () => {
+    const r = createRelease([], { name: '1.0:Beta/X?' });
+    expect(r.slug).toBe('1.0-beta-x');
+    expect(r.frontmatter.name).toBe('1.0:Beta/X?');
+  });
+
+  it('collapses runs of dashes and trims them at edges', () => {
+    expect(createRelease([], { name: 'Foo: bar' }).slug).toBe('foo-bar');
+    expect(createRelease([], { name: ':foo:' }).slug).toBe('foo');
+    expect(createRelease([], { name: 'a   b' }).slug).toBe('a-b');
+  });
+
+  it('stores trimmed description when provided', () => {
+    const r = createRelease([], { name: '2.0', description: '  beta  ' });
+    expect(r.frontmatter.description).toBe('beta');
+  });
+
+  it('omits empty description', () => {
+    const r = createRelease([], { name: '2.0', description: '   ' });
+    expect(r.frontmatter.description).toBeUndefined();
+  });
+
+  it('throws when the slug duplicates an existing release (case-insensitive)', () => {
+    const existing = createRelease([], { name: 'Beta' });
+    expect(existing.slug).toBe('beta');
+    expect(() => createRelease([existing], { name: 'BETA' })).toThrow(
+      /already exists/i,
+    );
+    expect(() => createRelease([existing], { name: 'Beta' })).toThrow(
+      /already exists/i,
+    );
+  });
+
+  it('throws when sanitization leaves the slug empty', () => {
+    expect(() => createRelease([], { name: '..' })).toThrow(
+      /characters allowed in a filename/i,
+    );
+    expect(() => createRelease([], { name: '???' })).toThrow(
+      /characters allowed in a filename/i,
+    );
+  });
+
+  it('throws when the name is empty after trimming', () => {
+    expect(() => createRelease([], { name: '   ' })).toThrow(/required/i);
+  });
+
+  it('suffixes reserved Windows names with underscore', () => {
+    const r = createRelease([], { name: 'CON' });
+    expect(r.slug).toBe('con_');
+    expect(r.filename).toBe('releases/con_.md');
   });
 });
 

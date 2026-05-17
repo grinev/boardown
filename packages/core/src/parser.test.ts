@@ -38,10 +38,10 @@ Description in plain markdown. Supports **bold**, lists, \`code\`, etc.
 
 describe('parseRelease', () => {
   it('parses a well-formed file', () => {
-    const result = parseRelease(RELEASE_OK, 'releases/1.10.md');
+    const result = parseRelease(RELEASE_OK, 'releases/1.10.md', '1.10');
     expect(result.problems).toEqual([]);
     expect(result.value).not.toBeNull();
-    expect(result.value!.frontmatter.release).toBe('1.10');
+    expect(result.value!.slug).toBe('1.10');
     expect(result.value!.frontmatter.status).toBe('current');
     expect(result.value!.preamble).toBe('# Release 1.10');
     expect(result.value!.tasks).toHaveLength(2);
@@ -59,7 +59,7 @@ describe('parseRelease', () => {
 
   it('reports a file-level problem when the file frontmatter is missing', () => {
     const text = '## Some task\n\n---\nid: BD-1\ntype: feature\nstatus: todo\norder: 100\n---\n\nbody\n';
-    const result = parseRelease(text, 'releases/x.md');
+    const result = parseRelease(text, 'releases/x.md', 'x');
     expect(result.value).toBeNull();
     expect(result.problems).toHaveLength(1);
     expect(result.problems[0]!.scope).toBe('file');
@@ -92,7 +92,7 @@ order: 200
 
 missing id
 `;
-    const result = parseRelease(text, 'releases/1.0.md');
+    const result = parseRelease(text, 'releases/1.0.md', '1.0');
     expect(result.value).not.toBeNull();
     expect(result.value!.tasks).toHaveLength(1);
     expect(result.value!.tasks[0]!.frontmatter.id).toBe('BD-1');
@@ -122,7 +122,7 @@ Some description
 
 more description here
 `;
-    const result = parseRelease(text, 'releases/1.0.md');
+    const result = parseRelease(text, 'releases/1.0.md', '1.0');
     expect(result.value).not.toBeNull();
     expect(result.value!.tasks).toHaveLength(1);
     expect(result.value!.tasks[0]!.description).toContain('## Not a task heading');

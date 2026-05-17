@@ -38,9 +38,9 @@ const dateString = z.preprocess((value) => {
 }, z.string().min(1));
 
 export const ReleaseFrontmatterSchema = z.object({
-  release: z.string().min(1),
   status: z.enum(RELEASE_STATUSES),
   name: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
   startDate: dateString.optional(),
   endDate: dateString.optional(),
 });
@@ -48,6 +48,7 @@ export type ReleaseFrontmatter = z.infer<typeof ReleaseFrontmatterSchema>;
 
 export const ReleaseSchema = z.object({
   filename: z.string().min(1),
+  slug: z.string().min(1),
   frontmatter: ReleaseFrontmatterSchema,
   preamble: z.string(),
   tasks: z.array(TaskSchema),

@@ -1,3 +1,4 @@
+import { RELEASES_DIR } from './board-ops.js';
 import { CONFIG_FILENAME, parseConfig, serializeConfig } from './config.js';
 import type { FsAdapter } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
@@ -13,7 +14,6 @@ export interface BoardSnapshot {
   problems: ParseProblem[];
 }
 
-const RELEASES_DIR = 'releases';
 const EPICS_DIR = 'epics';
 const BACKLOG_BASENAME = 'no_epic.md';
 const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
@@ -64,6 +64,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   const releases: Release[] = [];
   for (const name of releaseFiles) {
     const path = `${RELEASES_DIR}/${name}`;
+    const slug = name.replace(/\.md$/, '');
     let text: string;
     try {
       text = await fs.read(path);
@@ -72,7 +73,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
-    const parsed = parseRelease(text, path);
+    const parsed = parseRelease(text, path, slug);
     problems.push(...parsed.problems);
     if (parsed.value !== null) releases.push(parsed.value);
   }

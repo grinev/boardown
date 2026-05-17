@@ -94,6 +94,32 @@
   white-space: nowrap;
 }
 
+.sectionCreateButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sectionCreateButton:hover {
+  background: var(--surface-muted);
+}
+
+.sectionCreateButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .rows {
   list-style: none;
   margin: 0;

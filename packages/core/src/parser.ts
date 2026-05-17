@@ -154,7 +154,11 @@ const parseTasks = (
   return { tasks, problems };
 };
 
-export const parseRelease = (text: string, filename: string): ParseResult<Release> => {
+export const parseRelease = (
+  text: string,
+  filename: string,
+  slug: string,
+): ParseResult<Release> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
 
@@ -190,6 +194,7 @@ export const parseRelease = (text: string, filename: string): ParseResult<Releas
   return {
     value: {
       filename,
+      slug,
       frontmatter: fmResult.data,
       preamble,
       tasks,

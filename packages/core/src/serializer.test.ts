@@ -3,7 +3,6 @@ import { parseEpic, parseRelease } from './parser.js';
 import { serializeEpic, serializeRelease } from './serializer.js';
 
 const RELEASE = `---
-release: "1.10"
 status: current
 startDate: 2026-05-01
 endDate: 2026-05-15
@@ -38,23 +37,23 @@ Description in plain markdown.
 
 describe('serializeRelease', () => {
   it('produces idempotent output after a parse → serialize → parse round-trip', () => {
-    const first = parseRelease(RELEASE, 'releases/1.10.md');
+    const first = parseRelease(RELEASE, 'releases/1.10.md', '1.10');
     expect(first.problems).toEqual([]);
     const serialized = serializeRelease(first.value!);
-    const second = parseRelease(serialized, 'releases/1.10.md');
+    const second = parseRelease(serialized, 'releases/1.10.md', '1.10');
     expect(second.problems).toEqual([]);
     const reserialized = serializeRelease(second.value!);
     expect(reserialized).toBe(serialized);
   });
 
   it('preserves preamble across round-trip', () => {
-    const first = parseRelease(RELEASE, 'releases/1.10.md');
+    const first = parseRelease(RELEASE, 'releases/1.10.md', '1.10');
     const serialized = serializeRelease(first.value!);
     expect(serialized).toContain('# Release 1.10');
   });
 
   it('orders task frontmatter keys canonically', () => {
-    const release = parseRelease(RELEASE, 'releases/1.10.md').value!;
+    const release = parseRelease(RELEASE, 'releases/1.10.md', '1.10').value!;
     const out = serializeRelease(release);
     const firstTask = out.slice(out.indexOf('## '));
     const idIdx = firstTask.indexOf('id: ');
@@ -69,17 +68,65 @@ describe('serializeRelease', () => {
     expect(epicIdx).toBeLessThan(orderIdx);
   });
 
-  it('orders release frontmatter keys canonically', () => {
-    const release = parseRelease(RELEASE, 'releases/1.10.md').value!;
+  it('orders release frontmatter keys canonically (status first, dates last)', () => {
+    const release = parseRelease(RELEASE, 'releases/1.10.md', '1.10').value!;
     const out = serializeRelease(release);
     const fileFm = out.slice(0, out.indexOf('## '));
-    const releaseIdx = fileFm.indexOf('release: ');
     const statusIdx = fileFm.indexOf('status: ');
     const startIdx = fileFm.indexOf('startDate: ');
     const endIdx = fileFm.indexOf('endDate: ');
-    expect(releaseIdx).toBeLessThan(statusIdx);
+    expect(statusIdx).toBeGreaterThan(-1);
     expect(statusIdx).toBeLessThan(startIdx);
     expect(startIdx).toBeLessThan(endIdx);
+    expect(fileFm).not.toContain('release: ');
+  });
+
+  it('round-trips a release with description', () => {
+    const text = `---
+status: future
+description: First public beta. Focuses on stability.
+---
+`;
+    const first = parseRelease(text, 'releases/2.0.md', '2.0');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.frontmatter.description).toBe(
+      'First public beta. Focuses on stability.',
+    );
+    const serialized = serializeRelease(first.value!);
+    const second = parseRelease(serialized, 'releases/2.0.md', '2.0');
+    expect(second.problems).toEqual([]);
+    expect(serializeRelease(second.value!)).toBe(serialized);
+  });
+
+  it('places description after name in serialized frontmatter', () => {
+    const text = `---
+status: future
+name: Beta
+description: Some text
+startDate: 2026-06-01
+---
+`;
+    const release = parseRelease(text, 'releases/2.0.md', '2.0').value!;
+    const out = serializeRelease(release);
+    const fileFm = out.slice(0, out.indexOf('---', 4) + 3);
+    const nameIdx = fileFm.indexOf('name: ');
+    const descIdx = fileFm.indexOf('description: ');
+    const startIdx = fileFm.indexOf('startDate: ');
+    expect(nameIdx).toBeGreaterThan(-1);
+    expect(nameIdx).toBeLessThan(descIdx);
+    expect(descIdx).toBeLessThan(startIdx);
+  });
+
+  it('ignores legacy release frontmatter field on parse', () => {
+    const text = `---
+release: "1.10"
+status: current
+---
+`;
+    const result = parseRelease(text, 'releases/1.10.md', '1.10');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.slug).toBe('1.10');
+    expect(serializeRelease(result.value!)).not.toContain('release: ');
   });
 });
 

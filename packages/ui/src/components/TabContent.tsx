@@ -36,10 +36,7 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
     );
   }
 
-  const slug = current.frontmatter.release;
-  const heading = current.frontmatter.name
-    ? `Release ${slug} — ${current.frontmatter.name}`
-    : `Release ${slug}`;
+  const heading = `Release ${current.frontmatter.name ?? current.slug}`;
 
   return (
     <section className={styles.boardSection}>

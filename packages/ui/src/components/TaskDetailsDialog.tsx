@@ -73,12 +73,10 @@ export function TaskDetailsDialog({
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
-    const sorted = [...releases].sort((a, b) =>
-      a.frontmatter.release.localeCompare(b.frontmatter.release),
-    );
+    const sorted = [...releases].sort((a, b) => a.slug.localeCompare(b.slug));
     const items: IconSelectOption[] = sorted.map((r) => ({
       value: r.filename,
-      label: r.frontmatter.release,
+      label: r.frontmatter.name ?? r.slug,
     }));
     if (task.frontmatter.epic) {
       return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];

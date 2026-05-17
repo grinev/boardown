@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
@@ -11,6 +11,7 @@ import {
   type StatusFilter,
   type TypeFilter,
 } from './BacklogFilters';
+import { CreateReleaseDialog } from './CreateReleaseDialog';
 import styles from './BacklogView.module.css';
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
@@ -38,12 +39,15 @@ const sortBacklogTasks = (a: Task, b: Task) => {
 };
 
 const releaseTitle = (release: Release): string =>
-  release.frontmatter.name ?? release.frontmatter.release;
+  release.frontmatter.name ?? release.slug;
 
 export function BacklogView() {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
+  const openCreateRelease = useBoardStore((s) => s.openCreateRelease);
+  const closeCreateRelease = useBoardStore((s) => s.closeCreateRelease);
+  const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -147,10 +151,14 @@ export function BacklogView() {
               epicsBySlug={epicsBySlug}
               onOpenTask={openTask}
               onOpenEpic={openEpic}
+              {...(section.key === 'backlog'
+                ? { onCreateRelease: openCreateRelease }
+                : {})}
             />
           );
         })}
       </div>
+      {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
     </div>
   );
 }
@@ -166,6 +174,7 @@ interface BacklogSectionProps {
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
+  onCreateRelease?: () => void;
 }
 
 function BacklogSection({
@@ -179,6 +188,7 @@ function BacklogSection({
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
+  onCreateRelease,
 }: BacklogSectionProps) {
   const emptyMessage =
     totalCount === 0
@@ -202,6 +212,16 @@ function BacklogSection({
         <span className={styles.sectionCount}>
           {filtersActive ? `${tasks.length} of ${totalCount}` : tasks.length}
         </span>
+        {onCreateRelease && (
+          <button
+            type="button"
+            className={styles.sectionCreateButton}
+            onClick={onCreateRelease}
+          >
+            <Plus size={14} aria-hidden="true" />
+            Create release
+          </button>
+        )}
       </header>
       {!collapsed &&
         (tasks.length === 0 ? (

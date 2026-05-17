@@ -10,9 +10,82 @@ import type {
 
 export const DEFAULT_EPIC_SLUG = 'no-epic';
 
+export const RELEASES_DIR = 'releases';
+
 export type Container = Release | Epic;
 
 const ORDER_STEP = 100;
+
+const WINDOWS_FORBIDDEN_CHARS = '<>:"/\\|?*';
+const WINDOWS_RESERVED_NAMES = new Set([
+  'CON', 'PRN', 'AUX', 'NUL',
+  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+]);
+
+const shouldReplaceWithDash = (ch: string): boolean => {
+  const code = ch.charCodeAt(0);
+  if (code < 32 || code === 127) return true;
+  if (ch === ' ') return true;
+  return WINDOWS_FORBIDDEN_CHARS.includes(ch);
+};
+
+export const sanitizeFilenameForFs = (input: string): string => {
+  let out = '';
+  for (const ch of input) {
+    out += shouldReplaceWithDash(ch) ? '-' : ch;
+  }
+  out = out.toLowerCase();
+  out = out.replace(/-+/g, '-');
+  out = out.replace(/^[-.]+/, '').replace(/[-. ]+$/, '');
+  if (out.length === 0) return '';
+  if (WINDOWS_RESERVED_NAMES.has(out.toUpperCase())) out = `${out}_`;
+  return out;
+};
+
+export interface NewReleaseInput {
+  name: string;
+  description?: string;
+}
+
+export const releaseFilenameForSlug = (slug: string): string =>
+  `${RELEASES_DIR}/${slug}.md`;
+
+export const createRelease = (
+  existing: readonly Release[],
+  input: NewReleaseInput,
+): Release => {
+  const name = input.name.trim();
+  if (name.length === 0) throw new Error('Release name is required');
+
+  const slug = sanitizeFilenameForFs(name);
+  if (slug.length === 0) {
+    throw new Error(
+      'Release name does not contain any characters allowed in a filename',
+    );
+  }
+
+  const slugLower = slug.toLowerCase();
+  const conflict = existing.find((r) => r.slug.toLowerCase() === slugLower);
+  if (conflict !== undefined) {
+    throw new Error(`Release already exists: ${conflict.slug}`);
+  }
+
+  const description = input.description?.trim();
+  return {
+    filename: releaseFilenameForSlug(slug),
+    slug,
+    frontmatter: {
+      status: 'future',
+      name,
+      ...(description !== undefined && description.length > 0
+        ? { description }
+        : {}),
+    },
+    preamble: '',
+    tasks: [],
+  };
+};
 
 const findTask = (tasks: Task[], taskId: string): Task => {
   const task = tasks.find((t) => t.frontmatter.id === taskId);

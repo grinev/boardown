@@ -43,8 +43,25 @@ on the task card and as a filter dimension.
 
 ### Release
 A markdown file under `releases/`, e.g. `releases/1.10.md`. Holds tasks
-planned for that release. Filename (without extension) is the release slug
-shown in the UI.
+planned for that release. The **filename** (without `.md`) is the release's
+stable identifier — used to reference it from drag-and-drop and internal
+links. The user never has to look at the filename directly: the **`name`**
+field in frontmatter is what the UI shows everywhere ("1.0", "First public
+beta", "Бета 🚀" — any string the OS allows in a filename).
+
+At creation time, the slug/filename is derived from the name by:
+
+1. replacing spaces, filesystem-forbidden characters (`< > : " / \ | ? *`)
+   and control characters with `-`;
+2. lowercasing the result (kebab-case, matching the planned `Epic` slug
+   convention);
+3. collapsing runs of dashes;
+4. trimming dashes and dots at the edges.
+
+Unicode and emoji are preserved (e.g. `Бета релиз 🚀` → `бета-релиз-🚀`,
+`Beta Release` → `beta-release`). Windows-reserved names (`CON`, `PRN`,
+`NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`) get a `_` suffix. After creation, the
+slug never changes — renaming is a manual file move.
 
 Release lifecycle:
 
@@ -65,13 +82,16 @@ Transitions:
 
 Release frontmatter fields:
 
-| Field       | Type    | Notes                                                  |
-|-------------|---------|--------------------------------------------------------|
-| `release`   | string  | The slug, mirrors the filename.                        |
-| `status`    | string  | `future` / `current` / `finished`.                     |
-| `name`      | string? | Optional human-readable name, e.g. "First public beta".|
-| `startDate` | date?   | Optional.                                              |
-| `endDate`   | date?   | Optional.                                              |
+| Field         | Type    | Notes                                                  |
+|---------------|---------|--------------------------------------------------------|
+| `status`      | string  | `future` / `current` / `finished`.                     |
+| `name`        | string  | Human-readable name shown everywhere in the UI. Required for new releases; legacy files without `name` fall back to the slug for display. |
+| `description` | string? | Optional plain-text description, no markdown in MVP.   |
+| `startDate`   | date?   | Optional.                                              |
+| `endDate`     | date?   | Optional.                                              |
+
+The slug lives in the filename only — there is no `release` (or `slug`)
+key in frontmatter, mirroring the way `Epic` stores its slug.
 
 ### Epic
 A markdown file under `epics/`, e.g. `epics/ui-foundation.md`. An epic groups
@@ -143,8 +163,8 @@ Example `releases/1.10.md`:
 
 ```markdown
 ---
-release: "1.10"
 status: current
+name: "1.10"
 startDate: 2026-05-01
 endDate: 2026-05-15
 ---
@@ -443,6 +463,8 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       drop user-configurable statuses and data-path settings from
       `BoardConfig`
 - [x] Add `epics/no_epic.md` as the storage container for tasks without an epic
+- [x] Release creation operation (new file with frontmatter; uniqueness
+      guard on slug; defaults to `status: future`)
 - [ ] Release lifecycle operations: start release, complete release (with
       task-relocation handling), guard the one-current-at-a-time invariant
 - [ ] Epic operations: create, edit, delete (with empty-epic guard)
@@ -468,6 +490,11 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] **Task creation modal**: title, type, epic, plain-text description
 - [x] **Task inline editing** in the details dialog: `title`,
       `description`, `type`, `status`, `epic`, `release`
+- [x] **Release creation modal**: Name + plain-text description; filename
+      is derived from the name (kebab-case lowercase, spaces and
+      filesystem-forbidden characters become `-`, edges trimmed, runs
+      collapsed) with a live preview in the form; status defaults to
+      `future`; launched from the Backlog section header
 - [ ] **Epic creation modal** (with deletion guard on non-empty epics)
 - [x] **Epic inline editing** in the details dialog: `name`,
       `description` / preamble (color — still TODO)

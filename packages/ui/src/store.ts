@@ -13,6 +13,7 @@ import type {
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
+  createRelease as createReleaseInBoard,
   createTask as createTaskInContainer,
   editEpic,
   editTask,
@@ -37,6 +38,11 @@ export interface CreateTaskInput {
   epic?: string;
 }
 
+export interface CreateReleaseInput {
+  name: string;
+  description?: string;
+}
+
 interface BoardState {
   status: BoardStatus;
   snapshot: BoardSnapshot | null;
@@ -48,6 +54,7 @@ interface BoardState {
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
+  createReleaseOpen: boolean;
   settingsOpen: boolean;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
@@ -58,9 +65,12 @@ interface BoardState {
   closeEpic: () => void;
   openCreateTask: (releaseFilename: string) => void;
   closeCreateTask: () => void;
+  openCreateRelease: () => void;
+  closeCreateRelease: () => void;
   openSettings: () => void;
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
+  createRelease: (input: CreateReleaseInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
   moveTask: (
     taskId: string,
@@ -88,6 +98,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   selectedTaskId: null,
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
+  createReleaseOpen: false,
   settingsOpen: false,
 
   load: async (fs) => {
@@ -153,6 +164,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   closeCreateTask: () => set({ createTaskForReleaseFilename: null }),
 
+  openCreateRelease: () => set({ createReleaseOpen: true }),
+
+  closeCreateRelease: () => set({ createReleaseOpen: false }),
+
   openSettings: () => set({ settingsOpen: true }),
 
   closeSettings: () => set({ settingsOpen: false }),
@@ -194,6 +209,30 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+      throw err;
+    }
+  },
+
+  createRelease: async (input) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const release = createReleaseInBoard(snapshot.releases, {
+      name: input.name,
+      ...(input.description !== undefined ? { description: input.description } : {}),
+    });
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: [...snapshot.releases, release],
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(release.filename, serializeRelease(release));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save release: ${message}` });
       throw err;
     }
   },
