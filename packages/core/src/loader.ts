@@ -1,19 +1,22 @@
 import { CONFIG_FILENAME, parseConfig, serializeConfig } from './config.js';
 import type { FsAdapter } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
-import { parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseEpic, parseRelease } from './parser.js';
 import { fileProblem, type ParseProblem, type ParseResult } from './problems.js';
-import type { BoardConfig, Epic, Release, Task } from './schemas.js';
+import type { Backlog, BoardConfig, Epic, Release, Task } from './schemas.js';
 
 export interface BoardSnapshot {
   config: BoardConfig;
   releases: Release[];
   epics: Epic[];
+  backlog: Backlog | null;
   problems: ParseProblem[];
 }
 
 const RELEASES_DIR = 'releases';
 const EPICS_DIR = 'epics';
+const BACKLOG_BASENAME = 'no_epic.md';
+const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
 
 const safeList = async (fs: FsAdapter, dir: string): Promise<string[]> => {
   try {
@@ -25,10 +28,11 @@ const safeList = async (fs: FsAdapter, dir: string): Promise<string[]> => {
 
 const isMarkdownFile = (name: string): boolean => name.endsWith('.md');
 
-const collectTasks = (releases: Release[], epics: Epic[]): Task[] => {
+const collectTasks = (releases: Release[], epics: Epic[], backlog: Backlog | null): Task[] => {
   const out: Task[] = [];
   for (const r of releases) out.push(...r.tasks);
   for (const e of epics) out.push(...e.tasks);
+  if (backlog) out.push(...backlog.tasks);
   return out;
 };
 
@@ -53,7 +57,9 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   let config = configResult.value;
 
   const releaseFiles = (await safeList(fs, RELEASES_DIR)).filter(isMarkdownFile);
-  const epicFiles = (await safeList(fs, EPICS_DIR)).filter(isMarkdownFile);
+  const epicFiles = (await safeList(fs, EPICS_DIR))
+    .filter(isMarkdownFile)
+    .filter((name) => name !== BACKLOG_BASENAME);
 
   const releases: Release[] = [];
   for (const name of releaseFiles) {
@@ -88,7 +94,17 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
     if (parsed.value !== null) epics.push(parsed.value);
   }
 
-  const verified = verifyNextId(config, collectTasks(releases, epics));
+  let backlog: Backlog | null = null;
+  try {
+    const backlogText = await fs.read(BACKLOG_PATH);
+    const parsed = parseBacklog(backlogText, BACKLOG_PATH);
+    problems.push(...parsed.problems);
+    if (parsed.value !== null) backlog = parsed.value;
+  } catch {
+    // no_epic.md is optional — missing file is the common case
+  }
+
+  const verified = verifyNextId(config, collectTasks(releases, epics, backlog));
   if (verified.bumped) {
     config = verified.config;
     try {
@@ -106,7 +122,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   }
 
   return {
-    value: { config, releases, epics, problems },
+    value: { config, releases, epics, backlog, problems },
     problems,
   };
 };

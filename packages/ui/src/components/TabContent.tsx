@@ -1,5 +1,6 @@
 import type { Epic, Release, TaskStatus } from '@boardown/core';
 import type { ActiveTab } from '../store';
+import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
 import styles from './TabContent.module.css';
 
@@ -12,12 +13,7 @@ interface TabContentProps {
 
 export function TabContent({ activeTab, releases, epics, statuses }: TabContentProps) {
   if (activeTab === 'backlog') {
-    return (
-      <section className={styles.placeholder}>
-        <h2>Backlog</h2>
-        <p>No tasks yet</p>
-      </section>
-    );
+    return <BacklogView />;
   }
 
   if (activeTab === 'archive') {

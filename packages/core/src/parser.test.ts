@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseEpic, parseRelease } from './parser.js';
 
 const RELEASE_OK = `---
 release: "1.10"
@@ -127,6 +127,120 @@ more description here
     expect(result.value!.tasks).toHaveLength(1);
     expect(result.value!.tasks[0]!.description).toContain('## Not a task heading');
     expect(result.value!.tasks[0]!.description).toContain('more description here');
+  });
+});
+
+describe('parseBacklog', () => {
+  it('parses a file with no frontmatter and multiple tasks', () => {
+    const text = `## First
+
+---
+id: BD-12
+type: tech
+status: todo
+order: 100
+---
+
+first body
+
+## Second
+
+---
+id: BD-13
+type: docs
+status: todo
+order: 200
+---
+
+second body
+`;
+    const result = parseBacklog(text, 'epics/no_epic.md');
+    expect(result.problems).toEqual([]);
+    expect(result.value).not.toBeNull();
+    expect(result.value!.frontmatter).toEqual({});
+    expect(result.value!.tasks).toHaveLength(2);
+    expect(result.value!.tasks[0]!.frontmatter.id).toBe('BD-12');
+  });
+
+  it('parses a file with an empty frontmatter block', () => {
+    const text = `---
+---
+
+## Only
+
+---
+id: BD-20
+type: feature
+status: todo
+order: 100
+---
+
+body
+`;
+    const result = parseBacklog(text, 'epics/no_epic.md');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.tasks).toHaveLength(1);
+    expect(result.value!.tasks[0]!.frontmatter.id).toBe('BD-20');
+  });
+
+  it('skips a single broken task and keeps the rest', () => {
+    const text = `## Good
+
+---
+id: BD-30
+type: feature
+status: todo
+order: 100
+---
+
+ok
+
+## Bad
+
+---
+type: feature
+status: todo
+order: 200
+---
+
+missing id
+`;
+    const result = parseBacklog(text, 'epics/no_epic.md');
+    expect(result.value!.tasks).toHaveLength(1);
+    expect(result.value!.tasks[0]!.frontmatter.id).toBe('BD-30');
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]!.scope).toBe('task');
+  });
+
+  it('handles a completely empty file', () => {
+    const result = parseBacklog('', 'epics/no_epic.md');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.tasks).toEqual([]);
+    expect(result.value!.preamble).toBe('');
+  });
+
+  it('reports a problem when frontmatter has extra fields', () => {
+    const text = `---
+name: Should not be here
+---
+
+## A task
+
+---
+id: BD-40
+type: tech
+status: todo
+order: 100
+---
+
+body
+`;
+    const result = parseBacklog(text, 'epics/no_epic.md');
+    expect(result.value).not.toBeNull();
+    expect(result.value!.tasks).toHaveLength(1);
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]!.scope).toBe('file');
+    expect(result.problems[0]!.message).toContain('Backlog frontmatter failed validation');
   });
 });
 

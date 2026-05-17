@@ -102,11 +102,13 @@ tasks.
 The conceptual collection of all unscheduled tasks. It includes:
 
 - Tasks living in any `epics/<slug>.md` file (have an epic but no release).
-- Tasks living in `backlog.md` (have neither an epic nor a release).
+- Tasks living in `epics/no_epic.md` (have neither an epic nor a release).
 
-A single top-level `backlog.md` holds tasks without an epic, so that
+A single `epics/no_epic.md` file holds tasks without an epic, so that
 "uncategorized" tasks have a single home rather than polluting `epics/` with
-a synthetic placeholder.
+a synthetic placeholder. It sits next to the epic files for locality, but
+the loader treats it as a special container (no `name`/`color`, tasks render
+without an epic badge), not as an epic.
 
 ## Storage format
 
@@ -116,12 +118,12 @@ By default, everything lives under `.boardown/` at the project root:
 <repo root>/
 └── .boardown/
     ├── config.yaml
-    ├── backlog.md         # tasks without an epic and without a release
     ├── releases/
     │   ├── v0.1.md
     │   ├── 1.10.md
     │   └── 1.11.md
     └── epics/
+        ├── no_epic.md     # tasks without an epic and without a release
         ├── ui-foundation.md
         └── parser.md
 ```
@@ -132,7 +134,7 @@ there.
 
 ### Markdown file structure
 
-Every release/epic/backlog file holds an optional top-level frontmatter block
+Every release/epic/no_epic file holds an optional top-level frontmatter block
 describing the container, followed by zero or more **task sections**. Each
 task is an `## H2` heading, followed by its own frontmatter block, followed
 by the description text.
@@ -275,7 +277,7 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
    "Start release" button (enabled only when no other release is currently
    `current`).
 3. **Backlog** — all tasks with no release: tasks from `epics/*.md` and from
-   `backlog.md`, rendered as a flat list with epic badges (no nested
+   `epics/no_epic.md`, rendered as a flat list with epic badges (no nested
    grouping).
 
 A narrow filter panel on the left side hosts:
@@ -371,7 +373,7 @@ release, no future releases, no archived releases, no tasks under filter).
 ## "Create board" flow
 
 When `.boardown/` does not exist, the shell writes the default structure
-(`config.yaml`, an empty `backlog.md`, empty `epics/`, and a starter
+(`config.yaml`, an empty `epics/no_epic.md`, empty `epics/`, and a starter
 `releases/v0.1.md` with `status: current`). The VS Code extension can prompt
 for the ID prefix; the local web shell uses `TASK` by default unless the user
 creates `config.yaml` manually before first launch.
@@ -436,7 +438,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       release with `status: future|current|finished` and optional dates;
       drop user-configurable statuses and data-path settings from
       `BoardConfig`
-- [ ] Add `backlog.md` as the storage container for tasks without an epic
+- [x] Add `epics/no_epic.md` as the storage container for tasks without an epic
 - [ ] Release lifecycle operations: start release, complete release (with
       task-relocation handling), guard the one-current-at-a-time invariant
 - [ ] Epic operations: create, edit, delete (with empty-epic guard)
@@ -450,6 +452,9 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       (done/total)`, `Archive (n)`)
 - [ ] **Backlog screen**: stacked sections (current, future, backlog),
       collapsible; epic filter panel on the left
+  - [x] Read-only first cut: sections rendered, clickable task title opens
+        the details dialog, clickable epic badge opens the epic dialog,
+        no filters / collapse / D&D / lifecycle buttons yet
 - [ ] **Board screen**: kanban for the current release with status columns;
       empty state when no release is current
 - [ ] **Archive screen**: finished releases in the same layout as Backlog,

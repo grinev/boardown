@@ -69,6 +69,17 @@ export const EpicSchema = z.object({
 });
 export type Epic = z.infer<typeof EpicSchema>;
 
+export const BacklogFrontmatterSchema = z.object({}).strict();
+export type BacklogFrontmatter = z.infer<typeof BacklogFrontmatterSchema>;
+
+export const BacklogSchema = z.object({
+  filename: z.string().min(1),
+  frontmatter: BacklogFrontmatterSchema,
+  preamble: z.string(),
+  tasks: z.array(TaskSchema),
+});
+export type Backlog = z.infer<typeof BacklogSchema>;
+
 export const ThemeSchema = z.enum(['light', 'dark']);
 export type Theme = z.infer<typeof ThemeSchema>;
 

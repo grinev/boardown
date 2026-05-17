@@ -139,4 +139,63 @@ describe('loadBoard', () => {
     const after = await fs.read('config.yaml');
     expect(after).toBe(before);
   });
+
+  it('treats missing epics/no_epic.md as null backlog without problems', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    const result = await loadBoard(fs);
+    expect(result.value).not.toBeNull();
+    expect(result.value!.backlog).toBeNull();
+    expect(result.problems).toEqual([]);
+  });
+
+  it('parses epics/no_epic.md alongside epics without falsely flagging it', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write('epics/parser.md', EPIC_OK);
+    await fs.write(
+      'epics/no_epic.md',
+      `## Loose
+
+---
+id: BD-3
+type: feature
+status: todo
+order: 100
+---
+
+body
+`,
+    );
+    const result = await loadBoard(fs);
+    expect(result.value).not.toBeNull();
+    expect(result.value!.epics).toHaveLength(1);
+    expect(result.value!.epics[0]!.slug).toBe('parser');
+    expect(result.value!.backlog).not.toBeNull();
+    expect(result.value!.backlog!.tasks).toHaveLength(1);
+    expect(result.problems).toEqual([]);
+  });
+
+  it('includes backlog tasks when bumping nextId', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write(
+      'epics/no_epic.md',
+      `## Big one
+
+---
+id: BD-7
+type: tech
+status: todo
+order: 100
+---
+
+body
+`,
+    );
+    const result = await loadBoard(fs);
+    expect(result.value).not.toBeNull();
+    expect(result.value!.config.nextId).toBe(8);
+    expect(result.value!.backlog!.tasks).toHaveLength(1);
+  });
 });

@@ -1,5 +1,7 @@
 import yaml from 'js-yaml';
 import {
+  type Backlog,
+  BacklogFrontmatterSchema,
   type Epic,
   EpicFrontmatterSchema,
   type Release,
@@ -189,6 +191,46 @@ export const parseRelease = (text: string, filename: string): ParseResult<Releas
     value: {
       filename,
       frontmatter: fmResult.data,
+      preamble,
+      tasks,
+    },
+    problems,
+  };
+};
+
+export const parseBacklog = (text: string, filename: string): ParseResult<Backlog> => {
+  const problems: ParseProblem[] = [];
+  const { fileFrontmatterText, body } = splitFileFrontmatter(text);
+
+  if (fileFrontmatterText !== null) {
+    let rawFm: unknown;
+    try {
+      rawFm = parseYaml(fileFrontmatterText);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      problems.push(fileProblem(filename, `Invalid file frontmatter YAML: ${message}`));
+    }
+    if (rawFm !== undefined) {
+      const fmResult = BacklogFrontmatterSchema.safeParse(rawFm);
+      if (!fmResult.success) {
+        problems.push(
+          fileProblem(
+            filename,
+            `Backlog frontmatter failed validation: ${fmResult.error.issues.map((i) => i.message).join('; ')}`,
+          ),
+        );
+      }
+    }
+  }
+
+  const { preamble, segments } = splitBody(body);
+  const { tasks, problems: taskProblems } = parseTasks(segments, filename);
+  problems.push(...taskProblems);
+
+  return {
+    value: {
+      filename,
+      frontmatter: {},
       preamble,
       tasks,
     },
