@@ -269,10 +269,7 @@ function BacklogSection({
   const itemIds = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
-    <section
-      ref={setNodeRef}
-      className={`${styles.section}${isOver ? ` ${styles.sectionDragOver!}` : ''}`}
-    >
+    <section ref={setNodeRef} className={styles.section}>
       <header className={styles.sectionHeader}>
         <button
           type="button"
