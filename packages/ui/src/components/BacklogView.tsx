@@ -1,4 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
@@ -47,6 +48,18 @@ export function BacklogView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
+  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  const toggleCollapsed = useCallback((key: string) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   const epics = snapshot?.epics ?? [];
 
@@ -128,6 +141,8 @@ export function BacklogView() {
             tasks={displayedTasks}
             totalCount={section.tasks.length}
             filtersActive={filtersActive}
+            collapsed={collapsedKeys.has(section.key)}
+            onToggle={() => toggleCollapsed(section.key)}
             epicsBySlug={epicsBySlug}
             onOpenTask={openTask}
             onOpenEpic={openEpic}
@@ -144,6 +159,8 @@ interface BacklogSectionProps {
   tasks: Task[];
   totalCount: number;
   filtersActive: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
@@ -155,6 +172,8 @@ function BacklogSection({
   tasks,
   totalCount,
   filtersActive,
+  collapsed,
+  onToggle,
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
@@ -163,34 +182,45 @@ function BacklogSection({
     totalCount === 0
       ? 'No work items'
       : 'No tasks match the filters';
+  const ChevronIcon = collapsed ? ChevronRight : ChevronDown;
   return (
     <section className={styles.section}>
       <header className={styles.sectionHeader}>
+        <button
+          type="button"
+          className={styles.sectionToggle}
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand section' : 'Collapse section'}
+        >
+          <ChevronIcon size={16} className={styles.sectionChevron} aria-hidden="true" />
+        </button>
         <span className={styles.sectionTitle}>{title}</span>
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
         <span className={styles.sectionCount}>
           {filtersActive ? `${tasks.length} of ${totalCount}` : tasks.length}
         </span>
       </header>
-      {tasks.length === 0 ? (
-        <div className={styles.empty}>{emptyMessage}</div>
-      ) : (
-        <ul className={styles.rows}>
-          {tasks.map((task) => {
-            const epicSlug = task.frontmatter.epic;
-            const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
-            return (
-              <BacklogRow
-                key={task.frontmatter.id}
-                task={task}
-                epic={epic}
-                onOpenTask={onOpenTask}
-                onOpenEpic={onOpenEpic}
-              />
-            );
-          })}
-        </ul>
-      )}
+      {!collapsed &&
+        (tasks.length === 0 ? (
+          <div className={styles.empty}>{emptyMessage}</div>
+        ) : (
+          <ul className={styles.rows}>
+            {tasks.map((task) => {
+              const epicSlug = task.frontmatter.epic;
+              const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
+              return (
+                <BacklogRow
+                  key={task.frontmatter.id}
+                  task={task}
+                  epic={epic}
+                  onOpenTask={onOpenTask}
+                  onOpenEpic={onOpenEpic}
+                />
+              );
+            })}
+          </ul>
+        ))}
     </section>
   );
 }

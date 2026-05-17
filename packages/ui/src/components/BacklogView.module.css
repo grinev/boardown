@@ -27,6 +27,37 @@
   border-bottom: 1px solid var(--card-border);
 }
 
+.sectionHeader:has(.sectionToggle[aria-expanded='false']) {
+  border-bottom: 0;
+}
+
+.sectionToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  margin: -2px;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sectionToggle:hover {
+  background: var(--inset-bg);
+  color: var(--text-primary);
+}
+
+.sectionToggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sectionChevron {
+  flex: 0 0 auto;
+}
+
 .sectionTitle {
   font-weight: 600;
   color: var(--text-primary);

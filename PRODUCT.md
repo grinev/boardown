@@ -459,6 +459,8 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
   - [x] Read-only first cut: sections rendered, clickable task title opens
         the details dialog, clickable epic badge opens the epic dialog,
         no filters / collapse / D&D / lifecycle buttons yet
+  - [x] Collapsible sections (chevron on the section header; expanded by
+        default; collapsed state is local/ephemeral, resets on reload)
 - [ ] **Board screen**: kanban for the current release with status columns;
       empty state when no release is current
 - [ ] **Archive screen**: finished releases in the same layout as Backlog,
