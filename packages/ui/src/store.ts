@@ -1,4 +1,5 @@
 import type {
+  Backlog,
   BoardSnapshot,
   Epic,
   EpicPatch,
@@ -20,6 +21,7 @@ import {
   loadBoard,
   moveTaskBetweenContainers,
   moveTaskInContainer,
+  serializeBacklog,
   serializeConfig,
   serializeEpic,
   serializeRelease,
@@ -81,8 +83,73 @@ interface BoardState {
     taskId: string,
     targetReleaseFilename: string | null,
   ) => Promise<void>;
+  moveTaskOnBacklog: (
+    taskId: string,
+    target: BacklogMoveTarget,
+    beforeTaskId: string | null,
+  ) => Promise<void>;
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
 }
+
+export type BacklogMoveTarget =
+  | { kind: 'release'; filename: string }
+  | { kind: 'backlog' };
+
+type ContainerLocation =
+  | { kind: 'release'; index: number; container: Release }
+  | { kind: 'epic'; index: number; container: Epic }
+  | { kind: 'backlog'; container: Backlog };
+
+const findTaskContainer = (
+  snapshot: BoardSnapshot,
+  taskId: string,
+): { location: ContainerLocation; task: Task } | null => {
+  for (let i = 0; i < snapshot.releases.length; i++) {
+    const release = snapshot.releases[i]!;
+    const task = release.tasks.find((t) => t.frontmatter.id === taskId);
+    if (task) {
+      return {
+        location: { kind: 'release', index: i, container: release },
+        task,
+      };
+    }
+  }
+  for (let i = 0; i < snapshot.epics.length; i++) {
+    const epic = snapshot.epics[i]!;
+    const task = epic.tasks.find((t) => t.frontmatter.id === taskId);
+    if (task) {
+      return {
+        location: { kind: 'epic', index: i, container: epic },
+        task,
+      };
+    }
+  }
+  if (snapshot.backlog) {
+    const task = snapshot.backlog.tasks.find(
+      (t) => t.frontmatter.id === taskId,
+    );
+    if (task) {
+      return {
+        location: { kind: 'backlog', container: snapshot.backlog },
+        task,
+      };
+    }
+  }
+  return null;
+};
+
+const serializeContainer = (
+  location: Pick<ContainerLocation, 'kind'> & { container: Release | Epic | Backlog },
+): string => {
+  switch (location.kind) {
+    case 'release':
+      return serializeRelease(location.container as Release);
+    case 'epic':
+      return serializeEpic(location.container as Epic);
+    case 'backlog':
+      return serializeBacklog(location.container as Backlog);
+  }
+};
 
 const formatProblems = (problems: ParseProblem[]): string =>
   problems.map((p) => `${p.file}: ${p.message}`).join('\n');
@@ -458,6 +525,131 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         );
       } else {
         await fs.write(moved.dest.filename, serializeEpic(moved.dest as Epic));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to move task: ${message}` });
+      throw err;
+    }
+  },
+
+  moveTaskOnBacklog: async (taskId, target, beforeTaskId) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const found = findTaskContainer(snapshot, taskId);
+    if (!found) {
+      set({ errorMessage: `Task not found: ${taskId}` });
+      return;
+    }
+    const { location: sourceLoc, task } = found;
+
+    let destLoc: ContainerLocation;
+    if (target.kind === 'release') {
+      const index = snapshot.releases.findIndex(
+        (r) => r.filename === target.filename,
+      );
+      if (index === -1) {
+        set({ errorMessage: `Release not found: ${target.filename}` });
+        return;
+      }
+      destLoc = {
+        kind: 'release',
+        index,
+        container: snapshot.releases[index]!,
+      };
+    } else {
+      const epicSlug = task.frontmatter.epic;
+      if (epicSlug !== undefined) {
+        const index = snapshot.epics.findIndex((e) => e.slug === epicSlug);
+        if (index === -1) {
+          set({ errorMessage: `Epic not found: ${epicSlug}` });
+          return;
+        }
+        destLoc = {
+          kind: 'epic',
+          index,
+          container: snapshot.epics[index]!,
+        };
+      } else {
+        if (!snapshot.backlog) {
+          set({ errorMessage: 'Backlog container is missing' });
+          return;
+        }
+        destLoc = { kind: 'backlog', container: snapshot.backlog };
+      }
+    }
+
+    const sameContainer =
+      sourceLoc.kind === destLoc.kind &&
+      sourceLoc.container.filename === destLoc.container.filename;
+
+    let nextSource: Release | Epic | Backlog;
+    let nextDest: Release | Epic | Backlog;
+
+    if (sameContainer) {
+      const updated = moveTaskInContainer(sourceLoc.container, taskId, {
+        status: task.frontmatter.status,
+        beforeTaskId: target.kind === 'release' ? beforeTaskId : null,
+      });
+      nextSource = updated;
+      nextDest = updated;
+    } else {
+      const moved = moveTaskBetweenContainers(
+        sourceLoc.container,
+        destLoc.container,
+        taskId,
+        {
+          newStatus: task.frontmatter.status,
+          beforeTaskId: target.kind === 'release' ? beforeTaskId : null,
+        },
+      );
+      nextSource = moved.source;
+      nextDest = moved.dest;
+    }
+
+    const nextReleases = [...snapshot.releases];
+    const nextEpics = [...snapshot.epics];
+    let nextBacklog = snapshot.backlog;
+
+    const assign = (
+      loc: ContainerLocation,
+      value: Release | Epic | Backlog,
+    ): void => {
+      switch (loc.kind) {
+        case 'release':
+          nextReleases[loc.index] = value as Release;
+          break;
+        case 'epic':
+          nextEpics[loc.index] = value as Epic;
+          break;
+        case 'backlog':
+          nextBacklog = value as Backlog;
+          break;
+      }
+    };
+
+    assign(sourceLoc, nextSource);
+    if (!sameContainer) assign(destLoc, nextDest);
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: nextReleases,
+      epics: nextEpics,
+      backlog: nextBacklog,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(
+        nextSource.filename,
+        serializeContainer({ kind: sourceLoc.kind, container: nextSource }),
+      );
+      if (!sameContainer) {
+        await fs.write(
+          nextDest.filename,
+          serializeContainer({ kind: destLoc.kind, container: nextDest }),
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

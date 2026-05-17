@@ -1,30 +1,38 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
+import { useDroppable } from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { Epic, Release, Task } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { TASK_TYPE_META } from '../task-types';
-import { pickContrastText } from '../utils/contrast-color';
-import { formatStatusLabel } from '../utils/format-status';
+import { BacklogDndContext } from '../dnd/BacklogDndContext';
+import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
+import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
   BacklogFilters,
   type EpicFilter,
   type StatusFilter,
   type TypeFilter,
 } from './BacklogFilters';
+import { BacklogRowView } from './BacklogRowView';
 import { CreateReleaseDialog } from './CreateReleaseDialog';
 import styles from './BacklogView.module.css';
 
-const STATUS_CLASS: Record<TaskStatus, string> = {
-  todo: styles.statusTodo!,
-  'in-progress': styles.statusInProgress!,
-  done: styles.statusDone!,
-};
-
-interface SectionData {
+interface SectionMeta {
   key: string;
   title: string;
   statusLabel: string | null;
-  tasks: Task[];
+  hasCreateRelease: boolean;
 }
 
 const NO_EPIC_SORT_KEY = '￿';
@@ -40,6 +48,9 @@ const sortBacklogTasks = (a: Task, b: Task) => {
 
 const releaseTitle = (release: Release): string =>
   release.frontmatter.name ?? release.slug;
+
+const releaseSectionKey = (release: Release): string =>
+  `release:${release.filename}`;
 
 export function BacklogView() {
   const snapshot = useBoardStore((s) => s.snapshot);
@@ -65,7 +76,7 @@ export function BacklogView() {
     });
   }, []);
 
-  const epics = snapshot?.epics ?? [];
+  const epics = useMemo(() => snapshot?.epics ?? [], [snapshot?.epics]);
 
   useEffect(() => {
     if (epicFilter === 'all' || epicFilter === 'no-epic') return;
@@ -73,21 +84,79 @@ export function BacklogView() {
     if (!exists) setEpicFilter('all');
   }, [epics, epicFilter]);
 
+  const { sectionMetas, sourceBuckets } = useMemo(() => {
+    const metas: SectionMeta[] = [];
+    const buckets: SectionBuckets = new Map();
+    if (!snapshot) return { sectionMetas: metas, sourceBuckets: buckets };
+
+    const { releases, backlog } = snapshot;
+    const current = releases.find((r) => r.frontmatter.status === 'current');
+    const futures = releases
+      .filter((r) => r.frontmatter.status === 'future')
+      .sort((a, b) => a.filename.localeCompare(b.filename));
+
+    if (current) {
+      const key = releaseSectionKey(current);
+      metas.push({
+        key,
+        title: releaseTitle(current),
+        statusLabel: 'active',
+        hasCreateRelease: false,
+      });
+      buckets.set(key, [...current.tasks].sort(sortByOrder));
+    }
+    for (const r of futures) {
+      const key = releaseSectionKey(r);
+      metas.push({
+        key,
+        title: releaseTitle(r),
+        statusLabel: 'future',
+        hasCreateRelease: false,
+      });
+      buckets.set(key, [...r.tasks].sort(sortByOrder));
+    }
+    metas.push({
+      key: BACKLOG_SECTION_KEY,
+      title: 'Backlog',
+      statusLabel: null,
+      hasCreateRelease: true,
+    });
+    buckets.set(
+      BACKLOG_SECTION_KEY,
+      [
+        ...epics.flatMap((e) => e.tasks),
+        ...(backlog?.tasks ?? []),
+      ].sort(sortBacklogTasks),
+    );
+
+    return { sectionMetas: metas, sourceBuckets: buckets };
+  }, [snapshot, epics]);
+
+  const [overlayBuckets, setOverlayBuckets] =
+    useState<SectionBuckets>(sourceBuckets);
+
+  useEffect(() => {
+    setOverlayBuckets(sourceBuckets);
+  }, [sourceBuckets]);
+
+  const epicsBySlug = useMemo(
+    () => new Map(epics.map((e) => [e.slug, e])),
+    [epics],
+  );
+
+  const expandCollapsed = useCallback(
+    (key: string) => {
+      setCollapsedKeys((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    },
+    [],
+  );
+
   if (snapshot === null) return null;
-
-  const { releases, backlog } = snapshot;
-
-  const epicsBySlug = new Map(epics.map((e) => [e.slug, e]));
-
-  const current = releases.find((r) => r.frontmatter.status === 'current');
-  const futures = releases
-    .filter((r) => r.frontmatter.status === 'future')
-    .sort((a, b) => a.filename.localeCompare(b.filename));
-
-  const backlogTasks = [
-    ...epics.flatMap((e) => e.tasks),
-    ...(backlog?.tasks ?? []),
-  ].sort(sortBacklogTasks);
 
   const filtersActive =
     statusFilter !== 'all' || typeFilter !== 'all' || epicFilter !== 'all';
@@ -103,25 +172,6 @@ export function BacklogView() {
     return true;
   };
 
-  const sections: SectionData[] = [];
-  if (current) {
-    sections.push({
-      key: `release:${current.filename}`,
-      title: releaseTitle(current),
-      statusLabel: 'active',
-      tasks: [...current.tasks].sort(sortByOrder),
-    });
-  }
-  for (const r of futures) {
-    sections.push({
-      key: `release:${r.filename}`,
-      title: releaseTitle(r),
-      statusLabel: 'future',
-      tasks: [...r.tasks].sort(sortByOrder),
-    });
-  }
-  sections.push({ key: 'backlog', title: 'Backlog', statusLabel: null, tasks: backlogTasks });
-
   return (
     <div className={styles.view}>
       <BacklogFilters
@@ -133,37 +183,47 @@ export function BacklogView() {
         onTypeChange={setTypeFilter}
         onEpicChange={setEpicFilter}
       />
-      <div className={styles.scrollArea}>
-        {sections.map((section) => {
-          const displayedTasks = filtersActive
-            ? section.tasks.filter(matchesFilters)
-            : section.tasks;
-          return (
-            <BacklogSection
-              key={section.key}
-              title={section.title}
-              statusLabel={section.statusLabel}
-              tasks={displayedTasks}
-              totalCount={section.tasks.length}
-              filtersActive={filtersActive}
-              collapsed={collapsedKeys.has(section.key)}
-              onToggle={() => toggleCollapsed(section.key)}
-              epicsBySlug={epicsBySlug}
-              onOpenTask={openTask}
-              onOpenEpic={openEpic}
-              {...(section.key === 'backlog'
-                ? { onCreateRelease: openCreateRelease }
-                : {})}
-            />
-          );
-        })}
-      </div>
+      <BacklogDndContext
+        buckets={overlayBuckets}
+        setBuckets={setOverlayBuckets}
+        epics={epics}
+      >
+        <div className={styles.scrollArea}>
+          {sectionMetas.map((meta) => {
+            const sectionTasks = overlayBuckets.get(meta.key) ?? [];
+            const displayedTasks = filtersActive
+              ? sectionTasks.filter(matchesFilters)
+              : sectionTasks;
+            return (
+              <BacklogSection
+                key={meta.key}
+                sectionKey={meta.key}
+                title={meta.title}
+                statusLabel={meta.statusLabel}
+                tasks={displayedTasks}
+                totalCount={sectionTasks.length}
+                filtersActive={filtersActive}
+                collapsed={collapsedKeys.has(meta.key)}
+                onToggle={() => toggleCollapsed(meta.key)}
+                onExpandRequested={() => expandCollapsed(meta.key)}
+                epicsBySlug={epicsBySlug}
+                onOpenTask={openTask}
+                onOpenEpic={openEpic}
+                {...(meta.hasCreateRelease
+                  ? { onCreateRelease: openCreateRelease }
+                  : {})}
+              />
+            );
+          })}
+        </div>
+      </BacklogDndContext>
       {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
     </div>
   );
 }
 
 interface BacklogSectionProps {
+  sectionKey: string;
   title: string;
   statusLabel: string | null;
   tasks: Task[];
@@ -171,6 +231,7 @@ interface BacklogSectionProps {
   filtersActive: boolean;
   collapsed: boolean;
   onToggle: () => void;
+  onExpandRequested: () => void;
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
@@ -178,6 +239,7 @@ interface BacklogSectionProps {
 }
 
 function BacklogSection({
+  sectionKey,
   title,
   statusLabel,
   tasks,
@@ -185,18 +247,32 @@ function BacklogSection({
   filtersActive,
   collapsed,
   onToggle,
+  onExpandRequested,
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
   onCreateRelease,
 }: BacklogSectionProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: sectionDropId(sectionKey) });
+
+  useEffect(() => {
+    if (!collapsed || !isOver) return;
+    const id = window.setTimeout(() => onExpandRequested(), 500);
+    return () => window.clearTimeout(id);
+  }, [collapsed, isOver, onExpandRequested]);
+
   const emptyMessage =
     totalCount === 0
-      ? 'No work items'
+      ? 'No tasks yet'
       : 'No tasks match the filters';
   const ChevronIcon = collapsed ? ChevronRight : ChevronDown;
+  const itemIds = tasks.map((t) => taskDragId(t.frontmatter.id));
+
   return (
-    <section className={styles.section}>
+    <section
+      ref={setNodeRef}
+      className={`${styles.section}${isOver ? ` ${styles.sectionDragOver!}` : ''}`}
+    >
       <header className={styles.sectionHeader}>
         <button
           type="button"
@@ -209,9 +285,6 @@ function BacklogSection({
         </button>
         <span className={styles.sectionTitle}>{title}</span>
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
-        <span className={styles.sectionCount}>
-          {filtersActive ? `${tasks.length} of ${totalCount}` : tasks.length}
-        </span>
         {onCreateRelease && (
           <button
             type="button"
@@ -222,27 +295,33 @@ function BacklogSection({
             Create release
           </button>
         )}
+        <span className={styles.sectionCount}>
+          {filtersActive ? `${tasks.length} of ${totalCount}` : tasks.length}
+        </span>
       </header>
-      {!collapsed &&
-        (tasks.length === 0 ? (
-          <div className={styles.empty}>{emptyMessage}</div>
-        ) : (
-          <ul className={styles.rows}>
-            {tasks.map((task) => {
-              const epicSlug = task.frontmatter.epic;
-              const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
-              return (
-                <BacklogRow
-                  key={task.frontmatter.id}
-                  task={task}
-                  epic={epic}
-                  onOpenTask={onOpenTask}
-                  onOpenEpic={onOpenEpic}
-                />
-              );
-            })}
-          </ul>
-        ))}
+      {!collapsed && (
+        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+          {tasks.length === 0 ? (
+            <div className={styles.empty}>{emptyMessage}</div>
+          ) : (
+            <ul className={styles.rows}>
+              {tasks.map((task) => {
+                const epicSlug = task.frontmatter.epic;
+                const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
+                return (
+                  <BacklogRow
+                    key={task.frontmatter.id}
+                    task={task}
+                    epic={epic}
+                    onOpenTask={onOpenTask}
+                    onOpenEpic={onOpenEpic}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </SortableContext>
+      )}
     </section>
   );
 }
@@ -255,53 +334,31 @@ interface BacklogRowProps {
 }
 
 function BacklogRow({ task, epic, onOpenTask, onOpenEpic }: BacklogRowProps) {
-  const { id, type, status } = task.frontmatter;
-  const typeMeta = TASK_TYPE_META[type];
-  const TypeIcon = typeMeta.icon;
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: taskDragId(task.frontmatter.id) });
 
-  const epicStyle = epic
-    ? ({
-        '--epic-bg': epic.frontmatter.color,
-        '--epic-fg': pickContrastText(epic.frontmatter.color),
-      } as CSSProperties)
-    : undefined;
+  const rowStyle: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? undefined,
+    opacity: isDragging ? 0 : 1,
+  };
 
   return (
-    <li className={styles.row}>
-      <TypeIcon
-        className={styles.typeIcon}
-        style={{ color: typeMeta.colorVar }}
-        aria-label={typeMeta.label}
-      />
-      <span className={styles.idText}>{id}</span>
-      <button
-        type="button"
-        className={styles.titleButton}
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenTask(id);
-        }}
-      >
-        {task.title}
-      </button>
-      <span className={styles.epicSlot}>
-        {epic && (
-          <button
-            type="button"
-            className={styles.epicBadge}
-            style={epicStyle}
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenEpic(epic.slug);
-            }}
-          >
-            {epic.frontmatter.name}
-          </button>
-        )}
-      </span>
-      <span className={`${styles.statusPill} ${STATUS_CLASS[status]}`}>
-        {formatStatusLabel(status)}
-      </span>
-    </li>
+    <BacklogRowView
+      ref={setNodeRef}
+      task={task}
+      epic={epic}
+      onOpenTask={onOpenTask}
+      onOpenEpic={onOpenEpic}
+      style={rowStyle}
+      {...attributes}
+      {...listeners}
+    />
   );
 }

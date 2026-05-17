@@ -94,6 +94,14 @@
   white-space: nowrap;
 }
 
+.sectionHeader:has(.sectionCreateButton) .sectionCount {
+  margin-left: 0;
+}
+
+.sectionHeader:has(.sectionCreateButton) .sectionCreateButton {
+  margin-left: auto;
+}
+
 .sectionCreateButton {
   display: inline-flex;
   align-items: center;
@@ -136,6 +144,32 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--card-border);
   background: var(--card-bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+.row:active {
+  cursor: grabbing;
+}
+
+.sectionDragOver {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dragOverlayList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: var(--drag-shadow);
+  background: var(--card-bg);
+}
+
+.dragOverlayList .row {
+  cursor: grabbing;
 }
 
 .epicSlot {
@@ -183,6 +217,8 @@
   text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
+  justify-self: start;
+  max-width: 100%;
 }
 
 .titleButton:hover,

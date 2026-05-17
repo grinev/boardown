@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import type { Epic, Release, Task, TaskFrontmatter } from './schemas.js';
+import type { Backlog, Epic, Release, Task, TaskFrontmatter } from './schemas.js';
 
 const FENCE = '---';
 
@@ -57,3 +57,6 @@ export const serializeEpic = (epic: Epic): string => {
   };
   return buildFile(fm, epic.preamble, epic.tasks);
 };
+
+export const serializeBacklog = (backlog: Backlog): string =>
+  buildFile({}, backlog.preamble, backlog.tasks);

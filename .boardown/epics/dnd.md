@@ -7,17 +7,6 @@ Card drag-and-drop on the board and (eventually) on the Backlog screen:
 moving cards between status columns, between releases, and between the
 Backlog and a release.
 
-## Multi-card drag selection
-
----
-id: BD-17
-type: feature
-status: todo
-order: 100
----
-
-Allow holding Shift to select a range of cards and drag them together.
-
 ## Drag preview shifts on touch devices
 
 ---

@@ -498,8 +498,12 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Epic creation modal** (with deletion guard on non-empty epics)
 - [x] **Epic inline editing** in the details dialog: `name`,
       `description` / preamble (color — still TODO)
-- [ ] **Drag & drop** (`@dnd-kit`): within a kanban column, between columns
-      on Board, between sections on Backlog
+- [ ] **Drag & drop** (`@dnd-kit`):
+  - [x] Board: within a kanban column, between status columns
+  - [x] Backlog: between release sections and to/from the Backlog section
+        (reorder inside release sections supported; reorder inside the
+        Backlog section is intentionally not supported — Backlog ordering
+        is epic + order, set by file structure)
 - [ ] **Release lifecycle UI**: Start release / Complete release buttons on
       section headers; the "where to move unfinished tasks" modal on Complete
 - [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for

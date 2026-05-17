@@ -1,5 +1,6 @@
 import { nextTaskId } from './id-generator.js';
 import type {
+  Backlog,
   BoardConfig,
   Epic,
   Release,
@@ -12,7 +13,7 @@ export const DEFAULT_EPIC_SLUG = 'no-epic';
 
 export const RELEASES_DIR = 'releases';
 
-export type Container = Release | Epic;
+export type Container = Release | Epic | Backlog;
 
 const ORDER_STEP = 100;
 
