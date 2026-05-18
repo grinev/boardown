@@ -203,6 +203,17 @@ export const parseRelease = (
   };
 };
 
+const stripEpicFromTask = (task: Task): Task => {
+  if (task.frontmatter.epic === undefined) return task;
+  const { epic: _omit, ...rest } = task.frontmatter;
+  return { ...task, frontmatter: rest };
+};
+
+const withEpicOnTask = (task: Task, slug: string): Task =>
+  task.frontmatter.epic === slug
+    ? task
+    : { ...task, frontmatter: { ...task.frontmatter, epic: slug } };
+
 export const parseBacklog = (text: string, filename: string): ParseResult<Backlog> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
@@ -237,7 +248,7 @@ export const parseBacklog = (text: string, filename: string): ParseResult<Backlo
       filename,
       frontmatter: {},
       preamble,
-      tasks,
+      tasks: tasks.map(stripEpicFromTask),
     },
     problems,
   };
@@ -286,7 +297,7 @@ export const parseEpic = (
       slug,
       frontmatter: fmResult.data,
       preamble,
-      tasks,
+      tasks: tasks.map((t) => withEpicOnTask(t, slug)),
     },
     problems,
   };

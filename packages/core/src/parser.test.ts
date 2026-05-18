@@ -272,4 +272,74 @@ body
     expect(result.value!.preamble).toBe('Notes about the epic.');
     expect(result.value!.tasks).toHaveLength(1);
   });
+
+  it('infers task.epic from the file slug when the field is missing', () => {
+    const text = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## Task with no epic field
+
+---
+id: BD-7
+type: feature
+status: todo
+order: 100
+---
+
+body
+`;
+    const result = parseEpic(text, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.tasks[0]!.frontmatter.epic).toBe('ui-foundation');
+  });
+
+  it('overrides a stale task.epic value with the file slug', () => {
+    const text = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## Task with stale epic
+
+---
+id: BD-7
+type: feature
+status: todo
+epic: parser
+order: 100
+---
+
+body
+`;
+    const result = parseEpic(text, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.tasks[0]!.frontmatter.epic).toBe('ui-foundation');
+  });
+});
+
+describe('parseBacklog epic normalization', () => {
+  it('drops task.epic for tasks in no_epic.md', () => {
+    const text = `---
+{}
+---
+
+## Stray epic field
+
+---
+id: BD-9
+type: feature
+status: todo
+epic: ui-foundation
+order: 100
+---
+
+body
+`;
+    const result = parseBacklog(text, 'epics/no_epic.md');
+    expect(result.problems).toEqual([]);
+    expect(result.value!.tasks).toHaveLength(1);
+    expect(result.value!.tasks[0]!.frontmatter.epic).toBeUndefined();
+  });
 });

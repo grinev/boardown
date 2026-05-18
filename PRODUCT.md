@@ -103,6 +103,21 @@ tasks** — tasks that belong to the epic but are not (yet) assigned to a
 release. When a task is moved into a release, it is physically relocated to
 the release file; the `epic` field on the task preserves the link.
 
+**Source of truth for `task.epic`.** Which epic a task belongs to is
+determined by which file it physically lives in:
+
+- A task inside `epics/<slug>.md` belongs to the `<slug>` epic. The
+  `epic` field in the task's frontmatter is ignored on load and omitted on
+  save — the filename is authoritative.
+- A task inside `epics/no_epic.md` has no epic. Any stray `epic` field is
+  stripped on load.
+- A task inside `releases/<slug>.md` keeps its epic association in the
+  `epic` field of its frontmatter; that field is the only link, since
+  release files mix tasks from different epics.
+
+Changing a task's epic on a backlog task is therefore a **file move**,
+not a frontmatter edit.
+
 Epic frontmatter fields:
 
 | Field         | Type    | Notes                                                  |

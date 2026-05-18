@@ -9,7 +9,14 @@ import {
   moveTaskBetweenContainers,
   reorderTask,
 } from './board-ops.js';
-import type { BoardConfig, Epic, Release, Task, TaskStatus } from './schemas.js';
+import type {
+  Backlog,
+  BoardConfig,
+  Epic,
+  Release,
+  Task,
+  TaskStatus,
+} from './schemas.js';
 
 const config: BoardConfig = {
   idPrefix: 'BD',
@@ -320,5 +327,67 @@ describe('moveTaskBetweenContainers', () => {
     const moved = result.dest.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.status).toBe('in-progress');
     expect(moved.frontmatter.order).toBe(200);
+  });
+
+  it('preserves task.epic by default (release → release)', () => {
+    const a = release({
+      title: 'Task',
+      description: '',
+      frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'parser', order: 100 },
+    });
+    a.filename = 'releases/1.10.md';
+    const b = release();
+    b.filename = 'releases/1.11.md';
+    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+      newStatus: 'todo',
+      beforeTaskId: null,
+    });
+    expect(result.dest.tasks[0]!.frontmatter.epic).toBe('parser');
+  });
+
+  it('sets task.epic to dest.slug when destEpic is { kind: set }', () => {
+    const a = release(task('BD-1', 'todo', 100));
+    a.filename = 'releases/1.10.md';
+    const b: Epic = {
+      filename: 'epics/dnd.md',
+      slug: 'dnd',
+      frontmatter: { name: 'DnD', color: '#000000' },
+      preamble: '',
+      tasks: [],
+    };
+    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+      newStatus: 'todo',
+      beforeTaskId: null,
+      destEpic: { kind: 'set', slug: 'dnd' },
+    });
+    expect(result.dest.tasks[0]!.frontmatter.epic).toBe('dnd');
+  });
+
+  it('clears task.epic when destEpic is { kind: clear }', () => {
+    const a: Epic = {
+      filename: 'epics/dnd.md',
+      slug: 'dnd',
+      frontmatter: { name: 'DnD', color: '#000000' },
+      preamble: '',
+      tasks: [
+        {
+          title: 'Task',
+          description: '',
+          frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'dnd', order: 100 },
+        },
+      ],
+    };
+    const b: Backlog = {
+      filename: 'epics/no_epic.md',
+      frontmatter: {},
+      preamble: '',
+      tasks: [],
+    };
+    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+      newStatus: 'todo',
+      beforeTaskId: null,
+      destEpic: { kind: 'clear' },
+    });
+    expect(result.dest.tasks[0]!.frontmatter.epic).toBeUndefined();
   });
 });

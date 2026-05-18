@@ -7,14 +7,14 @@ Card drag-and-drop on the board and (eventually) on the Backlog screen:
 moving cards between status columns, between releases, and between the
 Backlog and a release.
 
-## Drag preview shifts on touch devices
+## Investigate drag-and-drop perf on large boards
 
 ---
-id: BD-18
-type: bug
-status: in-progress
-order: 200
+id: BD-16
+type: tech
+status: todo
+order: 100
 ---
 
-On touch input the drag preview appears with an offset, making it hard
-to aim at narrow status columns.
+Profile drag interactions with 200+ cards on the board and capture a
+baseline for later optimisation.

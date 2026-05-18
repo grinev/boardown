@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseEpic, parseRelease } from './parser.js';
-import { serializeEpic, serializeRelease } from './serializer.js';
+import { parseBacklog, parseEpic, parseRelease } from './parser.js';
+import { serializeBacklog, serializeEpic, serializeRelease } from './serializer.js';
 
 const RELEASE = `---
 status: current
@@ -179,5 +179,48 @@ name: Parser
     const nameIdx = out.indexOf('name: ');
     const colorIdx = out.indexOf('color: ');
     expect(nameIdx).toBeLessThan(colorIdx);
+  });
+
+  it('omits task.epic in serialized output even if the model carries it', () => {
+    const text = `---
+name: Parser
+color: "#8957e5"
+---
+
+## Task
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 100
+---
+`;
+    const first = parseEpic(text, 'epics/parser.md', 'parser');
+    expect(first.value!.tasks[0]!.frontmatter.epic).toBe('parser');
+    const serialized = serializeEpic(first.value!);
+    expect(serialized).not.toMatch(/^epic:/m);
+  });
+});
+
+describe('serializeBacklog', () => {
+  it('omits task.epic field when serializing no_epic.md', () => {
+    const text = `---
+{}
+---
+
+## Backlog task
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+---
+`;
+    const first = parseBacklog(text, 'epics/no_epic.md');
+    expect(first.value!.tasks[0]!.frontmatter.epic).toBeUndefined();
+    const serialized = serializeBacklog(first.value!);
+    expect(serialized).not.toMatch(/^epic:/m);
   });
 });

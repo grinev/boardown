@@ -304,10 +304,30 @@ export const moveTaskInContainer = <C extends Container>(
 ): C =>
   replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
 
+export type DestEpic =
+  | { kind: 'preserve' }
+  | { kind: 'clear' }
+  | { kind: 'set'; slug: string };
+
 export interface MoveAcrossArgs {
   newStatus: TaskStatus;
   beforeTaskId: string | null;
+  destEpic?: DestEpic;
 }
+
+const applyDestEpic = (fm: Task['frontmatter'], action: DestEpic): Task['frontmatter'] => {
+  switch (action.kind) {
+    case 'preserve':
+      return fm;
+    case 'clear': {
+      if (fm.epic === undefined) return fm;
+      const { epic: _omit, ...rest } = fm;
+      return rest;
+    }
+    case 'set':
+      return fm.epic === action.slug ? fm : { ...fm, epic: action.slug };
+  }
+};
 
 export const moveTaskBetweenContainers = <S extends Container, D extends Container>(
   source: S,
@@ -316,9 +336,13 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   args: MoveAcrossArgs,
 ): { source: S; dest: D } => {
   const task = findTask(source.tasks, taskId);
+  const epicAction: DestEpic = args.destEpic ?? { kind: 'preserve' };
   const updated: Task = {
     ...task,
-    frontmatter: { ...task.frontmatter, status: args.newStatus },
+    frontmatter: applyDestEpic(
+      { ...task.frontmatter, status: args.newStatus },
+      epicAction,
+    ),
   };
   const newSource = replaceTasks(
     source,

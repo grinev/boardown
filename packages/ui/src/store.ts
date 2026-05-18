@@ -1,6 +1,7 @@
 import type {
   Backlog,
   BoardSnapshot,
+  DestEpic,
   Epic,
   EpicPatch,
   FsAdapter,
@@ -148,6 +149,17 @@ const serializeContainer = (
       return serializeEpic(location.container as Epic);
     case 'backlog':
       return serializeBacklog(location.container as Backlog);
+  }
+};
+
+const destEpicForLocation = (location: ContainerLocation): DestEpic => {
+  switch (location.kind) {
+    case 'release':
+      return { kind: 'preserve' };
+    case 'epic':
+      return { kind: 'set', slug: location.container.slug };
+    case 'backlog':
+      return { kind: 'clear' };
   }
 };
 
@@ -308,38 +320,100 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const { snapshot, fs } = get();
     if (!snapshot || !fs) return;
 
-    const releaseIndex = snapshot.releases.findIndex((r) =>
-      r.tasks.some((t) => t.frontmatter.id === taskId),
-    );
-    if (releaseIndex !== -1) {
-      const release = snapshot.releases[releaseIndex]!;
-      const nextRelease = editTask(release, taskId, patch);
+    const found = findTaskContainer(snapshot, taskId);
+    if (!found) {
+      set({ errorMessage: `Task not found: ${taskId}` });
+      return;
+    }
+    const { location: sourceLoc, task } = found;
+
+    const currentEpic = task.frontmatter.epic;
+    const epicChanges =
+      patch.epic !== undefined &&
+      ((patch.epic === null && currentEpic !== undefined) ||
+        (typeof patch.epic === 'string' && patch.epic !== currentEpic));
+    const needsRelocation = epicChanges && sourceLoc.kind !== 'release';
+
+    if (needsRelocation) {
+      let destLoc: ContainerLocation;
+      if (patch.epic === null) {
+        if (!snapshot.backlog) {
+          set({ errorMessage: 'Backlog container is missing' });
+          return;
+        }
+        destLoc = { kind: 'backlog', container: snapshot.backlog };
+      } else {
+        const slug = patch.epic as string;
+        const index = snapshot.epics.findIndex((e) => e.slug === slug);
+        if (index === -1) {
+          set({ errorMessage: `Epic not found: ${slug}` });
+          return;
+        }
+        destLoc = { kind: 'epic', index, container: snapshot.epics[index]! };
+      }
+
+      const moved = moveTaskBetweenContainers(
+        sourceLoc.container,
+        destLoc.container,
+        taskId,
+        {
+          newStatus: task.frontmatter.status,
+          beforeTaskId: null,
+          destEpic: destEpicForLocation(destLoc),
+        },
+      );
+
+      const remainderPatch: TaskPatch = { ...patch };
+      delete remainderPatch.epic;
+      const destWithRemainder =
+        remainderPatch.title !== undefined ||
+        remainderPatch.description !== undefined ||
+        remainderPatch.type !== undefined ||
+        remainderPatch.status !== undefined
+          ? editTask(moved.dest, taskId, remainderPatch)
+          : moved.dest;
+
       const nextReleases = [...snapshot.releases];
-      nextReleases[releaseIndex] = nextRelease;
-      const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
-      set({ snapshot: nextSnapshot, errorMessage: null });
-      try {
-        await fs.write(nextRelease.filename, serializeRelease(nextRelease));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
-        throw err;
-      }
-      return;
-    }
-
-    const epicIndex = snapshot.epics.findIndex((e) =>
-      e.tasks.some((t) => t.frontmatter.id === taskId),
-    );
-    if (epicIndex !== -1) {
-      const epic = snapshot.epics[epicIndex]!;
-      const nextEpic = editTask(epic, taskId, patch);
       const nextEpics = [...snapshot.epics];
-      nextEpics[epicIndex] = nextEpic;
-      const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
+      let nextBacklog = snapshot.backlog;
+
+      const assign = (
+        loc: ContainerLocation,
+        value: Release | Epic | Backlog,
+      ): void => {
+        switch (loc.kind) {
+          case 'release':
+            nextReleases[loc.index] = value as Release;
+            break;
+          case 'epic':
+            nextEpics[loc.index] = value as Epic;
+            break;
+          case 'backlog':
+            nextBacklog = value as Backlog;
+            break;
+        }
+      };
+
+      assign(sourceLoc, moved.source);
+      assign(destLoc, destWithRemainder);
+
+      const nextSnapshot: BoardSnapshot = {
+        ...snapshot,
+        releases: nextReleases,
+        epics: nextEpics,
+        backlog: nextBacklog,
+      };
       set({ snapshot: nextSnapshot, errorMessage: null });
+
       try {
-        await fs.write(nextEpic.filename, serializeEpic(nextEpic));
+        await fs.write(
+          moved.source.filename,
+          serializeContainer({ kind: sourceLoc.kind, container: moved.source }),
+        );
+        await fs.write(
+          destWithRemainder.filename,
+          serializeContainer({ kind: destLoc.kind, container: destWithRemainder }),
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save task: ${message}` });
@@ -348,7 +422,41 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return;
     }
 
-    set({ errorMessage: `Task not found: ${taskId}` });
+    const nextContainer = editTask(sourceLoc.container, taskId, patch);
+    const nextReleases = [...snapshot.releases];
+    const nextEpics = [...snapshot.epics];
+    let nextBacklog = snapshot.backlog;
+
+    switch (sourceLoc.kind) {
+      case 'release':
+        nextReleases[sourceLoc.index] = nextContainer as Release;
+        break;
+      case 'epic':
+        nextEpics[sourceLoc.index] = nextContainer as Epic;
+        break;
+      case 'backlog':
+        nextBacklog = nextContainer as Backlog;
+        break;
+    }
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: nextReleases,
+      epics: nextEpics,
+      backlog: nextBacklog,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(
+        nextContainer.filename,
+        serializeContainer({ kind: sourceLoc.kind, container: nextContainer }),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+      throw err;
+    }
   },
 
   moveTask: async (taskId, status, beforeTaskId) => {
@@ -480,9 +588,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         ? snapshot.releases[destIndex]!
         : snapshot.epics[destIndex]!;
 
+    const destEpic: DestEpic =
+      destKind === 'epic'
+        ? { kind: 'set', slug: (dest as Epic).slug }
+        : { kind: 'preserve' };
+
     const moved = moveTaskBetweenContainers(source, dest, taskId, {
       newStatus: task.frontmatter.status,
       beforeTaskId: null,
+      destEpic,
     });
 
     const nextReleases = [...snapshot.releases];
@@ -602,6 +716,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         {
           newStatus: task.frontmatter.status,
           beforeTaskId,
+          destEpic: destEpicForLocation(destLoc),
         },
       );
       nextSource = moved.source;
