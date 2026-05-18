@@ -8,7 +8,7 @@
 id: BD-19
 type: feature
 status: todo
-order: 200
+order: 225
 ---
 
 When the workspace has no current release the board view shows raw
@@ -21,7 +21,7 @@ a release from Backlog.
 id: BD-20
 type: docs
 status: done
-order: 300
+order: 400
 ---
 
 Capture the lenient-parsing rules in PRODUCT.md so future contributors

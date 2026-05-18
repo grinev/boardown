@@ -35,7 +35,7 @@ A single unit of work. Fields:
 | `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
 | `status`      | string    | One of `todo`, `in-progress`, `done`. Hardcoded set.            |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
-| `order`       | integer   | Sort key within a container (release / epic / backlog), shared across statuses. Step of 100 between peers. |
+| `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. |
 
 Task types are **hardcoded** in the MVP — no per-project customization.
 Each type has a fixed icon and color baked into the app, used for the badge
@@ -516,10 +516,13 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Drag & drop** (`@dnd-kit`):
   - [x] Board: within a kanban column, between status columns
   - [x] Backlog: between release sections and to/from the Backlog section,
-        with reorder supported inside every section (including the Backlog
-        section, where ordering is grouped by epic and then by `order`).
+        with reorder supported inside every section. Inside the Backlog
+        section tasks form a single flat list ordered globally by `order`
+        across all backlog containers (epic files + `no_epic.md`).
         Reorder only changes `order`; `status` and `epic` are not touched
-        by DnD on the Backlog screen.
+        by DnD on the Backlog screen — moving a task across the
+        boundary of one epic group inside the flat list does not change
+        the file it lives in.
 - [ ] **Release lifecycle UI**: Start release / Complete release buttons on
       section headers; the "where to move unfinished tasks" modal on Complete
 - [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for

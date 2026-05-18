@@ -161,7 +161,7 @@ describe('loadBoard', () => {
 id: BD-3
 type: feature
 status: todo
-order: 100
+order: 200
 ---
 
 body

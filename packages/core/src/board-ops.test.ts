@@ -8,6 +8,7 @@ import {
   editTask,
   moveTaskBetweenContainers,
   reorderTask,
+  reorderTaskInBacklog,
 } from './board-ops.js';
 import type {
   Backlog,
@@ -389,5 +390,105 @@ describe('moveTaskBetweenContainers', () => {
       destEpic: { kind: 'clear' },
     });
     expect(result.dest.tasks[0]!.frontmatter.epic).toBeUndefined();
+  });
+});
+
+const epic = (slug: string, ...tasks: Task[]): Epic => ({
+  filename: `epics/${slug}.md`,
+  slug,
+  frontmatter: { name: slug, color: '#000000' },
+  preamble: '',
+  tasks,
+});
+
+const backlog = (...tasks: Task[]): Backlog => ({
+  filename: 'epics/no_epic.md',
+  frontmatter: {},
+  preamble: '',
+  tasks,
+});
+
+const findTaskAnywhere = (
+  result: { epics: Epic[]; backlog: Backlog | null },
+  id: string,
+): Task | undefined => {
+  for (const e of result.epics) {
+    const t = e.tasks.find((x) => x.frontmatter.id === id);
+    if (t) return t;
+  }
+  return result.backlog?.tasks.find((x) => x.frontmatter.id === id);
+};
+
+describe('reorderTaskInBacklog', () => {
+  it('moves task within its own epic by changing order only, writes one file', () => {
+    const a = epic('a', task('BD-1', 'todo', 100), task('BD-2', 'todo', 200), task('BD-3', 'todo', 300));
+    const result = reorderTaskInBacklog({ epics: [a], backlog: null }, 'BD-3', 'BD-2');
+    const moved = findTaskAnywhere(result, 'BD-3')!;
+    expect(moved.frontmatter.order).toBe(150);
+    expect(result.changedFilenames).toEqual(['epics/a.md']);
+    expect(result.epics[0]!.tasks).toHaveLength(3);
+  });
+
+  it('reorders across epics without touching task.epic or file location', () => {
+    const a = epic(
+      'a',
+      { ...task('BD-1', 'todo', 100), frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'a', order: 100 } },
+    );
+    const b = epic(
+      'b',
+      { ...task('BD-2', 'todo', 200), frontmatter: { id: 'BD-2', type: 'feature', status: 'todo', epic: 'b', order: 200 } },
+      { ...task('BD-3', 'todo', 300), frontmatter: { id: 'BD-3', type: 'feature', status: 'todo', epic: 'b', order: 300 } },
+    );
+    // Place BD-3 before BD-1 (different epic) -> BD-3 ends up first in the flat list
+    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-3', 'BD-1');
+    const moved = findTaskAnywhere(result, 'BD-3')!;
+    expect(moved.frontmatter.epic).toBe('b');
+    expect(result.epics.find((e) => e.slug === 'b')!.tasks.some((t) => t.frontmatter.id === 'BD-3')).toBe(true);
+    expect(result.epics.find((e) => e.slug === 'a')!.tasks.some((t) => t.frontmatter.id === 'BD-3')).toBe(false);
+    // BD-3 must have order < 100 (or trigger renumber landing at 100/200/300)
+    const all = [
+      ...result.epics.flatMap((e) => e.tasks),
+    ].sort((x, y) => x.frontmatter.order - y.frontmatter.order);
+    expect(all.map((t) => t.frontmatter.id)).toEqual(['BD-3', 'BD-1', 'BD-2']);
+  });
+
+  it('places task before a no_epic task while keeping it in its epic file', () => {
+    const a = epic('a', task('BD-1', 'todo', 300));
+    const bl = backlog(task('BD-2', 'todo', 200));
+    // BD-1 starts at 300 (after BD-2). Drop BD-1 before BD-2 — only its order
+    // should change, and it must stay in epics/a.md.
+    const result = reorderTaskInBacklog({ epics: [a], backlog: bl }, 'BD-1', 'BD-2');
+    expect(result.changedFilenames).toEqual(['epics/a.md']);
+    expect(result.epics[0]!.tasks[0]!.frontmatter.id).toBe('BD-1');
+    expect(result.epics[0]!.tasks[0]!.frontmatter.order).toBe(100);
+    expect(result.backlog!.tasks[0]!.frontmatter.id).toBe('BD-2');
+  });
+
+  it('places task at the end when beforeTaskId is null', () => {
+    const a = epic('a', task('BD-1', 'todo', 100));
+    const b = epic('b', task('BD-2', 'todo', 200));
+    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-1', null);
+    const moved = findTaskAnywhere(result, 'BD-1')!;
+    expect(moved.frontmatter.order).toBe(300);
+  });
+
+  it('triggers global renumber on collision; touches all affected files', () => {
+    const a = epic('a', task('BD-1', 'todo', 100), task('BD-2', 'todo', 101));
+    const b = epic('b', task('BD-3', 'todo', 50));
+    // BD-1 / BD-2 are adjacent integers — no room to insert between them, must renumber.
+    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-3', 'BD-2');
+    const all = [...result.epics.flatMap((e) => e.tasks)].sort(
+      (x, y) => x.frontmatter.order - y.frontmatter.order,
+    );
+    expect(all.map((t) => t.frontmatter.order)).toEqual([100, 200, 300]);
+    expect(all.map((t) => t.frontmatter.id)).toEqual(['BD-1', 'BD-3', 'BD-2']);
+    expect(new Set(result.changedFilenames)).toEqual(new Set(['epics/a.md', 'epics/b.md']));
+  });
+
+  it('throws when task is not in any backlog container', () => {
+    const a = epic('a', task('BD-1', 'todo', 100));
+    expect(() =>
+      reorderTaskInBacklog({ epics: [a], backlog: null }, 'BD-999', null),
+    ).toThrow(/Task not found in backlog/);
   });
 });

@@ -358,3 +358,142 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
     dest: replaceTasks(destWithTask, placed),
   };
 };
+
+export interface BacklogContainers {
+  epics: Epic[];
+  backlog: Backlog | null;
+}
+
+export interface BacklogReorderResult {
+  epics: Epic[];
+  backlog: Backlog | null;
+  changedFilenames: string[];
+}
+
+interface BacklogTaskLocation {
+  container: Epic | Backlog;
+  task: Task;
+}
+
+const locateBacklogTask = (
+  containers: BacklogContainers,
+  taskId: string,
+): BacklogTaskLocation | null => {
+  for (const epic of containers.epics) {
+    const task = epic.tasks.find((t) => t.frontmatter.id === taskId);
+    if (task) return { container: epic, task };
+  }
+  if (containers.backlog) {
+    const task = containers.backlog.tasks.find((t) => t.frontmatter.id === taskId);
+    if (task) return { container: containers.backlog, task };
+  }
+  return null;
+};
+
+type FlatBacklogEntry = { containerFilename: string; task: Task };
+
+const flattenBacklog = (containers: BacklogContainers): FlatBacklogEntry[] => {
+  const flat: FlatBacklogEntry[] = [];
+  for (const epic of containers.epics) {
+    for (const task of epic.tasks) flat.push({ containerFilename: epic.filename, task });
+  }
+  if (containers.backlog) {
+    for (const task of containers.backlog.tasks) {
+      flat.push({ containerFilename: containers.backlog.filename, task });
+    }
+  }
+  return flat.sort((a, b) => a.task.frontmatter.order - b.task.frontmatter.order);
+};
+
+const writeOrder = (task: Task, order: number): Task => ({
+  ...task,
+  frontmatter: { ...task.frontmatter, order },
+});
+
+const applyOrderMap = (
+  containers: BacklogContainers,
+  orderById: Map<string, number>,
+): BacklogReorderResult => {
+  const changedFilenames = new Set<string>();
+  const remap = <C extends Epic | Backlog>(container: C): C => {
+    let changed = false;
+    const nextTasks = container.tasks.map((t) => {
+      const target = orderById.get(t.frontmatter.id);
+      if (target === undefined || target === t.frontmatter.order) return t;
+      changed = true;
+      return writeOrder(t, target);
+    });
+    if (!changed) return container;
+    changedFilenames.add(container.filename);
+    return replaceTasks(container, nextTasks);
+  };
+  const nextEpics = containers.epics.map(remap);
+  const nextBacklog = containers.backlog ? remap(containers.backlog) : null;
+  return {
+    epics: nextEpics,
+    backlog: nextBacklog,
+    changedFilenames: [...changedFilenames],
+  };
+};
+
+const buildSequentialOrderMap = (entries: FlatBacklogEntry[]): Map<string, number> => {
+  const map = new Map<string, number>();
+  entries.forEach((entry, i) => {
+    map.set(entry.task.frontmatter.id, (i + 1) * ORDER_STEP);
+  });
+  return map;
+};
+
+export const reorderTaskInBacklog = (
+  containers: BacklogContainers,
+  taskId: string,
+  beforeTaskId: string | null,
+): BacklogReorderResult => {
+  const location = locateBacklogTask(containers, taskId);
+  if (location === null) throw new Error(`Task not found in backlog: ${taskId}`);
+
+  const others = flattenBacklog(containers).filter(
+    (e) => e.task.frontmatter.id !== taskId,
+  );
+
+  let insertIdx: number;
+  if (beforeTaskId === null) {
+    insertIdx = others.length;
+  } else {
+    const found = others.findIndex((e) => e.task.frontmatter.id === beforeTaskId);
+    insertIdx = found === -1 ? others.length : found;
+  }
+
+  let newOrder = 0;
+  let needsRenumber = false;
+  if (others.length === 0) {
+    newOrder = ORDER_STEP;
+  } else if (insertIdx === 0) {
+    const candidate = others[0]!.task.frontmatter.order - ORDER_STEP;
+    if (candidate <= 0) needsRenumber = true;
+    else newOrder = candidate;
+  } else if (insertIdx === others.length) {
+    newOrder = others[others.length - 1]!.task.frontmatter.order + ORDER_STEP;
+  } else {
+    const prev = others[insertIdx - 1]!.task.frontmatter.order;
+    const next = others[insertIdx]!.task.frontmatter.order;
+    const candidate = Math.floor((prev + next) / 2);
+    if (candidate === prev || candidate === next) needsRenumber = true;
+    else newOrder = candidate;
+  }
+
+  if (needsRenumber) {
+    const insertedEntry: FlatBacklogEntry = {
+      containerFilename: location.container.filename,
+      task: location.task,
+    };
+    const finalOrder = [
+      ...others.slice(0, insertIdx),
+      insertedEntry,
+      ...others.slice(insertIdx),
+    ];
+    return applyOrderMap(containers, buildSequentialOrderMap(finalOrder));
+  }
+
+  return applyOrderMap(containers, new Map([[taskId, newOrder]]));
+};

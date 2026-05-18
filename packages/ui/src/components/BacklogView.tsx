@@ -35,16 +35,7 @@ interface SectionMeta {
   hasCreateRelease: boolean;
 }
 
-const NO_EPIC_SORT_KEY = '￿';
-
 const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
-
-const sortBacklogTasks = (a: Task, b: Task) => {
-  const ea = a.frontmatter.epic ?? NO_EPIC_SORT_KEY;
-  const eb = b.frontmatter.epic ?? NO_EPIC_SORT_KEY;
-  if (ea !== eb) return ea.localeCompare(eb);
-  return a.frontmatter.order - b.frontmatter.order;
-};
 
 const releaseTitle = (release: Release): string =>
   release.frontmatter.name ?? release.slug;
@@ -126,7 +117,7 @@ export function BacklogView() {
       [
         ...epics.flatMap((e) => e.tasks),
         ...(backlog?.tasks ?? []),
-      ].sort(sortBacklogTasks),
+      ].sort(sortByOrder),
     );
 
     return { sectionMetas: metas, sourceBuckets: buckets };
