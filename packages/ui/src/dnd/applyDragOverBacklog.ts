@@ -52,7 +52,6 @@ export const applyDragOverBacklog = (
   }
 
   if (targetSection === activeSection) {
-    if (targetSection === BACKLOG_SECTION_KEY) return buckets;
     if (overTaskId === null) return buckets;
     const tasks = buckets.get(activeSection) ?? [];
     const fromIdx = tasks.findIndex((t) => t.frontmatter.id === taskId);
@@ -74,7 +73,7 @@ export const applyDragOverBacklog = (
   );
 
   const destTasks = [...(buckets.get(targetSection) ?? [])];
-  if (overTaskId === null || targetSection === BACKLOG_SECTION_KEY) {
+  if (overTaskId === null) {
     destTasks.push(activeTask);
   } else {
     const idx = destTasks.findIndex((t) => t.frontmatter.id === overTaskId);
@@ -98,9 +97,6 @@ export const findBacklogPlacement = (
   for (const [key, tasks] of buckets) {
     const idx = tasks.findIndex((t) => t.frontmatter.id === taskId);
     if (idx === -1) continue;
-    if (key === BACKLOG_SECTION_KEY) {
-      return { sectionKey: key, beforeTaskId: null };
-    }
     return {
       sectionKey: key,
       beforeTaskId: tasks[idx + 1]?.frontmatter.id ?? null,

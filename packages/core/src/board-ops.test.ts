@@ -50,15 +50,25 @@ describe('createTask', () => {
     expect(result.container.tasks).toHaveLength(2);
   });
 
-  it('starts column from 100 when empty', () => {
+  it('places new task after the last order in the container regardless of status', () => {
     const r0 = release(task('BD-1', 'todo', 500));
     const result = createTask(r0, config, {
       title: 'X',
       type: 'tech',
       status: 'in-progress',
     });
-    expect(result.task.frontmatter.order).toBe(100);
+    expect(result.task.frontmatter.order).toBe(600);
     expect(result.task.frontmatter.type).toBe('tech');
+  });
+
+  it('starts container from 100 when empty', () => {
+    const r0 = release();
+    const result = createTask(r0, config, {
+      title: 'First',
+      type: 'feature',
+      status: 'todo',
+    });
+    expect(result.task.frontmatter.order).toBe(100);
   });
 });
 
@@ -85,7 +95,7 @@ describe('editTask', () => {
     expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
   });
 
-  it('changes status and places task at end of new column', () => {
+  it('changes status and places task at the end of the container', () => {
     const r0 = release(
       task('BD-1', 'todo', 100),
       task('BD-2', 'done', 100),
@@ -154,7 +164,7 @@ describe('deleteTask', () => {
 });
 
 describe('changeTaskStatus', () => {
-  it('moves task to end of new status column', () => {
+  it('updates status and places task at the end of the container', () => {
     const r0 = release(
       task('BD-1', 'todo', 100),
       task('BD-2', 'in-progress', 100),
@@ -186,7 +196,7 @@ describe('reorderTask', () => {
     expect(moved.frontmatter.order).toBe(300);
   });
 
-  it('renumbers the column on order collision', () => {
+  it('renumbers the container on order collision', () => {
     const r0 = release(
       task('BD-1', 'todo', 100),
       task('BD-2', 'todo', 101),
@@ -194,10 +204,26 @@ describe('reorderTask', () => {
     );
     const r1 = reorderTask(r0, 'BD-3', 'BD-2');
     const orders = r1.tasks
-      .filter((t) => t.frontmatter.status === 'todo')
       .sort((a, b) => a.frontmatter.order - b.frontmatter.order)
       .map((t) => t.frontmatter.order);
     expect(orders).toEqual([100, 200, 300]);
+  });
+
+  it('reorders tasks across different statuses by container order', () => {
+    const r0 = release(
+      task('BD-1', 'todo', 100),
+      task('BD-2', 'in-progress', 200),
+      task('BD-3', 'done', 300),
+    );
+    // Put BD-1 (todo) right before BD-3 (done) — i.e. between BD-2 and BD-3.
+    const r1 = reorderTask(r0, 'BD-1', 'BD-3');
+    const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
+    expect(moved.frontmatter.status).toBe('todo');
+    expect(moved.frontmatter.order).toBe(250);
+    const orderedIds = [...r1.tasks]
+      .sort((a, b) => a.frontmatter.order - b.frontmatter.order)
+      .map((t) => t.frontmatter.id);
+    expect(orderedIds).toEqual(['BD-2', 'BD-1', 'BD-3']);
   });
 });
 

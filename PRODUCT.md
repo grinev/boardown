@@ -35,7 +35,7 @@ A single unit of work. Fields:
 | `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
 | `status`      | string    | One of `todo`, `in-progress`, `done`. Hardcoded set.            |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
-| `order`       | integer   | Sort key within a column / list. Step of 100 between peers.     |
+| `order`       | integer   | Sort key within a container (release / epic / backlog), shared across statuses. Step of 100 between peers. |
 
 Task types are **hardcoded** in the MVP — no per-project customization.
 Each type has a fixed icon and color baked into the app, used for the badge
@@ -500,10 +500,11 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       `description` / preamble (color — still TODO)
 - [ ] **Drag & drop** (`@dnd-kit`):
   - [x] Board: within a kanban column, between status columns
-  - [x] Backlog: between release sections and to/from the Backlog section
-        (reorder inside release sections supported; reorder inside the
-        Backlog section is intentionally not supported — Backlog ordering
-        is epic + order, set by file structure)
+  - [x] Backlog: between release sections and to/from the Backlog section,
+        with reorder supported inside every section (including the Backlog
+        section, where ordering is grouped by epic and then by `order`).
+        Reorder only changes `order`; `status` and `epic` are not touched
+        by DnD on the Backlog screen.
 - [ ] **Release lifecycle UI**: Start release / Complete release buttons on
       section headers; the "where to move unfinished tasks" modal on Complete
 - [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for

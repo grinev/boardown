@@ -107,41 +107,39 @@ interface PlaceArgs {
   beforeTaskId: string | null;
 }
 
-const placeTaskInColumn = (
+const placeTaskInContainer = (
   tasks: Task[],
   movingId: string,
   args: PlaceArgs,
 ): Task[] => {
   const moving = findTask(tasks, movingId);
   const others = tasks.filter((t) => t.frontmatter.id !== movingId);
-  const column = sortByOrder(
-    others.filter((t) => t.frontmatter.status === args.status),
-  );
+  const siblings = sortByOrder(others);
 
   let insertIdx: number;
   if (args.beforeTaskId === null) {
-    insertIdx = column.length;
+    insertIdx = siblings.length;
   } else {
-    const found = column.findIndex((t) => t.frontmatter.id === args.beforeTaskId);
-    insertIdx = found === -1 ? column.length : found;
+    const found = siblings.findIndex((t) => t.frontmatter.id === args.beforeTaskId);
+    insertIdx = found === -1 ? siblings.length : found;
   }
 
   let newOrder: number;
   let needsRenumber = false;
 
-  if (column.length === 0) {
+  if (siblings.length === 0) {
     newOrder = ORDER_STEP;
   } else if (insertIdx === 0) {
-    newOrder = column[0]!.frontmatter.order - ORDER_STEP;
+    newOrder = siblings[0]!.frontmatter.order - ORDER_STEP;
     if (newOrder <= 0) {
       newOrder = 0;
       needsRenumber = true;
     }
-  } else if (insertIdx === column.length) {
-    newOrder = column[column.length - 1]!.frontmatter.order + ORDER_STEP;
+  } else if (insertIdx === siblings.length) {
+    newOrder = siblings[siblings.length - 1]!.frontmatter.order + ORDER_STEP;
   } else {
-    const prev = column[insertIdx - 1]!;
-    const next = column[insertIdx]!;
+    const prev = siblings[insertIdx - 1]!;
+    const next = siblings[insertIdx]!;
     const candidate = Math.floor((prev.frontmatter.order + next.frontmatter.order) / 2);
     if (candidate === prev.frontmatter.order || candidate === next.frontmatter.order) {
       newOrder = 0;
@@ -156,29 +154,23 @@ const placeTaskInColumn = (
     frontmatter: { ...moving.frontmatter, status: args.status, order: newOrder },
   };
 
-  const newColumn = [
-    ...column.slice(0, insertIdx),
+  const placed = [
+    ...siblings.slice(0, insertIdx),
     updatedMoving,
-    ...column.slice(insertIdx),
+    ...siblings.slice(insertIdx),
   ];
 
-  const finalColumn = needsRenumber
-    ? newColumn.map((t, i) => ({
+  return needsRenumber
+    ? placed.map((t, i) => ({
         ...t,
         frontmatter: { ...t.frontmatter, order: (i + 1) * ORDER_STEP },
       }))
-    : newColumn;
-
-  const otherTasks = others.filter((t) => t.frontmatter.status !== args.status);
-  return [...otherTasks, ...finalColumn];
+    : placed;
 };
 
-const lastOrderForStatus = (tasks: Task[], status: TaskStatus): number => {
-  const orders = tasks
-    .filter((t) => t.frontmatter.status === status)
-    .map((t) => t.frontmatter.order);
-  if (orders.length === 0) return 0;
-  return Math.max(...orders);
+const lastOrderInContainer = (tasks: Task[]): number => {
+  if (tasks.length === 0) return 0;
+  return Math.max(...tasks.map((t) => t.frontmatter.order));
 };
 
 export interface NewTaskInput {
@@ -195,7 +187,7 @@ export const createTask = <C extends Container>(
   input: NewTaskInput,
 ): { container: C; config: BoardConfig; task: Task } => {
   const { id, config: nextConfig } = nextTaskId(config);
-  const order = lastOrderForStatus(container.tasks, input.status) + ORDER_STEP;
+  const order = lastOrderInContainer(container.tasks) + ORDER_STEP;
   const task: Task = {
     title: input.title,
     description: input.description ?? '',
@@ -230,7 +222,7 @@ export const editTask = <C extends Container>(
   const current = findTask(container.tasks, taskId);
   const workingTasks =
     patch.status !== undefined && patch.status !== current.frontmatter.status
-      ? placeTaskInColumn(container.tasks, taskId, {
+      ? placeTaskInContainer(container.tasks, taskId, {
           status: patch.status,
           beforeTaskId: null,
         })
@@ -284,7 +276,7 @@ export const changeTaskStatus = <C extends Container>(
 ): C =>
   replaceTasks(
     container,
-    placeTaskInColumn(container.tasks, taskId, {
+    placeTaskInContainer(container.tasks, taskId, {
       status: newStatus,
       beforeTaskId: null,
     }),
@@ -298,7 +290,7 @@ export const reorderTask = <C extends Container>(
   const task = findTask(container.tasks, taskId);
   return replaceTasks(
     container,
-    placeTaskInColumn(container.tasks, taskId, {
+    placeTaskInContainer(container.tasks, taskId, {
       status: task.frontmatter.status,
       beforeTaskId,
     }),
@@ -310,7 +302,7 @@ export const moveTaskInContainer = <C extends Container>(
   taskId: string,
   args: { status: TaskStatus; beforeTaskId: string | null },
 ): C =>
-  replaceTasks(container, placeTaskInColumn(container.tasks, taskId, args));
+  replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
 
 export interface MoveAcrossArgs {
   newStatus: TaskStatus;
@@ -333,7 +325,7 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
     source.tasks.filter((t) => t.frontmatter.id !== taskId),
   );
   const destWithTask = replaceTasks(dest, [...dest.tasks, updated]);
-  const placed = placeTaskInColumn(destWithTask.tasks, taskId, {
+  const placed = placeTaskInContainer(destWithTask.tasks, taskId, {
     status: args.newStatus,
     beforeTaskId: args.beforeTaskId,
   });

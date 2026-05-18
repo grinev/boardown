@@ -97,16 +97,7 @@ export function BacklogDndContext({
     if (!isTaskDragId(activeId)) return;
     const taskId = parseTaskDragId(activeId);
 
-    let finalBuckets = bucketsRef.current;
-    if (event.over) {
-      const next = applyDragOverBacklog(event.active, event.over, finalBuckets);
-      if (next !== finalBuckets) {
-        finalBuckets = next;
-        bucketsRef.current = next;
-        setBuckets(next);
-      }
-    }
-
+    const finalBuckets = bucketsRef.current;
     const placement = findBacklogPlacement(finalBuckets, taskId);
     if (!placement) {
       if (original) {

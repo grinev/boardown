@@ -590,7 +590,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (sameContainer) {
       const updated = moveTaskInContainer(sourceLoc.container, taskId, {
         status: task.frontmatter.status,
-        beforeTaskId: target.kind === 'release' ? beforeTaskId : null,
+        beforeTaskId,
       });
       nextSource = updated;
       nextDest = updated;
@@ -601,7 +601,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         taskId,
         {
           newStatus: task.frontmatter.status,
-          beforeTaskId: target.kind === 'release' ? beforeTaskId : null,
+          beforeTaskId,
         },
       );
       nextSource = moved.source;
