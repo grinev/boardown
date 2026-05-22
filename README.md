@@ -147,11 +147,13 @@ The generated config uses `idPrefix: TASK`, so the first generated task id is
 ```yaml
 idPrefix: TASK
 nextId: 1
+projectName: My Board
 ```
 
-Create `config.yaml` yourself before first launch if you want a different
-prefix. The starter release is named `v0.1` and has `status: current`, so the
-board is ready for new tasks immediately.
+The `projectName` field is required and shown in the app header. Create
+`config.yaml` yourself before first launch if you want a different prefix or
+project name. The starter release is named `v0.1` and has `status: current`,
+so the board is ready for new tasks immediately.
 
 ## License
 

@@ -88,6 +88,7 @@ export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().min(1),
     nextId: z.number().int().nonnegative(),
+    projectName: z.string().min(1),
     theme: ThemeSchema.optional(),
   })
   .strict();

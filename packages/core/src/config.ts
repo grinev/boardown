@@ -34,6 +34,7 @@ export const serializeConfig = (config: BoardConfig): string => {
   const ordered: Record<string, unknown> = {
     idPrefix: config.idPrefix,
     nextId: config.nextId,
+    projectName: config.projectName,
   };
   if (config.theme !== undefined) {
     ordered.theme = config.theme;

@@ -21,6 +21,7 @@ type Resolved = ResolvedTarget | RejectedTarget;
 const CONFIG_FILENAME = 'config.yaml';
 const DEFAULT_CONFIG = `idPrefix: TASK
 nextId: 1
+projectName: My Board
 `;
 const BACKLOG_FILENAME = 'backlog.md';
 const RELEASES_DIR = 'releases';

@@ -25,6 +25,7 @@ import type {
 const config: BoardConfig = {
   idPrefix: 'BD',
   nextId: 10,
+  projectName: 'My Project',
 };
 
 const task = (

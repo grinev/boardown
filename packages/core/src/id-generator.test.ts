@@ -5,6 +5,7 @@ import type { BoardConfig, Task } from './schemas.js';
 const baseConfig: BoardConfig = {
   idPrefix: 'BD',
   nextId: 7,
+  projectName: 'My Project',
 };
 
 const task = (id: string): Task => ({

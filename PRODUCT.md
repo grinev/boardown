@@ -225,12 +225,15 @@ Notes:
 ```yaml
 idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
+projectName: My Board # required, human-readable name shown in the app header
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
 ```
 
-That is the entire MVP config. The `theme` field is written by the in-app
-theme switcher; it stays absent from `config.yaml` until the user toggles
-it for the first time. Statuses, status colors, and task types are
+That is the entire MVP config. The `projectName` field is required (set during
+onboarding) and read-only from the app's point of view (edit `config.yaml`
+directly); it is shown in the header. The `theme` field is written by the
+in-app theme switcher; it stays absent from `config.yaml` until the user
+toggles it for the first time. Statuses, status colors, and task types are
 **hardcoded** in the app; customizing them is post-MVP. Epic colors are
 user-defined per epic (see Epic frontmatter above).
 

@@ -31,6 +31,7 @@ class InMemoryFs implements FsAdapter {
 
 const CONFIG = `idPrefix: BD
 nextId: 5
+projectName: My Project
 `;
 
 const RELEASE_OK = `---

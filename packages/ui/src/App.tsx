@@ -65,7 +65,7 @@ export function App({ fs }: AppProps) {
     return (
       <main className={styles.app}>
         <header className={styles.header}>
-          <h1>boardown</h1>
+          <h1 />
         </header>
         <div className={styles.loading}>Loading…</div>
       </main>
@@ -76,7 +76,7 @@ export function App({ fs }: AppProps) {
     return (
       <main className={styles.app}>
         <header className={styles.header}>
-          <h1>boardown</h1>
+          <h1 />
         </header>
         <div className={styles.errorScreen}>
           <p className={styles.errorMessage}>Failed to load board.</p>
@@ -110,7 +110,7 @@ export function App({ fs }: AppProps) {
   return (
     <main className={styles.app}>
       <header className={styles.header}>
-        <h1>boardown</h1>
+        <h1>{snapshot.config.projectName}</h1>
       </header>
       <TabBar activeTab={activeTab} onSelect={setActiveTab} />
       <TabContent

@@ -156,8 +156,17 @@ describe('BoardConfigSchema', () => {
     const result = BoardConfigSchema.safeParse({
       idPrefix: 'BD',
       nextId: 47,
+      projectName: 'My Project',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects a config without projectName', () => {
+    const result = BoardConfigSchema.safeParse({
+      idPrefix: 'BD',
+      nextId: 47,
+    });
+    expect(result.success).toBe(false);
   });
 
   it('rejects tasksDir because data location belongs to the shell', () => {
@@ -173,6 +182,7 @@ describe('BoardConfigSchema', () => {
     const result = BoardConfigSchema.safeParse({
       idPrefix: 'BD',
       nextId: 0,
+      projectName: 'My Project',
       theme: 'dark',
     });
     expect(result.success).toBe(true);

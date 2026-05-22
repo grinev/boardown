@@ -4,6 +4,7 @@ import type { BoardConfig } from './schemas.js';
 
 const VALID = `idPrefix: BD
 nextId: 47
+projectName: My Project
 `;
 
 describe('parseConfig', () => {
@@ -13,12 +14,14 @@ describe('parseConfig', () => {
     expect(result.value).toEqual({
       idPrefix: 'BD',
       nextId: 47,
+      projectName: 'My Project',
     });
   });
 
   it('parses a config with optional fields', () => {
     const text = `idPrefix: BD
 nextId: 47
+projectName: My Project
 theme: dark
 `;
     const result = parseConfig(text);
@@ -26,8 +29,25 @@ theme: dark
     expect(result.value).toEqual({
       idPrefix: 'BD',
       nextId: 47,
+      projectName: 'My Project',
       theme: 'dark',
     });
+  });
+
+  it('rejects a missing projectName', () => {
+    const text = `idPrefix: BD
+nextId: 47
+`;
+    const result = parseConfig(text);
+    expect(result.value).toBeNull();
+    expect(result.problems).toHaveLength(1);
+  });
+
+  it('rejects empty projectName', () => {
+    const text = `${VALID}`.replace('My Project', '""');
+    const result = parseConfig(text);
+    expect(result.value).toBeNull();
+    expect(result.problems).toHaveLength(1);
   });
 
   it('rejects tasksDir because data location belongs to the shell', () => {
@@ -81,27 +101,44 @@ describe('serializeConfig', () => {
     const cfg: BoardConfig = {
       idPrefix: 'XX',
       nextId: 0,
+      projectName: 'My Project',
       theme: 'dark',
     };
     const out = serializeConfig(cfg);
     const idx = (s: string) => out.indexOf(s);
     expect(idx('idPrefix')).toBeLessThan(idx('nextId'));
-    expect(idx('nextId')).toBeLessThan(idx('theme'));
+    expect(idx('nextId')).toBeLessThan(idx('projectName'));
+    expect(idx('projectName')).toBeLessThan(idx('theme'));
   });
 
-  it('omits optional fields when undefined', () => {
+  it('omits the optional theme when undefined', () => {
     const cfg: BoardConfig = {
       idPrefix: 'BD',
       nextId: 0,
+      projectName: 'My Project',
     };
     const out = serializeConfig(cfg);
     expect(out).not.toContain('theme');
+  });
+
+  it('round-trips projectName', () => {
+    const cfg: BoardConfig = {
+      idPrefix: 'BD',
+      nextId: 0,
+      projectName: 'My Project',
+    };
+    const out = serializeConfig(cfg);
+    expect(out).toContain('projectName');
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
   });
 
   it('round-trips theme when set', () => {
     const cfg: BoardConfig = {
       idPrefix: 'BD',
       nextId: 0,
+      projectName: 'My Project',
       theme: 'dark',
     };
     const out = serializeConfig(cfg);
