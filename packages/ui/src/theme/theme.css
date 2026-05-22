@@ -22,8 +22,10 @@
   --inline-edit-hover-bg: #ebecf0;
 
   --tab-bg: #ffffff;
-  --tab-bg-active: var(--accent-bg);
+  --tab-bg-active: var(--bg);
   --tab-border: var(--divider);
+  --tab-active-shadow: 0 -3px 2px -1px rgba(37, 99, 235, 0.6),
+    -3px 0 2px -1px rgba(37, 99, 235, 0.6), 3px 0 2px -1px rgba(37, 99, 235, 0.6);
 
   --epic-bg: #e0f2fe;
   --epic-fg: #075985;
@@ -77,8 +79,10 @@
   --inline-edit-hover-bg: #21262d;
 
   --tab-bg: #161b22;
-  --tab-bg-active: var(--accent-bg);
+  --tab-bg-active: var(--bg);
   --tab-border: var(--divider);
+  --tab-active-shadow: 0 -3px 2px -1px rgba(88, 166, 255, 0.65),
+    -3px 0 2px -1px rgba(88, 166, 255, 0.65), 3px 0 2px -1px rgba(88, 166, 255, 0.65);
 
   --epic-bg: #0c3650;
   --epic-fg: #7dd3fc;

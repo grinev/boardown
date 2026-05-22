@@ -10,7 +10,6 @@
 .header {
   padding: 8px 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--divider);
 }
 
 .header h1 {

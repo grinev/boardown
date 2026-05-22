@@ -5,7 +5,6 @@
   gap: 8px;
   padding: 0 8px;
   background: var(--surface);
-  border-bottom: 1px solid var(--divider);
 }
 
 .tabs {
@@ -33,6 +32,13 @@
   background: var(--tab-bg-active);
   color: var(--accent);
   font-weight: 600;
-  border-bottom: 2px solid var(--accent);
-  margin-bottom: -1px;
+  border-color: transparent;
+  box-shadow: var(--tab-active-shadow);
+  /* Clip the shadow at the bottom edge so it only shows on top and sides;
+     otherwise the blurred drop shadows bleed a faint line under the tab. */
+  clip-path: inset(-6px -6px 0 -6px);
+}
+
+.tabActive:hover {
+  background: var(--tab-bg-active);
 }

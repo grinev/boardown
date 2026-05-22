@@ -344,9 +344,10 @@ the user to start one from Backlog.
 ### Archive
 
 The same layout as Backlog, but populated only with `finished` releases
-(newest first). No Backlog section, no current section. The epic filter
-panel remains. By default, the archive is **read-only** — tasks cannot be
-dragged out. An explicit "reopen task" action that lifts a task back to
+(newest first). No Backlog section, no current section, no filter bar. All
+releases are collapsed by default. The archive is **read-only** — tasks
+cannot be dragged out. Task and epic cards are still clickable and open the
+editor. An explicit "reopen task" action that lifts a task back to
 current/Backlog is post-MVP.
 
 ### Task card
@@ -505,8 +506,8 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
         default; collapsed state is local/ephemeral, resets on reload)
 - [ ] **Board screen**: kanban for the current release with status columns;
       empty state when no release is current
-- [ ] **Archive screen**: finished releases in the same layout as Backlog,
-      read-only by default
+- [x] **Archive screen**: finished releases in the same layout as Backlog,
+      read-only, collapsed by default, no filter bar
 - [x] **Task creation modal**: title, type, epic, plain-text description
 - [x] **Task inline editing** in the details dialog: `title`,
       `description`, `type`, `status`, `epic`, `release`
@@ -540,7 +541,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for
       `status`, `type`, `epic` (with a "No epic" option); applies globally
       to all sections; counter switches to `N of M` when active. Backlog
-      done; Archive still TODO.
+      only; Archive intentionally has no filter bar.
 - [ ] **Empty states** for every screen and major section
 - [ ] **Initial-board flow**: when no `.boardown/` exists, prompt for ID
       prefix and create the default structure via the adapter
