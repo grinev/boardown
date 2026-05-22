@@ -4,6 +4,7 @@ import type { Epic, Release, Task } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogRowView } from './BacklogRowView';
 import styles from './BacklogView.module.css';
+import archiveStyles from './ArchiveView.module.css';
 
 const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
 
@@ -69,7 +70,7 @@ export function ArchiveView() {
 
   return (
     <div className={styles.view}>
-      <div className={styles.scrollArea}>
+      <div className={`${styles.scrollArea} ${archiveStyles.scrollArea}`}>
         {finished.map((release) => {
           const key = releaseSectionKey(release);
           const tasks = [...release.tasks].sort(sortByOrder);
