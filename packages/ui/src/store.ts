@@ -16,6 +16,7 @@ import type {
 import {
   CONFIG_FILENAME,
   completeRelease as completeReleaseInBoard,
+  createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
   createTask as createTaskInContainer,
   editEpic,
@@ -37,7 +38,9 @@ export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type ActiveTab = 'backlog' | 'board' | 'archive';
 
 export interface CreateTaskInput {
-  releaseFilename: string;
+  // Empty/omitted means the task is created in the backlog: in the selected
+  // epic's file when `epic` is set, otherwise in no_epic.md.
+  releaseFilename?: string;
   title: string;
   description?: string;
   type: TaskType;
@@ -47,6 +50,12 @@ export interface CreateTaskInput {
 export interface CreateReleaseInput {
   name: string;
   description?: string;
+}
+
+export interface CreateEpicInput {
+  name: string;
+  description?: string;
+  color: string;
 }
 
 interface BoardState {
@@ -60,7 +69,9 @@ interface BoardState {
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
+  createTaskOpen: boolean;
   createReleaseOpen: boolean;
+  createEpicOpen: boolean;
   completeReleaseOpen: boolean;
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
@@ -72,9 +83,12 @@ interface BoardState {
   openEpic: (slug: string) => void;
   closeEpic: () => void;
   openCreateTask: (releaseFilename: string) => void;
+  openCreateTaskMenu: () => void;
   closeCreateTask: () => void;
   openCreateRelease: () => void;
   closeCreateRelease: () => void;
+  openCreateEpic: () => void;
+  closeCreateEpic: () => void;
   openCompleteRelease: () => void;
   closeCompleteRelease: () => void;
   completeRelease: (target: CompleteReleaseTarget) => Promise<void>;
@@ -85,6 +99,7 @@ interface BoardState {
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
   createRelease: (input: CreateReleaseInput) => Promise<void>;
+  createEpic: (input: CreateEpicInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
   moveTask: (
     taskId: string,
@@ -192,7 +207,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   selectedTaskId: null,
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
+  createTaskOpen: false,
   createReleaseOpen: false,
+  createEpicOpen: false,
   completeReleaseOpen: false,
   startReleaseForFilename: null,
   settingsOpen: false,
@@ -258,11 +275,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   openCreateTask: (releaseFilename) =>
     set({ createTaskForReleaseFilename: releaseFilename }),
 
-  closeCreateTask: () => set({ createTaskForReleaseFilename: null }),
+  openCreateTaskMenu: () => set({ createTaskOpen: true }),
+
+  closeCreateTask: () =>
+    set({ createTaskForReleaseFilename: null, createTaskOpen: false }),
 
   openCreateRelease: () => set({ createReleaseOpen: true }),
 
   closeCreateRelease: () => set({ createReleaseOpen: false }),
+
+  openCreateEpic: () => set({ createEpicOpen: true }),
+
+  closeCreateEpic: () => set({ createEpicOpen: false }),
 
   openCompleteRelease: () => set({ completeReleaseOpen: true }),
 
@@ -280,41 +304,88 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const { snapshot, fs } = get();
     if (!snapshot || !fs) return;
 
-    const releaseIndex = snapshot.releases.findIndex(
-      (r) => r.filename === input.releaseFilename,
-    );
-    if (releaseIndex === -1) {
-      set({ errorMessage: `Release not found: ${input.releaseFilename}` });
-      return;
-    }
-    const release = snapshot.releases[releaseIndex]!;
-
-    const result = createTaskInContainer(release, snapshot.config, {
+    const baseInput = {
       title: input.title,
       type: input.type,
-      status: 'todo',
+      status: 'todo' as const,
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.epic !== undefined ? { epic: input.epic } : {}),
-    });
-
-    const nextReleases = [...snapshot.releases];
-    nextReleases[releaseIndex] = result.container;
-
-    const nextSnapshot: BoardSnapshot = {
-      ...snapshot,
-      config: result.config,
-      releases: nextReleases,
     };
-    set({ snapshot: nextSnapshot, errorMessage: null });
 
-    try {
-      await fs.write(result.container.filename, serializeRelease(result.container));
-      await fs.write(CONFIG_FILENAME, serializeConfig(result.config));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ snapshot, errorMessage: `Failed to save task: ${message}` });
-      throw err;
+    const persist = async (
+      nextSnapshot: BoardSnapshot,
+      filename: string,
+      content: string,
+      config: typeof snapshot.config,
+    ) => {
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(filename, content);
+        await fs.write(CONFIG_FILENAME, serializeConfig(config));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
+    };
+
+    // Task bound to a release: the epic, if any, is kept as a frontmatter link.
+    if (input.releaseFilename) {
+      const releaseIndex = snapshot.releases.findIndex(
+        (r) => r.filename === input.releaseFilename,
+      );
+      if (releaseIndex === -1) {
+        set({ errorMessage: `Release not found: ${input.releaseFilename}` });
+        return;
+      }
+      const release = snapshot.releases[releaseIndex]!;
+      const result = createTaskInContainer(release, snapshot.config, {
+        ...baseInput,
+        ...(input.epic !== undefined ? { epic: input.epic } : {}),
+      });
+      const nextReleases = [...snapshot.releases];
+      nextReleases[releaseIndex] = result.container;
+      await persist(
+        { ...snapshot, config: result.config, releases: nextReleases },
+        result.container.filename,
+        serializeRelease(result.container),
+        result.config,
+      );
+      return;
     }
+
+    // No release, epic selected: the task lives in the epic's file. The epic
+    // link is implied by the filename, so it is omitted from the frontmatter.
+    if (input.epic) {
+      const epicIndex = snapshot.epics.findIndex((e) => e.slug === input.epic);
+      if (epicIndex === -1) {
+        set({ errorMessage: `Epic not found: ${input.epic}` });
+        return;
+      }
+      const epic = snapshot.epics[epicIndex]!;
+      const result = createTaskInContainer(epic, snapshot.config, baseInput);
+      const nextEpics = [...snapshot.epics];
+      nextEpics[epicIndex] = result.container;
+      await persist(
+        { ...snapshot, config: result.config, epics: nextEpics },
+        result.container.filename,
+        serializeEpic(result.container),
+        result.config,
+      );
+      return;
+    }
+
+    // No release, no epic: the task goes to the backlog (no_epic.md).
+    if (!snapshot.backlog) {
+      set({ errorMessage: 'Backlog container (no_epic.md) is missing' });
+      return;
+    }
+    const result = createTaskInContainer(snapshot.backlog, snapshot.config, baseInput);
+    await persist(
+      { ...snapshot, config: result.config, backlog: result.container },
+      result.container.filename,
+      serializeBacklog(result.container),
+      result.config,
+    );
   },
 
   createRelease: async (input) => {
@@ -337,6 +408,31 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ snapshot, errorMessage: `Failed to save release: ${message}` });
+      throw err;
+    }
+  },
+
+  createEpic: async (input) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const epic = createEpicInBoard(snapshot.epics, {
+      name: input.name,
+      color: input.color,
+      ...(input.description !== undefined ? { description: input.description } : {}),
+    });
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      epics: [...snapshot.epics, epic],
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(epic.filename, serializeEpic(epic));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save epic: ${message}` });
       throw err;
     }
   },

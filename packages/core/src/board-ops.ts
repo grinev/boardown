@@ -14,6 +14,8 @@ export const DEFAULT_EPIC_SLUG = 'no-epic';
 
 export const RELEASES_DIR = 'releases';
 
+export const EPICS_DIR = 'epics';
+
 export type Container = Release | Epic | Backlog;
 
 const ORDER_STEP = 100;
@@ -85,6 +87,48 @@ export const createRelease = (
         : {}),
     },
     preamble: '',
+    tasks: [],
+  };
+};
+
+export interface NewEpicInput {
+  name: string;
+  description?: string;
+  color: string;
+}
+
+export const epicFilenameForSlug = (slug: string): string =>
+  `${EPICS_DIR}/${slug}.md`;
+
+export const createEpic = (
+  existing: readonly Epic[],
+  input: NewEpicInput,
+): Epic => {
+  const name = input.name.trim();
+  if (name.length === 0) throw new Error('Epic name is required');
+
+  const slug = sanitizeFilenameForFs(name);
+  if (slug.length === 0) {
+    throw new Error(
+      'Epic name does not contain any characters allowed in a filename',
+    );
+  }
+
+  const slugLower = slug.toLowerCase();
+  const conflict = existing.find((e) => e.slug.toLowerCase() === slugLower);
+  if (conflict !== undefined) {
+    throw new Error(`Epic already exists: ${conflict.slug}`);
+  }
+
+  const description = input.description?.trim() ?? '';
+  return {
+    filename: epicFilenameForSlug(slug),
+    slug,
+    frontmatter: {
+      name,
+      color: input.color,
+    },
+    preamble: description,
     tasks: [],
   };
 };

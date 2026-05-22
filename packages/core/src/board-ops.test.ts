@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   changeTaskStatus,
   completeRelease,
+  createEpic,
   createRelease,
   startRelease,
   createTask,
@@ -312,6 +313,57 @@ describe('createRelease', () => {
     const r = createRelease([], { name: 'CON' });
     expect(r.slug).toBe('con_');
     expect(r.filename).toBe('releases/con_.md');
+  });
+});
+
+describe('createEpic', () => {
+  it('stores name and color, derives a filename-safe slug', () => {
+    const e = createEpic([], { name: 'Drag & Drop', color: '#f59e0b' });
+    expect(e.filename).toBe('epics/drag-&-drop.md');
+    expect(e.slug).toBe('drag-&-drop');
+    expect(e.frontmatter.name).toBe('Drag & Drop');
+    expect(e.frontmatter.color).toBe('#f59e0b');
+    expect(e.tasks).toEqual([]);
+    expect(e.preamble).toBe('');
+  });
+
+  it('lowercases the slug while keeping the name as typed', () => {
+    const e = createEpic([], { name: 'UI Foundation', color: '#1f6feb' });
+    expect(e.slug).toBe('ui-foundation');
+    expect(e.frontmatter.name).toBe('UI Foundation');
+  });
+
+  it('stores trimmed description in the preamble', () => {
+    const e = createEpic([], {
+      name: 'Parser',
+      color: '#1f6feb',
+      description: '  parsing logic  ',
+    });
+    expect(e.preamble).toBe('parsing logic');
+  });
+
+  it('leaves the preamble empty when no description is given', () => {
+    const e = createEpic([], { name: 'Parser', color: '#1f6feb' });
+    expect(e.preamble).toBe('');
+  });
+
+  it('throws when the slug duplicates an existing epic (case-insensitive)', () => {
+    const existing = createEpic([], { name: 'Parser', color: '#1f6feb' });
+    expect(() => createEpic([existing], { name: 'PARSER', color: '#1f6feb' })).toThrow(
+      /already exists/i,
+    );
+  });
+
+  it('throws when sanitization leaves the slug empty', () => {
+    expect(() => createEpic([], { name: '???', color: '#1f6feb' })).toThrow(
+      /characters allowed in a filename/i,
+    );
+  });
+
+  it('throws when the name is empty after trimming', () => {
+    expect(() => createEpic([], { name: '   ', color: '#1f6feb' })).toThrow(
+      /required/i,
+    );
   });
 });
 

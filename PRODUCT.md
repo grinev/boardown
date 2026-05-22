@@ -443,6 +443,12 @@ creates `config.yaml` manually before first launch.
 - "Git-managed team task tracker" deployment (web as a deployable artifact
   with a fixed folder, multi-user via git as the sync layer) — interesting
   future direction, not in scope for v1.
+- Multiple simultaneously-`current` releases with a Board release switcher
+  (à la Jira's multiple active sprints) — e.g. a large release in flight plus
+  an urgent hotfix release. Useful, but it removes the one-`current`-at-a-time
+  invariant that simplifies the Board view, the Backlog "current release"
+  section, the tab counters, and the `startRelease`/`completeRelease` core
+  ops. Revisit post-MVP once the base single-release flow is proven.
 
 ## MVP roadmap
 
@@ -516,7 +522,14 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       filesystem-forbidden characters become `-`, edges trimmed, runs
       collapsed) with a live preview in the form; status defaults to
       `future`; launched from the Backlog section header
-- [ ] **Epic creation modal** (with deletion guard on non-empty epics)
+- [x] **Epic creation modal**: Name + plain-text description + color picked
+      from a fixed palette; filename derived from the name like releases
+      (deletion guard on non-empty epics — still TODO)
+- [x] **Create menu** in the top navigation: a single Create dropdown
+      (Task / Epic / Release) next to the settings button. Task launched
+      here lets the user pick a release (finished releases excluded); with
+      no release the task is created in the backlog — in the chosen epic's
+      file, or `no_epic.md` when no epic is selected
 - [x] **Epic inline editing** in the details dialog: `name`,
       `description` / preamble (color — still TODO)
 - [ ] **Drag & drop** (`@dnd-kit`):

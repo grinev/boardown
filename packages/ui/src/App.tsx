@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
+import { CreateEpicDialog } from './components/CreateEpicDialog';
+import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -32,6 +34,9 @@ export function App({ fs }: AppProps) {
   const createTaskForReleaseFilename = useBoardStore(
     (s) => s.createTaskForReleaseFilename,
   );
+  const createTaskOpen = useBoardStore((s) => s.createTaskOpen);
+  const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
+  const createEpicOpen = useBoardStore((s) => s.createEpicOpen);
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
   const completeReleaseOpen = useBoardStore((s) => s.completeReleaseOpen);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
@@ -44,6 +49,8 @@ export function App({ fs }: AppProps) {
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
   const closeCreateTask = useBoardStore((s) => s.closeCreateTask);
+  const closeCreateRelease = useBoardStore((s) => s.closeCreateRelease);
+  const closeCreateEpic = useBoardStore((s) => s.closeCreateEpic);
   const closeSettings = useBoardStore((s) => s.closeSettings);
 
   useEffect(() => {
@@ -148,6 +155,15 @@ export function App({ fs }: AppProps) {
           onClose={closeCreateTask}
         />
       )}
+      {createTaskOpen && (
+        <CreateTaskDialog
+          releases={snapshot.releases}
+          epics={snapshot.epics}
+          onClose={closeCreateTask}
+        />
+      )}
+      {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
+      {createEpicOpen && <CreateEpicDialog onClose={closeCreateEpic} />}
       {completeReleaseOpen && (
         <CompleteReleaseDialog onClose={closeCompleteRelease} />
       )}

@@ -25,7 +25,6 @@ import {
   type TypeFilter,
 } from './BacklogFilters';
 import { BacklogRowView } from './BacklogRowView';
-import { CreateReleaseDialog } from './CreateReleaseDialog';
 import styles from './BacklogView.module.css';
 
 interface SectionMeta {
@@ -50,8 +49,6 @@ export function BacklogView() {
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
   const openCreateRelease = useBoardStore((s) => s.openCreateRelease);
-  const closeCreateRelease = useBoardStore((s) => s.closeCreateRelease);
-  const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
   const openStartRelease = useBoardStore((s) => s.openStartRelease);
 
@@ -228,7 +225,6 @@ export function BacklogView() {
           })}
         </div>
       </BacklogDndContext>
-      {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
     </div>
   );
 }

@@ -9,16 +9,18 @@ import { Modal } from './Modal';
 import styles from './CreateTaskDialog.module.css';
 
 interface CreateTaskDialogProps {
-  release: Release;
+  // When provided the task is bound to this release and the selector is locked.
+  // Otherwise the user picks a release from `releases`.
+  release?: Release;
+  releases?: Release[];
   epics: Epic[];
-  canChangeRelease?: boolean;
   onClose: () => void;
 }
 
 export function CreateTaskDialog({
   release,
+  releases = [],
   epics,
-  canChangeRelease = false,
   onClose,
 }: CreateTaskDialogProps) {
   const createTask = useBoardStore((s) => s.createTask);
@@ -27,15 +29,37 @@ export function CreateTaskDialog({
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('feature');
   const [epicSlug, setEpicSlug] = useState('');
+  const [releaseFilename, setReleaseFilename] = useState(release?.filename ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const releaseLocked = release !== undefined;
+  const releaseOptions = releaseLocked
+    ? [release]
+    : releases.filter((r) => r.frontmatter.status !== 'finished');
 
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && !submitting;
 
-  const sortedEpics = [...epics].sort((a, b) =>
-    a.frontmatter.name.localeCompare(b.frontmatter.name),
-  );
+  const epicOptions = useMemo<IconSelectOption[]>(() => {
+    const sorted = [...epics].sort((a, b) =>
+      a.frontmatter.name.localeCompare(b.frontmatter.name),
+    );
+    return [
+      { value: '', label: 'No epic' },
+      ...sorted.map((epic) => ({
+        value: epic.slug,
+        label: epic.frontmatter.name,
+        icon: (
+          <span
+            className={styles.epicSwatch}
+            style={{ background: epic.frontmatter.color }}
+            aria-hidden="true"
+          />
+        ),
+      })),
+    ];
+  }, [epics]);
 
   const typeOptions = useMemo<IconSelectOption[]>(
     () =>
@@ -57,8 +81,6 @@ export function CreateTaskDialog({
     [],
   );
 
-  const releaseLabel = release.frontmatter.name ?? release.slug;
-
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -67,7 +89,7 @@ export function CreateTaskDialog({
     try {
       const trimmedDescription = description.trim();
       await createTask({
-        releaseFilename: release.filename,
+        releaseFilename,
         title: trimmedTitle,
         type,
         ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
@@ -125,30 +147,30 @@ export function CreateTaskDialog({
             ariaLabel="Type"
           />
         </div>
-        <label className={styles.field}>
+        <div className={styles.field}>
           <span className={styles.label}>Epic</span>
-          <select
-            className={styles.select}
+          <IconSelect
             value={epicSlug}
-            onChange={(e) => setEpicSlug(e.target.value)}
-          >
-            <option value="">—</option>
-            {sortedEpics.map((epic) => (
-              <option key={epic.slug} value={epic.slug}>
-                {epic.frontmatter.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            options={epicOptions}
+            onChange={(v) => setEpicSlug(v)}
+            ariaLabel="Epic"
+          />
+        </div>
         <label className={styles.field}>
           <span className={styles.label}>Release</span>
           <select
             className={styles.select}
-            value={release.filename}
-            disabled={!canChangeRelease}
-            onChange={() => undefined}
+            value={releaseFilename}
+            disabled={releaseLocked}
+            required
+            onChange={(e) => setReleaseFilename(e.target.value)}
           >
-            <option value={release.filename}>{releaseLabel}</option>
+            {!releaseLocked && <option value="">—</option>}
+            {releaseOptions.map((r) => (
+              <option key={r.filename} value={r.filename}>
+                {r.frontmatter.name ?? r.slug}
+              </option>
+            ))}
           </select>
         </label>
         {submitError !== null && (
