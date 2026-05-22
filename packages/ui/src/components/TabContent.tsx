@@ -1,6 +1,7 @@
 import { CheckCircle2 } from 'lucide-react';
 import type { Epic, Release, TaskStatus } from '@boardown/core';
 import { useBoardStore, type ActiveTab } from '../store';
+import { ArchiveView } from './ArchiveView';
 import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
 import styles from './TabContent.module.css';
@@ -20,12 +21,7 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
   }
 
   if (activeTab === 'archive') {
-    return (
-      <section className={styles.placeholder}>
-        <h2>Archive</h2>
-        <p>No archived releases yet</p>
-      </section>
-    );
+    return <ArchiveView />;
   }
 
   const current = releases.find((r) => r.frontmatter.status === 'current');

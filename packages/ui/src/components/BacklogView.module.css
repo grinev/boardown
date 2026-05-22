@@ -162,6 +162,12 @@
   cursor: grabbing;
 }
 
+.staticRow,
+.staticRow:active {
+  cursor: default;
+  touch-action: auto;
+}
+
 .dragOverlayList {
   list-style: none;
   margin: 0;
