@@ -1,5 +1,6 @@
+import { CheckCircle2 } from 'lucide-react';
 import type { Epic, Release, TaskStatus } from '@boardown/core';
-import type { ActiveTab } from '../store';
+import { useBoardStore, type ActiveTab } from '../store';
 import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
 import styles from './TabContent.module.css';
@@ -12,6 +13,8 @@ interface TabContentProps {
 }
 
 export function TabContent({ activeTab, releases, epics, statuses }: TabContentProps) {
+  const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
+
   if (activeTab === 'backlog') {
     return <BacklogView />;
   }
@@ -42,6 +45,14 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
     <section className={styles.boardSection}>
       <header className={styles.releaseHeader}>
         <h2>{heading}</h2>
+        <button
+          type="button"
+          className={styles.completeButton}
+          onClick={openCompleteRelease}
+        >
+          <CheckCircle2 size={14} aria-hidden="true" />
+          Complete release
+        </button>
       </header>
       <BoardView release={current} epics={epics} statuses={statuses} />
     </section>

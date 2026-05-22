@@ -94,15 +94,21 @@
   white-space: nowrap;
 }
 
-.sectionHeader:has(.sectionCreateButton) .sectionCount {
+.sectionHeader:has(.sectionCreateButton) .sectionCount,
+.sectionHeader:has(.sectionCompleteButton) .sectionCount,
+.sectionHeader:has(.sectionStartButton) .sectionCount {
   margin-left: 0;
 }
 
-.sectionHeader:has(.sectionCreateButton) .sectionCreateButton {
+.sectionHeader:has(.sectionCreateButton) .sectionCreateButton,
+.sectionHeader:has(.sectionCompleteButton) .sectionCompleteButton,
+.sectionHeader:has(.sectionStartButton) .sectionStartButton {
   margin-left: auto;
 }
 
-.sectionCreateButton {
+.sectionCreateButton,
+.sectionCompleteButton,
+.sectionStartButton {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -119,11 +125,15 @@
   white-space: nowrap;
 }
 
-.sectionCreateButton:hover {
+.sectionCreateButton:hover,
+.sectionCompleteButton:hover,
+.sectionStartButton:hover {
   background: var(--surface-muted);
 }
 
-.sectionCreateButton:focus-visible {
+.sectionCreateButton:focus-visible,
+.sectionCompleteButton:focus-visible,
+.sectionStartButton:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

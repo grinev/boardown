@@ -3,9 +3,11 @@ import { TASK_STATUSES } from '@boardown/core';
 import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
+import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { SettingsDialog } from './components/SettingsDialog';
+import { StartReleaseDialog } from './components/StartReleaseDialog';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { TaskDetailsDialog } from './components/TaskDetailsDialog';
@@ -31,6 +33,10 @@ export function App({ fs }: AppProps) {
     (s) => s.createTaskForReleaseFilename,
   );
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
+  const completeReleaseOpen = useBoardStore((s) => s.completeReleaseOpen);
+  const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
+  const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
+  const closeStartRelease = useBoardStore((s) => s.closeStartRelease);
   const load = useBoardStore((s) => s.load);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
@@ -90,6 +96,9 @@ export function App({ fs }: AppProps) {
   const createTaskRelease = createTaskForReleaseFilename
     ? snapshot.releases.find((r) => r.filename === createTaskForReleaseFilename)
     : undefined;
+  const startReleaseTarget = startReleaseForFilename
+    ? snapshot.releases.find((r) => r.filename === startReleaseForFilename)
+    : undefined;
 
   return (
     <main className={styles.app}>
@@ -137,6 +146,15 @@ export function App({ fs }: AppProps) {
           release={createTaskRelease}
           epics={snapshot.epics}
           onClose={closeCreateTask}
+        />
+      )}
+      {completeReleaseOpen && (
+        <CompleteReleaseDialog onClose={closeCompleteRelease} />
+      )}
+      {startReleaseTarget && (
+        <StartReleaseDialog
+          release={startReleaseTarget}
+          onClose={closeStartRelease}
         />
       )}
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}

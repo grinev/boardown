@@ -15,11 +15,13 @@ import type {
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
+  completeRelease as completeReleaseInBoard,
   createRelease as createReleaseInBoard,
   createTask as createTaskInContainer,
   editEpic,
   editTask,
   loadBoard,
+  startRelease as startReleaseInBoard,
   moveTaskBetweenContainers,
   moveTaskInContainer,
   reorderTaskInBacklog,
@@ -59,6 +61,8 @@ interface BoardState {
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
   createReleaseOpen: boolean;
+  completeReleaseOpen: boolean;
+  startReleaseForFilename: string | null;
   settingsOpen: boolean;
   load: (fs: FsAdapter) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
@@ -71,6 +75,12 @@ interface BoardState {
   closeCreateTask: () => void;
   openCreateRelease: () => void;
   closeCreateRelease: () => void;
+  openCompleteRelease: () => void;
+  closeCompleteRelease: () => void;
+  completeRelease: (target: CompleteReleaseTarget) => Promise<void>;
+  openStartRelease: (filename: string) => void;
+  closeStartRelease: () => void;
+  startRelease: (filename: string) => Promise<void>;
   openSettings: () => void;
   closeSettings: () => void;
   createTask: (input: CreateTaskInput) => Promise<void>;
@@ -94,6 +104,10 @@ interface BoardState {
 }
 
 export type BacklogMoveTarget =
+  | { kind: 'release'; filename: string }
+  | { kind: 'backlog' };
+
+export type CompleteReleaseTarget =
   | { kind: 'release'; filename: string }
   | { kind: 'backlog' };
 
@@ -179,6 +193,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
   createReleaseOpen: false,
+  completeReleaseOpen: false,
+  startReleaseForFilename: null,
   settingsOpen: false,
 
   load: async (fs) => {
@@ -248,6 +264,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   closeCreateRelease: () => set({ createReleaseOpen: false }),
 
+  openCompleteRelease: () => set({ completeReleaseOpen: true }),
+
+  closeCompleteRelease: () => set({ completeReleaseOpen: false }),
+
+  openStartRelease: (filename) => set({ startReleaseForFilename: filename }),
+
+  closeStartRelease: () => set({ startReleaseForFilename: null }),
+
   openSettings: () => set({ settingsOpen: true }),
 
   closeSettings: () => set({ settingsOpen: false }),
@@ -313,6 +337,107 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ snapshot, errorMessage: `Failed to save release: ${message}` });
+      throw err;
+    }
+  },
+
+  completeRelease: async (target) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const releaseIndex = snapshot.releases.findIndex(
+      (r) => r.frontmatter.status === 'current',
+    );
+    if (releaseIndex === -1) {
+      set({ errorMessage: 'No current release to complete' });
+      return;
+    }
+
+    let targetReleaseIndex = -1;
+    if (target.kind === 'release') {
+      targetReleaseIndex = snapshot.releases.findIndex(
+        (r) => r.filename === target.filename,
+      );
+      if (targetReleaseIndex === -1) {
+        set({ errorMessage: `Release not found: ${target.filename}` });
+        return;
+      }
+    }
+
+    const result = completeReleaseInBoard({
+      release: snapshot.releases[releaseIndex]!,
+      epics: snapshot.epics,
+      backlog: snapshot.backlog,
+      targetRelease:
+        targetReleaseIndex === -1
+          ? null
+          : snapshot.releases[targetReleaseIndex]!,
+    });
+
+    const nextReleases = [...snapshot.releases];
+    nextReleases[releaseIndex] = result.release;
+    if (targetReleaseIndex !== -1 && result.targetRelease) {
+      nextReleases[targetReleaseIndex] = result.targetRelease;
+    }
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: nextReleases,
+      epics: result.epics,
+      backlog: result.backlog,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      for (const filename of result.changedFilenames) {
+        const release = nextSnapshot.releases.find((r) => r.filename === filename);
+        if (release) {
+          await fs.write(filename, serializeRelease(release));
+          continue;
+        }
+        const epic = nextSnapshot.epics.find((e) => e.filename === filename);
+        if (epic) {
+          await fs.write(filename, serializeEpic(epic));
+          continue;
+        }
+        if (nextSnapshot.backlog && nextSnapshot.backlog.filename === filename) {
+          await fs.write(filename, serializeBacklog(nextSnapshot.backlog));
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to complete release: ${message}` });
+      throw err;
+    }
+  },
+
+  startRelease: async (filename) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const releaseIndex = snapshot.releases.findIndex(
+      (r) => r.filename === filename,
+    );
+    if (releaseIndex === -1) {
+      set({ errorMessage: `Release not found: ${filename}` });
+      return;
+    }
+
+    const started = startReleaseInBoard(
+      snapshot.releases[releaseIndex]!,
+      snapshot.releases,
+    );
+
+    const nextReleases = [...snapshot.releases];
+    nextReleases[releaseIndex] = started;
+    const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(started.filename, serializeRelease(started));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to start release: ${message}` });
       throw err;
     }
   },

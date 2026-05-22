@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeTaskStatus,
+  completeRelease,
   createRelease,
+  startRelease,
   createTask,
   deleteTask,
   editEpic,
@@ -490,5 +492,134 @@ describe('reorderTaskInBacklog', () => {
     expect(() =>
       reorderTaskInBacklog({ epics: [a], backlog: null }, 'BD-999', null),
     ).toThrow(/Task not found in backlog/);
+  });
+});
+
+const epicTask = (
+  id: string,
+  status: TaskStatus,
+  order: number,
+  epicSlug: string,
+): Task => ({
+  title: id,
+  description: '',
+  frontmatter: { id, type: 'feature', status, epic: epicSlug, order },
+});
+
+describe('completeRelease', () => {
+  it('moves unfinished tasks to a target release and finishes the source', () => {
+    const source = release(
+      task('BD-1', 'done', 100),
+      task('BD-2', 'todo', 200),
+      task('BD-3', 'in-progress', 300),
+    );
+    const targetRelease: Release = {
+      filename: 'releases/2.0.md',
+      slug: '2.0',
+      frontmatter: { status: 'future' },
+      preamble: '',
+      tasks: [],
+    };
+
+    const result = completeRelease({
+      release: source,
+      epics: [],
+      backlog: null,
+      targetRelease,
+    });
+
+    expect(result.release.frontmatter.status).toBe('finished');
+    expect(result.release.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(result.targetRelease!.tasks.map((t) => t.frontmatter.id)).toEqual([
+      'BD-2',
+      'BD-3',
+    ]);
+    // statuses are preserved when moving to a release
+    expect(
+      result.targetRelease!.tasks.find((t) => t.frontmatter.id === 'BD-3')!
+        .frontmatter.status,
+    ).toBe('in-progress');
+    expect(new Set(result.changedFilenames)).toEqual(
+      new Set(['releases/1.10.md', 'releases/2.0.md']),
+    );
+  });
+
+  it('moves unfinished tasks to backlog, preserving their epic', () => {
+    const source = release(
+      task('BD-1', 'done', 100),
+      epicTask('BD-2', 'todo', 200, 'a'),
+      task('BD-3', 'todo', 300),
+    );
+    const a = epic('a');
+    const bl = backlog();
+
+    const result = completeRelease({
+      release: source,
+      epics: [a],
+      backlog: bl,
+      targetRelease: null,
+    });
+
+    expect(result.release.frontmatter.status).toBe('finished');
+    expect(result.release.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    // BD-2 had an epic -> goes back to that epic file
+    expect(result.epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+    expect(result.epics[0]!.tasks[0]!.frontmatter.epic).toBe('a');
+    // BD-3 had no epic -> goes to the backlog with the epic field cleared
+    expect(result.backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-3']);
+    expect(result.backlog!.tasks[0]!.frontmatter.epic).toBeUndefined();
+    expect(new Set(result.changedFilenames)).toEqual(
+      new Set(['releases/1.10.md', 'epics/a.md', 'epics/no_epic.md']),
+    );
+  });
+
+  it('only finishes the release when every task is done', () => {
+    const source = release(task('BD-1', 'done', 100), task('BD-2', 'done', 200));
+
+    const result = completeRelease({
+      release: source,
+      epics: [],
+      backlog: null,
+      targetRelease: null,
+    });
+
+    expect(result.release.frontmatter.status).toBe('finished');
+    expect(result.release.tasks).toHaveLength(2);
+    expect(result.changedFilenames).toEqual(['releases/1.10.md']);
+  });
+
+  it('throws when an unfinished task without epic has no backlog to fall back to', () => {
+    const source = release(task('BD-1', 'todo', 100));
+    expect(() =>
+      completeRelease({
+        release: source,
+        epics: [],
+        backlog: null,
+        targetRelease: null,
+      }),
+    ).toThrow(/Backlog container is missing/);
+  });
+});
+
+const futureRelease = (slug: string): Release => ({
+  filename: `releases/${slug}.md`,
+  slug,
+  frontmatter: { status: 'future', name: slug },
+  preamble: '',
+  tasks: [],
+});
+
+describe('startRelease', () => {
+  it('promotes a future release to current', () => {
+    const r1 = futureRelease('1.0');
+    const r2 = futureRelease('2.0');
+    const started = startRelease(r1, [r1, r2]);
+    expect(started.frontmatter.status).toBe('current');
+  });
+
+  it('throws when another release is already current', () => {
+    const r1 = futureRelease('1.0');
+    const active: Release = { ...futureRelease('0.9'), frontmatter: { status: 'current', name: '0.9' } };
+    expect(() => startRelease(r1, [active, r1])).toThrow(/already current/);
   });
 });

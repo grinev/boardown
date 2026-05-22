@@ -4,6 +4,7 @@ import type {
   BoardConfig,
   Epic,
   Release,
+  ReleaseStatus,
   Task,
   TaskStatus,
   TaskType,
@@ -86,6 +87,29 @@ export const createRelease = (
     preamble: '',
     tasks: [],
   };
+};
+
+export const setReleaseStatus = (
+  release: Release,
+  status: ReleaseStatus,
+): Release => ({
+  ...release,
+  frontmatter: { ...release.frontmatter, status },
+});
+
+export const startRelease = (
+  release: Release,
+  existing: readonly Release[],
+): Release => {
+  const current = existing.find(
+    (r) => r.frontmatter.status === 'current' && r.filename !== release.filename,
+  );
+  if (current !== undefined) {
+    throw new Error(
+      `Another release is already current: ${current.frontmatter.name ?? current.slug}`,
+    );
+  }
+  return setReleaseStatus(release, 'current');
 };
 
 const findTask = (tasks: Task[], taskId: string): Task => {
@@ -496,4 +520,88 @@ export const reorderTaskInBacklog = (
   }
 
   return applyOrderMap(containers, new Map([[taskId, newOrder]]));
+};
+
+export interface CompleteReleaseContainers {
+  release: Release;
+  epics: Epic[];
+  backlog: Backlog | null;
+  // When set, all unfinished tasks move into this release; otherwise they go
+  // back to their epic (or the backlog when they have none).
+  targetRelease: Release | null;
+}
+
+export interface CompleteReleaseResult {
+  release: Release;
+  targetRelease: Release | null;
+  epics: Epic[];
+  backlog: Backlog | null;
+  changedFilenames: string[];
+}
+
+export const completeRelease = (
+  input: CompleteReleaseContainers,
+): CompleteReleaseResult => {
+  const unfinished = input.release.tasks
+    .filter((t) => t.frontmatter.status !== 'done')
+    .sort((a, b) => a.frontmatter.order - b.frontmatter.order);
+
+  let release = input.release;
+  let targetRelease = input.targetRelease;
+  const epics = [...input.epics];
+  let backlog = input.backlog;
+  const changedFilenames = new Set<string>([release.filename]);
+
+  for (const task of unfinished) {
+    const taskId = task.frontmatter.id;
+    const newStatus = task.frontmatter.status;
+
+    if (targetRelease !== null) {
+      const moved = moveTaskBetweenContainers(release, targetRelease, taskId, {
+        newStatus,
+        beforeTaskId: null,
+        destEpic: { kind: 'preserve' },
+      });
+      release = moved.source;
+      targetRelease = moved.dest;
+      changedFilenames.add(targetRelease.filename);
+      continue;
+    }
+
+    const epicSlug = task.frontmatter.epic;
+    const epicIdx =
+      epicSlug !== undefined ? epics.findIndex((e) => e.slug === epicSlug) : -1;
+
+    if (epicIdx !== -1) {
+      const moved = moveTaskBetweenContainers(release, epics[epicIdx]!, taskId, {
+        newStatus,
+        beforeTaskId: null,
+        destEpic: { kind: 'set', slug: epics[epicIdx]!.slug },
+      });
+      release = moved.source;
+      epics[epicIdx] = moved.dest;
+      changedFilenames.add(moved.dest.filename);
+      continue;
+    }
+
+    if (backlog === null) {
+      throw new Error('Backlog container is missing');
+    }
+    const moved = moveTaskBetweenContainers(release, backlog, taskId, {
+      newStatus,
+      beforeTaskId: null,
+      destEpic: { kind: 'clear' },
+    });
+    release = moved.source;
+    backlog = moved.dest;
+    changedFilenames.add(backlog.filename);
+  }
+
+  return {
+    release: setReleaseStatus(release, 'finished'),
+    targetRelease,
+    epics,
+    backlog,
+    changedFilenames: [...changedFilenames],
+  };
 };

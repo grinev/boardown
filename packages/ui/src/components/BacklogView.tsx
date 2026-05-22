@@ -5,7 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Play, Plus } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -33,6 +33,8 @@ interface SectionMeta {
   title: string;
   statusLabel: string | null;
   hasCreateRelease: boolean;
+  hasCompleteRelease: boolean;
+  startReleaseFilename: string | null;
 }
 
 const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
@@ -50,6 +52,8 @@ export function BacklogView() {
   const openCreateRelease = useBoardStore((s) => s.openCreateRelease);
   const closeCreateRelease = useBoardStore((s) => s.closeCreateRelease);
   const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
+  const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
+  const openStartRelease = useBoardStore((s) => s.openStartRelease);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -93,6 +97,8 @@ export function BacklogView() {
         title: releaseTitle(current),
         statusLabel: 'active',
         hasCreateRelease: false,
+        hasCompleteRelease: true,
+        startReleaseFilename: null,
       });
       buckets.set(key, [...current.tasks].sort(sortByOrder));
     }
@@ -103,6 +109,8 @@ export function BacklogView() {
         title: releaseTitle(r),
         statusLabel: 'future',
         hasCreateRelease: false,
+        hasCompleteRelease: false,
+        startReleaseFilename: current ? null : r.filename,
       });
       buckets.set(key, [...r.tasks].sort(sortByOrder));
     }
@@ -111,6 +119,8 @@ export function BacklogView() {
       title: 'Backlog',
       statusLabel: null,
       hasCreateRelease: true,
+      hasCompleteRelease: false,
+      startReleaseFilename: null,
     });
     buckets.set(
       BACKLOG_SECTION_KEY,
@@ -185,6 +195,7 @@ export function BacklogView() {
             const displayedTasks = filtersActive
               ? sectionTasks.filter(matchesFilters)
               : sectionTasks;
+            const startReleaseFilename = meta.startReleaseFilename;
             return (
               <BacklogSection
                 key={meta.key}
@@ -202,6 +213,15 @@ export function BacklogView() {
                 onOpenEpic={openEpic}
                 {...(meta.hasCreateRelease
                   ? { onCreateRelease: openCreateRelease }
+                  : {})}
+                {...(meta.hasCompleteRelease
+                  ? { onCompleteRelease: openCompleteRelease }
+                  : {})}
+                {...(startReleaseFilename
+                  ? {
+                      onStartRelease: () =>
+                        openStartRelease(startReleaseFilename),
+                    }
                   : {})}
               />
             );
@@ -227,6 +247,8 @@ interface BacklogSectionProps {
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
   onCreateRelease?: () => void;
+  onCompleteRelease?: () => void;
+  onStartRelease?: () => void;
 }
 
 function BacklogSection({
@@ -243,6 +265,8 @@ function BacklogSection({
   onOpenTask,
   onOpenEpic,
   onCreateRelease,
+  onCompleteRelease,
+  onStartRelease,
 }: BacklogSectionProps) {
   const { setNodeRef, isOver } = useDroppable({ id: sectionDropId(sectionKey) });
 
@@ -273,6 +297,26 @@ function BacklogSection({
         </button>
         <span className={styles.sectionTitle}>{title}</span>
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
+        {onStartRelease && (
+          <button
+            type="button"
+            className={styles.sectionStartButton}
+            onClick={onStartRelease}
+          >
+            <Play size={14} aria-hidden="true" />
+            Start release
+          </button>
+        )}
+        {onCompleteRelease && (
+          <button
+            type="button"
+            className={styles.sectionCompleteButton}
+            onClick={onCompleteRelease}
+          >
+            <CheckCircle2 size={14} aria-hidden="true" />
+            Complete release
+          </button>
+        )}
         {onCreateRelease && (
           <button
             type="button"

@@ -480,8 +480,13 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] Add `epics/no_epic.md` as the storage container for tasks without an epic
 - [x] Release creation operation (new file with frontmatter; uniqueness
       guard on slug; defaults to `status: future`)
-- [ ] Release lifecycle operations: start release, complete release (with
+- [x] Release lifecycle operations: start release, complete release (with
       task-relocation handling), guard the one-current-at-a-time invariant
+  - [x] Complete release (`completeRelease`): finishes the current release and
+        relocates its unfinished tasks to a chosen future release or the
+        backlog (epic preserved); `setReleaseStatus` helper
+  - [x] Start release (`startRelease`): promotes a future release to current,
+        guarding the one-current-at-a-time invariant
 - [ ] Epic operations: create, edit, delete (with empty-epic guard)
 
 ### `packages/ui` (business features)
@@ -523,8 +528,15 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
         by DnD on the Backlog screen — moving a task across the
         boundary of one epic group inside the flat list does not change
         the file it lives in.
-- [ ] **Release lifecycle UI**: Start release / Complete release buttons on
+- [x] **Release lifecycle UI**: Start release / Complete release buttons on
       section headers; the "where to move unfinished tasks" modal on Complete
+  - [x] Complete release: button on the current-release section header
+        (Backlog) and in the Board release header; modal picks a single
+        destination (a future release or the backlog) for all unfinished
+        tasks, or just confirms when everything is done
+  - [x] Start release: button on every future-release section header in the
+        Backlog, shown only when no release is current; confirmation modal
+        shows the task count before promoting the release
 - [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for
       `status`, `type`, `epic` (with a "No epic" option); applies globally
       to all sections; counter switches to `N of M` when active. Backlog

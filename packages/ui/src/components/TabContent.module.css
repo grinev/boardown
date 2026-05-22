@@ -25,6 +25,10 @@
 }
 
 .releaseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px 16px 0;
 }
 
@@ -32,6 +36,32 @@
   margin: 0;
   color: var(--text-primary);
   font-size: 18px;
+}
+
+.completeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.completeButton:hover {
+  background: var(--surface-muted);
+}
+
+.completeButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .error {
