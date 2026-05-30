@@ -78,11 +78,10 @@ export function TaskDetailsDialog({
       value: r.filename,
       label: r.frontmatter.name ?? r.slug,
     }));
-    if (task.frontmatter.epic) {
-      return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
-    }
-    return items;
-  }, [releases, task.frontmatter.epic]);
+    // "—" removes the release: a task with an epic falls back to its epic file,
+    // an epic-less task to the backlog (no_epic.md).
+    return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
+  }, [releases]);
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
     const sorted = [...epics].sort((a, b) =>
