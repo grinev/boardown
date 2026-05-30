@@ -162,7 +162,6 @@ export function CreateTaskDialog({
             className={styles.select}
             value={releaseFilename}
             disabled={releaseLocked}
-            required
             onChange={(e) => setReleaseFilename(e.target.value)}
           >
             {!releaseLocked && <option value="">—</option>}

@@ -19,6 +19,7 @@ import {
   createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
   createTask as createTaskInContainer,
+  emptyBacklog,
   editEpic,
   editTask,
   loadBoard,
@@ -33,7 +34,7 @@ import {
 } from '@boardown/core';
 import { create } from 'zustand';
 
-export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
 
 export type ActiveTab = 'backlog' | 'board' | 'archive';
 
@@ -58,6 +59,11 @@ export interface CreateEpicInput {
   color: string;
 }
 
+export interface OnboardingInput {
+  projectName: string;
+  idPrefix: string;
+}
+
 interface BoardState {
   status: BoardStatus;
   snapshot: BoardSnapshot | null;
@@ -76,6 +82,7 @@ interface BoardState {
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
   load: (fs: FsAdapter) => Promise<void>;
+  completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
   openTask: (id: string) => void;
@@ -218,7 +225,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ status: 'loading', errorMessage: null, fs });
     try {
       const result = await loadBoard(fs);
-      if (result.value === null) {
+      if (result.kind === 'missing-config') {
+        set({
+          status: 'onboarding',
+          snapshot: null,
+          problems: [],
+          errorMessage: null,
+        });
+        return;
+      }
+      if (result.kind === 'failed') {
         set({
           status: 'error',
           snapshot: null,
@@ -229,10 +245,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }
       set({
         status: 'ready',
-        snapshot: result.value,
-        problems: result.value.problems,
+        snapshot: result.snapshot,
+        problems: result.snapshot.problems,
         errorMessage: null,
-        theme: result.value.config.theme ?? 'light',
+        theme: result.snapshot.config.theme ?? 'light',
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -243,6 +259,20 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         errorMessage: message,
       });
     }
+  },
+
+  completeOnboarding: async (input) => {
+    const { fs } = get();
+    if (!fs) {
+      throw new Error('Filesystem adapter is not initialized');
+    }
+    const config = {
+      idPrefix: input.idPrefix,
+      nextId: 1,
+      projectName: input.projectName,
+    };
+    await fs.write(CONFIG_FILENAME, serializeConfig(config));
+    await get().load(fs);
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -374,12 +404,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return;
     }
 
-    // No release, no epic: the task goes to the backlog (no_epic.md).
-    if (!snapshot.backlog) {
-      set({ errorMessage: 'Backlog container (no_epic.md) is missing' });
-      return;
-    }
-    const result = createTaskInContainer(snapshot.backlog, snapshot.config, baseInput);
+    // No release, no epic: the task goes to the backlog (no_epic.md). The file
+    // may not exist yet on a fresh board — create it lazily on first task.
+    const backlog = snapshot.backlog ?? emptyBacklog();
+    const result = createTaskInContainer(backlog, snapshot.config, baseInput);
     await persist(
       { ...snapshot, config: result.config, backlog: result.container },
       result.container.filename,

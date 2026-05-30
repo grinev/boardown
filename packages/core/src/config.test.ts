@@ -86,6 +86,36 @@ nextId: 47
     const result = parseConfig('idPrefix: BD\n');
     expect(result.value).toBeNull();
   });
+
+  it.each([
+    ['lowercase', 'bd'],
+    ['too short', 'B'],
+    ['too long', 'TOOLONG'],
+    ['mixed with digits', 'B1'],
+    ['mixed case', 'Bd'],
+    ['contains hyphen', 'BD-'],
+  ])('rejects idPrefix that is %s', (_, value) => {
+    const text = `idPrefix: ${value}
+nextId: 1
+projectName: Project
+`;
+    const result = parseConfig(text);
+    expect(result.value).toBeNull();
+    expect(result.problems[0]!.message).toMatch(/idPrefix/);
+  });
+
+  it.each([['BD'], ['XX'], ['TASK'], ['ABCDE']])(
+    'accepts idPrefix %s (2–5 uppercase letters)',
+    (value) => {
+      const text = `idPrefix: ${value}
+nextId: 1
+projectName: Project
+`;
+      const result = parseConfig(text);
+      expect(result.value).not.toBeNull();
+      expect(result.value!.idPrefix).toBe(value);
+    },
+  );
 });
 
 describe('serializeConfig', () => {

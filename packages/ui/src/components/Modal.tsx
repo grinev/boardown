@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type MouseEvent, type ReactNode, type SyntheticEvent } from 'react';
 import styles from './Modal.module.css';
 
 interface ModalProps {
@@ -7,9 +7,17 @@ interface ModalProps {
   ariaLabel: string;
   children: ReactNode;
   className?: string | undefined;
+  dismissable?: boolean;
 }
 
-export function Modal({ open, onClose, ariaLabel, children, className }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  ariaLabel,
+  children,
+  className,
+  dismissable = true,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -33,8 +41,15 @@ export function Modal({ open, onClose, ariaLabel, children, className }: ModalPr
   }, [open, onClose]);
 
   const handleBackdropMouseDown = (event: MouseEvent<HTMLDialogElement>) => {
+    if (!dismissable) return;
     if (event.target === dialogRef.current) {
       dialogRef.current?.close();
+    }
+  };
+
+  const handleCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
+    if (!dismissable) {
+      event.preventDefault();
     }
   };
 
@@ -44,6 +59,7 @@ export function Modal({ open, onClose, ariaLabel, children, className }: ModalPr
       className={className ? `${styles.dialog} ${className}` : styles.dialog}
       aria-label={ariaLabel}
       onMouseDown={handleBackdropMouseDown}
+      onCancel={handleCancel}
     >
       <div className={styles.content}>{children}</div>
     </dialog>

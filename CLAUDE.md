@@ -100,6 +100,10 @@ API or otherwise) is post-MVP and may or may not happen.
   Surface validation errors as structured problems (see "Lenient parsing"
   in PRODUCT.md), never throw away user data.
 - Never auto-rewrite a file the parser failed to fully understand.
+- If `.boardown/config.yaml` is missing, the UI shows an onboarding modal
+  that writes it on submit. Do not auto-create `config.yaml` outside that
+  flow, and do not fall back to defaults — a present-but-invalid config is
+  always an error, never silently replaced.
 - No automated backups — git is the safety net.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and

@@ -75,37 +75,53 @@ describe('loadBoard', () => {
     await fs.write('releases/1.10.md', RELEASE_OK);
     await fs.write('epics/parser.md', EPIC_OK);
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
     expect(result.problems).toEqual([]);
-    expect(result.value!.config.idPrefix).toBe('BD');
-    expect(result.value!.releases).toHaveLength(1);
-    expect(result.value!.epics).toHaveLength(1);
-    expect(result.value!.epics[0]!.slug).toBe('parser');
+    expect(result.snapshot.config.idPrefix).toBe('BD');
+    expect(result.snapshot.releases).toHaveLength(1);
+    expect(result.snapshot.epics).toHaveLength(1);
+    expect(result.snapshot.epics[0]!.slug).toBe('parser');
   });
 
-  it('returns a file problem when config is missing', async () => {
+  it('returns missing-config when config.yaml does not exist', async () => {
     const fs = new InMemoryFs();
     const result = await loadBoard(fs);
-    expect(result.value).toBeNull();
-    expect(result.problems).toHaveLength(1);
-    expect(result.problems[0]!.scope).toBe('file');
+    expect(result.kind).toBe('missing-config');
   });
 
-  it('returns a file problem when config fails validation', async () => {
+  it('returns failed when config fails validation', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', 'idPrefix: BD\n');
     const result = await loadBoard(fs);
-    expect(result.value).toBeNull();
+    expect(result.kind).toBe('failed');
+    if (result.kind !== 'failed') throw new Error('expected failed');
     expect(result.problems).toHaveLength(1);
+  });
+
+  it('returns failed when idPrefix is lowercase', async () => {
+    const fs = new InMemoryFs();
+    await fs.write(
+      'config.yaml',
+      `idPrefix: bd
+nextId: 1
+projectName: Project
+`,
+    );
+    const result = await loadBoard(fs);
+    expect(result.kind).toBe('failed');
+    if (result.kind !== 'failed') throw new Error('expected failed');
+    expect(result.problems[0]!.message).toMatch(/idPrefix/);
   });
 
   it('treats missing release/epic dirs as empty', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.releases).toEqual([]);
-    expect(result.value!.epics).toEqual([]);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.releases).toEqual([]);
+    expect(result.snapshot.epics).toEqual([]);
   });
 
   it('keeps good files when one is broken (lenient)', async () => {
@@ -114,8 +130,9 @@ describe('loadBoard', () => {
     await fs.write('releases/good.md', RELEASE_OK);
     await fs.write('releases/bad.md', '## Lonely task\n');
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.releases).toHaveLength(1);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.releases).toHaveLength(1);
     expect(result.problems.some((p) => p.scope === 'file' && p.file.includes('bad.md'))).toBe(true);
   });
 
@@ -125,8 +142,9 @@ describe('loadBoard', () => {
     const releaseWithHigherId = RELEASE_OK.replace('id: BD-1', 'id: BD-42');
     await fs.write('releases/1.10.md', releaseWithHigherId);
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.config.nextId).toBe(43);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.config.nextId).toBe(43);
     const persisted = await fs.read('config.yaml');
     expect(persisted).toContain('nextId: 43');
   });
@@ -145,8 +163,9 @@ describe('loadBoard', () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.backlog).toBeNull();
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.backlog).toBeNull();
     expect(result.problems).toEqual([]);
   });
 
@@ -169,11 +188,12 @@ body
 `,
     );
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.epics).toHaveLength(1);
-    expect(result.value!.epics[0]!.slug).toBe('parser');
-    expect(result.value!.backlog).not.toBeNull();
-    expect(result.value!.backlog!.tasks).toHaveLength(1);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.epics).toHaveLength(1);
+    expect(result.snapshot.epics[0]!.slug).toBe('parser');
+    expect(result.snapshot.backlog).not.toBeNull();
+    expect(result.snapshot.backlog!.tasks).toHaveLength(1);
     expect(result.problems).toEqual([]);
   });
 
@@ -195,8 +215,9 @@ body
 `,
     );
     const result = await loadBoard(fs);
-    expect(result.value).not.toBeNull();
-    expect(result.value!.config.nextId).toBe(8);
-    expect(result.value!.backlog!.tasks).toHaveLength(1);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.config.nextId).toBe(8);
+    expect(result.snapshot.backlog!.tasks).toHaveLength(1);
   });
 });

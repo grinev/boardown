@@ -11,5 +11,10 @@ export const findTaskById = (snapshot: BoardSnapshot, id: string): Task | null =
       if (task.frontmatter.id === id) return task;
     }
   }
+  if (snapshot.backlog) {
+    for (const task of snapshot.backlog.tasks) {
+      if (task.frontmatter.id === id) return task;
+    }
+  }
   return null;
 };

@@ -231,17 +231,22 @@ theme: light          # optional, "light" or "dark"; defaults to "light" when ab
 
 That is the entire MVP config. The `projectName` field is required (set during
 onboarding) and read-only from the app's point of view (edit `config.yaml`
-directly); it is shown in the header. The `theme` field is written by the
-in-app theme switcher; it stays absent from `config.yaml` until the user
-toggles it for the first time. Statuses, status colors, and task types are
-**hardcoded** in the app; customizing them is post-MVP. Epic colors are
-user-defined per epic (see Epic frontmatter above).
+directly); it is shown in the header. The `idPrefix` field accepts 2–5 uppercase
+ASCII letters (`A–Z`). The `theme` field is written by the in-app theme
+switcher; it stays absent from `config.yaml` until the user toggles it for the
+first time. Statuses, status colors, and task types are **hardcoded** in the
+app; customizing them is post-MVP. Epic colors are user-defined per epic (see
+Epic frontmatter above).
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
 by hand).
 
-An invalid `config.yaml` shows a dedicated error screen — no silent fallback.
+If `config.yaml` is missing, the app shows an onboarding modal that asks for
+`projectName` and `idPrefix`, then writes the file on submit; the rest of the
+load continues normally. An invalid `config.yaml` (present but not parseable
+or not matching the schema) shows a dedicated error screen — no silent
+fallback, no auto-rewrite.
 
 ## Distribution & shells
 
@@ -421,6 +426,13 @@ When `.boardown/` does not exist, the shell writes the default structure
 for the ID prefix; the local web shell uses `TASK` by default unless the user
 creates `config.yaml` manually before first launch.
 
+When `.boardown/` exists but `config.yaml` is missing, `@boardown/ui` shows an
+onboarding modal that collects `projectName` and `idPrefix` and writes
+`.boardown/config.yaml` via the `FsAdapter`. The modal is not dismissable —
+the board cannot load without a config — and `nextId` starts at `1`. The
+shell does not need any additional logic for this case beyond providing a
+working adapter.
+
 ## Out of scope (for now)
 
 - Customizable statuses and status colors (hardcoded in MVP).
@@ -561,6 +573,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Empty states** for every screen and major section
 - [ ] **Initial-board flow**: when no `.boardown/` exists, prompt for ID
       prefix and create the default structure via the adapter
+      - [x] Onboarding modal when `.boardown/config.yaml` is missing
+            (collects `projectName` + `idPrefix`, writes the config)
+      - [ ] Full default-structure scaffold when `.boardown/` itself is
+            missing (epics, releases, backlog) — shell responsibility
 - [ ] **External-change conflict modal** (Reload / Overwrite), triggered by
       the shell on save conflicts
 - [ ] **Reload action** + imperative `reload()` API the shell can call

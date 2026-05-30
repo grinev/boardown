@@ -1,9 +1,9 @@
-import { RELEASES_DIR } from './board-ops.js';
+import { BACKLOG_BASENAME, BACKLOG_PATH, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
 import { CONFIG_FILENAME, parseConfig, serializeConfig } from './config.js';
 import type { FsAdapter } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
 import { parseBacklog, parseEpic, parseRelease } from './parser.js';
-import { fileProblem, type ParseProblem, type ParseResult } from './problems.js';
+import { fileProblem, type ParseProblem } from './problems.js';
 import type { Backlog, BoardConfig, Epic, Release, Task } from './schemas.js';
 
 export interface BoardSnapshot {
@@ -14,9 +14,10 @@ export interface BoardSnapshot {
   problems: ParseProblem[];
 }
 
-const EPICS_DIR = 'epics';
-const BACKLOG_BASENAME = 'no_epic.md';
-const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
+export type LoadBoardResult =
+  | { kind: 'loaded'; snapshot: BoardSnapshot; problems: ParseProblem[] }
+  | { kind: 'missing-config' }
+  | { kind: 'failed'; problems: ParseProblem[] };
 
 const safeList = async (fs: FsAdapter, dir: string): Promise<string[]> => {
   try {
@@ -36,7 +37,12 @@ const collectTasks = (releases: Release[], epics: Epic[], backlog: Backlog | nul
   return out;
 };
 
-export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapshot>> => {
+export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
+  const stat = await fs.stat(CONFIG_FILENAME);
+  if (stat === null) {
+    return { kind: 'missing-config' };
+  }
+
   const problems: ParseProblem[] = [];
 
   let configText: string;
@@ -45,14 +51,14 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
-      value: null,
+      kind: 'failed',
       problems: [fileProblem(CONFIG_FILENAME, `Cannot read config: ${message}`)],
     };
   }
 
   const configResult = parseConfig(configText);
   if (configResult.value === null) {
-    return { value: null, problems: configResult.problems };
+    return { kind: 'failed', problems: configResult.problems };
   }
   let config = configResult.value;
 
@@ -123,7 +129,8 @@ export const loadBoard = async (fs: FsAdapter): Promise<ParseResult<BoardSnapsho
   }
 
   return {
-    value: { config, releases, epics, backlog, problems },
+    kind: 'loaded',
+    snapshot: { config, releases, epics, backlog, problems },
     problems,
   };
 };

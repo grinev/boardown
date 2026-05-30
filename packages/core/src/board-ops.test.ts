@@ -9,10 +9,13 @@ import {
   deleteTask,
   editEpic,
   editTask,
+  emptyBacklog,
   moveTaskBetweenContainers,
   reorderTask,
   reorderTaskInBacklog,
 } from './board-ops.js';
+import { parseBacklog } from './parser.js';
+import { serializeBacklog } from './serializer.js';
 import type {
   Backlog,
   BoardConfig,
@@ -365,6 +368,31 @@ describe('createEpic', () => {
     expect(() => createEpic([], { name: '   ', color: '#1f6feb' })).toThrow(
       /required/i,
     );
+  });
+});
+
+describe('emptyBacklog', () => {
+  it('returns an empty backlog at epics/no_epic.md', () => {
+    const b = emptyBacklog();
+    expect(b.filename).toBe('epics/no_epic.md');
+    expect(b.frontmatter).toEqual({});
+    expect(b.preamble).toBe('');
+    expect(b.tasks).toEqual([]);
+  });
+
+  it('accepts a task and serializes to a parseable file', () => {
+    const result = createTask(emptyBacklog(), config, {
+      title: 'Loose task',
+      type: 'feature',
+      status: 'todo',
+    });
+    expect(result.container.tasks).toHaveLength(1);
+    const text = serializeBacklog(result.container);
+    const parsed = parseBacklog(text, result.container.filename);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.value).not.toBeNull();
+    expect(parsed.value!.tasks).toHaveLength(1);
+    expect(parsed.value!.tasks[0]!.title).toBe('Loose task');
   });
 });
 

@@ -16,7 +16,20 @@ export const RELEASES_DIR = 'releases';
 
 export const EPICS_DIR = 'epics';
 
+export const BACKLOG_BASENAME = 'no_epic.md';
+
+export const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
+
 export type Container = Release | Epic | Backlog;
+
+// An empty backlog stand-in for boards that have no `epics/no_epic.md` yet.
+// The file is written lazily the first time a task lands in the backlog.
+export const emptyBacklog = (): Backlog => ({
+  filename: BACKLOG_PATH,
+  frontmatter: {},
+  preamble: '',
+  tasks: [],
+});
 
 const ORDER_STEP = 100;
 

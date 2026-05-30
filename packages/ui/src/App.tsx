@@ -8,6 +8,7 @@ import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
+import { OnboardingDialog } from './components/OnboardingDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StartReleaseDialog } from './components/StartReleaseDialog';
 import { TabBar } from './components/TabBar';
@@ -68,6 +69,17 @@ export function App({ fs }: AppProps) {
           <h1 />
         </header>
         <div className={styles.loading}>Loading…</div>
+      </main>
+    );
+  }
+
+  if (status === 'onboarding') {
+    return (
+      <main className={styles.app}>
+        <header className={styles.header}>
+          <h1 />
+        </header>
+        <OnboardingDialog />
       </main>
     );
   }

@@ -84,9 +84,12 @@ export type Backlog = z.infer<typeof BacklogSchema>;
 export const ThemeSchema = z.enum(['light', 'dark']);
 export type Theme = z.infer<typeof ThemeSchema>;
 
+export const ID_PREFIX_REGEX = /^[A-Z]{2,5}$/;
+export const ID_PREFIX_MESSAGE = 'idPrefix must be 2-5 uppercase letters (A-Z)';
+
 export const BoardConfigSchema = z
   .object({
-    idPrefix: z.string().min(1),
+    idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
     nextId: z.number().int().nonnegative(),
     projectName: z.string().min(1),
     theme: ThemeSchema.optional(),
