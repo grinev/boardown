@@ -102,6 +102,7 @@ Use pnpm's `--filter`:
 pnpm --filter @boardown/web dev      # only the web dev server
 pnpm --filter @boardown/core build   # only the core build
 pnpm --filter @boardown/core test    # only core tests
+pnpm --filter @boardown/ui test      # only ui tests
 ```
 
 The dev server runs in any modern browser — it talks to the selected

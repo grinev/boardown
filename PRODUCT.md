@@ -597,6 +597,9 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 
 ### Quality
 
-- [ ] Vitest smoke tests for `core` (parser round-trip, ID generator,
+- [x] Vitest smoke tests for `core` (parser round-trip, ID generator,
       board operations, lifecycle transitions)
+- [x] Vitest tests for `ui` logic: pure helpers (`dnd/*`, `utils/*`,
+      `epic-colors`) and store orchestration (`store.ts`) against an in-memory
+      `FsAdapter`. React component tests are out of scope for the MVP.
 - [ ] Manual end-to-end pass against a sample `.boardown/` repo
