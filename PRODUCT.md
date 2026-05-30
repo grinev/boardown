@@ -277,9 +277,9 @@ but it is not a production browser distribution channel for the MVP — there is
 no folder picker, no File System Access API integration. Both are explicit
 non-goals for the MVP and may or may not be added later.
 
-Refresh strategy: on `window.focus` and `visibilitychange → visible`, the
-app reloads all files. A manual **Reload** button is also available in the
-UI.
+Refresh strategy: a manual **Reload** button in the UI is the only way to
+re-read files. There is no automatic refresh (no focus/visibility reload, no
+file watching) — see "Out of scope".
 
 ### Electron (post-MVP)
 
@@ -437,6 +437,9 @@ working adapter.
 
 ## Out of scope (for now)
 
+- Automatic refresh of any kind, in **both** the web and VS Code shells:
+  no file watching, no focus/visibility reload. Re-reading the board is
+  always a manual user action via the **Reload** button.
 - Customizable statuses and status colors (hardcoded in MVP).
 - Customizable task types.
 - Markdown formatting inside task descriptions (plain text only).
@@ -455,8 +458,9 @@ working adapter.
   dev-only.
 - Firefox / Safari support, hosted version, mobile.
 - AI features of any kind.
-- VS Code extension and Electron build are deferred *implementations* — the
-  product spec covers them, but no extension/Electron code lands in MVP.
+- Electron build is a deferred *implementation* — the product spec covers it,
+  but no Electron code lands in MVP. (The VS Code extension, by contrast, is
+  the primary MVP shell — see its roadmap section above.)
 - "Git-managed team task tracker" deployment (web as a deployable artifact
   with a fixed folder, multi-user via git as the sync layer) — interesting
   future direction, not in scope for v1.
@@ -585,6 +589,29 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Parse-error UX**: top banner + gray "problem cards" for tasks that
       could not be parsed cleanly
 
+### `packages/vscode` (primary MVP shell)
+
+The canonical distribution target: a third shell next to `web` that reuses
+`@boardown/ui` unchanged and swaps only the `FsAdapter` implementation and the
+host integration (webview panel + message passing instead of a browser tab over
+HTTP). Built bottom-up in four stages, each runnable in the Extension
+Development Host.
+
+- [ ] **Stage 1 — Walking skeleton**: scaffold `packages/vscode` (manifest,
+      build), an "Open boardown board" command that opens a webview panel
+      mounting `@boardown/ui` with no data yet
+- [ ] **Stage 2 — `FsAdapter` over message passing**: `VsCodeFsAdapter` on the
+      webview side ↔ host router backed by `vscode.workspace.fs` (analog of
+      `web`'s `DevHttpFsAdapter` + `dev-fs-plugin`); the board loads real
+      `.boardown/` data and drag & drop persists
+- [ ] **Stage 3 — Workspace integration & board creation**: `.boardown/`
+      discovery and activation, QuickPick for multiple workspace folders, and
+      an "Initialize boardown here" command that scaffolds the default structure
+- [ ] **Stage 4 — Refresh, conflicts, packaging**: a manual **Reload** button
+      wired to `ui.reload()` (no file watcher — refresh is user-triggered only)
+      and the conflict modal via `lastModified` (depend on the matching `ui`
+      items), `.vsix` packaging, manual end-to-end pass, and doc updates
+
 ### `packages/web` (dev shell)
 
 - [x] Vite + React app skeleton that mounts `@boardown/ui`
@@ -592,8 +619,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       `.boardown/`
 - [x] Optional `--data-dir` for local use from sources, with default
       structure initialization when `config.yaml` is missing
-- [ ] Refresh on `window.focus` and `visibilitychange → visible` calls
-      `ui.reload()`
+- [ ] Manual **Reload** button wired to `ui.reload()` (no automatic refresh)
 - [ ] Wire the conflict-detection flow end-to-end against `lastModified`
       from the dev adapter
 
