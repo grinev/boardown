@@ -108,7 +108,9 @@ determined by which file it physically lives in:
 
 - A task inside `epics/<slug>.md` belongs to the `<slug>` epic. The
   `epic` field in the task's frontmatter is ignored on load and omitted on
-  save — the filename is authoritative.
+  save — the filename is authoritative. Code that collects or groups tasks
+  by epic must derive membership from the containing file for these tasks,
+  never by filtering on the `epic` field.
 - A task inside `epics/no_epic.md` has no epic. Any stray `epic` field is
   stripped on load.
 - A task inside `releases/<slug>.md` keeps its epic association in the

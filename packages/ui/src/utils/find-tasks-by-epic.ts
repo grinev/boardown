@@ -16,10 +16,12 @@ export const findTasksByEpic = (snapshot: BoardSnapshot, slug: string): Task[] =
       if (task.frontmatter.epic === slug) out.push(task);
     }
   }
+  // Tasks in epics/<slug>.md belong to the epic by virtue of their file; the
+  // epic frontmatter field is irrelevant here (filename is authoritative).
   for (const epic of snapshot.epics) {
     if (epic.slug !== slug) continue;
     for (const task of epic.tasks) {
-      if (task.frontmatter.epic === slug) out.push(task);
+      out.push(task);
     }
   }
   out.sort((a, b) => idOrder(a.frontmatter.id) - idOrder(b.frontmatter.id));
