@@ -612,10 +612,11 @@ Development Host.
       esbuild host + Vite webview build), an "Open boardown board" command that
       opens a webview panel rendering a placeholder; host↔webview handshake in
       place. Mounting the real `@boardown/ui` is Stage 2.
-- [ ] **Stage 2 — `FsAdapter` over message passing**: `VsCodeFsAdapter` on the
+- [x] **Stage 2 — `FsAdapter` over message passing**: `VsCodeFsAdapter` on the
       webview side ↔ host router backed by `vscode.workspace.fs` (analog of
       `web`'s `DevHttpFsAdapter` + `dev-fs-plugin`); the board loads real
-      `.boardown/` data and drag & drop persists
+      `.boardown/` data and drag & drop persists. Board root is
+      `workspaceFolders[0]/.boardown` for now — discovery/selection is Stage 3.
 - [ ] **Stage 3 — Workspace integration & board creation**: `.boardown/`
       discovery and activation, QuickPick for multiple workspace folders, and
       an "Initialize boardown here" command that scaffolds the default structure

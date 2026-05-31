@@ -67,7 +67,7 @@ Install dependencies once if you skipped the quick start above:
 pnpm install
 ```
 
-The repo is a pnpm workspace with three packages:
+The repo is a pnpm workspace with four packages:
 
 - [`packages/core`](./packages/core) — platform-agnostic logic (schemas,
   parser, board operations). Pure TypeScript, runs in Node.
@@ -77,10 +77,11 @@ The repo is a pnpm workspace with three packages:
 - [`packages/web`](./packages/web) — dev-only browser shell: Vite app that
   mounts `@boardown/ui` over a Vite middleware which serves a local
   `.boardown/` data directory. Used for iterating on the UI from sources.
+- [`packages/vscode`](./packages/vscode) — the primary MVP distribution target,
+  an in-progress VS Code extension shell next to `web` (extension host via
+  esbuild + webview via Vite), reusing `@boardown/ui` unchanged.
 
-A future `packages/vscode` (the primary MVP distribution target) and
-`packages/electron` (post-MVP) will be additional shells next to `web`,
-reusing `@boardown/ui` unchanged.
+A `packages/electron` shell is post-MVP.
 
 ### Common scripts (run from the repo root)
 

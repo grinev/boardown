@@ -73,8 +73,12 @@ later esbuild/rollup for VS Code / Electron) transpiles it.
 stages (see PRODUCT.md roadmap). It is a sibling shell next to `web` and reuses
 `@boardown/ui` unchanged — only the `FsAdapter` implementation and entry flow
 differ. The extension host is bundled with esbuild (`vscode` external, CJS) and
-the webview with Vite; both run in the Extension Development Host via F5. An
-Electron build is post-MVP and follows the same shell pattern.
+the webview with Vite; both run in the Extension Development Host via F5. The
+webview mounts the real `@boardown/ui` with a `VsCodeFsAdapter` that proxies
+`read/write/list/stat` to the host over `postMessage`, where the host serves
+them from `vscode.workspace.fs`. The board root is `workspaceFolders[0]/.boardown`
+(discovery/selection across folders is a later stage). An Electron build is
+post-MVP and follows the same shell pattern.
 
 `packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
