@@ -340,3 +340,85 @@ describe('optimistic update rollback', () => {
     expect(state().errorMessage).toMatch(/failed to save release/i);
   });
 });
+
+const CONFIG_MD = `idPrefix: BD
+nextId: 50
+projectName: My Project
+`;
+
+const RELEASE_MD = `---
+release: "1.0"
+status: current
+---
+
+## Task one
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+---
+
+body
+`;
+
+const loadFrom = async (files: Record<string, string>): Promise<MemFs> => {
+  const fs = new MemFs();
+  for (const [path, content] of Object.entries(files)) {
+    await fs.write(path, content);
+  }
+  fs.writes = [];
+  await state().load(fs);
+  return fs;
+};
+
+describe('reload', () => {
+  it('re-reads the board from disk', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+    expect(current().config.projectName).toBe('My Project');
+
+    const raw = state().rawFs as MemFs;
+    raw.files.set(CONFIG_FILENAME, {
+      content: CONFIG_MD.replace('My Project', 'Renamed'),
+      lastModified: Date.now() + 1,
+    });
+
+    await state().reload();
+
+    expect(current().config.projectName).toBe('Renamed');
+  });
+});
+
+describe('external-change conflict', () => {
+  it('opens the conflict modal and rolls back when a target file changed on disk', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+    const before = current();
+
+    // Simulate an external edit: bump the file's mtime without going through
+    // the guarded adapter.
+    fs.files.get('releases/1.0.md')!.lastModified += 1000;
+
+    await expect(state().updateTask('BD-1', { title: 'Renamed' })).rejects.toThrow();
+
+    expect(state().conflictOpen).toBe(true);
+    expect(state().snapshot).toBe(before);
+  });
+
+  it('clears the conflict flag on reload', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+    fs.files.get('releases/1.0.md')!.lastModified += 1000;
+    await expect(state().updateTask('BD-1', { title: 'X' })).rejects.toThrow();
+    expect(state().conflictOpen).toBe(true);
+
+    await state().reload();
+
+    expect(state().conflictOpen).toBe(false);
+  });
+});

@@ -1,6 +1,7 @@
 import { Archive, ClipboardList, SquareKanban, type LucideIcon } from 'lucide-react';
 import type { ActiveTab } from '../store';
 import { CreateMenu } from './CreateMenu';
+import { ReloadButton } from './ReloadButton';
 import { SettingsButton } from './SettingsButton';
 import styles from './TabBar.module.css';
 
@@ -36,6 +37,7 @@ export function TabBar({ activeTab, onSelect }: TabBarProps) {
       </div>
       <div className={styles.actions}>
         <CreateMenu />
+        <ReloadButton />
         <SettingsButton />
       </div>
     </div>

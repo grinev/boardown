@@ -1,0 +1,59 @@
+.dialog {
+  max-width: min(440px, 92vw);
+  min-height: auto;
+}
+
+.header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.reloadButton {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.reloadButton:hover {
+  filter: brightness(0.95);
+}
+
+.reloadButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

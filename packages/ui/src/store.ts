@@ -18,6 +18,7 @@ import {
   completeRelease as completeReleaseInBoard,
   createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
+  createGuardedFs,
   createTask as createTaskInContainer,
   emptyBacklog,
   editEpic,
@@ -72,6 +73,8 @@ interface BoardState {
   activeTab: ActiveTab;
   theme: Theme;
   fs: FsAdapter | null;
+  rawFs: FsAdapter | null;
+  conflictOpen: boolean;
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
@@ -82,6 +85,8 @@ interface BoardState {
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
   load: (fs: FsAdapter) => Promise<void>;
+  reload: () => Promise<void>;
+  closeConflict: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
@@ -211,6 +216,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   activeTab: 'board',
   theme: 'light',
   fs: null,
+  rawFs: null,
+  conflictOpen: false,
   selectedTaskId: null,
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
@@ -222,7 +229,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   settingsOpen: false,
 
   load: async (fs) => {
-    set({ status: 'loading', errorMessage: null, fs });
+    set({ status: 'loading', errorMessage: null, fs, rawFs: fs, conflictOpen: false });
     try {
       const result = await loadBoard(fs);
       if (result.kind === 'missing-config') {
@@ -243,11 +250,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         });
         return;
       }
+      // From here on writes go through a guard that refuses to clobber files
+      // changed on disk since this load, surfacing the conflict modal instead.
+      const guarded = createGuardedFs(fs, result.fileVersions, () =>
+        set({ conflictOpen: true }),
+      );
       set({
         status: 'ready',
+        fs: guarded,
         snapshot: result.snapshot,
         problems: result.snapshot.problems,
         errorMessage: null,
+        conflictOpen: false,
         theme: result.snapshot.config.theme ?? 'light',
       });
     } catch (err) {
@@ -260,6 +274,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       });
     }
   },
+
+  reload: async () => {
+    const { rawFs } = get();
+    if (rawFs) await get().load(rawFs);
+  },
+
+  closeConflict: () => set({ conflictOpen: false }),
 
   completeOnboarding: async (input) => {
     const { fs } = get();

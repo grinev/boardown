@@ -82,6 +82,9 @@ describe('loadBoard', () => {
     expect(result.snapshot.releases).toHaveLength(1);
     expect(result.snapshot.epics).toHaveLength(1);
     expect(result.snapshot.epics[0]!.slug).toBe('parser');
+    expect(Object.keys(result.fileVersions).sort()).toEqual(
+      ['config.yaml', 'epics/parser.md', 'releases/1.10.md'].sort(),
+    );
   });
 
   it('returns missing-config when config.yaml does not exist', async () => {

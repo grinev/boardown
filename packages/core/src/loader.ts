@@ -15,7 +15,12 @@ export interface BoardSnapshot {
 }
 
 export type LoadBoardResult =
-  | { kind: 'loaded'; snapshot: BoardSnapshot; problems: ParseProblem[] }
+  | {
+      kind: 'loaded';
+      snapshot: BoardSnapshot;
+      problems: ParseProblem[];
+      fileVersions: Record<string, number>;
+    }
   | { kind: 'missing-config' }
   | { kind: 'failed'; problems: ParseProblem[] };
 
@@ -44,6 +49,12 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   }
 
   const problems: ParseProblem[] = [];
+  const fileVersions: Record<string, number> = { [CONFIG_FILENAME]: stat.lastModified };
+
+  const recordVersion = async (path: string): Promise<void> => {
+    const s = await fs.stat(path);
+    if (s !== null) fileVersions[path] = s.lastModified;
+  };
 
   let configText: string;
   try {
@@ -79,6 +90,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
+    await recordVersion(path);
     const parsed = parseRelease(text, path, slug);
     problems.push(...parsed.problems);
     if (parsed.value !== null) releases.push(parsed.value);
@@ -96,6 +108,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
+    await recordVersion(path);
     const parsed = parseEpic(text, path, slug);
     problems.push(...parsed.problems);
     if (parsed.value !== null) epics.push(parsed.value);
@@ -104,6 +117,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   let backlog: Backlog | null = null;
   try {
     const backlogText = await fs.read(BACKLOG_PATH);
+    await recordVersion(BACKLOG_PATH);
     const parsed = parseBacklog(backlogText, BACKLOG_PATH);
     problems.push(...parsed.problems);
     if (parsed.value !== null) backlog = parsed.value;
@@ -116,6 +130,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     config = verified.config;
     try {
       await fs.write(CONFIG_FILENAME, serializeConfig(config));
+      await recordVersion(CONFIG_FILENAME);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       problems.push(
@@ -132,5 +147,6 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     kind: 'loaded',
     snapshot: { config, releases, epics, backlog, problems },
     problems,
+    fileVersions,
   };
 };

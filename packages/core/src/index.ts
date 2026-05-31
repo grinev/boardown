@@ -7,3 +7,4 @@ export * from './id-generator.js';
 export * from './board-ops.js';
 export * from './config.js';
 export * from './loader.js';
+export * from './conflicts.js';

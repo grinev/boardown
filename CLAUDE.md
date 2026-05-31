@@ -76,9 +76,10 @@ differ. The extension host is bundled with esbuild (`vscode` external, CJS) and
 the webview with Vite; both run in the Extension Development Host via F5. The
 webview mounts the real `@boardown/ui` with a `VsCodeFsAdapter` that proxies
 `read/write/list/stat` to the host over `postMessage`, where the host serves
-them from `vscode.workspace.fs`. The board root is `workspaceFolders[0]/.boardown`
-(discovery/selection across folders is a later stage). An Electron build is
-post-MVP and follows the same shell pattern.
+them from `vscode.workspace.fs`. The board root is the single open workspace
+folder's `.boardown/`; choosing among multiple roots or an arbitrary folder is
+out of scope (Electron territory). An Electron build is post-MVP and follows the
+same shell pattern.
 
 `packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
@@ -112,6 +113,11 @@ API or otherwise) is post-MVP and may or may not happen.
   flow, and do not fall back to defaults — a present-but-invalid config is
   always an error, never silently replaced.
 - No automated backups — git is the safety net.
+- External-change safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
+  (`packages/core`), which compares each write target's `lastModified` against
+  the value captured at load and refuses to clobber a file changed on disk,
+  opening the Reload conflict modal instead. Shared by all shells; there is no
+  automatic refresh — re-reading is the manual Reload button only.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
   CSS Modules for component-specific styles (`Foo.module.css`). Components

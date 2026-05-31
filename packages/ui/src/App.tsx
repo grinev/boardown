@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
+import { ConflictDialog } from './components/ConflictDialog';
 import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
@@ -39,6 +40,7 @@ export function App({ fs }: AppProps) {
   const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
   const createEpicOpen = useBoardStore((s) => s.createEpicOpen);
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
+  const conflictOpen = useBoardStore((s) => s.conflictOpen);
   const completeReleaseOpen = useBoardStore((s) => s.completeReleaseOpen);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
@@ -186,6 +188,7 @@ export function App({ fs }: AppProps) {
         />
       )}
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {conflictOpen && <ConflictDialog />}
     </main>
   );
 }

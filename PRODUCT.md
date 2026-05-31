@@ -461,6 +461,11 @@ working adapter.
 - Electron build is a deferred *implementation* — the product spec covers it,
   but no Electron code lands in MVP. (The VS Code extension, by contrast, is
   the primary MVP shell — see its roadmap section above.)
+- Folder selection / multiple boards in one shell — the VS Code extension always
+  uses the single open workspace folder's `.boardown/` (separate windows already
+  scope independently). Choosing among several roots in one window, or an
+  arbitrary folder picker, belongs to the Electron desktop build. Future
+  direction, not in MVP.
 - "Git-managed team task tracker" deployment (web as a deployable artifact
   with a fixed folder, multi-user via git as the sync layer) — interesting
   future direction, not in scope for v1.
@@ -583,9 +588,13 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
             (collects `projectName` + `idPrefix`, writes the config)
       - [ ] Full default-structure scaffold when `.boardown/` itself is
             missing (epics, releases, backlog) — shell responsibility
-- [ ] **External-change conflict modal** (Reload / Overwrite), triggered by
-      the shell on save conflicts
-- [ ] **Reload action** + imperative `reload()` API the shell can call
+- [x] **External-change conflict modal** (Reload) in `ui`/`core`: writes go
+      through a guarded `FsAdapter` (`createGuardedFs`) that compares each
+      target's `lastModified` against the value captured at load and refuses to
+      overwrite a file changed on disk, opening the modal instead. Overwrite is
+      deferred to a separate task.
+- [x] **Reload action** + `reload()` store API; surfaced as a Reload button in
+      the `TabBar` (shared by both shells, no automatic refresh)
 - [ ] **Parse-error UX**: top banner + gray "problem cards" for tasks that
       could not be parsed cleanly
 
@@ -596,16 +605,17 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       `.boardown/`
 - [x] Optional `--data-dir` for local use from sources, with default
       structure initialization when `config.yaml` is missing
-- [ ] Manual **Reload** button wired to `ui.reload()` (no automatic refresh)
-- [ ] Wire the conflict-detection flow end-to-end against `lastModified`
-      from the dev adapter
+- [x] Manual **Reload** button (shared `ui` `TabBar` button → `reload()`,
+      no automatic refresh)
+- [x] Conflict-detection flow against `lastModified` from the dev adapter
+      (shared guarded `FsAdapter` in `ui`/`core`)
 
 ### `packages/vscode` (primary MVP shell)
 
 The canonical distribution target: a third shell next to `web` that reuses
 `@boardown/ui` unchanged and swaps only the `FsAdapter` implementation and the
 host integration (webview panel + message passing instead of a browser tab over
-HTTP). Built bottom-up in four stages, each runnable in the Extension
+HTTP). Built bottom-up in three stages, each runnable in the Extension
 Development Host.
 
 - [x] **Stage 1 — Walking skeleton**: scaffold `packages/vscode` (manifest,
@@ -615,15 +625,18 @@ Development Host.
 - [x] **Stage 2 — `FsAdapter` over message passing**: `VsCodeFsAdapter` on the
       webview side ↔ host router backed by `vscode.workspace.fs` (analog of
       `web`'s `DevHttpFsAdapter` + `dev-fs-plugin`); the board loads real
-      `.boardown/` data and drag & drop persists. Board root is
-      `workspaceFolders[0]/.boardown` for now — discovery/selection is Stage 3.
-- [ ] **Stage 3 — Workspace integration & board creation**: `.boardown/`
-      discovery and activation, QuickPick for multiple workspace folders, and
-      an "Initialize boardown here" command that scaffolds the default structure
-- [ ] **Stage 4 — Refresh, conflicts, packaging**: a manual **Reload** button
-      wired to `ui.reload()` (no file watcher — refresh is user-triggered only)
-      and the conflict modal via `lastModified` (depend on the matching `ui`
-      items), `.vsix` packaging, manual end-to-end pass, and doc updates
+      `.boardown/` data and drag & drop persists. Board root is the single
+      workspace folder's `.boardown/`; a fresh project is initialized through
+      the existing onboarding modal (writes `config.yaml`, the host creates
+      `.boardown/` on first write). Multi-root selection is out of scope.
+- [x] **Stage 3 — Refresh & conflicts**: the shared `ui` Reload button and the
+      external-change conflict modal (via `lastModified`) light up in the webview
+      automatically — no vscode-side work beyond reusing `@boardown/ui`. No file
+      watcher; refresh stays user-triggered only.
+
+**Packaging (`.vsix`)** — separate, deferred track (not a numbered stage):
+bundle the extension into an installable `.vsix`, manual end-to-end pass, and
+publishing metadata. Planned in its own round.
 
 ### Quality
 
