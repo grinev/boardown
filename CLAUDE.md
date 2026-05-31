@@ -51,11 +51,13 @@ boardown/
 │   ├── ui/            # React app: components, Zustand store, UI flow.
 │   │                  # Takes an FsAdapter as a prop. No DOM-only / Node /
 │   │                  # VS Code imports.
-│   └── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
-│                      # over a Vite middleware that serves a selected
-│                      # .boardown/, focus/visibility refresh triggers.
-│                      # Mounts @boardown/ui. No production browser deployment
-│                      # in MVP.
+│   ├── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
+│   │                  # over a Vite middleware that serves a selected
+│   │                  # .boardown/, manual Reload only. Mounts @boardown/ui.
+│   │                  # No production browser deployment in MVP.
+│   └── vscode/        # Primary MVP shell: extension host (esbuild) + webview
+│                      # (Vite) hosting @boardown/ui. Built in stages; see
+│                      # PRODUCT.md roadmap.
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -67,11 +69,12 @@ boardown/
 `src/index.ts`, no separate build step. The shell's bundler (Vite for `web`,
 later esbuild/rollup for VS Code / Electron) transpiles it.
 
-A `packages/vscode` extension is the primary MVP distribution target but
-will be implemented as a separate planning round once `packages/ui` is
-feature-complete enough to host. An Electron build is post-MVP. When either
-arrives, it is a sibling shell next to `web` and reuses `@boardown/ui`
-unchanged — only the `FsAdapter` implementation and entry flow differ.
+`packages/vscode` is the primary MVP distribution target, built bottom-up in
+stages (see PRODUCT.md roadmap). It is a sibling shell next to `web` and reuses
+`@boardown/ui` unchanged — only the `FsAdapter` implementation and entry flow
+differ. The extension host is bundled with esbuild (`vscode` external, CJS) and
+the webview with Vite; both run in the Extension Development Host via F5. An
+Electron build is post-MVP and follows the same shell pattern.
 
 `packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`

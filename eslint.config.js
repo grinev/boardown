@@ -21,7 +21,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/{web,ui}/**/*.{ts,tsx}'],
+    files: ['packages/{web,ui,vscode}/**/*.{ts,tsx}'],
     ...react.configs.flat.recommended,
     ...react.configs.flat['jsx-runtime'],
     languageOptions: {
@@ -35,12 +35,20 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/{web,ui}/**/*.{ts,tsx}'],
+    files: ['packages/{web,ui,vscode}/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
   {
     files: ['packages/core/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    files: ['**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,

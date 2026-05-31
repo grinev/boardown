@@ -119,6 +119,10 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
       await ensureBoardRoot(boardRoot);
       server.config.logger.info(`boardown data dir: ${boardRoot}`);
 
+      // connect's middleware signature is void-returning; the async body owns
+      // its own error handling (try/catch below), so the returned promise is
+      // intentionally not awaited by connect.
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       server.middlewares.use(async (req, res, next) => {
         if (!req.url || !req.url.startsWith('/api/fs/')) {
           next();

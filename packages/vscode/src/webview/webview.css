@@ -1,0 +1,20 @@
+body {
+  margin: 0;
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+}
+
+.placeholder {
+  padding: 2rem;
+}
+
+.placeholder h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.placeholder p {
+  margin: 0;
+  opacity: 0.8;
+}

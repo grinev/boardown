@@ -553,7 +553,7 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
       file, or `no_epic.md` when no epic is selected
 - [x] **Epic inline editing** in the details dialog: `name`,
       `description` / preamble (color — still TODO)
-- [ ] **Drag & drop** (`@dnd-kit`):
+- [x] **Drag & drop** (`@dnd-kit`):
   - [x] Board: within a kanban column, between status columns
   - [x] Backlog: between release sections and to/from the Backlog section,
         with reorder supported inside every section. Inside the Backlog
@@ -572,11 +572,11 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
   - [x] Start release: button on every future-release section header in the
         Backlog, shown only when no release is current; confirmation modal
         shows the task count before promoting the release
-- [ ] **Backlog filter bar**: top-of-screen single-select dropdowns for
+- [x] **Backlog filter bar**: top-of-screen single-select dropdowns for
       `status`, `type`, `epic` (with a "No epic" option); applies globally
       to all sections; counter switches to `N of M` when active. Backlog
       only; Archive intentionally has no filter bar.
-- [ ] **Empty states** for every screen and major section
+- [x] **Empty states** for every screen and major section
 - [ ] **Initial-board flow**: when no `.boardown/` exists, prompt for ID
       prefix and create the default structure via the adapter
       - [x] Onboarding modal when `.boardown/config.yaml` is missing
@@ -589,6 +589,17 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [ ] **Parse-error UX**: top banner + gray "problem cards" for tasks that
       could not be parsed cleanly
 
+### `packages/web` (dev shell)
+
+- [x] Vite + React app skeleton that mounts `@boardown/ui`
+- [x] `DevHttpFsAdapter` over the Vite middleware that serves the selected
+      `.boardown/`
+- [x] Optional `--data-dir` for local use from sources, with default
+      structure initialization when `config.yaml` is missing
+- [ ] Manual **Reload** button wired to `ui.reload()` (no automatic refresh)
+- [ ] Wire the conflict-detection flow end-to-end against `lastModified`
+      from the dev adapter
+
 ### `packages/vscode` (primary MVP shell)
 
 The canonical distribution target: a third shell next to `web` that reuses
@@ -597,9 +608,10 @@ host integration (webview panel + message passing instead of a browser tab over
 HTTP). Built bottom-up in four stages, each runnable in the Extension
 Development Host.
 
-- [ ] **Stage 1 — Walking skeleton**: scaffold `packages/vscode` (manifest,
-      build), an "Open boardown board" command that opens a webview panel
-      mounting `@boardown/ui` with no data yet
+- [x] **Stage 1 — Walking skeleton**: scaffold `packages/vscode` (manifest,
+      esbuild host + Vite webview build), an "Open boardown board" command that
+      opens a webview panel rendering a placeholder; host↔webview handshake in
+      place. Mounting the real `@boardown/ui` is Stage 2.
 - [ ] **Stage 2 — `FsAdapter` over message passing**: `VsCodeFsAdapter` on the
       webview side ↔ host router backed by `vscode.workspace.fs` (analog of
       `web`'s `DevHttpFsAdapter` + `dev-fs-plugin`); the board loads real
@@ -611,17 +623,6 @@ Development Host.
       wired to `ui.reload()` (no file watcher — refresh is user-triggered only)
       and the conflict modal via `lastModified` (depend on the matching `ui`
       items), `.vsix` packaging, manual end-to-end pass, and doc updates
-
-### `packages/web` (dev shell)
-
-- [x] Vite + React app skeleton that mounts `@boardown/ui`
-- [x] `DevHttpFsAdapter` over the Vite middleware that serves the selected
-      `.boardown/`
-- [x] Optional `--data-dir` for local use from sources, with default
-      structure initialization when `config.yaml` is missing
-- [ ] Manual **Reload** button wired to `ui.reload()` (no automatic refresh)
-- [ ] Wire the conflict-detection flow end-to-end against `lastModified`
-      from the dev adapter
 
 ### Quality
 
