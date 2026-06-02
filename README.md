@@ -180,6 +180,46 @@ The `projectName` field is required and shown in the app header. Create
 project name. The starter release is named `v0.1` and has `status: current`,
 so the board is ready for new tasks immediately.
 
+## Releasing
+
+The whole monorepo ships under **one lockstep version**: the same number lives
+in every `package.json`, with the **root `package.json` as the single source of
+truth**. There is only one distributed artifact today (the `.vsix`), and future
+shells (web, Electron, JetBrains) will release together under the same version.
+
+Releases are driven by a version bump on `main`, not by pushing tags by hand:
+
+1. Bump the version and commit it:
+
+   ```sh
+   pnpm release:prepare patch     # or minor / major / an explicit 0.3.0
+   pnpm release:rc                # cut a 0.3.0-rc.1 prerelease
+   ```
+
+   This updates the root version, mirrors it into every package, and creates a
+   `chore(release): vX.Y.Z` commit (no tag).
+
+2. Push to `main`:
+
+   ```sh
+   git push origin main
+   ```
+
+3. The [`Publish`](./.github/workflows/publish.yml) workflow notices that the
+   tag `vX.Y.Z` for the current version does not exist yet, runs the checks,
+   builds the `.vsix`, generates release notes from the commit log, creates and
+   pushes the tag, and publishes a GitHub Release with the `.vsix` in **Assets**.
+   If the tag already exists (no version bump), the workflow skips the release.
+
+Preview the notes that would be generated for the current version with:
+
+```sh
+pnpm release:notes:preview
+```
+
+Every push and pull request to `main` also runs the
+[`CI`](./.github/workflows/ci.yml) workflow (lint, typecheck, build, test).
+
 ## License
 
 [MIT](./LICENSE)

@@ -644,8 +644,14 @@ Development Host.
 - [ ] Manual end-to-end pass: install the `.vsix` in a clean VS Code and verify
       open / load / drag & drop / Reload / conflict against a sample
       `.boardown/`.
+- [x] Automated GitHub Release: bumping the repo version on `main`
+      (`pnpm release:prepare`) triggers the `Publish` workflow, which builds the
+      `.vsix`, tags `vX.Y.Z`, and attaches the artifact to a GitHub Release.
+      The whole monorepo shares one lockstep version (see
+      [Releasing](./README.md#releasing)).
 - [ ] Marketplace publishing (`vsce publish`, registered publisher, PAT) —
-      still deferred, planned in its own round.
+      still deferred, planned in its own round; will slot in as a gated step in
+      the same `Publish` workflow.
 
 ### Quality
 

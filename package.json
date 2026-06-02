@@ -1,6 +1,6 @@
 {
   "name": "boardown",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,6 +12,10 @@
       "esbuild"
     ]
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grinev/boardown.git"
+  },
   "scripts": {
     "dev": "pnpm --filter @boardown/web dev",
     "build": "pnpm -r build",
@@ -19,7 +23,10 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "release:prepare": "node scripts/release-prepare.mjs",
+    "release:rc": "node scripts/release-prepare.mjs rc",
+    "release:notes:preview": "node scripts/release-notes-preview.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",

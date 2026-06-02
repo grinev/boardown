@@ -1,0 +1,132 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Release from main version bump
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Determine release state
+        id: determine
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+
+          STABLE_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
+          RC_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$'
+
+          if [[ "$CURRENT_VERSION" =~ $STABLE_PATTERN ]]; then
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "release_kind=stable" >> "$GITHUB_OUTPUT"
+          elif [[ "$CURRENT_VERSION" =~ $RC_PATTERN ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "release_kind=rc" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unsupported version format: $CURRENT_VERSION"
+            echo "Allowed formats: X.Y.Z and X.Y.Z-rc.N"
+            exit 1
+          fi
+
+          git fetch --tags --force
+          TAG_NAME="v$CURRENT_VERSION"
+          if git tag -l "$TAG_NAME" | grep -q "$TAG_NAME"; then
+            echo "Tag already exists: $TAG_NAME"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Release candidate detected: tag is missing for current version"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+      - name: No release needed
+        if: steps.determine.outputs.should_release != 'true'
+        run: 'echo "Skipping publish: no eligible version bump detected"'
+
+      - name: Install dependencies
+        if: steps.determine.outputs.should_release == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.determine.outputs.should_release == 'true'
+        run: pnpm lint
+
+      - name: Typecheck
+        if: steps.determine.outputs.should_release == 'true'
+        run: pnpm typecheck
+
+      - name: Test
+        if: steps.determine.outputs.should_release == 'true'
+        run: pnpm test
+
+      # Build release artifacts. Add future shells (web/electron/jetbrains) as
+      # extra build commands here and extend the `files:` list of the release
+      # step below — the version is already shared across the whole repo.
+      - name: Build release artifacts
+        if: steps.determine.outputs.should_release == 'true'
+        run: pnpm --filter ./packages/vscode package
+
+      - name: Generate release notes
+        if: steps.determine.outputs.should_release == 'true'
+        id: notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BODY_FILE="$RUNNER_TEMP/release-notes.md"
+          node scripts/generate-release-notes.mjs \
+            --version "${{ steps.determine.outputs.current_version }}" \
+            --kind "${{ steps.determine.outputs.release_kind }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --output "$BODY_FILE"
+
+          echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push git tag
+        if: steps.determine.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.determine.outputs.tag_name }}"
+          git push origin "${{ steps.determine.outputs.tag_name }}"
+
+      - name: Create GitHub release
+        if: steps.determine.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.determine.outputs.tag_name }}
+          name: ${{ steps.determine.outputs.tag_name }}
+          body_path: ${{ steps.notes.outputs.body_file }}
+          prerelease: ${{ steps.determine.outputs.is_prerelease == 'true' }}
+          files: packages/vscode/build/*.vsix

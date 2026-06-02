@@ -133,6 +133,12 @@ API or otherwise) is post-MVP and may or may not happen.
   speculation.
 - No backwards-compatibility shims while the project is pre-1.0. Just change
   the code.
+- Versioning is **lockstep**: every `package.json` carries the same version,
+  with the **root `package.json` as the single source of truth**. Never bump a
+  package version by hand — use `pnpm release:prepare` (which mirrors the root
+  version into all packages via `scripts/sync-versions.mjs`). Releases are
+  cut by bumping the version on `main`; the `Publish` workflow tags and attaches
+  the built `.vsix` to a GitHub Release. See [README](./README.md#releasing).
 
 ## Working style
 
