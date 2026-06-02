@@ -1,0 +1,11 @@
+# Everything is bundled into dist/ — keep only the runtime + metadata.
+src/**
+build/**
+.vscode/**
+tsconfig.json
+esbuild.mjs
+vite.config.ts
+.gitignore
+**/*.ts
+**/*.map
+*.vsix

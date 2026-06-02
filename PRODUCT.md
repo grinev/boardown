@@ -634,9 +634,18 @@ Development Host.
       automatically — no vscode-side work beyond reusing `@boardown/ui`. No file
       watcher; refresh stays user-triggered only.
 
-**Packaging (`.vsix`)** — separate, deferred track (not a numbered stage):
-bundle the extension into an installable `.vsix`, manual end-to-end pass, and
-publishing metadata. Planned in its own round.
+**Packaging (`.vsix`)** — separate track (not a numbered stage):
+
+- [x] Bundle the extension into an installable `.vsix` (`@vscode/vsce`,
+      `pnpm --filter boardown package`, `--no-dependencies` since host +
+      webview are already bundled) with publishing metadata (`publisher`,
+      `icon`, `README`, `CHANGELOG`, `LICENSE`, `.vscodeignore`). The
+      `publisher` and icon are placeholders pending real ones.
+- [ ] Manual end-to-end pass: install the `.vsix` in a clean VS Code and verify
+      open / load / drag & drop / Reload / conflict against a sample
+      `.boardown/`.
+- [ ] Marketplace publishing (`vsce publish`, registered publisher, PAT) —
+      still deferred, planned in its own round.
 
 ### Quality
 

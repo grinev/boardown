@@ -1,7 +1,8 @@
 # boardown
 
-> 🚧 **Status: work in progress.** The VS Code extension is in development,
-> but boardown can already be used from sources via the local web shell.
+> 🚧 **Status: work in progress.** The VS Code extension now packages into an
+> installable `.vsix` (see [below](#vs-code-extension)); boardown can also be
+> used from sources via the local web shell.
 
 A local-first task board that stores its data as plain markdown files inside
 your project's git repo. Releases, epics and tasks live in `.boardown/` next
@@ -23,6 +24,27 @@ build is post-MVP.
 </p>
 
 See [PRODUCT.md](./PRODUCT.md) for the full spec and the MVP roadmap.
+
+## VS Code extension
+
+The extension is the primary MVP target. To build an installable `.vsix` from
+sources:
+
+```sh
+pnpm install
+pnpm --filter boardown package
+```
+
+This produces `packages/vscode/build/boardown-<version>.vsix`. Install it into
+VS Code with:
+
+```sh
+code --install-extension packages/vscode/build/boardown-0.1.0.vsix
+```
+
+Then open a folder and run **boardown: Open board** from the Command Palette.
+(Marketplace publishing is not set up yet — the `publisher` and icon are
+placeholders.)
 
 ## Try it from sources
 
@@ -78,8 +100,9 @@ The repo is a pnpm workspace with four packages:
   mounts `@boardown/ui` over a Vite middleware which serves a local
   `.boardown/` data directory. Used for iterating on the UI from sources.
 - [`packages/vscode`](./packages/vscode) — the primary MVP distribution target,
-  an in-progress VS Code extension shell next to `web` (extension host via
-  esbuild + webview via Vite), reusing `@boardown/ui` unchanged.
+  a VS Code extension shell next to `web` (extension host via esbuild + webview
+  via Vite), reusing `@boardown/ui` unchanged. Packages into an installable
+  `.vsix` (see [VS Code extension](#vs-code-extension) above).
 
 A `packages/electron` shell is post-MVP.
 

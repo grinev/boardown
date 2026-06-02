@@ -33,8 +33,9 @@ License: MIT.
 - **Drag & drop:** `@dnd-kit/core`
 - **Tests:** Vitest
 
-The primary MVP distribution channel is a **VS Code extension** (planned but
-not yet implemented), which reads `.boardown/` from the open workspace. The
+The primary MVP distribution channel is a **VS Code extension** (implemented
+and packaged into an installable `.vsix`; see PRODUCT.md roadmap), which reads
+`.boardown/` from the open workspace. The
 **browser shell (`packages/web`) is a development and local-from-sources tool**
 — it boots `@boardown/ui` against a selected `.boardown/` over a Vite
 middleware, and is not a production distribution channel for the MVP. File
