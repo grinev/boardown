@@ -8,7 +8,8 @@ the rest of the project — no cloud, no server, no account.
 ## Usage
 
 1. Open the folder that contains (or should contain) your board in VS Code.
-2. Run **boardown: Open board** from the Command Palette.
+2. Click the board icon in the top-right corner of the editor, or run
+   **Boardown: Open Board** from the Command Palette.
 
 The board reads `.boardown/` from the open workspace folder. On a fresh
 project, the onboarding modal writes `config.yaml` and the board is created on

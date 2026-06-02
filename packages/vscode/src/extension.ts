@@ -33,6 +33,10 @@ export function activate(context: vscode.ExtensionContext): void {
         },
       );
       panel = created;
+      created.iconPath = {
+        light: vscode.Uri.joinPath(context.extensionUri, 'media', 'board-light.svg'),
+        dark: vscode.Uri.joinPath(context.extensionUri, 'media', 'board-dark.svg'),
+      };
 
       created.webview.html = getHtml(created.webview, context.extensionUri);
 
@@ -131,6 +135,12 @@ function isFileNotFound(err: unknown): boolean {
   return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
 }
 
+function themeName(kind: vscode.ColorThemeKind): 'light' | 'dark' {
+  return kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight
+    ? 'light'
+    : 'dark';
+}
+
 function getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   const assetUri = (...segments: string[]): vscode.Uri =>
     webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', ...segments));
@@ -138,6 +148,10 @@ function getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   const scriptUri = assetUri('webview.js');
   const styleUri = assetUri('webview.css');
   const nonce = getNonce();
+  // Seed data-theme on <html> from VS Code's active theme so the board palette
+  // (theme.css keys off [data-theme]) resolves on the very first parse, before
+  // any script runs — otherwise :root's light default paints white for a frame.
+  const theme = themeName(vscode.window.activeColorTheme.kind);
 
   const csp = [
     `default-src 'none'`,
@@ -150,7 +164,7 @@ function getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   ].join('; ');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="${theme}">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />

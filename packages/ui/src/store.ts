@@ -240,7 +240,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       rawFs: fs,
       conflictOpen: false,
       // Keep a previously captured default when the caller (e.g. reload) omits it.
-      ...(defaultTheme !== undefined ? { defaultTheme } : {}),
+      // Seed `theme` from it too so the loading screen matches the host theme
+      // (e.g. VS Code dark) instead of flashing the light-theme default before
+      // config is read; config.theme still wins once the board loads below.
+      ...(defaultTheme !== undefined ? { defaultTheme, theme: defaultTheme } : {}),
     });
     try {
       const result = await loadBoard(fs);

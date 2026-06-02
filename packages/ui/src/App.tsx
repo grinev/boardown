@@ -1,6 +1,6 @@
 import type { FsAdapter, Theme } from '@boardown/core';
 import { TASK_STATUSES } from '@boardown/core';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
@@ -63,9 +63,16 @@ export function App({ fs, defaultTheme }: AppProps) {
     void load(fs, defaultTheme);
   }, [fs, load, defaultTheme]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+  // useLayoutEffect so the attribute is set before the browser paints the first
+  // frame — a plain effect runs after paint and flashes the light-theme default.
+  // While the board is still loading, prefer the host-provided theme (e.g. VS
+  // Code's) over the store's 'light' default; once loaded, `theme` reflects
+  // config and wins.
+  useLayoutEffect(() => {
+    const resolved =
+      status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme;
+    document.documentElement.setAttribute('data-theme', resolved);
+  }, [theme, defaultTheme, status]);
 
   if (status === 'idle' || status === 'loading') {
     return (

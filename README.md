@@ -42,7 +42,8 @@ VS Code with:
 code --install-extension packages/vscode/build/boardown-0.1.0.vsix
 ```
 
-Then open a folder and run **boardown: Open board** from the Command Palette.
+Then open a folder and click the board icon in the top-right corner of the
+editor, or run **Boardown: Open Board** from the Command Palette.
 (Marketplace publishing is not set up yet — the `publisher` and icon are
 placeholders.)
 

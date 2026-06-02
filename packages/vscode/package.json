@@ -34,9 +34,21 @@
     "commands": [
       {
         "command": "boardown.openBoard",
-        "title": "boardown: Open board"
+        "title": "Boardown: Open Board",
+        "icon": {
+          "light": "media/board-light.svg",
+          "dark": "media/board-dark.svg"
+        }
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "boardown.openBoard",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "build:host": "node esbuild.mjs",

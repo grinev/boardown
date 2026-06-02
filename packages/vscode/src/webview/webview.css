@@ -5,6 +5,9 @@ body {
   /* VS Code injects a default `padding: 0 20px` on webview bodies; drop it so
      the board (and its full-width header bar) reaches the editor edges. */
   padding: 0;
-  background: var(--bg);
-  color: var(--text-primary);
+  /* Until @boardown/ui's theme.css defines --bg/--text-primary, fall back to
+     VS Code's own injected theme colors so the first paint matches the editor
+     instead of flashing white on dark themes. */
+  background: var(--bg, var(--vscode-editor-background));
+  color: var(--text-primary, var(--vscode-foreground));
 }
