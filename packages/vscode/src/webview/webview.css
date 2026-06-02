@@ -2,6 +2,9 @@
    @boardown/ui's theme.css (via the mounted <App>). */
 body {
   margin: 0;
+  /* VS Code injects a default `padding: 0 20px` on webview bodies; drop it so
+     the board (and its full-width header bar) reaches the editor edges. */
+  padding: 0;
   background: var(--bg);
   color: var(--text-primary);
 }
