@@ -72,6 +72,9 @@ interface BoardState {
   errorMessage: string | null;
   activeTab: ActiveTab;
   theme: Theme;
+  // Host-provided fallback theme (e.g. VS Code's color theme), used only when
+  // seeding a brand-new config at onboarding. Null when the shell omits it.
+  defaultTheme: Theme | null;
   fs: FsAdapter | null;
   rawFs: FsAdapter | null;
   conflictOpen: boolean;
@@ -84,7 +87,7 @@ interface BoardState {
   completeReleaseOpen: boolean;
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
-  load: (fs: FsAdapter) => Promise<void>;
+  load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   reload: () => Promise<void>;
   closeConflict: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
@@ -215,6 +218,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   errorMessage: null,
   activeTab: 'board',
   theme: 'light',
+  defaultTheme: null,
   fs: null,
   rawFs: null,
   conflictOpen: false,
@@ -228,8 +232,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   startReleaseForFilename: null,
   settingsOpen: false,
 
-  load: async (fs) => {
-    set({ status: 'loading', errorMessage: null, fs, rawFs: fs, conflictOpen: false });
+  load: async (fs, defaultTheme) => {
+    set({
+      status: 'loading',
+      errorMessage: null,
+      fs,
+      rawFs: fs,
+      conflictOpen: false,
+      // Keep a previously captured default when the caller (e.g. reload) omits it.
+      ...(defaultTheme !== undefined ? { defaultTheme } : {}),
+    });
     try {
       const result = await loadBoard(fs);
       if (result.kind === 'missing-config') {
@@ -238,6 +250,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           snapshot: null,
           problems: [],
           errorMessage: null,
+          theme: get().defaultTheme ?? 'light',
         });
         return;
       }
@@ -287,10 +300,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (!fs) {
       throw new Error('Filesystem adapter is not initialized');
     }
+    const dt = get().defaultTheme;
     const config = {
       idPrefix: input.idPrefix,
       nextId: 1,
       projectName: input.projectName,
+      ...(dt ? { theme: dt } : {}),
     };
     await fs.write(CONFIG_FILENAME, serializeConfig(config));
     await get().load(fs);

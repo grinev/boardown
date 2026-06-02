@@ -328,6 +328,34 @@ describe('setTheme', () => {
   });
 });
 
+describe('completeOnboarding', () => {
+  it('seeds the new config theme from the host default theme', async () => {
+    const fs = new MemFs();
+    await state().load(fs, 'dark');
+    expect(state().status).toBe('onboarding');
+    expect(state().theme).toBe('dark');
+
+    await state().completeOnboarding({ projectName: 'New', idPrefix: 'NW' });
+
+    expect(state().status).toBe('ready');
+    expect(current().config.theme).toBe('dark');
+    expect(state().theme).toBe('dark');
+  });
+
+  it('omits the theme when the host provides no default', async () => {
+    // defaultTheme persists in the store across loads (it survives reload), so
+    // clear the value a previous test left behind before exercising the no-host case.
+    useBoardStore.setState({ defaultTheme: null });
+    const fs = new MemFs();
+    await state().load(fs);
+
+    await state().completeOnboarding({ projectName: 'New', idPrefix: 'NW' });
+
+    expect(current().config.theme).toBeUndefined();
+    expect(state().theme).toBe('light');
+  });
+});
+
 describe('optimistic update rollback', () => {
   it('restores the previous snapshot when a mutation write fails', async () => {
     const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));

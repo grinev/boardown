@@ -1,8 +1,22 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { Theme } from '@boardown/core';
 import { App } from '@boardown/ui';
 import { VsCodeFsAdapter } from './VsCodeFsAdapter';
 import './webview.css';
+
+// VS Code tags the webview <body> with its active color theme. Light variants
+// are checked first because high-contrast-light also carries vscode-high-contrast.
+function detectTheme(): Theme {
+  const classes = document.body.classList;
+  if (classes.contains('vscode-light') || classes.contains('vscode-high-contrast-light')) {
+    return 'light';
+  }
+  if (classes.contains('vscode-dark') || classes.contains('vscode-high-contrast')) {
+    return 'dark';
+  }
+  return 'light';
+}
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -22,7 +36,7 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App fs={new VsCodeFsAdapter(vscode)} />
+    <App fs={new VsCodeFsAdapter(vscode)} defaultTheme={detectTheme()} />
   </StrictMode>,
 );
 

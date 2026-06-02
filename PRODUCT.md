@@ -234,9 +234,12 @@ theme: light          # optional, "light" or "dark"; defaults to "light" when ab
 That is the entire MVP config. The `projectName` field is required (set during
 onboarding) and read-only from the app's point of view (edit `config.yaml`
 directly); it is shown in the header. The `idPrefix` field accepts 2–5 uppercase
-ASCII letters (`A–Z`). The `theme` field is written by the in-app theme
-switcher; it stays absent from `config.yaml` until the user toggles it for the
-first time. Statuses, status colors, and task types are **hardcoded** in the
+ASCII letters (`A–Z`). The `theme` field is seeded at onboarding from the host's
+color theme when the shell provides one (the VS Code shell maps the editor's
+light/dark theme); shells that don't pass a default (e.g. the dev web shell)
+leave it absent, in which case it defaults to `"light"`. After onboarding it is
+owned by the in-app theme switcher — the host theme no longer influences it.
+Statuses, status colors, and task types are **hardcoded** in the
 app; customizing them is post-MVP. Epic colors are user-defined per epic (see
 Epic frontmatter above).
 
@@ -245,8 +248,8 @@ to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
 by hand).
 
 If `config.yaml` is missing, the app shows an onboarding modal that asks for
-`projectName` and `idPrefix`, then writes the file on submit; the rest of the
-load continues normally. An invalid `config.yaml` (present but not parseable
+`projectName` and `idPrefix`, then writes the file on submit (including the
+host-provided theme, if any); the rest of the load continues normally. An invalid `config.yaml` (present but not parseable
 or not matching the schema) shows a dedicated error screen — no silent
 fallback, no auto-rewrite.
 

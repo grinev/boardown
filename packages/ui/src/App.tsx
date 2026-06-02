@@ -1,4 +1,4 @@
-import type { FsAdapter } from '@boardown/core';
+import type { FsAdapter, Theme } from '@boardown/core';
 import { TASK_STATUSES } from '@boardown/core';
 import { useEffect } from 'react';
 import './theme/theme.css';
@@ -22,9 +22,12 @@ import { findTasksByEpic } from './utils/find-tasks-by-epic';
 
 interface AppProps {
   fs: FsAdapter;
+  // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
+  // only when onboarding writes a brand-new config; ignored once a board exists.
+  defaultTheme?: Theme;
 }
 
-export function App({ fs }: AppProps) {
+export function App({ fs, defaultTheme }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
   const problems = useBoardStore((s) => s.problems);
@@ -57,8 +60,8 @@ export function App({ fs }: AppProps) {
   const closeSettings = useBoardStore((s) => s.closeSettings);
 
   useEffect(() => {
-    void load(fs);
-  }, [fs, load]);
+    void load(fs, defaultTheme);
+  }, [fs, load, defaultTheme]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
