@@ -40,6 +40,7 @@ export function App({ fs, defaultTheme }: AppProps) {
     (s) => s.createTaskForReleaseFilename,
   );
   const createTaskOpen = useBoardStore((s) => s.createTaskOpen);
+  const createTaskBacklog = useBoardStore((s) => s.createTaskBacklog);
   const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
   const createEpicOpen = useBoardStore((s) => s.createEpicOpen);
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
@@ -182,6 +183,13 @@ export function App({ fs, defaultTheme }: AppProps) {
       {createTaskOpen && (
         <CreateTaskDialog
           releases={snapshot.releases}
+          epics={snapshot.epics}
+          onClose={closeCreateTask}
+        />
+      )}
+      {createTaskBacklog && (
+        <CreateTaskDialog
+          backlogLocked
           epics={snapshot.epics}
           onClose={closeCreateTask}
         />

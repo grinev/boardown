@@ -82,6 +82,7 @@ interface BoardState {
   selectedEpicSlug: string | null;
   createTaskForReleaseFilename: string | null;
   createTaskOpen: boolean;
+  createTaskBacklog: boolean;
   createReleaseOpen: boolean;
   createEpicOpen: boolean;
   completeReleaseOpen: boolean;
@@ -99,6 +100,7 @@ interface BoardState {
   closeEpic: () => void;
   openCreateTask: (releaseFilename: string) => void;
   openCreateTaskMenu: () => void;
+  openCreateTaskBacklog: () => void;
   closeCreateTask: () => void;
   openCreateRelease: () => void;
   closeCreateRelease: () => void;
@@ -226,6 +228,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   selectedEpicSlug: null,
   createTaskForReleaseFilename: null,
   createTaskOpen: false,
+  createTaskBacklog: false,
   createReleaseOpen: false,
   createEpicOpen: false,
   completeReleaseOpen: false,
@@ -349,8 +352,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   openCreateTaskMenu: () => set({ createTaskOpen: true }),
 
+  openCreateTaskBacklog: () => set({ createTaskBacklog: true }),
+
   closeCreateTask: () =>
-    set({ createTaskForReleaseFilename: null, createTaskOpen: false }),
+    set({
+      createTaskForReleaseFilename: null,
+      createTaskOpen: false,
+      createTaskBacklog: false,
+    }),
 
   openCreateRelease: () => set({ createReleaseOpen: true }),
 

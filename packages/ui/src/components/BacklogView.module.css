@@ -94,18 +94,17 @@
   white-space: nowrap;
 }
 
-.sectionHeader:has(.sectionCreateButton) .sectionCount,
-.sectionHeader:has(.sectionCompleteButton) .sectionCount,
-.sectionHeader:has(.sectionStartButton) .sectionCount {
+/* The Create task button is present in every section and anchors the right
+   group ([Create task][action][count]), so the count never needs auto here. */
+.sectionHeader:has(.sectionCreateTaskButton) .sectionCount {
   margin-left: 0;
 }
 
-.sectionHeader:has(.sectionCreateButton) .sectionCreateButton,
-.sectionHeader:has(.sectionCompleteButton) .sectionCompleteButton,
-.sectionHeader:has(.sectionStartButton) .sectionStartButton {
+.sectionCreateTaskButton {
   margin-left: auto;
 }
 
+.sectionCreateTaskButton,
 .sectionCreateButton,
 .sectionCompleteButton,
 .sectionStartButton {
@@ -125,12 +124,14 @@
   white-space: nowrap;
 }
 
+.sectionCreateTaskButton:hover,
 .sectionCreateButton:hover,
 .sectionCompleteButton:hover,
 .sectionStartButton:hover {
   background: var(--surface-muted);
 }
 
+.sectionCreateTaskButton:focus-visible,
 .sectionCreateButton:focus-visible,
 .sectionCompleteButton:focus-visible,
 .sectionStartButton:focus-visible {

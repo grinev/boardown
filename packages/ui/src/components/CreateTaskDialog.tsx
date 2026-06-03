@@ -10,9 +10,11 @@ import styles from './CreateTaskDialog.module.css';
 
 interface CreateTaskDialogProps {
   // When provided the task is bound to this release and the selector is locked.
-  // Otherwise the user picks a release from `releases`.
+  // When `backlogLocked` is set the task has no release (goes to the backlog)
+  // and the selector is locked to "—". Otherwise the user picks from `releases`.
   release?: Release;
   releases?: Release[];
+  backlogLocked?: boolean;
   epics: Epic[];
   onClose: () => void;
 }
@@ -20,6 +22,7 @@ interface CreateTaskDialogProps {
 export function CreateTaskDialog({
   release,
   releases = [],
+  backlogLocked = false,
   epics,
   onClose,
 }: CreateTaskDialogProps) {
@@ -33,10 +36,13 @@ export function CreateTaskDialog({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const releaseLocked = release !== undefined;
-  const releaseOptions = releaseLocked
-    ? [release]
-    : releases.filter((r) => r.frontmatter.status !== 'finished');
+  const releaseLocked = release !== undefined || backlogLocked;
+  const releaseOptions =
+    release !== undefined
+      ? [release]
+      : backlogLocked
+        ? []
+        : releases.filter((r) => r.frontmatter.status !== 'finished');
 
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && !submitting;
@@ -164,7 +170,7 @@ export function CreateTaskDialog({
             disabled={releaseLocked}
             onChange={(e) => setReleaseFilename(e.target.value)}
           >
-            {!releaseLocked && <option value="">—</option>}
+            {(!releaseLocked || backlogLocked) && <option value="">—</option>}
             {releaseOptions.map((r) => (
               <option key={r.filename} value={r.filename}>
                 {r.frontmatter.name ?? r.slug}

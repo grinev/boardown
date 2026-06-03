@@ -34,6 +34,8 @@ interface SectionMeta {
   hasCreateRelease: boolean;
   hasCompleteRelease: boolean;
   startReleaseFilename: string | null;
+  // Release this section creates tasks into; null means the backlog.
+  releaseFilename: string | null;
 }
 
 const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
@@ -51,6 +53,8 @@ export function BacklogView() {
   const openCreateRelease = useBoardStore((s) => s.openCreateRelease);
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
   const openStartRelease = useBoardStore((s) => s.openStartRelease);
+  const openCreateTask = useBoardStore((s) => s.openCreateTask);
+  const openCreateTaskBacklog = useBoardStore((s) => s.openCreateTaskBacklog);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -96,6 +100,7 @@ export function BacklogView() {
         hasCreateRelease: false,
         hasCompleteRelease: true,
         startReleaseFilename: null,
+        releaseFilename: current.filename,
       });
       buckets.set(key, [...current.tasks].sort(sortByOrder));
     }
@@ -108,6 +113,7 @@ export function BacklogView() {
         hasCreateRelease: false,
         hasCompleteRelease: false,
         startReleaseFilename: current ? null : r.filename,
+        releaseFilename: r.filename,
       });
       buckets.set(key, [...r.tasks].sort(sortByOrder));
     }
@@ -118,6 +124,7 @@ export function BacklogView() {
       hasCreateRelease: true,
       hasCompleteRelease: false,
       startReleaseFilename: null,
+      releaseFilename: null,
     });
     buckets.set(
       BACKLOG_SECTION_KEY,
@@ -193,6 +200,7 @@ export function BacklogView() {
               ? sectionTasks.filter(matchesFilters)
               : sectionTasks;
             const startReleaseFilename = meta.startReleaseFilename;
+            const releaseFilename = meta.releaseFilename;
             return (
               <BacklogSection
                 key={meta.key}
@@ -208,6 +216,11 @@ export function BacklogView() {
                 epicsBySlug={epicsBySlug}
                 onOpenTask={openTask}
                 onOpenEpic={openEpic}
+                onCreateTask={
+                  releaseFilename
+                    ? () => openCreateTask(releaseFilename)
+                    : openCreateTaskBacklog
+                }
                 {...(meta.hasCreateRelease
                   ? { onCreateRelease: openCreateRelease }
                   : {})}
@@ -242,6 +255,7 @@ interface BacklogSectionProps {
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
+  onCreateTask: () => void;
   onCreateRelease?: () => void;
   onCompleteRelease?: () => void;
   onStartRelease?: () => void;
@@ -260,6 +274,7 @@ function BacklogSection({
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
+  onCreateTask,
   onCreateRelease,
   onCompleteRelease,
   onStartRelease,
@@ -293,6 +308,14 @@ function BacklogSection({
         </button>
         <span className={styles.sectionTitle}>{title}</span>
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
+        <button
+          type="button"
+          className={styles.sectionCreateTaskButton}
+          onClick={onCreateTask}
+        >
+          <Plus size={14} aria-hidden="true" />
+          Create task
+        </button>
         {onStartRelease && (
           <button
             type="button"
