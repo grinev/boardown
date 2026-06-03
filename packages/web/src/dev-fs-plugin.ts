@@ -23,7 +23,6 @@ const DEFAULT_CONFIG = `idPrefix: TASK
 nextId: 1
 projectName: My Board
 `;
-const BACKLOG_FILENAME = 'backlog.md';
 const RELEASES_DIR = 'releases';
 const STARTER_RELEASE_FILENAME = 'v0.1.md';
 const STARTER_RELEASE = `---
@@ -80,7 +79,6 @@ export const ensureBoardRoot = async (boardRoot: string): Promise<void> => {
 
   await fs.mkdir(path.join(boardRoot, RELEASES_DIR), { recursive: true });
   await fs.mkdir(path.join(boardRoot, EPICS_DIR), { recursive: true });
-  await writeFileIfMissing(path.join(boardRoot, BACKLOG_FILENAME), '');
   const createdConfig = await writeFileIfMissing(
     path.join(boardRoot, CONFIG_FILENAME),
     DEFAULT_CONFIG,

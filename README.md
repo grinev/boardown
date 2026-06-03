@@ -161,7 +161,6 @@ the default structure:
 ```text
 .boardown/
 ├── config.yaml
-├── backlog.md
 ├── releases/
 │   └── v0.1.md
 └── epics/
