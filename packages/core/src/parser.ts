@@ -130,8 +130,8 @@ const parseTasks = (
     const result = TaskFrontmatterSchema.safeParse(rawData);
     if (!result.success) {
       const idCandidate =
-        rawData && typeof rawData === 'object' && 'id' in rawData && typeof (rawData as { id: unknown }).id === 'string'
-          ? ((rawData as { id: string }).id)
+        rawData && typeof rawData === 'object' && 'id' in rawData && typeof rawData.id === 'string'
+          ? rawData.id
           : undefined;
       problems.push(
         taskProblem(

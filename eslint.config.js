@@ -19,6 +19,16 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
+  },
+  {
+    files: ['packages/**/*.test.{ts,tsx}'],
+    rules: {
+      // Mock FsAdapter implementations must be async to satisfy the interface.
+      '@typescript-eslint/require-await': 'off',
+    },
   },
   {
     files: ['packages/{web,ui,vscode}/**/*.{ts,tsx}'],

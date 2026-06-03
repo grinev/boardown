@@ -91,7 +91,7 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
           <X size={18} aria-hidden="true" />
         </button>
       </header>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
         <label className={styles.field}>
           <span className={styles.label}>Name</span>
           <input

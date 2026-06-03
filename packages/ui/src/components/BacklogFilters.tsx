@@ -118,7 +118,7 @@ export function BacklogFilters({
         <IconSelect
           value={epicFilter}
           options={epicOptions}
-          onChange={(v) => onEpicChange(v as EpicFilter)}
+          onChange={(v) => onEpicChange(v)}
           ariaLabel="Filter by epic"
           triggerClassName={styles.trigger}
         />

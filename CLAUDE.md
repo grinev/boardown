@@ -146,6 +146,22 @@ API or otherwise) is post-MVP and may or may not happen.
   cut by bumping the version on `main`; the `Publish` workflow tags and attaches
   the built `.vsix` to a GitHub Release. See [README](./README.md#releasing).
 
+## Verifying changes
+
+Before considering any code change done, run these from the repo root and make
+sure they pass (they are the same gates CI enforces):
+
+- `pnpm typecheck` — `tsc --noEmit` across all packages.
+- `pnpm lint` — ESLint over the whole repo.
+- `pnpm build` — `pnpm -r build`, builds every package.
+- `pnpm test` — Vitest across all packages.
+
+Run the full set as part of a task's Definition of Done; a green local run is
+expected before committing. If a change is scoped to one package you may iterate
+with `pnpm --filter @boardown/<pkg> <script>`, but do a full-repo
+`pnpm typecheck && pnpm lint && pnpm build` before wrapping up. Never commit
+code that fails any of these gates.
+
 ## Working style
 
 - Stay strictly within the scope the user asked for. If a task surfaces

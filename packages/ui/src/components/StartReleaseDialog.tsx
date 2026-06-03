@@ -55,7 +55,7 @@ export function StartReleaseDialog({ release, onClose }: StartReleaseDialogProps
           <X size={18} aria-hidden="true" />
         </button>
       </header>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
         <p className={styles.message}>
           This release has {taskCount} {taskCount === 1 ? 'task' : 'tasks'}. It
           will become the current release and open on the Board.

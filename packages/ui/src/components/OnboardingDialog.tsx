@@ -45,7 +45,7 @@ export function OnboardingDialog() {
       <header className={styles.header}>
         <h2 className={styles.title}>Welcome to Boardown</h2>
       </header>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
         <p className={styles.intro}>
           Tell Boardown about your project. These settings will be saved to{' '}
           <code>.boardown/config.yaml</code> and can be changed later.

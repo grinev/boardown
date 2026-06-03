@@ -80,7 +80,7 @@ export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
           <X size={18} aria-hidden="true" />
         </button>
       </header>
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
         {unfinished.length === 0 ? (
           <p className={styles.message}>
             All tasks are done. The release will be marked as finished.
