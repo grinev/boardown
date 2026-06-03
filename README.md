@@ -112,7 +112,7 @@ A `packages/electron` shell is post-MVP.
 | Command            | What it does                                              |
 |--------------------|-----------------------------------------------------------|
 | `pnpm dev`         | Start the web dev server against this repo's `.boardown/` (Vite, `http://localhost:5173`) |
-| `pnpm build`       | Build every package that has a `build` script (core → `dist/`, web → Vite bundle; `ui` is source-only) |
+| `pnpm build`       | Build the shells that have a `build` script (web → Vite bundle, vscode → host + webview); `core` and `ui` are source-only and skipped |
 | `pnpm test`        | Run Vitest across all packages                            |
 | `pnpm typecheck`   | Run `tsc --noEmit` in every package                       |
 | `pnpm lint`        | Run ESLint over the workspace                             |

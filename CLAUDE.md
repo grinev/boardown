@@ -66,9 +66,12 @@ boardown/
 └── PRODUCT.md
 ```
 
-`@boardown/ui` is consumed source-only: `main`/`exports` point at
-`src/index.ts`, no separate build step. The shell's bundler (Vite for `web`,
-later esbuild/rollup for VS Code / Electron) transpiles it.
+`@boardown/core` and `@boardown/ui` are both consumed source-only:
+`main`/`exports` point at `src/index.ts`, no separate build step. The shell's
+bundler (Vite for `web`, esbuild for the VS Code host) transpiles them, and
+`tsc`/ESLint resolve their types straight from source. Neither package emits a
+`dist/`. Only the shells (`web`, `vscode`) have a `build` script — they bundle
+the source-only libraries into their own artifacts.
 
 `packages/vscode` is the primary MVP distribution target, built bottom-up in
 stages (see PRODUCT.md roadmap). It is a sibling shell next to `web` and reuses
@@ -151,15 +154,19 @@ API or otherwise) is post-MVP and may or may not happen.
 Before considering any code change done, run these from the repo root and make
 sure they pass (they are the same gates CI enforces):
 
-- `pnpm typecheck` — `tsc --noEmit` across all packages.
 - `pnpm lint` — ESLint over the whole repo.
-- `pnpm build` — `pnpm -r build`, builds every package.
+- `pnpm typecheck` — `tsc --noEmit` across all packages.
+- `pnpm build` — `pnpm -r build`; builds the shells (`web`, `vscode`). The
+  source-only libraries (`core`, `ui`) have no `build` script and are skipped.
 - `pnpm test` — Vitest across all packages.
+
+Order does not matter: `core` and `ui` are source-only, so `lint`/`typecheck`
+resolve their types from source and never depend on a prior build.
 
 Run the full set as part of a task's Definition of Done; a green local run is
 expected before committing. If a change is scoped to one package you may iterate
 with `pnpm --filter @boardown/<pkg> <script>`, but do a full-repo
-`pnpm typecheck && pnpm lint && pnpm build` before wrapping up. Never commit
+`pnpm lint && pnpm typecheck && pnpm build` before wrapping up. Never commit
 code that fails any of these gates.
 
 ## Working style
