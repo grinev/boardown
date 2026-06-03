@@ -180,6 +180,10 @@ code that fails any of these gates.
   order, etc.) do not need to be confirmed.
 - The MVP scope is intentionally small. Push back on feature creep and link
   to PRODUCT.md "Out of scope" when relevant.
+- **Never commit without explicit permission.** Do not run `git commit` (or
+  `git push`) on your own initiative, even when a change is finished and the
+  gates pass. Stage and prepare changes if asked, but wait for the user to
+  explicitly tell you to commit.
 
 ## Roadmap
 

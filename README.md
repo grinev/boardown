@@ -1,51 +1,67 @@
 # boardown
 
-> 🚧 **Status: work in progress.** The VS Code extension now packages into an
-> installable `.vsix` (see [below](#vs-code-extension)); boardown can also be
-> used from sources via the local web shell.
+[![CI](https://github.com/grinev/boardown/actions/workflows/ci.yml/badge.svg)](https://github.com/grinev/boardown/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![pnpm](https://img.shields.io/badge/pnpm-10-f69220?logo=pnpm&logoColor=white)](https://pnpm.io)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 
 A local-first task board that stores its data as plain markdown files inside
 your project's git repo. Releases, epics and tasks live in `.boardown/` next
 to your code, so they version, branch and diff with the rest of the project —
 no cloud, no server, no account.
 
-The primary MVP target is a **VS Code extension** that reads `.boardown/`
-from the open workspace. While that extension is being built, the browser app
-in this repo (`packages/web`) can run locally against any `.boardown/` data
-directory, which works well in VS Code's built-in browser panel. An Electron
-build is post-MVP.
+boardown ships as a **VS Code extension** that reads `.boardown/` from the
+open workspace.
 
 <p align="center">
-  <img src="./assets/screenshot-1.png" alt="boardown board view" width="80%" />
+  <img src="./assets/Board.png" alt="boardown board view" width="80%" />
 </p>
 
 <p align="center">
-  <img src="./assets/screenshot-2.png" alt="boardown task details" width="80%" />
+  <img src="./assets/Task.png" alt="boardown task details" width="80%" />
 </p>
 
-See [PRODUCT.md](./PRODUCT.md) for the full spec and the MVP roadmap.
+<p align="center">
+  <img src="./assets/Backlog.png" alt="boardown backlog view" width="80%" />
+</p>
 
-## VS Code extension
+See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
 
-The extension is the primary MVP target. To build an installable `.vsix` from
-sources:
+## Installation
+
+A Marketplace listing is coming soon. For now, install the extension from the
+`.vsix` attached to each [GitHub Release](https://github.com/grinev/boardown/releases):
+
+1. Download `boardown-<version>.vsix` from the latest release's **Assets**.
+2. Open VS Code and go to the **Extensions** view (`Ctrl+Shift+X` /
+   `Cmd+Shift+X`).
+3. Click the **`…`** menu at the top of the Extensions panel and choose
+   **Install from VSIX…**.
+4. Select the downloaded `.vsix` file.
+
+Or install it from the command line:
+
+```sh
+code --install-extension boardown-0.1.0.vsix
+```
+
+Once installed, open your project folder and click the board icon in the
+top-right corner of the editor, or run **Boardown: Open Board** from the
+Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`). If the workspace has no
+`.boardown/` folder yet, an onboarding screen walks you through creating the
+board.
+
+## Building the `.vsix` from sources
+
+To build an installable `.vsix` yourself instead of downloading it:
 
 ```sh
 pnpm install
 pnpm --filter boardown package
 ```
 
-This produces `packages/vscode/build/boardown-<version>.vsix`. Install it into
-VS Code with:
-
-```sh
-code --install-extension packages/vscode/build/boardown-0.1.0.vsix
-```
-
-Then open a folder and click the board icon in the top-right corner of the
-editor, or run **Boardown: Open Board** from the Command Palette.
-(Marketplace publishing is not set up yet — the `publisher` and icon are
-placeholders.)
+This produces `packages/vscode/build/boardown-<version>.vsix`, which you can
+install with the steps above.
 
 ## Try it from sources
 
@@ -103,7 +119,7 @@ The repo is a pnpm workspace with four packages:
 - [`packages/vscode`](./packages/vscode) — the primary MVP distribution target,
   a VS Code extension shell next to `web` (extension host via esbuild + webview
   via Vite), reusing `@boardown/ui` unchanged. Packages into an installable
-  `.vsix` (see [VS Code extension](#vs-code-extension) above).
+  `.vsix` (see [Building the `.vsix` from sources](#building-the-vsix-from-sources) above).
 
 A `packages/electron` shell is post-MVP.
 
