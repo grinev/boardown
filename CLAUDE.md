@@ -133,6 +133,12 @@ API or otherwise) is post-MVP and may or may not happen.
   speculation.
 - No backwards-compatibility shims while the project is pre-1.0. Just change
   the code.
+- boardown dog-foods its own board, stored in `.boardown/`. Commit changes to
+  that board data under the `chore(board): …` scope. This scope is excluded
+  from generated release notes by `scripts/generate-release-notes.mjs`, so
+  task-tracking commits never leak into a user-facing changelog. Reserve
+  `chore(board)` for `.boardown/` data; use normal conventional-commit types
+  for code and docs.
 - Versioning is **lockstep**: every `package.json` carries the same version,
   with the **root `package.json` as the single source of truth**. Never bump a
   package version by hand — use `pnpm release:prepare` (which mirrors the root

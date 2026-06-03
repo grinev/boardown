@@ -62,6 +62,12 @@ function isReleaseCommit(subject) {
   return /^chore\(release\):\s*v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/i.test(subject.trim());
 }
 
+// Board data lives in .boardown/ (boardown dog-foods itself). Those commits use
+// the chore(board) scope and are project-internal, never release-worthy.
+function isBoardCommit(subject) {
+  return /^chore\(board\):/i.test(subject.trim());
+}
+
 function extractPrNumber(subject) {
   const match = subject.match(/\s*\(#(\d+)\)$/);
 
@@ -253,6 +259,7 @@ async function main() {
         })
         .filter((entry) => entry.subject.length > 0)
         .filter((entry) => !isReleaseCommit(entry.subject))
+        .filter((entry) => !isBoardCommit(entry.subject))
     : [];
 
   const authorCache = await resolveAuthors(

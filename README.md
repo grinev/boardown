@@ -193,6 +193,11 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    pushes the tag, and publishes a GitHub Release with the `.vsix` in **Assets**.
    If the tag already exists (no version bump), the workflow skips the release.
 
+boardown tracks its own work on a board stored in `.boardown/`. Commits that
+only touch that board data use the `chore(board): …` scope and are excluded
+from the generated release notes (just like the `chore(release): …` bump
+commit), so dog-fooding the board never clutters a user-facing changelog.
+
 Preview the notes that would be generated for the current version with:
 
 ```sh
