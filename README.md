@@ -155,30 +155,12 @@ those endpoints. This is the working environment for UI development and local
 use from sources; a production browser deployment (folder picker, FS Access
 API or otherwise) is not in the MVP scope.
 
-When the selected data directory has no `config.yaml`, the web shell creates
-the default structure:
-
-```text
-.boardown/
-├── config.yaml
-├── releases/
-│   └── v0.1.md
-└── epics/
-```
-
-The generated config uses `idPrefix: TASK`, so the first generated task id is
-`TASK-1`:
-
-```yaml
-idPrefix: TASK
-nextId: 1
-projectName: My Board
-```
-
-The `projectName` field is required and shown in the app header. Create
-`config.yaml` yourself before first launch if you want a different prefix or
-project name. The starter release is named `v0.1` and has `status: current`,
-so the board is ready for new tasks immediately.
+When the selected data directory has no `config.yaml`, the shell does **not**
+seed a config or a starter release. Instead `@boardown/ui` shows an onboarding
+modal that collects the project name and ID prefix and writes
+`.boardown/config.yaml` on submit (`nextId` starts at `1`). After onboarding the
+board starts empty and opens on the Backlog tab — create your first release from
+the UI. The web dev shell only ensures the board root directory exists.
 
 ## Releasing
 

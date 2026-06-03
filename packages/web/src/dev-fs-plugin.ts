@@ -18,22 +18,6 @@ interface RejectedTarget {
 }
 type Resolved = ResolvedTarget | RejectedTarget;
 
-const CONFIG_FILENAME = 'config.yaml';
-const DEFAULT_CONFIG = `idPrefix: TASK
-nextId: 1
-projectName: My Board
-`;
-const RELEASES_DIR = 'releases';
-const STARTER_RELEASE_FILENAME = 'v0.1.md';
-const STARTER_RELEASE = `---
-release: "v0.1"
-status: current
----
-
-# Release v0.1
-`;
-const EPICS_DIR = 'epics';
-
 const sendJson = (
   res: Parameters<Connect.NextHandleFunction>[1],
   status: number,
@@ -58,36 +42,14 @@ const readBody = (req: Connect.IncomingMessage): Promise<string> =>
     req.on('error', reject);
   });
 
-const writeFileIfMissing = async (filename: string, content: string): Promise<boolean> => {
-  try {
-    await fs.writeFile(filename, content, { encoding: 'utf-8', flag: 'wx' });
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-      throw err;
-    }
-    return false;
-  }
-};
-
+// Only ensure the board root directory exists so the adapter can read/write.
+// Never seed config.yaml or a starter release: a missing config must reach the
+// UI as `missing-config` so onboarding always runs.
 export const ensureBoardRoot = async (boardRoot: string): Promise<void> => {
   await fs.mkdir(boardRoot, { recursive: true });
   const stat = await fs.stat(boardRoot);
   if (!stat.isDirectory()) {
     throw new Error(`Board data path is not a directory: ${boardRoot}`);
-  }
-
-  await fs.mkdir(path.join(boardRoot, RELEASES_DIR), { recursive: true });
-  await fs.mkdir(path.join(boardRoot, EPICS_DIR), { recursive: true });
-  const createdConfig = await writeFileIfMissing(
-    path.join(boardRoot, CONFIG_FILENAME),
-    DEFAULT_CONFIG,
-  );
-  if (createdConfig) {
-    await writeFileIfMissing(
-      path.join(boardRoot, RELEASES_DIR, STARTER_RELEASE_FILENAME),
-      STARTER_RELEASE,
-    );
   }
 };
 

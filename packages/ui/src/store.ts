@@ -312,6 +312,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     };
     await fs.write(CONFIG_FILENAME, serializeConfig(config));
     await get().load(fs);
+    // A freshly created board has no releases yet, so land on the Backlog tab
+    // instead of the empty Board.
+    set({ activeTab: 'backlog' });
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),

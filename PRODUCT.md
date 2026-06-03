@@ -425,18 +425,17 @@ release, no future releases, no archived releases, no tasks under filter).
 
 ## "Create board" flow
 
-When `.boardown/` does not exist, the shell writes the default structure
-(`config.yaml`, an empty `epics/no_epic.md`, empty `epics/`, and a starter
-`releases/v0.1.md` with `status: current`). The VS Code extension can prompt
-for the ID prefix; the local web shell uses `TASK` by default unless the user
-creates `config.yaml` manually before first launch.
-
-When `.boardown/` exists but `config.yaml` is missing, `@boardown/ui` shows an
-onboarding modal that collects `projectName` and `idPrefix` and writes
-`.boardown/config.yaml` via the `FsAdapter`. The modal is not dismissable —
-the board cannot load without a config — and `nextId` starts at `1`. The
-shell does not need any additional logic for this case beyond providing a
-working adapter.
+Whenever `.boardown/config.yaml` is missing — whether the folder is brand-new,
+empty, or has releases/epics but no config — `@boardown/ui` shows an onboarding
+modal that collects `projectName` and `idPrefix` and writes
+`.boardown/config.yaml` via the `FsAdapter`. The modal is not dismissable — the
+board cannot load without a config — and `nextId` starts at `1`. Shells do not
+seed a config or a starter release and do not fall back to defaults; they only
+provide a working `FsAdapter` (the web dev shell additionally ensures the board
+root directory exists). After onboarding the board starts empty (no releases),
+opened on the Backlog tab; the user creates the first release themselves.
+`epics/no_epic.md` is likewise not seeded — it is created lazily on the first
+task that has neither an epic nor a release.
 
 ## Out of scope (for now)
 
