@@ -14,6 +14,7 @@ const fsCall = (req: FsRequest): Promise<unknown> => ipcRenderer.invoke(IPC.fs, 
 
 const bridge: BoardownBridge = {
   theme: bootstrap.theme,
+  themeChoice: bootstrap.themeChoice,
   initialFolder: bootstrap.initialFolder,
   fs: {
     read: async (filePath) => {
@@ -34,6 +35,7 @@ const bridge: BoardownBridge = {
   cancelBoard: () => ipcRenderer.invoke(IPC.cancelBoard) as Promise<void>,
   removeRecent: (folder) => ipcRenderer.invoke(IPC.removeRecent, folder) as Promise<void>,
   getRecents: () => ipcRenderer.invoke(IPC.getRecents) as Promise<ProjectEntry[]>,
+  setThemeChoice: (choice) => ipcRenderer.invoke(IPC.setThemeChoice, choice) as Promise<void>,
   onBoardOpened: (listener) => {
     const handler = (_event: IpcRendererEvent, folder: string): void => listener(folder);
     ipcRenderer.on(IPC.boardOpened, handler);

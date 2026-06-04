@@ -4,9 +4,14 @@
   flex-shrink: 0;
   width: 240px;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--shell-sidebar-bg);
   border-right: 1px solid var(--shell-border);
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .header {
@@ -161,4 +166,74 @@
   padding: 8px 16px;
   font-size: 12px;
   color: var(--shell-text-muted);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.settingsButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settingsButton:hover {
+  background: var(--shell-item-hover);
+}
+
+.settingsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 12px;
+}
+
+.settingsLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--shell-text-muted);
+}
+
+.themeOptions {
+  display: flex;
+  gap: 4px;
+}
+
+.themeOption {
+  flex: 1;
+  padding: 6px 4px;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.themeOption:hover {
+  background: var(--shell-item-hover);
+}
+
+.themeOptionActive,
+.themeOptionActive:hover {
+  border-color: transparent;
+  background: var(--shell-active-bg);
+  color: var(--shell-active-fg);
 }

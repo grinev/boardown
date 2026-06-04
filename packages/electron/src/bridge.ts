@@ -2,6 +2,9 @@ import type { FsAdapter, Theme } from '@boardown/core';
 
 export type FsMethod = 'read' | 'write' | 'list' | 'stat';
 
+// App-wide theme setting. 'system' follows the OS; 'light'/'dark' are fixed.
+export type ThemeChoice = 'system' | 'light' | 'dark';
+
 export interface FsRequest {
   method: FsMethod;
   path: string;
@@ -26,6 +29,7 @@ export interface ProjectEntry extends RecentEntry {
 // CLI-supplied folder without a round-trip flash.
 export interface BootstrapState {
   theme: Theme;
+  themeChoice: ThemeChoice;
   initialFolder: string | null;
 }
 
@@ -35,6 +39,8 @@ export interface BootstrapState {
 // the currently open board.
 export interface BoardownBridge {
   readonly theme: Theme;
+  // The user's chosen theme mode, for the settings UI (resolved value = theme).
+  readonly themeChoice: ThemeChoice;
   readonly initialFolder: string | null;
   readonly fs: FsAdapter;
   readonly pickFolder: () => Promise<void>;
@@ -45,6 +51,9 @@ export interface BoardownBridge {
   // Drop a project from the sidebar list (does not touch the folder on disk).
   readonly removeRecent: (folder: string) => Promise<void>;
   readonly getRecents: () => Promise<ProjectEntry[]>;
+  // Change the app-wide theme mode (persisted). The resolved value arrives via
+  // `theme` / onThemeChange; the current mode is `themeChoice`.
+  readonly setThemeChoice: (choice: ThemeChoice) => Promise<void>;
   readonly onBoardOpened: (listener: (folder: string) => void) => () => void;
   readonly onBoardClosed: (listener: () => void) => () => void;
   readonly onThemeChange: (listener: (theme: Theme) => void) => () => void;
@@ -58,6 +67,7 @@ export const IPC = {
   cancelBoard: 'boardown:cancel-board',
   removeRecent: 'boardown:remove-recent',
   getRecents: 'boardown:get-recents',
+  setThemeChoice: 'boardown:set-theme-choice',
   boardOpened: 'boardown:board-opened',
   boardClosed: 'boardown:board-closed',
   themeChanged: 'boardown:theme-changed',

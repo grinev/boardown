@@ -11,10 +11,11 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import type { Theme } from '@boardown/core';
-import { IPC, type BootstrapState, type FsRequest } from '../bridge';
+import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
+import { isThemeChoice, loadThemeChoice, saveThemeChoice } from './settings';
 
 // Pin the app name before anything reads app.getPath('userData') (Electron
 // caches it on first access). Otherwise dev (`electron .`) would derive it from
@@ -37,8 +38,20 @@ interface BoardContext {
 }
 const boards = new Map<number, BoardContext>();
 
-function currentTheme(): Theme {
-  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+// App-wide theme choice (persisted), loaded on startup. The resolved light/dark
+// value depends on it: 'system' follows the OS, 'light'/'dark' are fixed.
+let themeChoice: ThemeChoice = 'system';
+
+function effectiveTheme(): Theme {
+  if (themeChoice === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  return themeChoice;
+}
+
+function broadcastTheme(): void {
+  const theme = effectiveTheme();
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(IPC.themeChanged, theme);
+  }
 }
 
 function setBoard(window: BrowserWindow, folder: string): void {
@@ -99,7 +112,7 @@ function createWindow(initialFolder: string | null): void {
     height: 760,
     minWidth: 600,
     minHeight: 400,
-    backgroundColor: currentTheme() === 'dark' ? '#121314' : '#ffffff',
+    backgroundColor: effectiveTheme() === 'dark' ? '#121314' : '#ffffff',
     title: 'boardown',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -146,7 +159,8 @@ function registerIpc(): void {
   ipcMain.on(IPC.bootstrap, (event) => {
     const ctx = boards.get(event.sender.id);
     const state: BootstrapState = {
-      theme: currentTheme(),
+      theme: effectiveTheme(),
+      themeChoice,
       initialFolder: ctx?.folder ?? null,
     };
     event.returnValue = state;
@@ -183,11 +197,22 @@ function registerIpc(): void {
   });
 
   ipcMain.handle(IPC.getRecents, () => listRecents());
+
+  ipcMain.handle(IPC.setThemeChoice, async (_event: IpcMainInvokeEvent, choice: ThemeChoice) => {
+    // IPC is an untrusted, stringly-typed boundary — validate before persisting.
+    if (!isThemeChoice(choice)) return;
+    // Persist first; only update in-memory + broadcast if the write succeeded,
+    // so a failed save leaves main consistent (and the renderer reverts its UI).
+    await saveThemeChoice(choice);
+    themeChoice = choice;
+    broadcastTheme();
+  });
 }
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
+    themeChoice = await loadThemeChoice();
     registerIpc();
     applySecurityHeaders();
     Menu.setApplicationMenu(
@@ -198,12 +223,9 @@ app
     );
     createWindow(parseFolderArg(process.argv));
 
-    nativeTheme.on('updated', () => {
-      const theme = currentTheme();
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send(IPC.themeChanged, theme);
-      }
-    });
+    // In 'system' mode the effective theme tracks the OS; in fixed modes
+    // broadcastTheme re-sends the same value, which is a harmless no-op.
+    nativeTheme.on('updated', () => broadcastTheme());
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(null);

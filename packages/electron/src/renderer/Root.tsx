@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { App } from '@boardown/ui';
-import type { ProjectEntry } from '../bridge';
+import type { ProjectEntry, ThemeChoice } from '../bridge';
 import { Sidebar } from './Sidebar';
 import { folderName, suggestIdPrefix } from './project-name';
 import styles from './Root.module.css';
@@ -14,6 +14,7 @@ export function Root() {
   const [activeFolder, setActiveFolder] = useState<string | null>(bridge.initialFolder);
   const [theme, setTheme] = useState(bridge.theme);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>(bridge.themeChoice);
 
   // App's defaultTheme only seeds a brand-new board's onboarding; it must stay
   // stable for each mount, or an OS theme change (which updates `theme`) would
@@ -29,6 +30,17 @@ export function Root() {
   const refreshProjects = useCallback(() => {
     void bridge.getRecents().then(setProjects);
   }, []);
+
+  const chooseTheme = useCallback(
+    (choice: ThemeChoice) => {
+      const previous = themeChoice;
+      setThemeChoiceState(choice);
+      // Revert if the host fails to persist, so the UI never shows a choice that
+      // wasn't actually saved.
+      void bridge.setThemeChoice(choice).catch(() => setThemeChoiceState(previous));
+    },
+    [themeChoice],
+  );
 
   useEffect(() => {
     refreshProjects();
@@ -69,6 +81,8 @@ export function Root() {
         onRemove={(folder) => {
           void bridge.removeRecent(folder).then(refreshProjects);
         }}
+        themeChoice={themeChoice}
+        onThemeChoice={chooseTheme}
       />
       <main className={styles.main}>
         {activeFolder === null ? (
@@ -89,6 +103,7 @@ export function Root() {
           <App
             key={activeFolder}
             fs={bridge.fs}
+            forcedTheme={theme}
             defaultTheme={openThemeRef.current}
             defaultProjectName={folderName(activeFolder)}
             defaultIdPrefix={suggestIdPrefix(folderName(activeFolder))}
