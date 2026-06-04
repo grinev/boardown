@@ -183,13 +183,23 @@ Bundle and package it:
 
 ```sh
 pnpm --filter @boardown/electron build   # main + preload (esbuild) + renderer (Vite) → dist/
-pnpm --filter @boardown/electron dist    # OS installers via electron-builder → release/
+pnpm --filter @boardown/electron dist    # package for the current OS via electron-builder → release/
 ```
 
 `pnpm install` downloads the Electron binary automatically (it is allow-listed in
-the root `pnpm.onlyBuiltDependencies`). Producing _signed, notarized_ installers
-for all three OSes is a release-pipeline concern (Apple notarization, Windows
-code-signing) and belongs in CI, not in a local `dist` build.
+the root `pnpm.onlyBuiltDependencies`).
+
+**Per OS** — `electron-builder` packages for the **host OS**, so run `dist` on the
+OS you're targeting (or in a CI matrix, one runner per OS):
+
+- **macOS** → `.dmg` + `.zip`
+- **Windows** → a `.zip` (no installer — unzip and run `boardown.exe`)
+- **Linux** → `.AppImage` (run directly) + `.deb`
+
+Cross-building from another OS is fiddly (Windows would need Wine), so a CI matrix
+is the reliable path for all three. Signed / notarized artifacts (Apple
+notarization, Windows code-signing) need certificates and belong in that CI step,
+not a local build.
 
 ### Sample board for the dev server
 
