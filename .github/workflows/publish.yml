@@ -25,15 +25,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
+      # Decide whether to release first, using the runner's preinstalled Node and
+      # git only. Setting up pnpm + Node (with `cache: pnpm`) before this would
+      # make the setup-node post-job fail trying to save a pnpm store that the
+      # skipped install never created, reddening every non-release push to main.
       - name: Determine release state
         id: determine
         run: |
@@ -72,6 +67,17 @@ jobs:
       - name: No release needed
         if: steps.determine.outputs.should_release != 'true'
         run: 'echo "Skipping publish: no eligible version bump detected"'
+
+      - name: Setup pnpm
+        if: steps.determine.outputs.should_release == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        if: steps.determine.outputs.should_release == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
       - name: Install dependencies
         if: steps.determine.outputs.should_release == 'true'
