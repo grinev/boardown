@@ -25,9 +25,23 @@ interface AppProps {
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
+  // Host-provided seeds for the onboarding form (e.g. the opened folder's name
+  // and a prefix derived from it). Used only when a brand-new board runs
+  // onboarding; ignored once a board exists.
+  defaultProjectName?: string;
+  defaultIdPrefix?: string;
+  // When provided, onboarding can be cancelled (shells with somewhere to go
+  // back to, e.g. the desktop sidebar). Omitted by web/vscode.
+  onCancel?: () => void;
 }
 
-export function App({ fs, defaultTheme }: AppProps) {
+export function App({
+  fs,
+  defaultTheme,
+  defaultProjectName,
+  defaultIdPrefix,
+  onCancel,
+}: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
   const problems = useBoardStore((s) => s.problems);
@@ -92,7 +106,11 @@ export function App({ fs, defaultTheme }: AppProps) {
         <header className={styles.header}>
           <h1 />
         </header>
-        <OnboardingDialog />
+        <OnboardingDialog
+          defaultProjectName={defaultProjectName ?? ''}
+          defaultIdPrefix={defaultIdPrefix ?? ''}
+          {...(onCancel ? { onCancel } : {})}
+        />
       </main>
     );
   }

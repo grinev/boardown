@@ -102,6 +102,32 @@
   margin-top: 4px;
 }
 
+.cancelButton {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--card-border);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.cancelButton:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.cancelButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .createButton {
   font: inherit;
   font-size: 13px;
