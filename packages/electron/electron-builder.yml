@@ -4,9 +4,9 @@
 # process + preload, Vite for the renderer), so packaging only ships dist/ and
 # package.json — no node_modules tree.
 #
-# Producing *distributable* installers for all three OSes (code-signing on
-# Windows, Apple notarization on macOS, building the Linux targets on Linux) is
-# a release-pipeline concern owned by the maintainer's CI and its secrets.
+# Producing signed/notarized *builds* for all three OSes (code-signing on
+# Windows, Apple notarization on macOS, each OS built on its own runner) is a
+# release-pipeline concern owned by the maintainer's CI and its secrets.
 # `pnpm --filter @boardown/electron dist` is the local entry point.
 appId: com.boardown.app
 productName: boardown
@@ -22,8 +22,10 @@ mac:
     - dmg
     - zip
 win:
+  # No installer — a plain .zip you unzip and run (boardown.exe). Mirrors the
+  # mac .zip / linux .AppImage "just run it" targets.
   target:
-    - nsis
+    - zip
 linux:
   category: Development
   target:
