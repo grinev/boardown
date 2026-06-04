@@ -31,7 +31,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/{web,ui,vscode}/**/*.{ts,tsx}'],
+    files: ['packages/{web,ui,vscode,electron}/**/*.{ts,tsx}'],
     ...react.configs.flat.recommended,
     ...react.configs.flat['jsx-runtime'],
     languageOptions: {
@@ -45,7 +45,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/{web,ui,vscode}/**/*.{ts,tsx}'],
+    files: ['packages/{web,ui,vscode,electron}/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
