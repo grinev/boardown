@@ -10,9 +10,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => state.userData },
 }));
 
-import { loadThemeChoice, saveThemeChoice } from './settings';
+import { loadSettings, saveSettings } from './settings';
 
-describe('settings — theme choice', () => {
+describe('settings', () => {
   beforeEach(async () => {
     state.userData = await fsp.mkdtemp(path.join(os.tmpdir(), 'boardown-settings-'));
   });
@@ -21,28 +21,45 @@ describe('settings — theme choice', () => {
     await fsp.rm(state.userData, { recursive: true, force: true });
   });
 
-  it('defaults to system when there is no file', async () => {
-    expect(await loadThemeChoice()).toBe('system');
+  it('defaults to system theme and no bounds when there is no file', async () => {
+    expect(await loadSettings()).toEqual({ themeChoice: 'system' });
   });
 
-  it('round-trips a saved choice', async () => {
-    await saveThemeChoice('dark');
-    expect(await loadThemeChoice()).toBe('dark');
-    await saveThemeChoice('light');
-    expect(await loadThemeChoice()).toBe('light');
+  it('round-trips theme choice and window bounds', async () => {
+    const settings = {
+      themeChoice: 'dark' as const,
+      windowBounds: { x: 10, y: 20, width: 800, height: 600 },
+      windowMaximized: true,
+    };
+    await saveSettings(settings);
+    expect(await loadSettings()).toEqual(settings);
   });
 
-  it('falls back to system on an unknown stored value', async () => {
+  it('falls back to system on an unknown theme choice', async () => {
     await fsp.writeFile(
       path.join(state.userData, 'settings.json'),
       JSON.stringify({ themeChoice: 'neon' }),
       'utf-8',
     );
-    expect(await loadThemeChoice()).toBe('system');
+    expect((await loadSettings()).themeChoice).toBe('system');
   });
 
-  it('falls back to system on malformed JSON', async () => {
+  it('drops invalid window bounds', async () => {
+    await fsp.writeFile(
+      path.join(state.userData, 'settings.json'),
+      JSON.stringify({ themeChoice: 'light', windowBounds: { x: 0, y: 0, width: 0, height: -5 } }),
+      'utf-8',
+    );
+    expect(await loadSettings()).toEqual({ themeChoice: 'light' });
+  });
+
+  it('falls back to defaults on malformed JSON', async () => {
     await fsp.writeFile(path.join(state.userData, 'settings.json'), '{ not json', 'utf-8');
-    expect(await loadThemeChoice()).toBe('system');
+    expect(await loadSettings()).toEqual({ themeChoice: 'system' });
+  });
+
+  it('leaves no temp file behind after an atomic save', async () => {
+    await saveSettings({ themeChoice: 'dark' });
+    expect(await fsp.readdir(state.userData)).toEqual(['settings.json']);
   });
 });

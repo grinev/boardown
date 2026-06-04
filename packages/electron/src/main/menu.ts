@@ -5,10 +5,10 @@ interface MenuActions {
   closeBoard: (window: BrowserWindow) => void;
 }
 
-// Native application menu. Built-in roles cover Edit (so copy/paste/undo work in
-// the board's text inputs), View (reload, devtools, zoom) and Window; the custom
-// File items drive the board picker (Open Folder…) and return to the welcome
-// screen (Close Board).
+// Native application menu, kept lean. Edit/Window use built-in roles (so
+// copy/paste/undo work in the board's inputs); File drives the board picker and
+// Close Board; View is trimmed to zoom / full screen / dev tools — the board has
+// its own Reload, so the menu's Reload / Force Reload are left out.
 export function buildAppMenu(actions: MenuActions): Menu {
   const isMac = process.platform === 'darwin';
 
@@ -36,7 +36,17 @@ export function buildAppMenu(actions: MenuActions): Menu {
       ],
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        { role: 'toggleDevTools' },
+      ],
+    },
     { role: 'windowMenu' },
   ];
 

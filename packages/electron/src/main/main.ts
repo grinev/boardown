@@ -7,6 +7,7 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  screen,
   session,
   type IpcMainInvokeEvent,
 } from 'electron';
@@ -15,7 +16,13 @@ import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../b
 import { handleFsRequest } from './board-fs';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
-import { isThemeChoice, loadThemeChoice, saveThemeChoice } from './settings';
+import {
+  isThemeChoice,
+  loadSettings,
+  saveSettings,
+  type Settings,
+  type WindowBounds,
+} from './settings';
 
 // Pin the app name before anything reads app.getPath('userData') (Electron
 // caches it on first access). Otherwise dev (`electron .`) would derive it from
@@ -38,13 +45,38 @@ interface BoardContext {
 }
 const boards = new Map<number, BoardContext>();
 
-// App-wide theme choice (persisted), loaded on startup. The resolved light/dark
-// value depends on it: 'system' follows the OS, 'light'/'dark' are fixed.
-let themeChoice: ThemeChoice = 'system';
+// Persisted app settings (theme choice + window bounds), loaded on startup.
+let settings: Settings = { themeChoice: 'system' };
 
 function effectiveTheme(): Theme {
-  if (themeChoice === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  return themeChoice;
+  if (settings.themeChoice === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  return settings.themeChoice;
+}
+
+// Whether saved bounds overlap a currently-connected display, so we don't
+// restore a window onto a monitor that has been unplugged.
+function boundsVisible(bounds: WindowBounds): boolean {
+  return screen.getAllDisplays().some(({ workArea }) => {
+    return (
+      bounds.x < workArea.x + workArea.width &&
+      bounds.x + bounds.width > workArea.x &&
+      bounds.y < workArea.y + workArea.height &&
+      bounds.y + bounds.height > workArea.y
+    );
+  });
+}
+
+function rememberWindow(window: BrowserWindow): void {
+  if (window.isDestroyed()) return;
+  // getNormalBounds() is the un-maximized geometry, so a maximized window
+  // restores to a sensible size (not a fake-maximized frame); the flag restores
+  // the maximized state itself.
+  settings = {
+    ...settings,
+    windowBounds: window.getNormalBounds(),
+    windowMaximized: window.isMaximized(),
+  };
+  void saveSettings(settings);
 }
 
 function broadcastTheme(): void {
@@ -107,9 +139,11 @@ function parseFolderArg(argv: string[]): string | null {
 }
 
 function createWindow(initialFolder: string | null): void {
+  const saved = settings.windowBounds;
   const window = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    width: saved?.width ?? 1100,
+    height: saved?.height ?? 760,
+    ...(saved && boundsVisible(saved) ? { x: saved.x, y: saved.y } : {}),
     minWidth: 600,
     minHeight: 400,
     backgroundColor: effectiveTheme() === 'dark' ? '#121314' : '#ffffff',
@@ -127,9 +161,27 @@ function createWindow(initialFolder: string | null): void {
     setBoard(window, initialFolder);
     void addRecent(initialFolder);
   }
+
+  // Remember size/position across launches. Debounce resize/move (they fire in
+  // bursts) and also save on close; writes are atomic, so a force-quit can't
+  // corrupt the settings file.
+  let boundsTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleBoundsSave = (): void => {
+    clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => rememberWindow(window), 400);
+  };
+  window.on('resize', scheduleBoundsSave);
+  window.on('move', scheduleBoundsSave);
+  window.on('close', () => {
+    clearTimeout(boundsTimer);
+    rememberWindow(window);
+  });
+
   window.webContents.on('destroyed', () => {
     boards.delete(id);
   });
+
+  if (settings.windowMaximized) window.maximize();
 
   if (DEV_SERVER_URL !== undefined) {
     void window.loadURL(DEV_SERVER_URL);
@@ -160,7 +212,7 @@ function registerIpc(): void {
     const ctx = boards.get(event.sender.id);
     const state: BootstrapState = {
       theme: effectiveTheme(),
-      themeChoice,
+      themeChoice: settings.themeChoice,
       initialFolder: ctx?.folder ?? null,
     };
     event.returnValue = state;
@@ -203,8 +255,9 @@ function registerIpc(): void {
     if (!isThemeChoice(choice)) return;
     // Persist first; only update in-memory + broadcast if the write succeeded,
     // so a failed save leaves main consistent (and the renderer reverts its UI).
-    await saveThemeChoice(choice);
-    themeChoice = choice;
+    const next: Settings = { ...settings, themeChoice: choice };
+    await saveSettings(next);
+    settings = next;
     broadcastTheme();
   });
 }
@@ -212,7 +265,7 @@ function registerIpc(): void {
 app
   .whenReady()
   .then(async () => {
-    themeChoice = await loadThemeChoice();
+    settings = await loadSettings();
     registerIpc();
     applySecurityHeaders();
     Menu.setApplicationMenu(
