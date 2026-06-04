@@ -8,6 +8,9 @@ import styles from './TabBar.module.css';
 interface TabBarProps {
   activeTab: ActiveTab;
   onSelect: (tab: ActiveTab) => void;
+  // Hosts that own the theme themselves (e.g. the desktop shell) hide the
+  // per-board settings, whose only control is the theme.
+  hideSettings?: boolean;
 }
 
 const TABS: ReadonlyArray<{ key: ActiveTab; label: string; icon: LucideIcon }> = [
@@ -19,7 +22,7 @@ const TABS: ReadonlyArray<{ key: ActiveTab; label: string; icon: LucideIcon }> =
 const tabClass = (active: boolean): string =>
   [styles.tab, active && styles.tabActive].filter(Boolean).join(' ');
 
-export function TabBar({ activeTab, onSelect }: TabBarProps) {
+export function TabBar({ activeTab, onSelect, hideSettings }: TabBarProps) {
   return (
     <div className={styles.bar}>
       <div className={styles.tabs}>
@@ -38,7 +41,7 @@ export function TabBar({ activeTab, onSelect }: TabBarProps) {
       <div className={styles.actions}>
         <CreateMenu />
         <ReloadButton />
-        <SettingsButton />
+        {!hideSettings && <SettingsButton />}
       </div>
     </div>
   );

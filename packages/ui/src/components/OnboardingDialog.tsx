@@ -6,11 +6,27 @@ import styles from './OnboardingDialog.module.css';
 
 const noop = () => {};
 
-export function OnboardingDialog() {
+interface OnboardingDialogProps {
+  // Host-provided seeds (e.g. derived from the opened folder); empty when the
+  // shell has no hint to offer.
+  defaultProjectName?: string;
+  defaultIdPrefix?: string;
+  // When provided, the form can be cancelled (button + ESC/backdrop) instead of
+  // being a required first step — used by shells where there is somewhere to go
+  // back to (e.g. the desktop sidebar). Omitted by web/vscode, where the board
+  // is the whole window and onboarding is mandatory.
+  onCancel?: () => void;
+}
+
+export function OnboardingDialog({
+  defaultProjectName,
+  defaultIdPrefix,
+  onCancel,
+}: OnboardingDialogProps) {
   const completeOnboarding = useBoardStore((s) => s.completeOnboarding);
 
-  const [projectName, setProjectName] = useState('');
-  const [idPrefix, setIdPrefix] = useState('');
+  const [projectName, setProjectName] = useState(defaultProjectName ?? '');
+  const [idPrefix, setIdPrefix] = useState(defaultIdPrefix ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -37,10 +53,10 @@ export function OnboardingDialog() {
   return (
     <Modal
       open
-      onClose={noop}
+      onClose={onCancel ?? noop}
       ariaLabel="Welcome to Boardown"
       className={styles.dialog}
-      dismissable={false}
+      dismissable={onCancel !== undefined}
     >
       <header className={styles.header}>
         <h2 className={styles.title}>Welcome to Boardown</h2>
@@ -89,6 +105,16 @@ export function OnboardingDialog() {
           </p>
         )}
         <footer className={styles.footer}>
+          {onCancel && (
+            <button
+              type="button"
+              className={styles.cancelButton}
+              onClick={onCancel}
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+          )}
           <button type="submit" className={styles.createButton} disabled={!canSubmit}>
             {submitting ? 'Creating…' : 'Create'}
           </button>

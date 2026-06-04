@@ -106,7 +106,7 @@ Install dependencies once if you skipped the quick start above:
 pnpm install
 ```
 
-The repo is a pnpm workspace with four packages:
+The repo is a pnpm workspace with five packages:
 
 - [`packages/core`](./packages/core) — platform-agnostic logic (schemas,
   parser, board operations). Pure TypeScript, runs in Node.
@@ -120,8 +120,10 @@ The repo is a pnpm workspace with four packages:
   a VS Code extension shell next to `web` (extension host via esbuild + webview
   via Vite), reusing `@boardown/ui` unchanged. Packages into an installable
   `.vsix` (see [Building the `.vsix` from sources](#building-the-vsix-from-sources) above).
-
-A `packages/electron` shell is post-MVP.
+- [`packages/electron`](./packages/electron) — a cross-platform desktop shell
+  (macOS / Windows / Linux): an Electron main process + preload behind the same
+  `FsAdapter`, with a Vite-built renderer that reuses `@boardown/ui`. See
+  [Desktop app (Electron)](#desktop-app-electron) below.
 
 ### Common scripts (run from the repo root)
 
@@ -160,6 +162,44 @@ pnpm dev -- --data-dir /path/to/project/.boardown
 If `--data-dir` is omitted, boardown uses this repository's `.boardown/`, same
 as before. Relative `--data-dir` paths are resolved from the directory where
 you run the command.
+
+### Desktop app (Electron)
+
+`packages/electron` is a cross-platform desktop build (macOS / Windows / Linux).
+It reuses `@boardown/ui` unchanged behind an Electron `FsAdapter` and boots to a
+sidebar of recent project folders — pick one, or **Open Folder…**, and the board
+loads from that folder's `.boardown/`.
+
+Run it from sources in dev (Vite HMR for the renderer, esbuild watch for the main
+process and preload):
+
+```sh
+pnpm --filter @boardown/electron dev
+# open a specific folder on launch:
+pnpm --filter @boardown/electron dev -- /path/to/project
+```
+
+Bundle and package it:
+
+```sh
+pnpm --filter @boardown/electron build   # main + preload (esbuild) + renderer (Vite) → dist/
+pnpm --filter @boardown/electron dist    # package for the current OS via electron-builder → release/
+```
+
+`pnpm install` downloads the Electron binary automatically (it is allow-listed in
+the root `pnpm.onlyBuiltDependencies`).
+
+**Per OS** — `electron-builder` packages for the **host OS**, so run `dist` on the
+OS you're targeting (or in a CI matrix, one runner per OS):
+
+- **macOS** → `.dmg` + `.zip`
+- **Windows** → a `.zip` (no installer — unzip and run `boardown.exe`)
+- **Linux** → `.AppImage` (run directly) + `.deb`
+
+Cross-building from another OS is fiddly (Windows would need Wine), so a CI matrix
+is the reliable path for all three. Signed / notarized artifacts (Apple
+notarization, Windows code-signing) need certificates and belong in that CI step,
+not a local build.
 
 ### Sample board for the dev server
 

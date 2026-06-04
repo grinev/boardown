@@ -25,9 +25,28 @@ interface AppProps {
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
+  // Host-provided seeds for the onboarding form (e.g. the opened folder's name
+  // and a prefix derived from it). Used only when a brand-new board runs
+  // onboarding; ignored once a board exists.
+  defaultProjectName?: string;
+  defaultIdPrefix?: string;
+  // When provided, onboarding can be cancelled (shells with somewhere to go
+  // back to, e.g. the desktop sidebar). Omitted by web/vscode.
+  onCancel?: () => void;
+  // When provided, the shell owns the theme app-wide: this value drives
+  // data-theme and the board's own config.theme is ignored for display. The
+  // per-board theme control is hidden so there is a single source of truth.
+  forcedTheme?: Theme;
 }
 
-export function App({ fs, defaultTheme }: AppProps) {
+export function App({
+  fs,
+  defaultTheme,
+  defaultProjectName,
+  defaultIdPrefix,
+  onCancel,
+  forcedTheme,
+}: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
   const problems = useBoardStore((s) => s.problems);
@@ -71,9 +90,10 @@ export function App({ fs, defaultTheme }: AppProps) {
   // config and wins.
   useLayoutEffect(() => {
     const resolved =
-      status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme;
+      forcedTheme ??
+      (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme);
     document.documentElement.setAttribute('data-theme', resolved);
-  }, [theme, defaultTheme, status]);
+  }, [theme, defaultTheme, forcedTheme, status]);
 
   if (status === 'idle' || status === 'loading') {
     return (
@@ -92,7 +112,11 @@ export function App({ fs, defaultTheme }: AppProps) {
         <header className={styles.header}>
           <h1 />
         </header>
-        <OnboardingDialog />
+        <OnboardingDialog
+          defaultProjectName={defaultProjectName ?? ''}
+          defaultIdPrefix={defaultIdPrefix ?? ''}
+          {...(onCancel ? { onCancel } : {})}
+        />
       </main>
     );
   }
@@ -137,7 +161,11 @@ export function App({ fs, defaultTheme }: AppProps) {
       <header className={styles.header}>
         <h1>{snapshot.config.projectName}</h1>
       </header>
-      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
+      <TabBar
+        activeTab={activeTab}
+        onSelect={setActiveTab}
+        hideSettings={forcedTheme !== undefined}
+      />
       <TabContent
         activeTab={activeTab}
         releases={snapshot.releases}
@@ -205,7 +233,7 @@ export function App({ fs, defaultTheme }: AppProps) {
           onClose={closeStartRelease}
         />
       )}
-      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {settingsOpen && !forcedTheme && <SettingsDialog onClose={closeSettings} />}
       {conflictOpen && <ConflictDialog />}
     </main>
   );

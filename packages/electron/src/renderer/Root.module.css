@@ -1,0 +1,71 @@
+.layout {
+  display: flex;
+  height: 100vh;
+}
+
+/* App (@boardown/ui) is height:100vh; clip here so it fills the main area
+ * exactly instead of overflowing the flex row. */
+.main {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Drag handle straddling the sidebar's right edge; negative margin keeps it from
+ * adding a gap between the sidebar and the board. */
+.resizer {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 6px;
+  margin-left: -6px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizer:hover {
+  background: var(--shell-border);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+  background: var(--shell-bg);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--shell-text);
+}
+
+.emptyHint {
+  margin: 0;
+  max-width: 360px;
+  font-size: 14px;
+  color: var(--shell-text-muted);
+}
+
+.emptyButton {
+  margin-top: 4px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--shell-accent);
+  color: var(--shell-accent-fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.emptyButton:hover {
+  opacity: 0.92;
+}

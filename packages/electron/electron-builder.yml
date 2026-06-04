@@ -1,0 +1,33 @@
+# Packaging config for the boardown desktop app.
+#
+# Everything the app runs is already bundled into dist/ (esbuild for the main
+# process + preload, Vite for the renderer), so packaging only ships dist/ and
+# package.json — no node_modules tree.
+#
+# Producing signed/notarized *builds* for all three OSes (code-signing on
+# Windows, Apple notarization on macOS, each OS built on its own runner) is a
+# release-pipeline concern owned by the maintainer's CI and its secrets.
+# `pnpm --filter @boardown/electron dist` is the local entry point.
+appId: com.boardown.app
+productName: boardown
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+win:
+  # No installer — a plain .zip you unzip and run (boardown.exe). Mirrors the
+  # mac .zip / linux .AppImage "just run it" targets.
+  target:
+    - zip
+linux:
+  category: Development
+  target:
+    - AppImage
+    - deb
