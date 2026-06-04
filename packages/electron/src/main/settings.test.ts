@@ -30,6 +30,7 @@ describe('settings', () => {
       themeChoice: 'dark' as const,
       windowBounds: { x: 10, y: 20, width: 800, height: 600 },
       windowMaximized: true,
+      lastFolder: '/Users/me/project',
     };
     await saveSettings(settings);
     expect(await loadSettings()).toEqual(settings);

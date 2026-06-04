@@ -68,13 +68,15 @@ function boundsVisible(bounds: WindowBounds): boolean {
 
 function rememberWindow(window: BrowserWindow): void {
   if (window.isDestroyed()) return;
-  // getNormalBounds() is the un-maximized geometry, so a maximized window
-  // restores to a sensible size (not a fake-maximized frame); the flag restores
-  // the maximized state itself.
+  const maximized = window.isMaximized();
+  // Capture geometry only in the normal state — a maximized or full-screen frame
+  // (including the macOS zoom) isn't a size to restore to, so the kept bounds
+  // stay the real window size and carry the screen position. windowMaximized
+  // restores the maximized state; full screen is intentionally not restored.
   settings = {
     ...settings,
-    windowBounds: window.getNormalBounds(),
-    windowMaximized: window.isMaximized(),
+    ...(maximized || window.isFullScreen() ? {} : { windowBounds: window.getBounds() }),
+    windowMaximized: maximized,
   };
   void saveSettings(settings);
 }
@@ -92,14 +94,21 @@ function setBoard(window: BrowserWindow, folder: string): void {
 
 async function openBoard(window: BrowserWindow, folder: string): Promise<void> {
   setBoard(window, folder);
+  // Remember it as the last-open project so it reopens on next launch.
+  settings = { ...settings, lastFolder: folder };
   await addRecent(folder);
+  void saveSettings(settings);
   window.webContents.send(IPC.boardOpened, folder);
 }
 
 // Drop the window's board and send it back to the welcome screen. The board
-// stays in recents, so reopening it is one click away.
+// stays in recents, so reopening it is one click away — but closing is
+// deliberate, so don't auto-reopen it on next launch.
 function closeBoard(window: BrowserWindow): void {
   boards.delete(window.webContents.id);
+  const { lastFolder, ...rest } = settings;
+  settings = rest;
+  void saveSettings(settings);
   window.webContents.send(IPC.boardClosed);
 }
 
@@ -138,6 +147,12 @@ function parseFolderArg(argv: string[]): string | null {
   return null;
 }
 
+// The project to reopen on launch when no folder is passed on the CLI: the last
+// one that was open, if it still exists on disk.
+function lastOpenedFolder(): string | null {
+  return settings.lastFolder && isDirectory(settings.lastFolder) ? settings.lastFolder : null;
+}
+
 function createWindow(initialFolder: string | null): void {
   const saved = settings.windowBounds;
   const window = new BrowserWindow({
@@ -159,7 +174,9 @@ function createWindow(initialFolder: string | null): void {
   const id = window.webContents.id;
   if (initialFolder !== null) {
     setBoard(window, initialFolder);
+    settings = { ...settings, lastFolder: initialFolder };
     void addRecent(initialFolder);
+    void saveSettings(settings);
   }
 
   // Remember size/position across launches. Debounce resize/move (they fire in
@@ -241,7 +258,12 @@ function registerIpc(): void {
     const ctx = boards.get(event.sender.id);
     if (!ctx) return;
     boards.delete(event.sender.id);
+    if (settings.lastFolder === ctx.folder) {
+      const { lastFolder, ...rest } = settings;
+      settings = rest;
+    }
     await removeRecent(ctx.folder);
+    void saveSettings(settings);
   });
 
   ipcMain.handle(IPC.removeRecent, async (_event: IpcMainInvokeEvent, folder: string) => {
@@ -274,14 +296,14 @@ app
         closeBoard: (window) => closeBoard(window),
       }),
     );
-    createWindow(parseFolderArg(process.argv));
+    createWindow(parseFolderArg(process.argv) ?? lastOpenedFolder());
 
     // In 'system' mode the effective theme tracks the OS; in fixed modes
     // broadcastTheme re-sends the same value, which is a harmless no-op.
     nativeTheme.on('updated', () => broadcastTheme());
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow(null);
+      if (BrowserWindow.getAllWindows().length === 0) createWindow(lastOpenedFolder());
     });
   })
   .catch((err: unknown) => {

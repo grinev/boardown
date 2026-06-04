@@ -14,6 +14,8 @@ export interface Settings {
   themeChoice: ThemeChoice;
   windowBounds?: WindowBounds;
   windowMaximized?: boolean;
+  // The project folder open when the app last closed, reopened on next launch.
+  lastFolder?: string;
 }
 
 const CHOICES: readonly ThemeChoice[] = ['system', 'light', 'dark'];
@@ -55,6 +57,7 @@ export async function loadSettings(): Promise<Settings> {
       themeChoice: isThemeChoice(obj.themeChoice) ? obj.themeChoice : 'system',
       ...(bounds ? { windowBounds: bounds } : {}),
       ...(obj.windowMaximized === true ? { windowMaximized: true } : {}),
+      ...(typeof obj.lastFolder === 'string' ? { lastFolder: obj.lastFolder } : {}),
     };
   } catch {
     return { themeChoice: 'system' };
