@@ -33,6 +33,10 @@ interface AppProps {
   // When provided, onboarding can be cancelled (shells with somewhere to go
   // back to, e.g. the desktop sidebar). Omitted by web/vscode.
   onCancel?: () => void;
+  // When provided, the shell owns the theme app-wide: this value drives
+  // data-theme and the board's own config.theme is ignored for display. The
+  // per-board theme control is hidden so there is a single source of truth.
+  forcedTheme?: Theme;
 }
 
 export function App({
@@ -41,6 +45,7 @@ export function App({
   defaultProjectName,
   defaultIdPrefix,
   onCancel,
+  forcedTheme,
 }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
@@ -85,9 +90,10 @@ export function App({
   // config and wins.
   useLayoutEffect(() => {
     const resolved =
-      status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme;
+      forcedTheme ??
+      (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme);
     document.documentElement.setAttribute('data-theme', resolved);
-  }, [theme, defaultTheme, status]);
+  }, [theme, defaultTheme, forcedTheme, status]);
 
   if (status === 'idle' || status === 'loading') {
     return (
@@ -155,7 +161,11 @@ export function App({
       <header className={styles.header}>
         <h1>{snapshot.config.projectName}</h1>
       </header>
-      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
+      <TabBar
+        activeTab={activeTab}
+        onSelect={setActiveTab}
+        hideSettings={forcedTheme !== undefined}
+      />
       <TabContent
         activeTab={activeTab}
         releases={snapshot.releases}
@@ -223,7 +233,7 @@ export function App({
           onClose={closeStartRelease}
         />
       )}
-      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {settingsOpen && !forcedTheme && <SettingsDialog onClose={closeSettings} />}
       {conflictOpen && <ConflictDialog />}
     </main>
   );
