@@ -6,6 +6,7 @@ import styles from './Sidebar.module.css';
 interface SidebarProps {
   projects: ProjectEntry[];
   activeFolder: string | null;
+  width: number;
   onSelect: (folder: string) => void;
   onOpenFolder: () => void;
   onRemove: (folder: string) => void;
@@ -22,6 +23,7 @@ const THEME_OPTIONS: ReadonlyArray<{ value: ThemeChoice; label: string }> = [
 export function Sidebar({
   projects,
   activeFolder,
+  width,
   onSelect,
   onOpenFolder,
   onRemove,
@@ -37,7 +39,7 @@ export function Sidebar({
   );
 
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} style={{ width }}>
       <div className={styles.header}>
         <h1 className={styles.title}>boardown</h1>
         <button type="button" className={styles.openButton} onClick={onOpenFolder}>

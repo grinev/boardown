@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  width: 240px;
+  /* width comes from the shell as an inline style (resizable + persisted). */
   height: 100vh;
   overflow: hidden;
   background: var(--shell-sidebar-bg);
@@ -11,6 +11,7 @@
 
 .scroll {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -101,6 +102,7 @@
   flex-direction: column;
   gap: 2px;
   width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
@@ -129,6 +131,7 @@
 
 .name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-size: 13px;
   font-weight: 500;
@@ -149,6 +152,8 @@
 }
 
 .path {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   font-size: 11px;
   color: var(--shell-text-muted);

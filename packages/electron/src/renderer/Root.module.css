@@ -12,6 +12,22 @@
   overflow: hidden;
 }
 
+/* Drag handle straddling the sidebar's right edge; negative margin keeps it from
+ * adding a gap between the sidebar and the board. */
+.resizer {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 6px;
+  margin-left: -6px;
+  cursor: col-resize;
+  background: transparent;
+}
+
+.resizer:hover {
+  background: var(--shell-border);
+}
+
 .empty {
   display: flex;
   flex-direction: column;
