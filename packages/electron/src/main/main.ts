@@ -16,6 +16,13 @@ import { handleFsRequest } from './board-fs';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
 
+// Pin the app name before anything reads app.getPath('userData') (Electron
+// caches it on first access). Otherwise dev (`electron .`) would derive it from
+// package.json (`@boardown/electron`) while the packaged app uses productName
+// ('boardown'), so the two would keep their recent-folders list in different
+// directories. Setting it here makes both use the same `boardown` userData dir.
+app.setName('boardown');
+
 // Set by the dev script; when present the renderer is served from Vite with HMR
 // instead of the packaged files, and we skip the production CSP (Vite needs its
 // own for HMR).
