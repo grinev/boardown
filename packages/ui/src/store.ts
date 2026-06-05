@@ -443,7 +443,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         return;
       }
       const epic = snapshot.epics[epicIndex]!;
-      const result = createTaskInContainer(epic, snapshot.config, baseInput);
+      const result = createTaskInContainer(epic, snapshot.config, {
+        ...baseInput,
+        epic: input.epic,
+      });
       const nextEpics = [...snapshot.epics];
       nextEpics[epicIndex] = result.container;
       await persist(

@@ -144,14 +144,20 @@ describe('createTask', () => {
     expect(fs.files.has(CONFIG_FILENAME)).toBe(true);
   });
 
-  it('adds a backlog task to the epic file without an epic frontmatter field', async () => {
-    setup(snap({ epics: [epic('parser')] }));
+  it('keeps the epic on the in-memory task but omits it from the epic file', async () => {
+    const { fs } = setup(snap({ epics: [epic('parser')] }));
 
     await state().createTask({ title: 'In epic', type: 'tech', epic: 'parser' });
 
+    // In memory the task carries its epic so the UI shows it without a reload.
     const tasks = current().epics[0]!.tasks;
     expect(tasks).toHaveLength(1);
-    expect(tasks[0]!.frontmatter.epic).toBeUndefined();
+    expect(tasks[0]!.frontmatter.epic).toBe('parser');
+
+    // On disk the epic file never stores `epic` — the link is implied by the
+    // filename and reconstructed on parse.
+    const written = fs.files.get('epics/parser.md')!.content;
+    expect(written).not.toMatch(/^epic:/m);
   });
 
   it('lazily creates the no_epic backlog for an epic-less, release-less task', async () => {
