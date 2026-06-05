@@ -9,6 +9,10 @@ interface MenuActions {
 // copy/paste/undo work in the board's inputs); File drives the board picker and
 // Close Board; View is trimmed to zoom / full screen / dev tools — the board has
 // its own Reload, so the menu's Reload / Force Reload are left out.
+//
+// On macOS this is set as the application menu (the system menu bar). On
+// Windows/Linux the menu bar is removed and this same menu is shown as a popup
+// from the sidebar's ☰ button instead (see main.ts / IPC.popupMenu).
 export function buildAppMenu(actions: MenuActions): Menu {
   const isMac = process.platform === 'darwin';
 

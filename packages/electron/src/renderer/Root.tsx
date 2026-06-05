@@ -136,6 +136,8 @@ export function Root() {
         }}
         themeChoice={themeChoice}
         onThemeChoice={chooseTheme}
+        showMenuButton={bridge.showMenuButton}
+        onMenuButton={() => bridge.popupMenu()}
       />
       <div
         className={styles.resizer}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
 import styles from './Sidebar.module.css';
 
@@ -12,6 +12,8 @@ interface SidebarProps {
   onRemove: (folder: string) => void;
   themeChoice: ThemeChoice;
   onThemeChoice: (choice: ThemeChoice) => void;
+  showMenuButton: boolean;
+  onMenuButton: () => void;
 }
 
 const THEME_OPTIONS: ReadonlyArray<{ value: ThemeChoice; label: string }> = [
@@ -29,6 +31,8 @@ export function Sidebar({
   onRemove,
   themeChoice,
   onThemeChoice,
+  showMenuButton,
+  onMenuButton,
 }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -41,7 +45,20 @@ export function Sidebar({
   return (
     <aside className={styles.sidebar} style={{ width }}>
       <div className={styles.header}>
-        <h1 className={styles.title}>boardown</h1>
+        <div className={styles.titleRow}>
+          {showMenuButton && (
+            <button
+              type="button"
+              className={styles.menuButton}
+              onClick={onMenuButton}
+              title="Menu"
+              aria-label="Open menu"
+            >
+              <Menu size={18} aria-hidden="true" />
+            </button>
+          )}
+          <h1 className={styles.title}>boardown</h1>
+        </div>
         <button type="button" className={styles.openButton} onClick={onOpenFolder}>
           + Open Folder…
         </button>

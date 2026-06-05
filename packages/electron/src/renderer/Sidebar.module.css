@@ -19,8 +19,34 @@
   padding: 16px 12px 8px;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text);
+  cursor: pointer;
+}
+
+.menuButton:hover {
+  background: var(--shell-item-hover);
+}
+
 .title {
-  margin: 0 0 12px;
+  margin: 0;
   padding: 0 4px;
   font-size: 16px;
   font-weight: 700;

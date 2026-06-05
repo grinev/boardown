@@ -16,6 +16,7 @@ const bridge: BoardownBridge = {
   theme: bootstrap.theme,
   themeChoice: bootstrap.themeChoice,
   initialFolder: bootstrap.initialFolder,
+  showMenuButton: bootstrap.showMenuButton,
   fs: {
     read: async (filePath) => {
       // Host returns null for a missing file (no IPC error log); restore the
@@ -31,6 +32,7 @@ const bridge: BoardownBridge = {
     stat: (filePath) => fsCall({ method: 'stat', path: filePath }) as Promise<FileStat | null>,
   },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<void>,
+  popupMenu: () => ipcRenderer.send(IPC.popupMenu),
   openRecent: (folder) => ipcRenderer.invoke(IPC.openRecent, folder) as Promise<void>,
   cancelBoard: () => ipcRenderer.invoke(IPC.cancelBoard) as Promise<void>,
   removeRecent: (folder) => ipcRenderer.invoke(IPC.removeRecent, folder) as Promise<void>,

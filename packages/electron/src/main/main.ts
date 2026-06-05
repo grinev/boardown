@@ -224,15 +224,21 @@ function applySecurityHeaders(): void {
   });
 }
 
-function registerIpc(): void {
+function registerIpc(appMenu: Menu): void {
   ipcMain.on(IPC.bootstrap, (event) => {
     const ctx = boards.get(event.sender.id);
     const state: BootstrapState = {
       theme: effectiveTheme(),
       themeChoice: settings.themeChoice,
       initialFolder: ctx?.folder ?? null,
+      showMenuButton: process.platform !== 'darwin',
     };
     event.returnValue = state;
+  });
+
+  ipcMain.on(IPC.popupMenu, (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window) appMenu.popup({ window });
   });
 
   ipcMain.handle(IPC.fs, async (event: IpcMainInvokeEvent, req: FsRequest) => {
@@ -288,14 +294,16 @@ app
   .whenReady()
   .then(async () => {
     settings = await loadSettings();
-    registerIpc();
+    const appMenu = buildAppMenu({
+      openFolder: (window) => void showOpenDialog(window),
+      closeBoard: (window) => closeBoard(window),
+    });
+    registerIpc(appMenu);
     applySecurityHeaders();
-    Menu.setApplicationMenu(
-      buildAppMenu({
-        openFolder: (window) => void showOpenDialog(window),
-        closeBoard: (window) => closeBoard(window),
-      }),
-    );
+    // macOS always shows its system menu bar, so keep the app menu there. On
+    // Windows/Linux drop the menu bar entirely; the renderer's ☰ button pops
+    // the same menu up via IPC.popupMenu.
+    Menu.setApplicationMenu(process.platform === 'darwin' ? appMenu : null);
     createWindow(parseFolderArg(process.argv) ?? lastOpenedFolder());
 
     // In 'system' mode the effective theme tracks the OS; in fixed modes

@@ -3,7 +3,9 @@
 Cross-platform desktop shell for boardown (macOS / Windows / Linux). A sibling of
 the `web` and `vscode` shells: it reuses `@boardown/ui` unchanged and only
 provides the platform layer — an `FsAdapter` over Electron IPC, an OS-native
-folder picker, a recent-folders list, and the application menu.
+folder picker, a recent-folders list, and the application menu. On macOS the
+menu lives in the system menu bar; on Windows/Linux the menu bar is removed and
+the same menu is reached through a ☰ button in the sidebar (a native popup).
 
 ## How it fits the architecture
 

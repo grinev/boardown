@@ -31,6 +31,10 @@ export interface BootstrapState {
   theme: Theme;
   themeChoice: ThemeChoice;
   initialFolder: string | null;
+  // Whether the shell renders its own ☰ menu button. True on Windows/Linux,
+  // where the native menu bar is removed; false on macOS, which keeps its
+  // system menu bar at the top of the screen.
+  showMenuButton: boolean;
 }
 
 // The surface exposed on window.boardown by the preload. The renderer talks to
@@ -42,8 +46,13 @@ export interface BoardownBridge {
   // The user's chosen theme mode, for the settings UI (resolved value = theme).
   readonly themeChoice: ThemeChoice;
   readonly initialFolder: string | null;
+  // See BootstrapState.showMenuButton.
+  readonly showMenuButton: boolean;
   readonly fs: FsAdapter;
   readonly pickFolder: () => Promise<void>;
+  // Pop up the native application menu at the cursor (the ☰ button). Win/Linux
+  // only — macOS reaches the same menu through its system menu bar.
+  readonly popupMenu: () => void;
   readonly openRecent: (folder: string) => Promise<void>;
   // Abandon onboarding for the open folder: forget it (drop from recents) and
   // clear the window's board context.
@@ -63,6 +72,7 @@ export const IPC = {
   bootstrap: 'boardown:bootstrap',
   fs: 'boardown:fs',
   pickFolder: 'boardown:pick-folder',
+  popupMenu: 'boardown:popup-menu',
   openRecent: 'boardown:open-recent',
   cancelBoard: 'boardown:cancel-board',
   removeRecent: 'boardown:remove-recent',
