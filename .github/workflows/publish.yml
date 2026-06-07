@@ -14,10 +14,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Release from main version bump
+  # Decide whether this push is a releasable version bump before spending any
+  # build minutes. Runs on the runner's preinstalled Node + git only — setting
+  # up pnpm + Node (with `cache: pnpm`) here would make the setup-node post-job
+  # fail trying to save a pnpm store that the skipped install never created,
+  # reddening every non-release push to main.
+  determine:
+    name: Determine release state
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    outputs:
+      should_release: ${{ steps.determine.outputs.should_release }}
+      current_version: ${{ steps.determine.outputs.current_version }}
+      is_prerelease: ${{ steps.determine.outputs.is_prerelease }}
+      release_kind: ${{ steps.determine.outputs.release_kind }}
+      tag_name: ${{ steps.determine.outputs.tag_name }}
 
     steps:
       - name: Checkout
@@ -25,10 +36,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Decide whether to release first, using the runner's preinstalled Node and
-      # git only. Setting up pnpm + Node (with `cache: pnpm`) before this would
-      # make the setup-node post-job fail trying to save a pnpm store that the
-      # skipped install never created, reddening every non-release push to main.
       - name: Determine release state
         id: determine
         run: |
@@ -68,42 +75,111 @@ jobs:
         if: steps.determine.outputs.should_release != 'true'
         run: 'echo "Skipping publish: no eligible version bump detected"'
 
+  # Build every distributable artifact. electron-builder packages only for the
+  # host OS, so the desktop installers need one runner per OS; the gates and the
+  # OS-agnostic .vsix run once on the Linux leg. Each leg uploads its artifacts
+  # for the release job to gather. Tagging happens later, only after all of
+  # these succeed.
+  build:
+    name: Build artifacts (${{ matrix.os }})
+    needs: determine
+    if: needs.determine.outputs.should_release == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: dist-ubuntu
+            run_gates: true
+          - os: windows-latest
+            artifact: dist-windows
+          - os: macos-latest
+            artifact: dist-macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup pnpm
-        if: steps.determine.outputs.should_release == 'true'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
-        if: steps.determine.outputs.should_release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
       - name: Install dependencies
-        if: steps.determine.outputs.should_release == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Gates + the .vsix are platform-agnostic — run them once, on Linux.
       - name: Lint
-        if: steps.determine.outputs.should_release == 'true'
+        if: matrix.run_gates
         run: pnpm lint
 
       - name: Typecheck
-        if: steps.determine.outputs.should_release == 'true'
+        if: matrix.run_gates
         run: pnpm typecheck
 
       - name: Test
-        if: steps.determine.outputs.should_release == 'true'
+        if: matrix.run_gates
         run: pnpm test
 
-      # Build release artifacts. Add future shells (web/electron/jetbrains) as
-      # extra build commands here and extend the `files:` list of the release
-      # step below — the version is already shared across the whole repo.
-      - name: Build release artifacts
-        if: steps.determine.outputs.should_release == 'true'
+      - name: Build VS Code extension (.vsix)
+        if: matrix.run_gates
         run: pnpm --filter ./packages/vscode package
 
+      # electron-builder reads its targets from electron-builder.yml and packages
+      # for the host OS. macOS is unsigned for now (no Developer ID); disabling
+      # the auto-update identity probe keeps the unsigned build from failing.
+      - name: Build desktop installers
+        env:
+          CSC_IDENTITY_AUTOUPDATE: false
+        run: pnpm --filter @boardown/electron dist
+
+      - name: Collect artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          # Glob explicit extensions so electron-builder's intermediate output
+          # (*.blockmap, latest*.yml, builder-debug.yml, unpacked dirs) stays out.
+          path: |
+            packages/vscode/build/*.vsix
+            packages/electron/release/*.exe
+            packages/electron/release/*.dmg
+            packages/electron/release/*.AppImage
+            packages/electron/release/*.deb
+            packages/electron/release/*.zip
+
+  # Gather every leg's artifacts, tag, and publish a single GitHub Release.
+  release:
+    name: Tag and publish release
+    needs: [determine, build]
+    if: needs.determine.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Generate release notes
-        if: steps.determine.outputs.should_release == 'true'
         id: notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,28 +187,26 @@ jobs:
           set -euo pipefail
           BODY_FILE="$RUNNER_TEMP/release-notes.md"
           node scripts/generate-release-notes.mjs \
-            --version "${{ steps.determine.outputs.current_version }}" \
-            --kind "${{ steps.determine.outputs.release_kind }}" \
+            --version "${{ needs.determine.outputs.current_version }}" \
+            --kind "${{ needs.determine.outputs.release_kind }}" \
             --repo "$GITHUB_REPOSITORY" \
             --output "$BODY_FILE"
 
           echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Create and push git tag
-        if: steps.determine.outputs.should_release == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.determine.outputs.tag_name }}"
-          git push origin "${{ steps.determine.outputs.tag_name }}"
+          git tag "${{ needs.determine.outputs.tag_name }}"
+          git push origin "${{ needs.determine.outputs.tag_name }}"
 
       - name: Create GitHub release
-        if: steps.determine.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.determine.outputs.tag_name }}
-          name: ${{ steps.determine.outputs.tag_name }}
+          tag_name: ${{ needs.determine.outputs.tag_name }}
+          name: ${{ needs.determine.outputs.tag_name }}
           body_path: ${{ steps.notes.outputs.body_file }}
-          prerelease: ${{ steps.determine.outputs.is_prerelease == 'true' }}
-          files: packages/vscode/build/*.vsix
+          prerelease: ${{ needs.determine.outputs.is_prerelease == 'true' }}
+          files: artifacts/**/*

@@ -663,6 +663,11 @@ Development Host.
       `.vsix`, tags `vX.Y.Z`, and attaches the artifact to a GitHub Release.
       The whole monorepo shares one lockstep version (see
       [Releasing](./README.md#releasing)).
+- [x] Desktop installers in the same release: the `Publish` workflow runs a
+      per-OS matrix (`electron-builder`) and attaches the Electron installers
+      (Windows `Setup.exe` + `.zip`, macOS `.dmg` + `.zip`, Linux `.AppImage` +
+      `.deb`) to each GitHub Release alongside the `.vsix`. Builds are unsigned;
+      code-signing / notarization are deferred to their own round.
 - [ ] Marketplace publishing (`vsce publish`, registered publisher, PAT) —
       still deferred, planned in its own round; will slot in as a gated step in
       the same `Publish` workflow.

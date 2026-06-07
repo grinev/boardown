@@ -4,10 +4,12 @@
 # process + preload, Vite for the renderer), so packaging only ships dist/ and
 # package.json — no node_modules tree.
 #
-# Producing signed/notarized *builds* for all three OSes (code-signing on
-# Windows, Apple notarization on macOS, each OS built on its own runner) is a
-# release-pipeline concern owned by the maintainer's CI and its secrets.
-# `pnpm --filter @boardown/electron dist` is the local entry point.
+# Producing builds for all three OSes (each on its own runner) is automated by
+# the repo's `Publish` workflow (.github/workflows/publish.yml), which attaches
+# the installers to each GitHub Release alongside the .vsix.
+# `pnpm --filter @boardown/electron dist` is the local entry point. Builds are
+# currently unsigned: code-signing on Windows and Apple notarization on macOS
+# need certificates/secrets and are deferred.
 appId: com.boardown.app
 productName: boardown
 directories:
@@ -17,10 +19,18 @@ files:
   - dist/**
   - package.json
 mac:
+  # Unsigned until an Apple Developer ID is set up; null skips the signing step
+  # instead of letting electron-builder probe for an identity on CI.
+  identity: null
   category: public.app-category.developer-tools
+  # Build both architectures from the (arm64) CI runner — Electron ships
+  # prebuilt binaries for each and the app has no native modules, so Intel
+  # (x64) and Apple Silicon (arm64) installers come out of a single runner.
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
 win:
   # nsis = a Setup.exe wizard (Start-menu + desktop shortcuts, uninstaller),
   # mirroring the mac .dmg / linux .deb installers. The .zip stays as the

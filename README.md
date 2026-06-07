@@ -51,6 +51,30 @@ Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`). If the workspace has no
 `.boardown/` folder yet, an onboarding screen walks you through creating the
 board.
 
+### Desktop app
+
+Each [GitHub Release](https://github.com/grinev/boardown/releases) also ships a
+standalone desktop app (Electron). Grab the file for your OS from the release's
+**Assets**:
+
+- **Windows** → `boardown Setup <version>.exe` (installer) or the portable
+  `.zip` (unzip and run `boardown.exe`).
+- **macOS** → `.dmg` (drag to Applications) or `.zip`. Pick the `arm64` build
+  for Apple Silicon or the `x64` build for Intel Macs.
+- **Linux** → `.AppImage` (`chmod +x boardown-<version>.AppImage && ./boardown-<version>.AppImage`)
+  or `.deb` (`sudo dpkg -i boardown_<version>_amd64.deb`).
+
+The desktop builds are **not code-signed yet**, so the OS warns on first launch.
+To run anyway:
+
+- **Windows** — on the SmartScreen prompt, click **More info → Run anyway**.
+- **macOS** — right-click the app → **Open** (then confirm), or clear the
+  quarantine flag: `xattr -dr com.apple.quarantine /Applications/boardown.app`.
+- **Linux** — no prompt; just make the `.AppImage` executable as shown above.
+
+On launch the app shows recent project folders and an **Open Folder…** button;
+pick a folder and the board loads from its `.boardown/`.
+
 ## Building the `.vsix` from sources
 
 To build an installable `.vsix` yourself instead of downloading it:
@@ -197,11 +221,13 @@ OS you're targeting (or in a CI matrix, one runner per OS):
 - **Windows** → a `Setup .exe` installer (NSIS) + a portable `.zip`
 - **Linux** → `.AppImage` (run directly) + `.deb`
 
-Cross-building from another OS is fiddly (Windows would need Wine), so a CI matrix
-is the reliable path for all three. Signed / notarized artifacts (Apple
-notarization, Windows code-signing) need certificates and belong in that CI step,
-not a local build. Until signing is set up, distributed builds are unsigned, so end
-users will see a SmartScreen (Windows) / Gatekeeper (macOS) warning on first launch.
+Cross-building from another OS is fiddly (Windows would need Wine), so the
+[`Publish`](./.github/workflows/publish.yml) workflow runs a per-OS matrix to
+build all three and attach them to each GitHub Release (see
+[Releasing](#releasing)). Signed / notarized artifacts (Apple notarization,
+Windows code-signing) need certificates and are deferred, so distributed builds
+are unsigned for now — end users see a SmartScreen (Windows) / Gatekeeper
+(macOS) warning on first launch ([how to bypass it](#desktop-app)).
 
 ### App icons
 
@@ -235,8 +261,9 @@ the UI. The web dev shell only ensures the board root directory exists.
 
 The whole monorepo ships under **one lockstep version**: the same number lives
 in every `package.json`, with the **root `package.json` as the single source of
-truth**. There is only one distributed artifact today (the `.vsix`), and future
-shells (web, Electron, JetBrains) will release together under the same version.
+truth**. Each release attaches the VS Code `.vsix` plus the Electron desktop
+installers for all three OSes (Windows / macOS / Linux); future shells (web,
+JetBrains) will release together under the same version.
 
 Releases are driven by a version bump on `main`, not by pushing tags by hand:
 
@@ -257,10 +284,14 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    ```
 
 3. The [`Publish`](./.github/workflows/publish.yml) workflow notices that the
-   tag `vX.Y.Z` for the current version does not exist yet, runs the checks,
-   builds the `.vsix`, generates release notes from the commit log, creates and
-   pushes the tag, and publishes a GitHub Release with the `.vsix` in **Assets**.
-   If the tag already exists (no version bump), the workflow skips the release.
+   tag `vX.Y.Z` for the current version does not exist yet. It runs in three
+   stages: a `determine` job decides whether the bump is releasable; a `build`
+   matrix then runs the checks and builds the `.vsix` once on Linux and the
+   desktop installers on one runner per OS (electron-builder packages only for
+   its host); finally a `release` job gathers every artifact, generates release
+   notes from the commit log, creates and pushes the tag, and publishes a GitHub
+   Release with the `.vsix` and the desktop installers in **Assets**. If the tag
+   already exists (no version bump), the workflow skips the release.
 
 boardown tracks its own work on a board stored in `.boardown/`. Commits that
 only touch that board data use the `chore(board): …` scope and are excluded

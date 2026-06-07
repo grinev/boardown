@@ -44,6 +44,9 @@ to regenerate them after a logo change, not by hand.
 > (or add `electron` to the root `pnpm.onlyBuiltDependencies`). The lint /
 > typecheck / build / test gates do **not** need the binary.
 
-Producing signed, notarized installers for all three OSes is a release-pipeline
-concern (certificates, Apple notarization, Windows code-signing) and lives in
-CI, not in this package.
+The repo's [`Publish`](../../.github/workflows/publish.yml) workflow runs a
+per-OS matrix that calls `dist` on each runner and attaches the installers to
+every GitHub Release alongside the `.vsix`. The builds are currently
+**unsigned** (macOS uses `mac.identity: null`); code-signing on Windows and
+Apple notarization on macOS need certificates/secrets and are deferred to a
+later release-pipeline round.
