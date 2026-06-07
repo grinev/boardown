@@ -84,3 +84,57 @@ type: feature
 status: todo
 order: 650
 ---
+
+## Add labels to tasks and label filters
+
+---
+id: BD-29
+type: feature
+status: todo
+order: 1100
+---
+
+## Add optimistic locks on item save
+
+---
+id: BD-30
+type: tech
+status: todo
+order: 475
+---
+
+## Show last updated date on tasks
+
+---
+id: BD-32
+type: feature
+status: todo
+order: 1200
+---
+
+## Add optional file watcher
+
+---
+id: BD-37
+type: feature
+status: todo
+order: 1300
+---
+
+## Add localization infrastructure
+
+---
+id: BD-38
+type: tech
+status: todo
+order: 1400
+---
+
+## Add task links (related to)
+
+---
+id: BD-40
+type: feature
+status: todo
+order: 1500
+---
