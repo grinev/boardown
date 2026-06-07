@@ -5,7 +5,7 @@ export interface ParsedArgs {
 
 // Flags that never take a value, so they don't swallow the following token
 // (e.g. `task add "T" --json` must keep "T" as a positional).
-const BOOLEAN_FLAGS = new Set(['json', 'help', 'dry-run', 'backlog', 'no-epic']);
+const BOOLEAN_FLAGS = new Set(['json', 'help', 'dry-run', 'no-epic', 'no-release', 'up', 'down']);
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const positionals: string[] = [];

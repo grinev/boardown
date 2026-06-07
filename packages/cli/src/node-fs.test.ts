@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NodeFsAdapter, resolveTarget } from './node-fs';
 
@@ -14,7 +14,9 @@ describe('resolveTarget', () => {
   });
 
   it('resolves a nested relative path under the root', () => {
-    expect(resolveTarget('/board', 'releases/v1.md')).toBe(join('/board', 'releases', 'v1.md'));
+    // resolveTarget uses path.resolve internally, which on Windows prefixes a
+    // drive letter — so the expectation must go through resolve() too, not join().
+    expect(resolveTarget('/board', 'releases/v1.md')).toBe(resolve('/board', 'releases', 'v1.md'));
   });
 });
 

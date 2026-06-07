@@ -24,6 +24,13 @@ describe('parseArgs', () => {
     expect(parseArgs(['--json', 'board']).positionals).toEqual(['board']);
   });
 
+  it('treats --up / --down / --no-release as boolean even before a positional', () => {
+    const up = parseArgs(['task', 'reorder', '--up', 'BD-1']);
+    expect(up.flags.up).toBe(true);
+    expect(up.positionals).toEqual(['task', 'reorder', 'BD-1']);
+    expect(parseArgs(['task', 'edit', '--no-release', 'BD-1']).positionals).toContain('BD-1');
+  });
+
   it('lets a value flag consume the next token but keeps later positionals', () => {
     const { positionals, flags } = parseArgs(['task', 'move', 'BD-1', '--release', 'v1', '--json']);
     expect(flags.release).toBe('v1');

@@ -140,4 +140,26 @@ describe('release / epic / move (deepening layer)', () => {
       taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', 'rt', '--no-release']), ctx),
     ).rejects.toMatchObject({ code: 'USAGE' });
   });
+
+  it('a finished release is read-only: task mutations fail with code ARCHIVED', async () => {
+    await taskCommand(parseArgs(['task', 'add', 'Shipped']), ctx);
+    const release = (await releaseCommand(parseArgs(['release', 'add', 'r']), ctx)).data as {
+      release: Release;
+    };
+    await releaseCommand(parseArgs(['release', 'start', release.release.slug]), ctx);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.release.slug]), ctx);
+    await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
+    await releaseCommand(parseArgs(['release', 'done', release.release.slug]), ctx);
+
+    // TS-1 was done, so it stayed in the now-finished release.
+    await expect(
+      taskCommand(parseArgs(['task', 'edit', 'TS-1', '--title', 'X']), ctx),
+    ).rejects.toMatchObject({ code: 'ARCHIVED' });
+    await expect(taskCommand(parseArgs(['task', 'rm', 'TS-1']), ctx)).rejects.toMatchObject({
+      code: 'ARCHIVED',
+    });
+    await expect(
+      taskCommand(parseArgs(['task', 'add', 'Late', '--release', release.release.slug]), ctx),
+    ).rejects.toMatchObject({ code: 'ARCHIVED' });
+  });
 });

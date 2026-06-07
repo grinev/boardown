@@ -87,6 +87,18 @@ function requireStatus(value: string): TaskStatus {
 const problemsField = (out: CommandOutput['problems']): Pick<CommandOutput, 'problems'> =>
   out !== undefined && out.length > 0 ? { problems: out } : {};
 
+// Run a core board-op, mapping its process-guard rejection (a finished release is
+// read-only and rejects new or moved work) to a structured ARCHIVED error rather
+// than the generic ERROR fallback. The task's existence is validated before
+// these calls, so a thrown error is always the finished-release guard.
+function applyOp<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    throw new CliError('ARCHIVED', err instanceof Error ? err.message : String(err));
+  }
+}
+
 async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const title = args.positionals[2];
   if (title === undefined || title.length === 0) {
@@ -142,7 +154,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     ...(epicTag !== undefined ? { epic: epicTag } : {}),
   };
 
-  const result = createTask(target.container, snapshot.config, input);
+  const result = applyOp(() => createTask(target.container, snapshot.config, input));
   await writeContainer(fs, { kind: target.kind, container: result.container });
   await writeConfig(fs, result.config);
 
@@ -213,11 +225,13 @@ async function moveAndReport(
   if (movingTask === undefined) {
     throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
   }
-  const result = moveTaskBetweenContainers(edited, dest.container, taskId, {
-    newStatus: movingTask.frontmatter.status,
-    beforeTaskId: null,
-    destEpic: dest.destEpic,
-  });
+  const result = applyOp(() =>
+    moveTaskBetweenContainers(edited, dest.container, taskId, {
+      newStatus: movingTask.frontmatter.status,
+      beforeTaskId: null,
+      destEpic: dest.destEpic,
+    }),
+  );
   await writeContainer(fs, { kind: location.kind, container: result.source });
   await writeContainer(fs, { kind: dest.kind, container: result.dest });
   const task = result.dest.tasks.find((t) => t.frontmatter.id === taskId);
@@ -284,7 +298,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   // Release relocation: move in/out of a release, keeping the epic tag.
   if (changesRelease) {
-    const edited = hasFields ? editTask(location.container, id, fields) : location.container;
+    const edited = hasFields ? applyOp(() => editTask(location.container, id, fields)) : location.container;
     const dest = resolveReleaseMove(snapshot, location, edited, id, releaseRef, noRelease);
     if (dest === null) {
       await writeContainer(fs, { kind: location.kind, container: edited });
@@ -308,7 +322,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       (typeof nextEpic === 'string' && nextEpic !== current.frontmatter.epic));
 
   if (epicReallyChanges && location.kind !== 'release') {
-    const edited = hasFields ? editTask(location.container, id, fields) : location.container;
+    const edited = hasFields ? applyOp(() => editTask(location.container, id, fields)) : location.container;
     let dest: MoveDest;
     if (nextEpic === null) {
       dest = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
@@ -325,7 +339,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   // Pure in-place edit (fields, plus epic tag when the task is in a release).
   const patch: TaskPatch = { ...fields };
   if (nextEpic !== undefined) patch.epic = nextEpic;
-  const edited = editTask(location.container, id, patch);
+  const edited = applyOp(() => editTask(location.container, id, patch));
   await writeContainer(fs, { kind: location.kind, container: edited });
   const task = edited.tasks.find((t) => t.frontmatter.id === id);
   return { data: { task, file: edited.filename }, human: `Updated ${id}.`, ...problemsField(problems) };
@@ -346,7 +360,7 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
-  const updated = changeTaskStatus(location.container, id, status);
+  const updated = applyOp(() => changeTaskStatus(location.container, id, status));
   await writeContainer(fs, { kind: location.kind, container: updated });
   const task = updated.tasks.find((t) => t.frontmatter.id === id);
 
@@ -468,7 +482,7 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     };
   }
 
-  const updated = reorderTask(location.container, id, beforeTaskId);
+  const updated = applyOp(() => reorderTask(location.container, id, beforeTaskId));
   await writeContainer(fs, { kind: location.kind, container: updated });
   const task = updated.tasks.find((t) => t.frontmatter.id === id);
 
@@ -492,7 +506,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
-  const updated = deleteTask(location.container, id);
+  const updated = applyOp(() => deleteTask(location.container, id));
   await writeContainer(fs, { kind: location.kind, container: updated });
 
   return {
