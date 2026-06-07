@@ -10,8 +10,10 @@ your project's git repo. Releases, epics and tasks live in `.boardown/` next
 to your code, so they version, branch and diff with the rest of the project —
 no cloud, no server, no account.
 
-boardown ships as a **VS Code extension** that reads `.boardown/` from the
-open workspace.
+boardown ships two ways: a **VS Code extension** that reads `.boardown/` from
+the open workspace, and a **standalone desktop app** (Windows / macOS / Linux)
+that opens any project folder. Both reuse the same board UI and read the same
+markdown files.
 
 <p align="center">
   <img src="./assets/Board.png" alt="boardown board view" width="80%" />
@@ -28,6 +30,13 @@ open workspace.
 See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
 
 ## Installation
+
+boardown comes as a VS Code extension and a desktop app — pick whichever fits
+your workflow. Both are attached to each
+[GitHub Release](https://github.com/grinev/boardown/releases) and open the same
+`.boardown/` board.
+
+### VS Code extension
 
 A Marketplace listing is coming soon. For now, install the extension from the
 `.vsix` attached to each [GitHub Release](https://github.com/grinev/boardown/releases):

@@ -8,7 +8,7 @@
 id: BD-17
 type: tech
 status: todo
-order: 300
+order: 700
 ---
 
 ## Task deletion
@@ -17,7 +17,7 @@ order: 300
 id: BD-18
 type: feature
 status: todo
-order: 500
+order: 1000
 ---
 
 ## Edit release
@@ -26,7 +26,7 @@ order: 500
 id: BD-19
 type: feature
 status: todo
-order: 600
+order: 1100
 ---
 
 ## Add release dates
@@ -35,7 +35,7 @@ order: 600
 id: BD-20
 type: feature
 status: todo
-order: 700
+order: 1300
 ---
 
 ## Edit epic color
@@ -44,7 +44,7 @@ order: 700
 id: BD-21
 type: feature
 status: todo
-order: 800
+order: 1400
 ---
 
 ## Multiple active releases support
@@ -53,7 +53,7 @@ order: 800
 id: BD-22
 type: feature
 status: todo
-order: 900
+order: 1500
 ---
 
 ## Change releases order in backlog
@@ -62,7 +62,7 @@ order: 900
 id: BD-23
 type: feature
 status: todo
-order: 1000
+order: 1600
 ---
 
 ## View and edit release description
@@ -71,7 +71,7 @@ order: 1000
 id: BD-28
 type: feature
 status: todo
-order: 650
+order: 1200
 ---
 
 ## Add labels to tasks and label filters
@@ -80,7 +80,7 @@ order: 650
 id: BD-29
 type: feature
 status: todo
-order: 1100
+order: 1700
 ---
 
 ## Add optimistic locks on item save
@@ -89,7 +89,7 @@ order: 1100
 id: BD-30
 type: tech
 status: todo
-order: 475
+order: 900
 ---
 
 ## Show last updated date on tasks
@@ -98,7 +98,7 @@ order: 475
 id: BD-32
 type: feature
 status: todo
-order: 1200
+order: 1800
 ---
 
 ## Add optional file watcher
@@ -107,7 +107,7 @@ order: 1200
 id: BD-37
 type: feature
 status: todo
-order: 1300
+order: 1900
 ---
 
 ## Add localization infrastructure
@@ -116,7 +116,7 @@ order: 1300
 id: BD-38
 type: tech
 status: todo
-order: 1400
+order: 2000
 ---
 
 ## Add task links (related to)
@@ -125,7 +125,7 @@ order: 1400
 id: BD-40
 type: feature
 status: todo
-order: 1500
+order: 2100
 ---
 
 ## Add Create task button to epic
@@ -134,5 +134,14 @@ order: 1500
 id: BD-42
 type: feature
 status: todo
-order: 1600
+order: 2200
+---
+
+## Show version in desktop and extension
+
+---
+id: BD-45
+type: feature
+status: todo
+order: 500
 ---

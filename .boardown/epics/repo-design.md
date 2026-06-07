@@ -9,7 +9,7 @@ color: "#a855f7"
 id: BD-39
 type: feature
 status: todo
-order: 100
+order: 300
 ---
 
 ## Change semantic releases logic and release notes structure
@@ -18,7 +18,7 @@ order: 100
 id: BD-27
 type: tech
 status: todo
-order: 200
+order: 600
 ---
 
 Commits should have scope: feat(core), fix(vscode), fix(desktop)
