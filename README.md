@@ -66,8 +66,8 @@ Each [GitHub Release](https://github.com/grinev/boardown/releases) also ships a
 standalone desktop app (Electron). Grab the file for your OS from the release's
 **Assets**:
 
-- **Windows** → `boardown Setup <version>.exe` (installer) or the portable
-  `.zip` (unzip and run `boardown.exe`).
+- **Windows** → `boardown-<version>-win-setup.exe` (installer) or the portable
+  `boardown-<version>-win.zip` (unzip and run `boardown.exe`).
 - **macOS** → `.dmg` (drag to Applications) or `.zip`. Pick the `arm64` build
   for Apple Silicon or the `x64` build for Intel Macs.
 - **Linux** → `.AppImage` (`chmod +x boardown-*.AppImage && ./boardown-*.AppImage`)

@@ -18,6 +18,11 @@ directories:
 files:
   - dist/**
   - package.json
+# Pin every artifact name to a `<product>-<version>-<platform/arch>.<ext>` shape.
+# electron-builder's defaults treat x64 as the implicit arch and drop the suffix
+# (so the Intel .dmg would be `boardown-<v>.dmg`, sorting away from the labelled
+# arm64 one in the GitHub Releases list). Spelling out artifactName keeps every
+# file self-describing and grouped.
 mac:
   # Unsigned until an Apple Developer ID is set up; null skips the signing step
   # instead of letting electron-builder probe for an identity on CI.
@@ -26,15 +31,21 @@ mac:
   # Build both architectures from the (arm64) CI runner — Electron ships
   # prebuilt binaries for each and the app has no native modules, so Intel
   # (x64) and Apple Silicon (arm64) installers come out of a single runner.
+  # artifactName here governs the .zip; the dmg block below overrides the .dmg.
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:
     - target: dmg
       arch: [x64, arm64]
     - target: zip
       arch: [x64, arm64]
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
 win:
   # nsis = a Setup.exe wizard (Start-menu + desktop shortcuts, uninstaller),
   # mirroring the mac .dmg / linux .deb installers. The .zip stays as the
   # portable "just unzip and run boardown.exe" option.
+  # artifactName here governs the .zip; the nsis block below overrides the .exe.
+  artifactName: ${productName}-${version}-win.${ext}
   target:
     - nsis
     - zip
@@ -44,6 +55,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  artifactName: ${productName}-${version}-win-setup.${ext}
 linux:
   category: Development
   # The npm package name is scoped (@boardown/electron); without these the .deb
