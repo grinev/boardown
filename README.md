@@ -136,6 +136,7 @@ The repo is a pnpm workspace with five packages:
 | `pnpm lint`        | Run ESLint over the workspace                             |
 | `pnpm format`      | Apply Prettier in-place                                   |
 | `pnpm format:check`| Check Prettier formatting without writing                 |
+| `pnpm icons`       | Regenerate every shell's app icon from `assets/brand/boardown.svg` (run after changing the logo) |
 
 ### Running a single package
 
@@ -193,13 +194,25 @@ the root `pnpm.onlyBuiltDependencies`).
 OS you're targeting (or in a CI matrix, one runner per OS):
 
 - **macOS** → `.dmg` + `.zip`
-- **Windows** → a `.zip` (no installer — unzip and run `boardown.exe`)
+- **Windows** → a `Setup .exe` installer (NSIS) + a portable `.zip`
 - **Linux** → `.AppImage` (run directly) + `.deb`
 
 Cross-building from another OS is fiddly (Windows would need Wine), so a CI matrix
 is the reliable path for all three. Signed / notarized artifacts (Apple
 notarization, Windows code-signing) need certificates and belong in that CI step,
-not a local build.
+not a local build. Until signing is set up, distributed builds are unsigned, so end
+users will see a SmartScreen (Windows) / Gatekeeper (macOS) warning on first launch.
+
+### App icons
+
+Every shell's app icon derives from a single master, `assets/brand/boardown.svg`.
+`pnpm icons` rasterizes it (via `sharp` + `png2icons`) into the per-shell binaries
+each build expects — the VS Code Marketplace `icon.png`, and Electron's
+`build/icon.{ico,icns,png}` (Windows / macOS / Linux). Those outputs are committed,
+so normal builds and CI never need the rasterizer. To change the logo, replace the
+one SVG and re-run `pnpm icons`. (The VS Code activity-bar glyph in
+`packages/vscode/media/` is a separate, host-recolored UI icon and is not part of
+this set.)
 
 ### Sample board for the dev server
 

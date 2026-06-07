@@ -22,10 +22,18 @@ mac:
     - dmg
     - zip
 win:
-  # No installer — a plain .zip you unzip and run (boardown.exe). Mirrors the
-  # mac .zip / linux .AppImage "just run it" targets.
+  # nsis = a Setup.exe wizard (Start-menu + desktop shortcuts, uninstaller),
+  # mirroring the mac .dmg / linux .deb installers. The .zip stays as the
+  # portable "just unzip and run boardown.exe" option.
   target:
+    - nsis
     - zip
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 linux:
   category: Development
   target:

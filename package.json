@@ -11,7 +11,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "sharp"
     ]
   },
   "repository": {
@@ -28,7 +29,8 @@
     "format:check": "prettier --check .",
     "release:prepare": "node scripts/release-prepare.mjs",
     "release:rc": "node scripts/release-prepare.mjs rc",
-    "release:notes:preview": "node scripts/release-notes-preview.mjs"
+    "release:notes:preview": "node scripts/release-notes-preview.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",
@@ -38,7 +40,9 @@
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.13.0",
+    "png2icons": "^2.0.1",
     "prettier": "^3.4.2",
+    "sharp": "^0.34.5",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0"
   }

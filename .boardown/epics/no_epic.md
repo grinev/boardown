@@ -65,17 +65,6 @@ status: todo
 order: 1000
 ---
 
-## Change semantic releases logic and release notes structure
-
----
-id: BD-27
-type: tech
-status: todo
-order: 450
----
-
-Commits should have scope: feat(core), fix(vscode), fix(desktop)
-
 ## View and edit release description
 
 ---
@@ -137,4 +126,13 @@ id: BD-40
 type: feature
 status: todo
 order: 1500
+---
+
+## Add Create task button to epic
+
+---
+id: BD-42
+type: feature
+status: todo
+order: 1600
 ---

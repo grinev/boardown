@@ -31,7 +31,13 @@ shell uses for its workspace folder.
 - `pnpm --filter @boardown/electron build` — bundle main, preload and renderer
   into `dist/`.
 - `pnpm --filter @boardown/electron dist` — package installers via
-  `electron-builder` (see `electron-builder.yml`).
+  `electron-builder` (see `electron-builder.yml`). On Windows this produces a
+  `Setup .exe` (NSIS) plus a portable `.zip`; macOS a `.dmg` + `.zip`; Linux an
+  `.AppImage` + `.deb`.
+
+The app icons in `build/` (`icon.ico` / `icon.icns` / `icon.png`) are generated
+from the shared brand master and committed — run `pnpm icons` from the repo root
+to regenerate them after a logo change, not by hand.
 
 > Running the app needs the Electron binary, whose download is a pnpm build
 > script. If pnpm reports it as ignored, approve it with `pnpm approve-builds`
