@@ -704,3 +704,57 @@ describe('startRelease', () => {
     expect(() => startRelease(r1, [active, r1])).toThrow(/already current/);
   });
 });
+
+describe('process invariants — finished release is archived', () => {
+  const finished = (...tasks: Task[]): Release => ({
+    ...release(...tasks),
+    filename: 'releases/done.md',
+    slug: 'done',
+    frontmatter: { status: 'finished' },
+  });
+
+  it('startRelease rejects a non-future release', () => {
+    expect(() => startRelease(finished(), [])).toThrow(/future/);
+    expect(() => startRelease(release(), [])).toThrow(/future/);
+  });
+
+  it('completeRelease rejects a non-current release', () => {
+    expect(() =>
+      completeRelease({
+        release: futureRelease('next'),
+        epics: [],
+        backlog: null,
+        targetRelease: null,
+      }),
+    ).toThrow(/current/);
+  });
+
+  it('createTask rejects a finished release', () => {
+    expect(() =>
+      createTask(finished(), config, { title: 'x', type: 'feature', status: 'todo' }),
+    ).toThrow(/finished/);
+  });
+
+  it('task mutations reject a finished release', () => {
+    const r = finished(task('BD-1', 'todo', 100));
+    expect(() => editTask(r, 'BD-1', { title: 'y' })).toThrow(/finished/);
+    expect(() => changeTaskStatus(r, 'BD-1', 'done')).toThrow(/finished/);
+    expect(() => deleteTask(r, 'BD-1')).toThrow(/finished/);
+    expect(() => reorderTask(r, 'BD-1', null)).toThrow(/finished/);
+  });
+
+  it('moveTaskBetweenContainers rejects a finished source or destination', () => {
+    expect(() =>
+      moveTaskBetweenContainers(finished(task('BD-1', 'todo', 100)), release(), 'BD-1', {
+        newStatus: 'todo',
+        beforeTaskId: null,
+      }),
+    ).toThrow(/out of a finished/);
+    expect(() =>
+      moveTaskBetweenContainers(release(task('BD-2', 'todo', 100)), finished(), 'BD-2', {
+        newStatus: 'todo',
+        beforeTaskId: null,
+      }),
+    ).toThrow(/into a finished/);
+  });
+});

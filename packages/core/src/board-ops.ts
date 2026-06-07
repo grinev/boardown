@@ -31,6 +31,13 @@ export const emptyBacklog = (): Backlog => ({
   tasks: [],
 });
 
+// A finished release is archived: the product treats its tasks as read-only and
+// forbids scheduling new work into it. These invariants live here so every shell
+// (UI, CLI, …) enforces them without re-implementing the rule. `status` only
+// exists on a Release frontmatter, so the `in` check narrows the union safely.
+const isFinishedRelease = (container: Container): boolean =>
+  'status' in container.frontmatter && container.frontmatter.status === 'finished';
+
 const ORDER_STEP = 100;
 
 const WINDOWS_FORBIDDEN_CHARS = '<>:"/\\|?*';
@@ -158,6 +165,9 @@ export const startRelease = (
   release: Release,
   existing: readonly Release[],
 ): Release => {
+  if (release.frontmatter.status !== 'future') {
+    throw new Error('Only a future release can be started');
+  }
   const current = existing.find(
     (r) => r.frontmatter.status === 'current' && r.filename !== release.filename,
   );
@@ -267,6 +277,9 @@ export const createTask = <C extends Container>(
   config: BoardConfig,
   input: NewTaskInput,
 ): { container: C; config: BoardConfig; task: Task } => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot create a task in a finished release');
+  }
   const { id, config: nextConfig } = nextTaskId(config);
   const order = lastOrderInContainer(container.tasks) + ORDER_STEP;
   const task: Task = {
@@ -300,6 +313,9 @@ export const editTask = <C extends Container>(
   taskId: string,
   patch: TaskPatch,
 ): C => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot edit a task in a finished release');
+  }
   const current = findTask(container.tasks, taskId);
   const workingTasks =
     patch.status !== undefined && patch.status !== current.frontmatter.status
@@ -344,30 +360,41 @@ export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
   },
 });
 
-export const deleteTask = <C extends Container>(container: C, taskId: string): C =>
-  replaceTasks(
+export const deleteTask = <C extends Container>(container: C, taskId: string): C => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot delete a task in a finished release');
+  }
+  return replaceTasks(
     container,
     container.tasks.filter((t) => t.frontmatter.id !== taskId),
   );
+};
 
 export const changeTaskStatus = <C extends Container>(
   container: C,
   taskId: string,
   newStatus: TaskStatus,
-): C =>
-  replaceTasks(
+): C => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot change the status of a task in a finished release');
+  }
+  return replaceTasks(
     container,
     placeTaskInContainer(container.tasks, taskId, {
       status: newStatus,
       beforeTaskId: null,
     }),
   );
+};
 
 export const reorderTask = <C extends Container>(
   container: C,
   taskId: string,
   beforeTaskId: string | null,
 ): C => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot reorder a task in a finished release');
+  }
   const task = findTask(container.tasks, taskId);
   return replaceTasks(
     container,
@@ -382,8 +409,12 @@ export const moveTaskInContainer = <C extends Container>(
   container: C,
   taskId: string,
   args: { status: TaskStatus; beforeTaskId: string | null },
-): C =>
-  replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
+): C => {
+  if (isFinishedRelease(container)) {
+    throw new Error('Cannot move a task in a finished release');
+  }
+  return replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
+};
 
 export type DestEpic =
   | { kind: 'preserve' }
@@ -416,6 +447,12 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   taskId: string,
   args: MoveAcrossArgs,
 ): { source: S; dest: D } => {
+  if (isFinishedRelease(source)) {
+    throw new Error('Cannot move a task out of a finished release');
+  }
+  if (isFinishedRelease(dest)) {
+    throw new Error('Cannot move a task into a finished release');
+  }
   const task = findTask(source.tasks, taskId);
   const epicAction: DestEpic = args.destEpic ?? { kind: 'preserve' };
   const updated: Task = {
@@ -599,6 +636,9 @@ export interface CompleteReleaseResult {
 export const completeRelease = (
   input: CompleteReleaseContainers,
 ): CompleteReleaseResult => {
+  if (input.release.frontmatter.status !== 'current') {
+    throw new Error('Only the current release can be completed');
+  }
   const unfinished = input.release.tasks
     .filter((t) => t.frontmatter.status !== 'done')
     .sort((a, b) => a.frontmatter.order - b.frontmatter.order);
