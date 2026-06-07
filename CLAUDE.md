@@ -56,9 +56,15 @@ boardown/
 │   │                  # over a Vite middleware that serves a selected
 │   │                  # .boardown/, manual Reload only. Mounts @boardown/ui.
 │   │                  # No production browser deployment in MVP.
-│   └── vscode/        # Primary MVP shell: extension host (esbuild) + webview
-│                      # (Vite) hosting @boardown/ui. Built in stages; see
-│                      # PRODUCT.md roadmap.
+│   ├── vscode/        # Primary MVP shell: extension host (esbuild) + webview
+│   │                  # (Vite) hosting @boardown/ui. Built in stages; see
+│   │                  # PRODUCT.md roadmap.
+│   ├── electron/      # Desktop shell (macOS / Windows / Linux): Electron main
+│   │                  # (esbuild) + renderer (Vite) hosting @boardown/ui over a
+│   │                  # Node FsAdapter. Post-MVP.
+│   └── cli/           # Command-line / agent-facing shell: maps argv onto
+│                      # @boardown/core board-ops over a Node FsAdapter, with
+│                      # machine-readable JSON output. Post-MVP.
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -70,8 +76,8 @@ boardown/
 `main`/`exports` point at `src/index.ts`, no separate build step. The shell's
 bundler (Vite for `web`, esbuild for the VS Code host) transpiles them, and
 `tsc`/ESLint resolve their types straight from source. Neither package emits a
-`dist/`. Only the shells (`web`, `vscode`) have a `build` script — they bundle
-the source-only libraries into their own artifacts.
+`dist/`. Only the shells (`web`, `vscode`, `electron`, `cli`) have a `build`
+script — they bundle the source-only libraries into their own artifacts.
 
 `packages/vscode` is the primary MVP distribution target, built bottom-up in
 stages (see PRODUCT.md roadmap). It is a sibling shell next to `web` and reuses
@@ -92,6 +98,15 @@ endpoints. This is the **only** browser-side path for the MVP — it is the
 working environment for `@boardown/ui` development, not a stepping stone to
 a production browser app. A production browser shell (with the FS Access
 API or otherwise) is post-MVP and may or may not happen.
+
+`packages/cli` is a post-MVP shell that does **not** mount `@boardown/ui` — it has
+no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,
+serializer, schemas) and implements `FsAdapter` over `node:fs/promises`, mapping
+CLI commands onto board operations. It is aimed at agents and scripts: output is a
+stable JSON envelope when stdout is not a TTY (or with `--json`), human-readable
+otherwise. The bin is bundled with esbuild into a single Node CJS file. Process
+invariants (release lifecycle, finished-release read-only) live in `core`, so the
+CLI inherits them rather than re-implementing them.
 
 ## Conventions
 

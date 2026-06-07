@@ -291,6 +291,18 @@ app: a recent-folders list on launch, an "Open Folder…" menu using the OS
 native dialog, and an optional CLI argument for opening a specific folder.
 Out of scope for the MVP.
 
+### CLI (post-MVP)
+
+A headless shell that does not mount `@boardown/ui` — it consumes
+`@boardown/core` directly and implements `FsAdapter` over Node's filesystem.
+It finds the board by walking up from the working directory to a `.boardown/`
+folder (or via `--data-dir`), and maps commands onto board operations
+(`board`, `task`, `release`, `epic`, `init`). It is aimed primarily at **agents
+and scripts**: output is a stable JSON envelope when stdout is not a TTY (or
+with `--json`), with stable error codes and exit codes, plus a `schema` command
+that prints the contract. Because every change is a plain-markdown git diff, an
+agent's edits stay reviewable and revertible. Out of scope for the MVP.
+
 ## Lenient parsing
 
 - A broken file does not block other files.

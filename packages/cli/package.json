@@ -1,0 +1,29 @@
+{
+  "name": "@boardown/cli",
+  "version": "0.1.0",
+  "description": "Command-line and agent-facing interface for boardown task boards.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "boardown": "./dist/cli.cjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@boardown/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "esbuild": "^0.24.0",
+    "vitest": "^2.1.8"
+  }
+}

@@ -39,6 +39,22 @@ importers:
         specifier: ^8.18.0
         version: 8.59.2(eslint@9.39.4)(typescript@5.9.3)
 
+  packages/cli:
+    dependencies:
+      '@boardown/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.10
+        version: 20.19.39
+      esbuild:
+        specifier: ^0.24.0
+        version: 0.24.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@20.19.39)
+
   packages/core:
     dependencies:
       gray-matter:
