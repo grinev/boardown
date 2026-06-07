@@ -70,8 +70,8 @@ standalone desktop app (Electron). Grab the file for your OS from the release's
   `.zip` (unzip and run `boardown.exe`).
 - **macOS** → `.dmg` (drag to Applications) or `.zip`. Pick the `arm64` build
   for Apple Silicon or the `x64` build for Intel Macs.
-- **Linux** → `.AppImage` (`chmod +x boardown-<version>.AppImage && ./boardown-<version>.AppImage`)
-  or `.deb` (`sudo dpkg -i boardown_<version>_amd64.deb`).
+- **Linux** → `.AppImage` (`chmod +x boardown-*.AppImage && ./boardown-*.AppImage`)
+  or `.deb` (`sudo dpkg -i boardown-*-amd64.deb`).
 
 The desktop builds are **not code-signed yet**, so the OS warns on first launch.
 To run anyway:

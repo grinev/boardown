@@ -46,6 +46,11 @@ nsis:
   createStartMenuShortcut: true
 linux:
   category: Development
+  # The npm package name is scoped (@boardown/electron); without these the .deb
+  # would derive its package/file name from it (invalid: contains a slash) and
+  # land in a release/@boardown/ subdir. Pin both to the product name instead.
+  executableName: boardown
+  artifactName: ${productName}-${version}-${arch}.${ext}
   target:
     - AppImage
     - deb
