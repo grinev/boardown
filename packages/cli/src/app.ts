@@ -24,14 +24,21 @@ Usage: boardown <command> [args] [--data-dir <path>] [--json]
 Commands:
   board                  Print the whole board.
   init                   Create a .boardown/ board here.
+  task get <id>          Show one task and where it lives.
   task add <title>       Create a task (--type --status --epic --release --description).
   task edit <id>         Edit a task (--title --description --type --status --epic --no-epic).
   task status <id> <s>   Change a task status (todo | in-progress | done).
+  task reorder <id>      Change priority (--before | --after <id> | --up | --down).
   task move <id>         Move a task (--release | --epic | --backlog) [--status --before].
   task rm <id>           Delete a task.
+  release get <ref>      Show one release and its tasks.
+  release list           List releases.
+  release current        Show the current release and its tasks.
   release add <name>     Create a release (--description).
   release start <ref>    Make a release current.
   release done <ref>     Finish a release (--into <release> to carry over open tasks).
+  epic get <slug>        Show one epic and its tasks.
+  epic list              List epics.
   epic add <name>        Create an epic (--color #rrggbb --description).
   epic edit <slug>       Edit an epic (--name --description).
   schema                 Print the machine-readable command/enum contract.

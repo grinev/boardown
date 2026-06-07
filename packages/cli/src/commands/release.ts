@@ -6,12 +6,14 @@ import {
   serializeEpic,
   serializeRelease,
   startRelease,
+  type CompleteReleaseResult,
   type NewReleaseInput,
   type Release,
 } from '@boardown/core';
 import { flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
 import {
+  currentRelease,
   findRelease,
   loadBoardOrThrow,
   resolveBoardRoot,
@@ -22,6 +24,14 @@ import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 export const releaseCommand: CommandHandler = (args, ctx) => {
   const sub = args.positionals[1];
   switch (sub) {
+    case 'get':
+    case 'show':
+      return releaseGet(args, ctx);
+    case 'list':
+      return releaseList(args, ctx);
+    case 'current':
+    case 'active':
+      return releaseCurrent(args, ctx);
     case 'add':
       return releaseAdd(args, ctx);
     case 'start':
@@ -33,11 +43,69 @@ export const releaseCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown release subcommand "${sub ?? ''}". Use: add | start | done.`,
+        `Unknown release subcommand "${sub ?? ''}". Use: get | list | current | add | start | done.`,
         2,
       );
   }
 };
+
+const renderRelease = (release: Release): string => {
+  const name = release.frontmatter.name ?? release.slug;
+  const lines = [`[${release.frontmatter.status}] ${name}  (${release.filename})`];
+  for (const task of release.tasks) {
+    lines.push(`  ${task.frontmatter.id}  [${task.frontmatter.status}]  ${task.title}`);
+  }
+  return lines.join('\n');
+};
+
+async function releaseGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const ref = args.positionals[2];
+  if (ref === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown release get <file|slug>.', 2);
+  }
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const board = await loadBoardOrThrow(root);
+  const release = requireRelease(board, ref);
+  return {
+    data: { release },
+    human: renderRelease(release),
+    ...problemsField(board.problems),
+  };
+}
+
+async function releaseList(_args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const board = await loadBoardOrThrow(root);
+  const releases = board.snapshot.releases.map((release) => ({
+    slug: release.slug,
+    name: release.frontmatter.name ?? release.slug,
+    status: release.frontmatter.status,
+    taskCount: release.tasks.length,
+  }));
+  const human =
+    releases.length > 0
+      ? releases.map((r) => `[${r.status}] ${r.slug}  ${r.name}  (${r.taskCount} tasks)`).join('\n')
+      : 'No releases.';
+  return { data: { releases }, human, ...problemsField(board.problems) };
+}
+
+async function releaseCurrent(_args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const board = await loadBoardOrThrow(root);
+  const release = currentRelease(board.snapshot);
+  if (release === undefined) {
+    return {
+      data: { release: null },
+      human: 'No current release.',
+      ...problemsField(board.problems),
+    };
+  }
+  return {
+    data: { release },
+    human: renderRelease(release),
+    ...problemsField(board.problems),
+  };
+}
 
 const problemsField = (problems: LoadedBoard['problems']): Pick<CommandOutput, 'problems'> =>
   problems.length > 0 ? { problems } : {};
@@ -118,12 +186,19 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   const intoRef = flagString(args.flags, 'into');
   const targetRelease = intoRef !== undefined ? requireRelease(board, intoRef) : null;
 
-  const result = completeRelease({
-    release,
-    epics: board.snapshot.epics,
-    backlog: board.snapshot.backlog ?? emptyBacklog(),
-    targetRelease,
-  });
+  let result: CompleteReleaseResult;
+  try {
+    result = completeRelease({
+      release,
+      epics: board.snapshot.epics,
+      backlog: board.snapshot.backlog ?? emptyBacklog(),
+      targetRelease,
+    });
+  } catch (err) {
+    // core rejects completing a non-current release (and carrying into a
+    // finished one); surface it as a structured error.
+    throw new CliError('RELEASE_NOT_CURRENT', err instanceof Error ? err.message : String(err));
+  }
 
   // Persist every container the redistribution actually touched.
   const changed = new Set(result.changedFilenames);

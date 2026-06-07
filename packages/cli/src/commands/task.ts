@@ -6,10 +6,12 @@ import {
   emptyBacklog,
   moveTaskBetweenContainers,
   moveTaskInContainer,
+  reorderTask,
   TASK_STATUSES,
   TASK_TYPES,
   type DestEpic,
   type NewTaskInput,
+  type Task,
   type TaskPatch,
   type TaskStatus,
   type TaskType,
@@ -31,12 +33,17 @@ import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 export const taskCommand: CommandHandler = (args, ctx) => {
   const sub = args.positionals[1];
   switch (sub) {
+    case 'get':
+    case 'show':
+      return taskGet(args, ctx);
     case 'add':
       return taskAdd(args, ctx);
     case 'edit':
       return taskEdit(args, ctx);
     case 'status':
       return taskStatus(args, ctx);
+    case 'reorder':
+      return taskReorder(args, ctx);
     case 'move':
       return taskMove(args, ctx);
     case 'rm':
@@ -46,7 +53,7 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: add | edit | status | move | rm.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | move | rm.`,
         2,
       );
   }
@@ -210,6 +217,132 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   const task = updated.tasks.find((t) => t.frontmatter.id === id);
 
   return { data: { task }, human: `${id} → ${status}.`, ...problemsField(problems) };
+}
+
+const renderTask = (task: Task, kind: string, file: string): string => {
+  const fm = task.frontmatter;
+  const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
+  const body = task.description.length > 0 ? `\n\n${task.description}` : '';
+  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}`;
+};
+
+async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[2];
+  if (id === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown task get <id>.', 2);
+  }
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const location = locateTask(snapshot, id);
+  if (location === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+  const task = location.container.tasks.find((t) => t.frontmatter.id === id);
+  if (task === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+
+  return {
+    data: { task, in: { kind: location.kind, file: location.container.filename } },
+    human: renderTask(task, location.kind, location.container.filename),
+    ...problemsField(problems),
+  };
+}
+
+type ReorderTarget =
+  | { kind: 'before'; anchor: string }
+  | { kind: 'after'; anchor: string }
+  | { kind: 'up' }
+  | { kind: 'down' };
+
+function reorderTarget(args: ParsedArgs): ReorderTarget {
+  const before = flagString(args.flags, 'before');
+  const after = flagString(args.flags, 'after');
+  const up = flagBool(args.flags, 'up');
+  const down = flagBool(args.flags, 'down');
+  if ([before !== undefined, after !== undefined, up, down].filter(Boolean).length !== 1) {
+    throw new CliError(
+      'USAGE',
+      'Provide exactly one of: --before <id> | --after <id> | --up | --down.',
+      2,
+    );
+  }
+  if (before !== undefined) return { kind: 'before', anchor: before };
+  if (after !== undefined) return { kind: 'after', anchor: after };
+  return up ? { kind: 'up' } : { kind: 'down' };
+}
+
+// Translate a human "move" into the `beforeTaskId` core's reorderTask expects
+// (null = place last). Returns undefined when the task is already at the
+// requested edge — a no-op the caller can skip.
+function beforeIdForReorder(
+  tasks: readonly Task[],
+  taskId: string,
+  target: ReorderTarget,
+): string | null | undefined {
+  if ((target.kind === 'before' || target.kind === 'after') && target.anchor === taskId) {
+    throw new CliError('USAGE', `Cannot place a task ${target.kind} itself.`);
+  }
+  const sorted = [...tasks].sort((a, b) => a.frontmatter.order - b.frontmatter.order);
+  const idx = sorted.findIndex((t) => t.frontmatter.id === taskId);
+  switch (target.kind) {
+    case 'before':
+      if (!sorted.some((t) => t.frontmatter.id === target.anchor)) {
+        throw new CliError('TASK_NOT_FOUND', `No task "${target.anchor}" in the same container.`);
+      }
+      return target.anchor;
+    case 'after': {
+      const at = sorted.findIndex((t) => t.frontmatter.id === target.anchor);
+      if (at === -1) {
+        throw new CliError('TASK_NOT_FOUND', `No task "${target.anchor}" in the same container.`);
+      }
+      return sorted[at + 1]?.frontmatter.id ?? null;
+    }
+    case 'up':
+      return idx <= 0 ? undefined : sorted[idx - 1]?.frontmatter.id;
+    case 'down':
+      return idx >= sorted.length - 1 ? undefined : (sorted[idx + 2]?.frontmatter.id ?? null);
+  }
+}
+
+async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[2];
+  if (id === undefined) {
+    throw new CliError(
+      'USAGE',
+      'Usage: boardown task reorder <id> (--before <id> | --after <id> | --up | --down).',
+      2,
+    );
+  }
+  const target = reorderTarget(args);
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const location = locateTask(snapshot, id);
+  if (location === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+
+  const beforeTaskId = beforeIdForReorder(location.container.tasks, id, target);
+  if (beforeTaskId === undefined) {
+    const task = location.container.tasks.find((t) => t.frontmatter.id === id);
+    return {
+      data: { task, file: location.container.filename, moved: false },
+      human: `${id} is already at the edge; nothing to do.`,
+      ...problemsField(problems),
+    };
+  }
+
+  const updated = reorderTask(location.container, id, beforeTaskId);
+  await writeContainer(fs, { kind: location.kind, container: updated });
+  const task = updated.tasks.find((t) => t.frontmatter.id === id);
+
+  return {
+    data: { task, file: updated.filename, moved: true },
+    human: `Reordered ${id} in ${updated.filename}.`,
+    ...problemsField(problems),
+  };
 }
 
 async function taskMove(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {

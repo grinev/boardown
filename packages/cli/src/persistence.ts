@@ -13,6 +13,7 @@ import {
   type FsAdapter,
   type ParseProblem,
   type Release,
+  type Task,
 } from '@boardown/core';
 import { findBoardRoot } from './board-root';
 import { NodeFsAdapter } from './node-fs';
@@ -73,6 +74,20 @@ export function findRelease(snapshot: BoardSnapshot, ref: string): Release | und
 
 export function findEpic(snapshot: BoardSnapshot, slug: string): Epic | undefined {
   return snapshot.epics.find((e) => e.slug === slug);
+}
+
+export function currentRelease(snapshot: BoardSnapshot): Release | undefined {
+  return snapshot.releases.find((r) => r.frontmatter.status === 'current');
+}
+
+// All tasks belonging to an epic: those physically in its file, plus tasks in
+// any release that carry the epic tag (filename is authoritative for epic
+// files; the tag carries membership once a task is scheduled into a release).
+export function epicMembers(snapshot: BoardSnapshot, epic: Epic): Task[] {
+  const tagged = snapshot.releases.flatMap((r) =>
+    r.tasks.filter((t) => t.frontmatter.epic === epic.slug),
+  );
+  return [...epic.tasks, ...tagged];
 }
 
 export function locateTask(snapshot: BoardSnapshot, taskId: string): ContainerRef | null {

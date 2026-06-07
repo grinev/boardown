@@ -25,6 +25,7 @@ const DESCRIPTOR = {
       usage: 'boardown init [--id-prefix PP] [--project-name NAME]',
       summary: 'Create a .boardown/ board in the current directory.',
     },
+    { name: 'task get', usage: 'boardown task get <id>', summary: 'Show one task and where it lives.' },
     {
       name: 'task add',
       usage:
@@ -43,11 +44,31 @@ const DESCRIPTOR = {
       summary: 'Change a task status.',
     },
     {
+      name: 'task reorder',
+      usage: 'boardown task reorder <id> (--before ID | --after ID | --up | --down)',
+      summary: "Change a task's priority (order) within its container.",
+    },
+    {
       name: 'task move',
       usage: 'boardown task move <id> (--release REF | --epic SLUG | --backlog) [--status STATUS] [--before ID]',
       summary: 'Move a task between the backlog, an epic, and a release.',
     },
     { name: 'task rm', usage: 'boardown task rm <id>', summary: 'Delete a task.' },
+    {
+      name: 'release get',
+      usage: 'boardown release get <file|slug>',
+      summary: 'Show one release and its tasks.',
+    },
+    {
+      name: 'release list',
+      usage: 'boardown release list',
+      summary: 'List releases (slug, status, task count).',
+    },
+    {
+      name: 'release current',
+      usage: 'boardown release current',
+      summary: 'Show the current release and its tasks (null if none).',
+    },
     {
       name: 'release add',
       usage: 'boardown release add <name> [--description TEXT]',
@@ -62,6 +83,16 @@ const DESCRIPTOR = {
       name: 'release done',
       usage: 'boardown release done <file|slug> [--into <release>]',
       summary: 'Finish a release; open tasks return to epics/backlog or carry into --into.',
+    },
+    {
+      name: 'epic get',
+      usage: 'boardown epic get <slug>',
+      summary: 'Show one epic and all its tasks.',
+    },
+    {
+      name: 'epic list',
+      usage: 'boardown epic list',
+      summary: 'List epics (slug, name, color, task count).',
     },
     {
       name: 'epic add',
