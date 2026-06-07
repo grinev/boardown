@@ -26,10 +26,9 @@ Commands:
   init                   Create a .boardown/ board here.
   task get <id>          Show one task and where it lives.
   task add <title>       Create a task (--type --status --epic --release --description).
-  task edit <id>         Edit a task (--title --description --type --status --epic --no-epic).
+  task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
   task status <id> <s>   Change a task status (todo | in-progress | done).
   task reorder <id>      Change priority (--before | --after <id> | --up | --down).
-  task move <id>         Move a task (--release | --epic | --backlog) [--status --before].
   task rm <id>           Delete a task.
   release get <ref>      Show one release and its tasks.
   release list           List releases.

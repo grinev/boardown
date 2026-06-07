@@ -5,12 +5,14 @@ import {
   editTask,
   emptyBacklog,
   moveTaskBetweenContainers,
-  moveTaskInContainer,
   reorderTask,
   TASK_STATUSES,
   TASK_TYPES,
+  type BoardSnapshot,
   type DestEpic,
+  type FsAdapter,
   type NewTaskInput,
+  type ParseProblem,
   type Task,
   type TaskPatch,
   type TaskStatus,
@@ -44,8 +46,6 @@ export const taskCommand: CommandHandler = (args, ctx) => {
       return taskStatus(args, ctx);
     case 'reorder':
       return taskReorder(args, ctx);
-    case 'move':
-      return taskMove(args, ctx);
     case 'rm':
     case 'remove':
     case 'delete':
@@ -53,7 +53,7 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | move | rm.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | rm.`,
         2,
       );
   }
@@ -153,10 +153,106 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   };
 }
 
+interface MoveDest {
+  kind: ContainerRef['kind'];
+  container: ContainerRef['container'];
+  destEpic: DestEpic;
+}
+
+// Resolve where a --release / --no-release edit moves the task (mirrors the UI's
+// Release selector / moveTaskToRelease). Returns null when no move is needed.
+function resolveReleaseMove(
+  snapshot: BoardSnapshot,
+  location: ContainerRef,
+  edited: ContainerRef['container'],
+  taskId: string,
+  releaseRef: string | undefined,
+  noRelease: boolean,
+): MoveDest | null {
+  if (releaseRef !== undefined) {
+    const release = findRelease(snapshot, releaseRef);
+    if (release === undefined) {
+      throw new CliError('RELEASE_NOT_FOUND', `No release "${releaseRef}".`);
+    }
+    if (edited.filename === release.filename) return null;
+    return { kind: 'release', container: release, destEpic: { kind: 'preserve' } };
+  }
+  if (noRelease) {
+    // Removing from a release falls back to the task's epic file, or the
+    // backlog when it has no epic. A no-op when the task isn't in a release.
+    if (location.kind !== 'release') return null;
+    const epicSlug = edited.tasks.find((t) => t.frontmatter.id === taskId)?.frontmatter.epic;
+    if (epicSlug !== undefined) {
+      const epic = findEpic(snapshot, epicSlug);
+      if (epic === undefined) {
+        throw new CliError('EPIC_NOT_FOUND', `No epic "${epicSlug}".`);
+      }
+      return { kind: 'epic', container: epic, destEpic: { kind: 'set', slug: epicSlug } };
+    }
+    return { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
+  }
+  return null;
+}
+
+// Apply a resolved relocation: write the patched container if the task is
+// already in the destination, otherwise move it and write both files.
+async function moveAndReport(
+  fs: FsAdapter,
+  location: ContainerRef,
+  edited: ContainerRef['container'],
+  dest: MoveDest,
+  taskId: string,
+  problems: ParseProblem[],
+): Promise<CommandOutput> {
+  if (edited.filename === dest.container.filename) {
+    await writeContainer(fs, { kind: location.kind, container: edited });
+    const task = edited.tasks.find((t) => t.frontmatter.id === taskId);
+    return { data: { task, file: edited.filename }, human: `Updated ${taskId}.`, ...problemsField(problems) };
+  }
+  const movingTask = edited.tasks.find((t) => t.frontmatter.id === taskId);
+  if (movingTask === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
+  }
+  const result = moveTaskBetweenContainers(edited, dest.container, taskId, {
+    newStatus: movingTask.frontmatter.status,
+    beforeTaskId: null,
+    destEpic: dest.destEpic,
+  });
+  await writeContainer(fs, { kind: location.kind, container: result.source });
+  await writeContainer(fs, { kind: dest.kind, container: result.dest });
+  const task = result.dest.tasks.find((t) => t.frontmatter.id === taskId);
+  return {
+    data: { task, from: result.source.filename, to: result.dest.filename },
+    human: `Updated ${taskId}; moved to ${result.dest.filename}.`,
+    ...problemsField(problems),
+  };
+}
+
 async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const id = args.positionals[2];
   if (id === undefined) {
-    throw new CliError('USAGE', 'Usage: boardown task edit <id> [--title ...] [--status ...] ...', 2);
+    throw new CliError(
+      'USAGE',
+      'Usage: boardown task edit <id> [--title/--description/--type/--status/--epic/--no-epic] [--release <ref> | --no-release].',
+      2,
+    );
+  }
+
+  const releaseRef = flagString(args.flags, 'release');
+  const noRelease = flagBool(args.flags, 'no-release');
+  const noEpic = flagBool(args.flags, 'no-epic');
+  const epicSlug = flagString(args.flags, 'epic');
+  if (releaseRef !== undefined && noRelease) {
+    throw new CliError('USAGE', 'Use either --release <ref> or --no-release, not both.', 2);
+  }
+  const changesRelease = releaseRef !== undefined || noRelease;
+  const changesEpic = epicSlug !== undefined || noEpic;
+  if (changesRelease && changesEpic) {
+    throw new CliError(
+      'USAGE',
+      'Change --release/--no-release and --epic/--no-epic in separate edits.',
+      2,
+    );
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
@@ -166,35 +262,73 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
-  const patch: TaskPatch = {};
+  // Field-only patch (epic/release relocation handled separately below).
+  const fields: TaskPatch = {};
   const title = flagString(args.flags, 'title');
-  if (title !== undefined) patch.title = title;
+  if (title !== undefined) fields.title = title;
   const description = flagString(args.flags, 'description');
-  if (description !== undefined) patch.description = description;
+  if (description !== undefined) fields.description = description;
   const typeFlag = flagString(args.flags, 'type');
-  if (typeFlag !== undefined) patch.type = requireType(typeFlag, 'feature');
+  if (typeFlag !== undefined) fields.type = requireType(typeFlag, 'feature');
   const statusFlag = flagString(args.flags, 'status');
-  if (statusFlag !== undefined) patch.status = requireStatus(statusFlag);
-  if (flagBool(args.flags, 'no-epic')) {
-    patch.epic = null;
-  } else {
-    const epicSlug = flagString(args.flags, 'epic');
-    if (epicSlug !== undefined) patch.epic = epicSlug;
-  }
+  if (statusFlag !== undefined) fields.status = requireStatus(statusFlag);
+  const hasFields = Object.keys(fields).length > 0;
 
-  if (Object.keys(patch).length === 0) {
+  if (!hasFields && !changesRelease && !changesEpic) {
     throw new CliError(
       'USAGE',
-      'Nothing to edit. Provide at least one of --title/--description/--type/--status/--epic/--no-epic.',
+      'Nothing to edit. Provide fields and/or --release/--no-release/--epic/--no-epic.',
       2,
     );
   }
 
-  const updated = editTask(location.container, id, patch);
-  await writeContainer(fs, { kind: location.kind, container: updated });
-  const task = updated.tasks.find((t) => t.frontmatter.id === id);
+  // Release relocation: move in/out of a release, keeping the epic tag.
+  if (changesRelease) {
+    const edited = hasFields ? editTask(location.container, id, fields) : location.container;
+    const dest = resolveReleaseMove(snapshot, location, edited, id, releaseRef, noRelease);
+    if (dest === null) {
+      await writeContainer(fs, { kind: location.kind, container: edited });
+      const task = edited.tasks.find((t) => t.frontmatter.id === id);
+      return { data: { task, file: edited.filename }, human: `Updated ${id}.`, ...problemsField(problems) };
+    }
+    return moveAndReport(fs, location, edited, dest, id, problems);
+  }
 
-  return { data: { task }, human: `Updated ${id}.`, ...problemsField(problems) };
+  // Epic change. A task in a release carries the epic as a tag (edit in place);
+  // elsewhere membership is by file, so changing the epic relocates the task
+  // (the backlog serializer strips epic tags) — this mirrors store.updateTask.
+  const current = location.container.tasks.find((t) => t.frontmatter.id === id);
+  if (current === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+  const nextEpic: string | null | undefined = noEpic ? null : epicSlug;
+  const epicReallyChanges =
+    nextEpic !== undefined &&
+    ((nextEpic === null && current.frontmatter.epic !== undefined) ||
+      (typeof nextEpic === 'string' && nextEpic !== current.frontmatter.epic));
+
+  if (epicReallyChanges && location.kind !== 'release') {
+    const edited = hasFields ? editTask(location.container, id, fields) : location.container;
+    let dest: MoveDest;
+    if (nextEpic === null) {
+      dest = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
+    } else {
+      const epic = findEpic(snapshot, nextEpic);
+      if (epic === undefined) {
+        throw new CliError('EPIC_NOT_FOUND', `No epic "${nextEpic}".`);
+      }
+      dest = { kind: 'epic', container: epic, destEpic: { kind: 'set', slug: nextEpic } };
+    }
+    return moveAndReport(fs, location, edited, dest, id, problems);
+  }
+
+  // Pure in-place edit (fields, plus epic tag when the task is in a release).
+  const patch: TaskPatch = { ...fields };
+  if (nextEpic !== undefined) patch.epic = nextEpic;
+  const edited = editTask(location.container, id, patch);
+  await writeContainer(fs, { kind: location.kind, container: edited });
+  const task = edited.tasks.find((t) => t.frontmatter.id === id);
+  return { data: { task, file: edited.filename }, human: `Updated ${id}.`, ...problemsField(problems) };
 }
 
 async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -341,94 +475,6 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   return {
     data: { task, file: updated.filename, moved: true },
     human: `Reordered ${id} in ${updated.filename}.`,
-    ...problemsField(problems),
-  };
-}
-
-async function taskMove(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
-  const id = args.positionals[2];
-  if (id === undefined) {
-    throw new CliError(
-      'USAGE',
-      'Usage: boardown task move <id> (--release <r> | --epic <slug> | --backlog) [--status ...] [--before <id>].',
-      2,
-    );
-  }
-
-  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
-  const source = locateTask(snapshot, id);
-  if (source === null) {
-    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
-  }
-  const task = source.container.tasks.find((t) => t.frontmatter.id === id);
-  if (task === undefined) {
-    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
-  }
-
-  const releaseRef = flagString(args.flags, 'release');
-  const epicSlug = flagString(args.flags, 'epic');
-  const toBacklog = flagBool(args.flags, 'backlog');
-  const destinations = [releaseRef !== undefined, epicSlug !== undefined, toBacklog].filter(
-    Boolean,
-  ).length;
-  if (destinations !== 1) {
-    throw new CliError(
-      'USAGE',
-      'Provide exactly one destination: --release <r> | --epic <slug> | --backlog.',
-      2,
-    );
-  }
-
-  const statusFlag = flagString(args.flags, 'status');
-  const newStatus = statusFlag === undefined ? task.frontmatter.status : requireStatus(statusFlag);
-  const beforeTaskId = flagString(args.flags, 'before') ?? null;
-
-  let dest: ContainerRef;
-  let destEpic: DestEpic;
-  if (releaseRef !== undefined) {
-    const release = findRelease(snapshot, releaseRef);
-    if (release === undefined) {
-      throw new CliError('RELEASE_NOT_FOUND', `No release "${releaseRef}".`);
-    }
-    dest = { kind: 'release', container: release };
-    destEpic = { kind: 'preserve' };
-  } else if (epicSlug !== undefined) {
-    const epic = findEpic(snapshot, epicSlug);
-    if (epic === undefined) {
-      throw new CliError('EPIC_NOT_FOUND', `No epic "${epicSlug}".`);
-    }
-    dest = { kind: 'epic', container: epic };
-    destEpic = { kind: 'set', slug: epic.slug };
-  } else {
-    dest = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog() };
-    destEpic = { kind: 'clear' };
-  }
-
-  // Same file → an in-place reorder/status change, not a cross-container move.
-  if (source.container.filename === dest.container.filename) {
-    const updated = moveTaskInContainer(source.container, id, { status: newStatus, beforeTaskId });
-    await writeContainer(fs, { kind: source.kind, container: updated });
-    const moved = updated.tasks.find((t) => t.frontmatter.id === id);
-    return {
-      data: { task: moved, file: updated.filename },
-      human: `Moved ${id} within ${updated.filename}.`,
-      ...problemsField(problems),
-    };
-  }
-
-  const result = moveTaskBetweenContainers(source.container, dest.container, id, {
-    newStatus,
-    beforeTaskId,
-    destEpic,
-  });
-  await writeContainer(fs, { kind: source.kind, container: result.source });
-  await writeContainer(fs, { kind: dest.kind, container: result.dest });
-  const moved = result.dest.tasks.find((t) => t.frontmatter.id === id);
-
-  return {
-    data: { task: moved, from: result.source.filename, to: result.dest.filename },
-    human: `Moved ${id} → ${result.dest.filename}.`,
     ...problemsField(problems),
   };
 }

@@ -35,8 +35,9 @@ const DESCRIPTOR = {
     {
       name: 'task edit',
       usage:
-        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--status STATUS] [--epic SLUG | --no-epic]',
-      summary: 'Edit a task in place.',
+        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release]',
+      summary:
+        'Edit a task. --release/--no-release move it in/out of a release; --epic/--no-epic reassign the epic (relocates a backlog/epic task, retags a task in a release).',
     },
     {
       name: 'task status',
@@ -47,11 +48,6 @@ const DESCRIPTOR = {
       name: 'task reorder',
       usage: 'boardown task reorder <id> (--before ID | --after ID | --up | --down)',
       summary: "Change a task's priority (order) within its container.",
-    },
-    {
-      name: 'task move',
-      usage: 'boardown task move <id> (--release REF | --epic SLUG | --backlog) [--status STATUS] [--before ID]',
-      summary: 'Move a task between the backlog, an epic, and a release.',
     },
     { name: 'task rm', usage: 'boardown task rm <id>', summary: 'Delete a task.' },
     {

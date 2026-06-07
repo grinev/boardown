@@ -48,7 +48,7 @@ describe('release / epic / move (deepening layer)', () => {
       .data as { release: Release };
     expect(started.release.frontmatter.status).toBe('current');
 
-    await taskCommand(parseArgs(['task', 'move', 'TS-1', '--release', release.release.slug]), ctx);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.release.slug]), ctx);
     const afterMove = await board(ctx);
     expect(hasTask(afterMove.releases.find((r) => r.slug === release.release.slug)?.tasks, 'TS-1')).toBe(
       true,
@@ -77,23 +77,48 @@ describe('release / epic / move (deepening layer)', () => {
     ).rejects.toMatchObject({ code: 'RELEASE_CONFLICT' });
   });
 
-  it('epic add, move a task into it (tags the task), then edit the epic name', async () => {
+  it('epic add, reassign a task to it via edit --epic, then edit the epic name', async () => {
     await taskCommand(parseArgs(['task', 'add', 'Platform work']), ctx);
     const epic = (await epicCommand(parseArgs(['epic', 'add', 'Platform', '--color', '#ff0000']), ctx))
       .data as { epic: Epic };
     expect(epic.epic.frontmatter.color).toBe('#ff0000');
 
-    await taskCommand(parseArgs(['task', 'move', 'TS-1', '--epic', epic.epic.slug]), ctx);
-    const afterMove = await board(ctx);
-    const inEpic = afterMove.epics
-      .find((e) => e.slug === epic.epic.slug)
-      ?.tasks.find((t) => t.frontmatter.id === 'TS-1');
-    expect(inEpic?.frontmatter.epic).toBe(epic.epic.slug);
+    // For a backlog task, --epic relocates it into the epic's file (where the tag
+    // sticks); a task in a release would just be retagged in place.
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--epic', epic.epic.slug]), ctx);
+    const got = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
+    expect((got.data as { task: Task }).task.frontmatter.epic).toBe(epic.epic.slug);
 
     await epicCommand(parseArgs(['epic', 'edit', epic.epic.slug, '--name', 'Platform 2']), ctx);
     const afterEdit = await board(ctx);
     expect(afterEdit.epics.find((e) => e.slug === epic.epic.slug)?.frontmatter.name).toBe(
       'Platform 2',
+    );
+  });
+
+  it('edit --release moves a task in, --no-release moves it back to the backlog', async () => {
+    await taskCommand(parseArgs(['task', 'add', 'Roundtrip']), ctx);
+    const release = (await releaseCommand(parseArgs(['release', 'add', 'rt']), ctx)).data as {
+      release: Release;
+    };
+    await releaseCommand(parseArgs(['release', 'start', release.release.slug]), ctx);
+
+    // combined field edit + move in one call
+    await taskCommand(
+      parseArgs(['task', 'edit', 'TS-1', '--status', 'in-progress', '--release', release.release.slug]),
+      ctx,
+    );
+    let board2 = await board(ctx);
+    const moved = board2.releases
+      .find((r) => r.slug === release.release.slug)
+      ?.tasks.find((t) => t.frontmatter.id === 'TS-1');
+    expect(moved?.frontmatter.status).toBe('in-progress');
+
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--no-release']), ctx);
+    board2 = await board(ctx);
+    expect(hasTask(board2.backlog?.tasks, 'TS-1')).toBe(true);
+    expect(hasTask(board2.releases.find((r) => r.slug === release.release.slug)?.tasks, 'TS-1')).toBe(
+      false,
     );
   });
 
@@ -109,10 +134,10 @@ describe('release / epic / move (deepening layer)', () => {
     ).rejects.toMatchObject({ code: 'USAGE' });
   });
 
-  it('task move requires exactly one destination', async () => {
+  it('edit rejects --release together with --no-release', async () => {
     await taskCommand(parseArgs(['task', 'add', 'X']), ctx);
-    await expect(taskCommand(parseArgs(['task', 'move', 'TS-1']), ctx)).rejects.toMatchObject({
-      code: 'USAGE',
-    });
+    await expect(
+      taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', 'rt', '--no-release']), ctx),
+    ).rejects.toMatchObject({ code: 'USAGE' });
   });
 });
