@@ -30,6 +30,13 @@ const orderedTaskFrontmatter = (
       done: it.done,
     }));
   }
+  if (fm.notes && fm.notes.length > 0) {
+    out.notes = fm.notes.map((note) => ({
+      id: note.id,
+      text: note.text,
+      createdAt: note.createdAt,
+    }));
+  }
   return out;
 };
 

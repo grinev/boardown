@@ -206,3 +206,17 @@
 .checklistBadgeDone {
   color: var(--status-done-fg);
 }
+
+.notesBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* When both badges are present, keep them grouped on the right. */
+.checklistBadge + .notesBadge {
+  margin-left: 8px;
+}

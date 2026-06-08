@@ -18,6 +18,19 @@ export const ChecklistItemSchema = z.object({
 });
 export type ChecklistItem = z.infer<typeof ChecklistItemSchema>;
 
+// js-yaml parses an unquoted ISO 8601 timestamp into a Date; coerce it back.
+const timestampString = z.preprocess((value) => {
+  if (value instanceof Date) return value.toISOString();
+  return value;
+}, z.string().min(1));
+
+export const NoteSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1),
+  createdAt: timestampString,
+});
+export type Note = z.infer<typeof NoteSchema>;
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
   type: z.enum(TASK_TYPES),
@@ -25,6 +38,7 @@ export const TaskFrontmatterSchema = z.object({
   epic: z.string().min(1).optional(),
   order: z.number().int(),
   checklist: z.array(ChecklistItemSchema).optional(),
+  notes: z.array(NoteSchema).optional(),
 });
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 

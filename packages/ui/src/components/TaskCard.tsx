@@ -1,4 +1,4 @@
-import { ListChecks } from 'lucide-react';
+import { ListChecks, MessageSquare } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Epic, Task } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -21,6 +21,7 @@ export function TaskCard({ task, epic }: TaskCardProps) {
   const checklist = task.frontmatter.checklist ?? [];
   const checklistDone = checklist.filter((it) => it.done).length;
   const allDone = checklist.length > 0 && checklistDone === checklist.length;
+  const notes = task.frontmatter.notes ?? [];
 
   const epicStyle = epic
     ? ({
@@ -70,6 +71,12 @@ export function TaskCard({ task, epic }: TaskCardProps) {
           >
             <ListChecks size={14} aria-hidden="true" />
             {checklistDone}/{checklist.length}
+          </span>
+        )}
+        {notes.length > 0 && (
+          <span className={styles.notesBadge} title="Notes">
+            <MessageSquare size={14} aria-hidden="true" />
+            {notes.length}
           </span>
         )}
       </footer>

@@ -272,6 +272,79 @@ description
   });
 });
 
+describe('notes serialization', () => {
+  const withNotes = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## A task
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 100
+notes:
+  - id: n1
+    text: First note
+    createdAt: "2026-01-01T00:00:00.000Z"
+  - id: n2
+    text: Second note
+    createdAt: "2026-01-02T12:30:00.000Z"
+---
+
+description
+`;
+
+  it('round-trips a task with notes', () => {
+    const first = parseEpic(withNotes, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.notes).toEqual([
+      { id: 'n1', text: 'First note', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'n2', text: 'Second note', createdAt: '2026-01-02T12:30:00.000Z' },
+    ]);
+    const serialized = serializeEpic(first.value!);
+    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(second.problems).toEqual([]);
+    expect(serializeEpic(second.value!)).toBe(serialized);
+  });
+
+  it('orders notes after checklist with canonical item keys', () => {
+    const withBoth = withNotes.replace(
+      'notes:',
+      `checklist:
+  - id: c1
+    text: Do it
+    done: false
+notes:`,
+    );
+    const epic = parseEpic(withBoth, 'epics/ui-foundation.md', 'ui-foundation').value!;
+    const out = serializeEpic(epic);
+    expect(out.indexOf('checklist:')).toBeLessThan(out.indexOf('notes:'));
+    const firstNote = out.slice(out.indexOf('- id: n1'));
+    expect(firstNote.indexOf('id: n1')).toBeLessThan(firstNote.indexOf('text: '));
+    expect(firstNote.indexOf('text: ')).toBeLessThan(firstNote.indexOf('createdAt: '));
+  });
+
+  it('omits empty notes from the serialized frontmatter', () => {
+    const epic: Epic = {
+      filename: 'epics/parser.md',
+      slug: 'parser',
+      frontmatter: { name: 'Parser', color: '#8957e5' },
+      preamble: '',
+      tasks: [
+        {
+          title: 'Task',
+          description: '',
+          frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', order: 100, notes: [] },
+        },
+      ],
+    };
+    expect(serializeEpic(epic)).not.toContain('notes:');
+  });
+});
+
 describe('serializeBacklog', () => {
   it('omits task.epic field when serializing no_epic.md', () => {
     const text = `---

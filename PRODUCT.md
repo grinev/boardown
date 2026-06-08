@@ -37,6 +37,7 @@ A single unit of work. Fields:
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
+| `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 
 Task types are **hardcoded** in the MVP — no per-project customization.
 Each type has a fixed icon and color baked into the app, used for the badge
@@ -204,6 +205,10 @@ checklist:
   - id: c2
     text: Persist new order to disk
     done: false
+notes:
+  - id: n1
+    text: Keyboard reordering can reuse the same placeTask op.
+    createdAt: "2026-05-02T09:30:00.000Z"
 ---
 
 Allow tasks to be dragged between status columns and between releases.

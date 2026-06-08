@@ -17,6 +17,7 @@ import { Checklist } from './Checklist';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
 import { Modal } from './Modal';
+import { Notes } from './Notes';
 import styles from './TaskDetailsDialog.module.css';
 
 interface TaskDetailsDialogProps {
@@ -145,6 +146,10 @@ export function TaskDetailsDialog({
           <Checklist
             task={task}
             onChange={(items) => updateTask(id, { checklist: items })}
+          />
+          <Notes
+            task={task}
+            onChange={(notes) => updateTask(id, { notes })}
           />
         </main>
         <aside className={styles.sidebar}>

@@ -107,6 +107,45 @@ describe('TaskFrontmatterSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an optional list of notes', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      notes: [
+        { id: 'n1', text: 'First note', createdAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'n2', text: 'Second note', createdAt: '2026-01-02T12:30:00.000Z' },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('coerces a Date createdAt back to an ISO string', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      notes: [{ id: 'n1', text: 'Note', createdAt: new Date('2026-01-01T00:00:00.000Z') }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.notes?.[0]?.createdAt).toBe('2026-01-01T00:00:00.000Z');
+    }
+  });
+
+  it('rejects a note with empty text', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      notes: [{ id: 'n1', text: '', createdAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('ReleaseFrontmatterSchema', () => {

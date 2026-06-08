@@ -4,6 +4,7 @@ import type {
   BoardConfig,
   ChecklistItem,
   Epic,
+  Note,
   Release,
   ReleaseStatus,
   Task,
@@ -308,6 +309,7 @@ export interface TaskPatch {
   type?: TaskType;
   status?: TaskStatus;
   checklist?: ChecklistItem[];
+  notes?: Note[];
 }
 
 export const editTask = <C extends Container>(
@@ -343,6 +345,13 @@ export const editTask = <C extends Container>(
         delete nextFrontmatter.checklist;
       } else {
         nextFrontmatter.checklist = patch.checklist;
+      }
+    }
+    if (patch.notes !== undefined) {
+      if (patch.notes.length === 0) {
+        delete nextFrontmatter.notes;
+      } else {
+        nextFrontmatter.notes = patch.notes;
       }
     }
     return {

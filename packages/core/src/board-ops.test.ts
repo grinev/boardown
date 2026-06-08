@@ -146,6 +146,24 @@ describe('editTask', () => {
     const r1 = editTask(r0, 'BD-1', { checklist: [] });
     expect(r1.tasks[0]!.frontmatter.checklist).toBeUndefined();
   });
+
+  it('sets the notes', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, 'BD-1', {
+      notes: [{ id: 'n1', text: 'A note', createdAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    expect(r1.tasks[0]!.frontmatter.notes).toEqual([
+      { id: 'n1', text: 'A note', createdAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('clears the notes when patched with an empty array', () => {
+    const t = task('BD-1', 'todo', 100);
+    t.frontmatter.notes = [{ id: 'n1', text: 'Old', createdAt: '2026-01-01T00:00:00.000Z' }];
+    const r0 = release(t);
+    const r1 = editTask(r0, 'BD-1', { notes: [] });
+    expect(r1.tasks[0]!.frontmatter.notes).toBeUndefined();
+  });
 });
 
 describe('editEpic', () => {
