@@ -11,12 +11,20 @@ export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 const HEX_COLOR_MESSAGE = 'color must be a 6-digit hex like #1f6feb';
 
+export const ChecklistItemSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1),
+  done: z.boolean(),
+});
+export type ChecklistItem = z.infer<typeof ChecklistItemSchema>;
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
   type: z.enum(TASK_TYPES),
   status: z.enum(TASK_STATUSES),
   epic: z.string().min(1).optional(),
   order: z.number().int(),
+  checklist: z.array(ChecklistItemSchema).optional(),
 });
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 

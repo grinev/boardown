@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { nextTaskId, verifyNextId } from './id-generator.js';
-import type { BoardConfig, Task } from './schemas.js';
+import { nextChecklistItemId, nextTaskId, verifyNextId } from './id-generator.js';
+import type { BoardConfig, ChecklistItem, Task } from './schemas.js';
 
 const baseConfig: BoardConfig = {
   idPrefix: 'BD',
@@ -50,5 +50,21 @@ describe('verifyNextId', () => {
     const result = verifyNextId(baseConfig, []);
     expect(result.bumped).toBe(false);
     expect(result.config.nextId).toBe(7);
+  });
+});
+
+describe('nextChecklistItemId', () => {
+  const item = (id: string): ChecklistItem => ({ id, text: id, done: false });
+
+  it('starts at c1 for an empty list', () => {
+    expect(nextChecklistItemId([])).toBe('c1');
+  });
+
+  it('returns one past the maximum numeric suffix', () => {
+    expect(nextChecklistItemId([item('c1'), item('c4'), item('c2')])).toBe('c5');
+  });
+
+  it('ignores ids that do not match the cN pattern', () => {
+    expect(nextChecklistItemId([item('foo'), item('c3')])).toBe('c4');
   });
 });

@@ -13,6 +13,7 @@ import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
+import { Checklist } from './Checklist';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
 import { Modal } from './Modal';
@@ -141,6 +142,10 @@ export function TaskDetailsDialog({
               onSave={(next) => updateTask(id, { description: next })}
             />
           </section>
+          <Checklist
+            task={task}
+            onChange={(items) => updateTask(id, { checklist: items })}
+          />
         </main>
         <aside className={styles.sidebar}>
           <IconSelect

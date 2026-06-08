@@ -2,6 +2,7 @@ import { nextTaskId } from './id-generator.js';
 import type {
   Backlog,
   BoardConfig,
+  ChecklistItem,
   Epic,
   Release,
   ReleaseStatus,
@@ -306,6 +307,7 @@ export interface TaskPatch {
   epic?: string | null;
   type?: TaskType;
   status?: TaskStatus;
+  checklist?: ChecklistItem[];
 }
 
 export const editTask = <C extends Container>(
@@ -335,6 +337,13 @@ export const editTask = <C extends Container>(
     }
     if (patch.type !== undefined) {
       nextFrontmatter.type = patch.type;
+    }
+    if (patch.checklist !== undefined) {
+      if (patch.checklist.length === 0) {
+        delete nextFrontmatter.checklist;
+      } else {
+        nextFrontmatter.checklist = patch.checklist;
+      }
     }
     return {
       ...t,

@@ -36,6 +36,7 @@ A single unit of work. Fields:
 | `status`      | string    | One of `todo`, `in-progress`, `done`. Hardcoded set.            |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. |
+| `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 
 Task types are **hardcoded** in the MVP — no per-project customization.
 Each type has a fixed icon and color baked into the app, used for the badge
@@ -196,6 +197,13 @@ type: feature
 status: in-progress
 epic: ui-foundation
 order: 100
+checklist:
+  - id: c1
+    text: Wire up @dnd-kit sensors
+    done: true
+  - id: c2
+    text: Persist new order to disk
+    done: false
 ---
 
 Allow tasks to be dragged between status columns and between releases.

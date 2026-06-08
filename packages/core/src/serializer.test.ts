@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseBacklog, parseEpic, parseRelease } from './parser.js';
+import type { Epic } from './schemas.js';
 import { serializeBacklog, serializeEpic, serializeRelease } from './serializer.js';
 
 const RELEASE = `---
@@ -200,6 +201,74 @@ order: 100
     expect(first.value!.tasks[0]!.frontmatter.epic).toBe('parser');
     const serialized = serializeEpic(first.value!);
     expect(serialized).not.toMatch(/^epic:/m);
+  });
+});
+
+describe('checklist serialization', () => {
+  const withChecklist = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## A task
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 100
+checklist:
+  - id: c1
+    text: Wire up the parser
+    done: true
+  - id: c2
+    text: Add tests
+    done: false
+---
+
+description
+`;
+
+  it('round-trips a task with a checklist', () => {
+    const first = parseEpic(withChecklist, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.checklist).toEqual([
+      { id: 'c1', text: 'Wire up the parser', done: true },
+      { id: 'c2', text: 'Add tests', done: false },
+    ]);
+    const serialized = serializeEpic(first.value!);
+    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(second.problems).toEqual([]);
+    expect(serializeEpic(second.value!)).toBe(serialized);
+  });
+
+  it('orders checklist after order and item keys canonically', () => {
+    const release = parseEpic(withChecklist, 'epics/ui-foundation.md', 'ui-foundation')
+      .value!;
+    const out = serializeEpic(release);
+    const orderIdx = out.indexOf('order: ');
+    const checklistIdx = out.indexOf('checklist:');
+    expect(orderIdx).toBeLessThan(checklistIdx);
+    const firstItem = out.slice(out.indexOf('- id: c1'));
+    expect(firstItem.indexOf('id: c1')).toBeLessThan(firstItem.indexOf('text: '));
+    expect(firstItem.indexOf('text: ')).toBeLessThan(firstItem.indexOf('done: '));
+  });
+
+  it('omits an empty checklist from the serialized frontmatter', () => {
+    const epic: Epic = {
+      filename: 'epics/parser.md',
+      slug: 'parser',
+      frontmatter: { name: 'Parser', color: '#8957e5' },
+      preamble: '',
+      tasks: [
+        {
+          title: 'Task',
+          description: '',
+          frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', order: 100, checklist: [] },
+        },
+      ],
+    };
+    expect(serializeEpic(epic)).not.toContain('checklist:');
   });
 });
 

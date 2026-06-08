@@ -23,6 +23,13 @@ const orderedTaskFrontmatter = (
   };
   if (!options.omitEpic && fm.epic !== undefined) out.epic = fm.epic;
   out.order = fm.order;
+  if (fm.checklist && fm.checklist.length > 0) {
+    out.checklist = fm.checklist.map((it) => ({
+      id: it.id,
+      text: it.text,
+      done: it.done,
+    }));
+  }
   return out;
 };
 

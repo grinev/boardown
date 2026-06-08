@@ -71,6 +71,42 @@ describe('TaskFrontmatterSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an optional checklist of items', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      checklist: [
+        { id: 'c1', text: 'First', done: true },
+        { id: 'c2', text: 'Second', done: false },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a checklist item with a non-boolean done', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      checklist: [{ id: 'c1', text: 'First', done: 'yes' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a checklist item with empty text', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      checklist: [{ id: 'c1', text: '', done: false }],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('ReleaseFrontmatterSchema', () => {

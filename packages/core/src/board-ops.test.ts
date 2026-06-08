@@ -128,6 +128,24 @@ describe('editTask', () => {
     expect(r1.tasks[0]!.frontmatter.order).toBe(100);
     expect(r1.tasks[0]!.title).toBe('Same column');
   });
+
+  it('sets the checklist', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, 'BD-1', {
+      checklist: [{ id: 'c1', text: 'Do the thing', done: false }],
+    });
+    expect(r1.tasks[0]!.frontmatter.checklist).toEqual([
+      { id: 'c1', text: 'Do the thing', done: false },
+    ]);
+  });
+
+  it('clears the checklist when patched with an empty array', () => {
+    const t = task('BD-1', 'todo', 100);
+    t.frontmatter.checklist = [{ id: 'c1', text: 'Old', done: true }];
+    const r0 = release(t);
+    const r1 = editTask(r0, 'BD-1', { checklist: [] });
+    expect(r1.tasks[0]!.frontmatter.checklist).toBeUndefined();
+  });
 });
 
 describe('editEpic', () => {

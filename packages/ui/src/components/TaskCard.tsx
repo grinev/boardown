@@ -1,3 +1,4 @@
+import { ListChecks } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Epic, Task } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -16,6 +17,10 @@ export function TaskCard({ task, epic }: TaskCardProps) {
   const TypeIcon = typeMeta.icon;
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
+
+  const checklist = task.frontmatter.checklist ?? [];
+  const checklistDone = checklist.filter((it) => it.done).length;
+  const allDone = checklist.length > 0 && checklistDone === checklist.length;
 
   const epicStyle = epic
     ? ({
@@ -58,6 +63,15 @@ export function TaskCard({ task, epic }: TaskCardProps) {
           aria-label={typeMeta.label}
         />
         <span className={styles.idText}>{id}</span>
+        {checklist.length > 0 && (
+          <span
+            className={`${styles.checklistBadge} ${allDone ? styles.checklistBadgeDone : ''}`}
+            title="Checklist"
+          >
+            <ListChecks size={14} aria-hidden="true" />
+            {checklistDone}/{checklist.length}
+          </span>
+        )}
       </footer>
     </article>
   );

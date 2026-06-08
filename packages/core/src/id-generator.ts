@@ -1,4 +1,17 @@
-import type { BoardConfig, Task } from './schemas.js';
+import type { BoardConfig, ChecklistItem, Task } from './schemas.js';
+
+const CHECKLIST_ID_RE = /^c(\d+)$/;
+
+export const nextChecklistItemId = (items: readonly ChecklistItem[]): string => {
+  let maxN = 0;
+  for (const item of items) {
+    const match = CHECKLIST_ID_RE.exec(item.id);
+    if (match === null) continue;
+    const n = Number.parseInt(match[1]!, 10);
+    if (Number.isFinite(n) && n > maxN) maxN = n;
+  }
+  return `c${maxN + 1}`;
+};
 
 export const nextTaskId = (
   config: BoardConfig,
