@@ -30,6 +30,8 @@ Commands:
   task status <id> <s>   Change a task status (todo | in-progress | done).
   task reorder <id>      Change priority (--before | --after <id> | --up | --down).
   task rm <id>           Delete a task.
+  task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
+  task notes <op>        Note: add | edit | rm (on <id>).
   release get <ref>      Show one release and its tasks.
   release list           List releases.
   release current        Show the current release and its tasks.

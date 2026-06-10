@@ -1,7 +1,15 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Backlog, BoardConfig, Epic, Release, Task } from '@boardown/core';
+import type {
+  Backlog,
+  BoardConfig,
+  ChecklistItem,
+  Epic,
+  Note,
+  Release,
+  Task,
+} from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import { loadBoardOrThrow } from '../persistence';
@@ -92,6 +100,80 @@ describe('cli commands (integration)', () => {
     await expect(
       taskCommand(parseArgs(['task', 'add', 'X', '--epic', 'ghost']), ctx),
     ).rejects.toThrow(/epic/i);
+  });
+
+  it('checklist add → done → undone → edit → rm round-trips', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'Has checklist']), ctx);
+
+    const add = await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'First item']), ctx);
+    const added = add.data as { task: Task; item: ChecklistItem };
+    expect(added.item.id).toBe('c1');
+    expect(added.item.done).toBe(false);
+    expect(added.task.frontmatter.checklist).toHaveLength(1);
+
+    await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'Second item']), ctx);
+
+    const checkedDone = await taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1']), ctx);
+    const afterDone = (checkedDone.data as { task: Task }).task;
+    expect(afterDone.frontmatter.checklist?.find((i) => i.id === 'c1')?.done).toBe(true);
+
+    // alias `check` + idempotent undone
+    const checkedUndone = await taskCommand(parseArgs(['task', 'check', 'undone', 'TS-1', 'c1']), ctx);
+    const afterUndone = (checkedUndone.data as { task: Task }).task;
+    expect(afterUndone.frontmatter.checklist?.find((i) => i.id === 'c1')?.done).toBe(false);
+
+    await taskCommand(parseArgs(['task', 'checklist', 'edit', 'TS-1', 'c1', 'Renamed item']), ctx);
+    const removed = await taskCommand(parseArgs(['task', 'checklist', 'rm', 'TS-1', 'c2']), ctx);
+    const afterRm = (removed.data as { task: Task; removed: string }).task;
+    expect((removed.data as { removed: string }).removed).toBe('c2');
+    expect(afterRm.frontmatter.checklist).toHaveLength(1);
+    expect(afterRm.frontmatter.checklist?.[0]?.id).toBe('c1');
+    expect(afterRm.frontmatter.checklist?.[0]?.text).toBe('Renamed item');
+  });
+
+  it('notes add → edit → rm round-trips', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'Has notes']), ctx);
+
+    const add = await taskCommand(parseArgs(['task', 'notes', 'add', 'TS-1', 'A thought']), ctx);
+    const added = add.data as { task: Task; note: Note };
+    expect(added.note.id).toBe('n1');
+    expect(Number.isNaN(Date.parse(added.note.createdAt))).toBe(false);
+    expect(added.task.frontmatter.notes).toHaveLength(1);
+
+    // alias `note`
+    await taskCommand(parseArgs(['task', 'note', 'add', 'TS-1', 'Another thought']), ctx);
+    await taskCommand(parseArgs(['task', 'notes', 'edit', 'TS-1', 'n1', 'Edited thought']), ctx);
+    const removed = await taskCommand(parseArgs(['task', 'notes', 'rm', 'TS-1', 'n2']), ctx);
+    const afterRm = (removed.data as { task: Task }).task;
+    expect(afterRm.frontmatter.notes).toHaveLength(1);
+    expect(afterRm.frontmatter.notes?.[0]?.id).toBe('n1');
+    expect(afterRm.frontmatter.notes?.[0]?.text).toBe('Edited thought');
+  });
+
+  it('checklist/notes ops reject a missing item with ITEM_NOT_FOUND', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+    await expect(
+      taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c9']), ctx),
+    ).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' });
+    await expect(
+      taskCommand(parseArgs(['task', 'notes', 'rm', 'TS-1', 'n9']), ctx),
+    ).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' });
+  });
+
+  it('task get human output lists checklist and notes with ids', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+    await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'Buy milk']), ctx);
+    await taskCommand(parseArgs(['task', 'notes', 'add', 'TS-1', 'Remember this']), ctx);
+    const get = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
+    expect(get.human).toContain('Checklist (0/1)');
+    expect(get.human).toContain('c1');
+    expect(get.human).toContain('Buy milk');
+    expect(get.human).toContain('Notes (1)');
+    expect(get.human).toContain('Remember this');
   });
 
   it('reports NO_BOARD when no board exists', async () => {
