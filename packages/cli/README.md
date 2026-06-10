@@ -16,6 +16,8 @@ boardown task add <title>       Create a task (--type --status --epic --release 
 boardown task edit <id>         Edit a task (--title --description --type --status --epic --no-epic).
 boardown task status <id> <s>   Change a task status (todo | in-progress | done).
 boardown task rm <id>           Delete a task.
+boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
+boardown task notes <op>        Note: add | edit | rm (on <id>).
 boardown schema                 Print the machine-readable command/enum contract.
 ```
 
