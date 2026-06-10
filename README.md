@@ -243,11 +243,11 @@ are unsigned for now — end users see a SmartScreen (Windows) / Gatekeeper
 Every shell's app icon derives from a single master, `assets/brand/boardown.svg`.
 `pnpm icons` rasterizes it (via `sharp` + `png2icons`) into the per-shell binaries
 each build expects — the VS Code Marketplace `icon.png`, and Electron's
-`build/icon.{ico,icns,png}` (Windows / macOS / Linux). Those outputs are committed,
-so normal builds and CI never need the rasterizer. To change the logo, replace the
-one SVG and re-run `pnpm icons`. (The VS Code activity-bar glyph in
-`packages/vscode/media/` is a separate, host-recolored UI icon and is not part of
-this set.)
+`build/icon.{ico,icns,png}` (Windows / macOS / Linux) — and also writes the VS Code
+command/tab button mark `packages/vscode/media/board.svg` as a small colored copy of
+the master, so it never drifts from the app icon. Those outputs are committed, so
+normal builds and CI never need the rasterizer. To change the logo, replace the one
+SVG and re-run `pnpm icons`.
 
 ### Sample board for the dev server
 

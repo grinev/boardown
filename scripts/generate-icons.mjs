@@ -36,6 +36,15 @@ for (const { out, size } of pngTargets) {
   await write(out, await renderPng(svg, size));
 }
 
+// VS Code's command/tab button reuses the master mark as a small colored SVG,
+// so it never drifts from the app icon. Drop the comment and shrink the default
+// width/height; the 1024 viewBox keeps scaling it crisply.
+const toolbarSvg = svg
+  .toString()
+  .replace(/^<!--[\s\S]*?-->\s*/, '')
+  .replace('width="1024" height="1024"', 'width="24" height="24"');
+await write('packages/vscode/media/board.svg', toolbarSvg);
+
 // ICO (Windows) and ICNS (macOS) are built from a single high-res PNG;
 // png2icons downscales it to every embedded size internally.
 const hi = await renderPng(svg, 1024);

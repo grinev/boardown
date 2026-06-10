@@ -35,10 +35,7 @@
       {
         "command": "boardown.openBoard",
         "title": "Boardown: Open Board",
-        "icon": {
-          "light": "media/board-light.svg",
-          "dark": "media/board-dark.svg"
-        }
+        "icon": "media/board.svg"
       }
     ],
     "menus": {

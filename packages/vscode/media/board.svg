@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="224" fill="#63301A"/>
+  <!-- board inside the dark frame -->
+  <rect x="128" y="128" width="768" height="768" rx="150" fill="#D88C4A"/>
+  <!-- two cards, equal spacing, offset like nostrils -->
+  <rect x="240" y="362" width="216" height="216" rx="48" fill="#63301A"/>
+  <rect x="568" y="446" width="216" height="216" rx="48" fill="#63301A"/>
+</svg>

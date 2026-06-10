@@ -33,10 +33,7 @@ export function activate(context: vscode.ExtensionContext): void {
         },
       );
       panel = created;
-      created.iconPath = {
-        light: vscode.Uri.joinPath(context.extensionUri, 'media', 'board-light.svg'),
-        dark: vscode.Uri.joinPath(context.extensionUri, 'media', 'board-dark.svg'),
-      };
+      created.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'board.svg');
 
       created.webview.html = getHtml(created.webview, context.extensionUri);
 
