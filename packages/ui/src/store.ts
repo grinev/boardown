@@ -90,6 +90,7 @@ interface BoardState {
   settingsOpen: boolean;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   reload: () => Promise<void>;
+  reloadSilent: () => Promise<void>;
   closeConflict: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
@@ -297,6 +298,41 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   reload: async () => {
     const { rawFs } = get();
     if (rawFs) await get().load(rawFs);
+  },
+
+  // Re-read the board and swap it in place without flipping status to
+  // 'loading', so an external change (git, the CLI, another editor) refreshes
+  // the view without flashing the loading screen. Only valid once a board is
+  // shown: outside 'ready', or when the board became invalid/absent on disk,
+  // fall back to the visible load() path — there a real problem should surface
+  // rather than silently keeping stale data.
+  reloadSilent: async () => {
+    const { rawFs, status } = get();
+    if (!rawFs) return;
+    if (status !== 'ready') {
+      await get().load(rawFs);
+      return;
+    }
+    try {
+      const result = await loadBoard(rawFs);
+      if (result.kind !== 'loaded') {
+        await get().load(rawFs);
+        return;
+      }
+      const guarded = createGuardedFs(rawFs, result.fileVersions, () =>
+        set({ conflictOpen: true }),
+      );
+      set({
+        fs: guarded,
+        snapshot: result.snapshot,
+        problems: result.snapshot.problems,
+        errorMessage: null,
+        conflictOpen: false,
+        theme: result.snapshot.config.theme ?? 'light',
+      });
+    } catch {
+      await get().load(rawFs);
+    }
   },
 
   closeConflict: () => set({ conflictOpen: false }),
