@@ -16,6 +16,9 @@ export interface Settings {
   windowMaximized?: boolean;
   // The project folder open when the app last closed, reopened on next launch.
   lastFolder?: string;
+  // Auto-refresh the board when its .boardown/ files change on disk. Absent =
+  // on; only an explicit false disables it.
+  autoRefresh?: boolean;
 }
 
 const CHOICES: readonly ThemeChoice[] = ['system', 'light', 'dark'];
@@ -58,6 +61,8 @@ export async function loadSettings(): Promise<Settings> {
       ...(bounds ? { windowBounds: bounds } : {}),
       ...(obj.windowMaximized === true ? { windowMaximized: true } : {}),
       ...(typeof obj.lastFolder === 'string' ? { lastFolder: obj.lastFolder } : {}),
+      // Default on: persist the field only when explicitly disabled.
+      ...(obj.autoRefresh === false ? { autoRefresh: false } : {}),
     };
   } catch {
     return { themeChoice: 'system' };

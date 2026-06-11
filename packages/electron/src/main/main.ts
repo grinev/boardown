@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { statSync, readdirSync, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import {
   app,
@@ -45,8 +45,28 @@ interface BoardContext {
 }
 const boards = new Map<number, BoardContext>();
 
+// How long after the host writes a file its own watch event is ignored, so the
+// renderer's own saves don't bounce back as an "external change" refresh.
+const ECHO_WINDOW_MS = 2000;
+// Collapse a burst of changes (e.g. a `git checkout`) into a single refresh.
+const REFRESH_DEBOUNCE_MS = 200;
+
+// Per-window file watcher over the open board's .boardown/, keyed by webContents
+// id (parallel to `boards`). Present only while auto-refresh is on and a board is
+// open; recentWrites tracks the host's own writes for echo suppression.
+interface BoardWatcher {
+  watchers: FSWatcher[];
+  recentWrites: Map<string, number>;
+  debounceTimer?: ReturnType<typeof setTimeout> | undefined;
+}
+const boardWatchers = new Map<number, BoardWatcher>();
+
 // Persisted app settings (theme choice + window bounds), loaded on startup.
 let settings: Settings = { themeChoice: 'system' };
+
+// The native application menu, built once at startup. Used as the macOS system
+// menu bar and as the Win/Linux popup triggered by the ☰ button.
+let appMenu: Menu;
 
 function effectiveTheme(): Theme {
   if (settings.themeChoice === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
@@ -88,6 +108,95 @@ function broadcastTheme(): void {
   }
 }
 
+function autoRefreshEnabled(): boolean {
+  // Absent means on; only an explicit false disables it.
+  return settings.autoRefresh !== false;
+}
+
+function disposeWatcher(id: number): void {
+  const bw = boardWatchers.get(id);
+  if (!bw) return;
+  clearTimeout(bw.debounceTimer);
+  for (const w of bw.watchers) w.close();
+  bw.recentWrites.clear();
+  boardWatchers.delete(id);
+}
+
+// (Re)build the per-window watcher for the board open in `window`: replaces any
+// existing one (board switch) and tears it down when auto-refresh is off.
+// .boardown/ has a fixed shallow layout (config.yaml + releases/ + epics/), so
+// rather than rely on recursive fs.watch — unreliable on Linux — we watch the
+// root and each first-level subdirectory explicitly.
+function applyWatcher(window: BrowserWindow): void {
+  const id = window.webContents.id;
+  disposeWatcher(id);
+  if (!autoRefreshEnabled()) return;
+  const ctx = boards.get(id);
+  if (!ctx) return;
+
+  const bw: BoardWatcher = { watchers: [], recentWrites: new Map() };
+  boardWatchers.set(id, bw);
+
+  const onEvent =
+    (dir: string) =>
+    (_event: string, filename: string | null): void => {
+      if (filename !== null) {
+        const abs = path.join(dir, filename);
+        const at = bw.recentWrites.get(abs);
+        if (at !== undefined) {
+          // The host's own write echoes back as a watch event — ignore it while
+          // fresh; let a stale entry fall through (and drop it).
+          if (Date.now() - at <= ECHO_WINDOW_MS) return;
+          bw.recentWrites.delete(abs);
+        }
+      }
+      clearTimeout(bw.debounceTimer);
+      bw.debounceTimer = setTimeout(() => {
+        bw.debounceTimer = undefined;
+        if (!window.isDestroyed()) window.webContents.send(IPC.boardChanged);
+      }, REFRESH_DEBOUNCE_MS);
+    };
+
+  const watchDir = (dir: string): void => {
+    try {
+      bw.watchers.push(watch(dir, onEvent(dir)));
+    } catch {
+      // A directory that isn't there (or vanished between readdir and watch) —
+      // skip it; the root watcher still catches it being created.
+    }
+  };
+
+  watchDir(ctx.boardRoot);
+  try {
+    for (const entry of readdirSync(ctx.boardRoot, { withFileTypes: true })) {
+      if (entry.isDirectory()) watchDir(path.join(ctx.boardRoot, entry.name));
+    }
+  } catch {
+    // Board root missing — nothing to watch until files appear.
+  }
+}
+
+// Persist first, mutate in-memory only on success (mirrors setThemeChoice), so a
+// failed save leaves main consistent and the renderer reverts its checkbox.
+// Applies to every open window immediately; the toggle lives in the renderer's
+// Settings panel.
+async function setAutoRefresh(enabled: boolean): Promise<void> {
+  const next: Settings = { ...settings, autoRefresh: enabled };
+  await saveSettings(next);
+  settings = next;
+  for (const window of BrowserWindow.getAllWindows()) applyWatcher(window);
+}
+
+function buildMenu(): void {
+  appMenu = buildAppMenu({
+    openFolder: (window) => void showOpenDialog(window),
+    closeBoard: (window) => closeBoard(window),
+  });
+  // macOS keeps the app menu as its system menu bar; Windows/Linux drop the bar
+  // and reach the same menu through the renderer's ☰ popup.
+  Menu.setApplicationMenu(process.platform === 'darwin' ? appMenu : null);
+}
+
 function setBoard(window: BrowserWindow, folder: string): void {
   boards.set(window.webContents.id, { folder, boardRoot: path.join(folder, BOARD_DIR) });
 }
@@ -98,6 +207,8 @@ async function openBoard(window: BrowserWindow, folder: string): Promise<void> {
   settings = { ...settings, lastFolder: folder };
   await addRecent(folder);
   void saveSettings(settings);
+  // Switch the watcher to the new board (replaces any prior one for this window).
+  applyWatcher(window);
   window.webContents.send(IPC.boardOpened, folder);
 }
 
@@ -105,6 +216,7 @@ async function openBoard(window: BrowserWindow, folder: string): Promise<void> {
 // stays in recents, so reopening it is one click away — but closing is
 // deliberate, so don't auto-reopen it on next launch.
 function closeBoard(window: BrowserWindow): void {
+  disposeWatcher(window.webContents.id);
   boards.delete(window.webContents.id);
   const { lastFolder, ...rest } = settings;
   settings = rest;
@@ -177,6 +289,7 @@ function createWindow(initialFolder: string | null): void {
     settings = { ...settings, lastFolder: initialFolder };
     void addRecent(initialFolder);
     void saveSettings(settings);
+    applyWatcher(window);
   }
 
   // Remember size/position across launches. Debounce resize/move (they fire in
@@ -195,6 +308,7 @@ function createWindow(initialFolder: string | null): void {
   });
 
   window.webContents.on('destroyed', () => {
+    disposeWatcher(id);
     boards.delete(id);
   });
 
@@ -224,7 +338,7 @@ function applySecurityHeaders(): void {
   });
 }
 
-function registerIpc(appMenu: Menu): void {
+function registerIpc(): void {
   ipcMain.on(IPC.bootstrap, (event) => {
     const ctx = boards.get(event.sender.id);
     const state: BootstrapState = {
@@ -232,6 +346,7 @@ function registerIpc(appMenu: Menu): void {
       themeChoice: settings.themeChoice,
       initialFolder: ctx?.folder ?? null,
       showMenuButton: process.platform !== 'darwin',
+      autoRefresh: autoRefreshEnabled(),
     };
     event.returnValue = state;
   });
@@ -244,7 +359,12 @@ function registerIpc(appMenu: Menu): void {
   ipcMain.handle(IPC.fs, async (event: IpcMainInvokeEvent, req: FsRequest) => {
     const ctx = boards.get(event.sender.id);
     if (!ctx) throw new Error('No board is open for this window');
-    return handleFsRequest(ctx.boardRoot, req);
+    const id = event.sender.id;
+    // Record the host's own writes so the watcher can tell them apart from
+    // external changes. No-op when this window has no watcher (auto-refresh off).
+    return handleFsRequest(ctx.boardRoot, req, (abs) => {
+      boardWatchers.get(id)?.recentWrites.set(abs, Date.now());
+    });
   });
 
   ipcMain.handle(IPC.pickFolder, async (event: IpcMainInvokeEvent) => {
@@ -263,6 +383,7 @@ function registerIpc(appMenu: Menu): void {
   ipcMain.handle(IPC.cancelBoard, async (event: IpcMainInvokeEvent) => {
     const ctx = boards.get(event.sender.id);
     if (!ctx) return;
+    disposeWatcher(event.sender.id);
     boards.delete(event.sender.id);
     if (settings.lastFolder === ctx.folder) {
       const { lastFolder, ...rest } = settings;
@@ -288,17 +409,20 @@ function registerIpc(appMenu: Menu): void {
     settings = next;
     broadcastTheme();
   });
+
+  ipcMain.handle(IPC.setAutoRefresh, async (_event: IpcMainInvokeEvent, enabled: boolean) => {
+    // IPC is an untrusted, stringly-typed boundary — validate before persisting.
+    if (typeof enabled !== 'boolean') return;
+    await setAutoRefresh(enabled);
+  });
 }
 
 app
   .whenReady()
   .then(async () => {
     settings = await loadSettings();
-    const appMenu = buildAppMenu({
-      openFolder: (window) => void showOpenDialog(window),
-      closeBoard: (window) => closeBoard(window),
-    });
-    registerIpc(appMenu);
+    buildMenu();
+    registerIpc();
     applySecurityHeaders();
     // macOS always shows its system menu bar, so keep the app menu there. On
     // Windows/Linux drop the menu bar entirely; the renderer's ☰ button pops

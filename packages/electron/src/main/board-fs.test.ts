@@ -1,7 +1,7 @@
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleFsRequest, resolveTarget } from './board-fs';
 
 const ROOT = path.resolve('/tmp/boardown-test/.boardown');
@@ -91,5 +91,18 @@ describe('handleFsRequest', () => {
     await expect(
       handleFsRequest(root, { method: 'read', path: '../escape' }),
     ).rejects.toThrow(/Invalid path/);
+  });
+
+  it('calls onWrite with the absolute path on write, and never on read/stat/list', async () => {
+    const onWrite = vi.fn();
+    await handleFsRequest(root, { method: 'write', path: 'releases/r.md', content: 'hi' }, onWrite);
+    expect(onWrite).toHaveBeenCalledTimes(1);
+    expect(onWrite).toHaveBeenCalledWith(path.join(root, 'releases', 'r.md'));
+
+    onWrite.mockClear();
+    await handleFsRequest(root, { method: 'read', path: 'releases/r.md' }, onWrite);
+    await handleFsRequest(root, { method: 'stat', path: 'releases/r.md' }, onWrite);
+    await handleFsRequest(root, { method: 'list', path: 'releases' }, onWrite);
+    expect(onWrite).not.toHaveBeenCalled();
   });
 });
