@@ -5,13 +5,17 @@ import {
   editTask,
   emptyBacklog,
   moveTaskBetweenContainers,
+  nextChecklistItemId,
+  nextNoteId,
   reorderTask,
   TASK_STATUSES,
   TASK_TYPES,
   type BoardSnapshot,
+  type ChecklistItem,
   type DestEpic,
   type FsAdapter,
   type NewTaskInput,
+  type Note,
   type ParseProblem,
   type Task,
   type TaskPatch,
@@ -50,10 +54,16 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     case 'remove':
     case 'delete':
       return taskRm(args, ctx);
+    case 'checklist':
+    case 'check':
+      return taskChecklist(args, ctx);
+    case 'notes':
+    case 'note':
+      return taskNotes(args, ctx);
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | rm.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | rm | checklist | notes.`,
         2,
       );
   }
@@ -367,11 +377,24 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   return { data: { task }, human: `${id} → ${status}.`, ...problemsField(problems) };
 }
 
+const renderChecklist = (items: readonly ChecklistItem[] | undefined): string => {
+  if (items === undefined || items.length === 0) return '';
+  const done = items.filter((it) => it.done).length;
+  const lines = items.map((it) => `  ${it.id}  [${it.done ? 'x' : ' '}] ${it.text}`).join('\n');
+  return `\n\nChecklist (${done}/${items.length}):\n${lines}`;
+};
+
+const renderNotes = (notes: readonly Note[] | undefined): string => {
+  if (notes === undefined || notes.length === 0) return '';
+  const lines = notes.map((n) => `  ${n.id}  ${n.createdAt}\n    ${n.text}`).join('\n');
+  return `\n\nNotes (${notes.length}):\n${lines}`;
+};
+
 const renderTask = (task: Task, kind: string, file: string): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}`;
+  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -514,4 +537,241 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
     human: `Removed ${id} from ${updated.filename}.`,
     ...problemsField(problems),
   };
+}
+
+// Shared read-modify-write for checklist / notes sub-ops: load the board, find
+// the task, let `build` turn it into a TaskPatch, then editTask + write. core
+// has no granular note/item mutators — both arrays are replaced wholesale via
+// editTask, which also enforces the finished-release guard (mapped to ARCHIVED
+// by applyOp, like every other task mutation).
+async function mutateTask(
+  ctx: CommandContext,
+  taskId: string | undefined,
+  usage: string,
+  build: (task: Task) => { patch: TaskPatch; human: string; extra?: Record<string, unknown> },
+): Promise<CommandOutput> {
+  if (taskId === undefined) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const location = locateTask(snapshot, taskId);
+  if (location === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
+  }
+  const task = location.container.tasks.find((t) => t.frontmatter.id === taskId);
+  if (task === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
+  }
+
+  const { patch, human, extra } = build(task);
+  const edited = applyOp(() => editTask(location.container, taskId, patch));
+  await writeContainer(fs, { kind: location.kind, container: edited });
+  const updated = edited.tasks.find((t) => t.frontmatter.id === taskId);
+
+  return {
+    data: { task: updated, file: edited.filename, ...(extra ?? {}) },
+    human,
+    ...problemsField(problems),
+  };
+}
+
+function requireText(value: string | undefined, usage: string): string {
+  const text = value?.trim();
+  if (text === undefined || text.length === 0) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  return text;
+}
+
+function requireChecklistItem(task: Task, itemId: string | undefined, usage: string): ChecklistItem {
+  if (itemId === undefined) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  const item = (task.frontmatter.checklist ?? []).find((it) => it.id === itemId);
+  if (item === undefined) {
+    throw new CliError('ITEM_NOT_FOUND', `No checklist item "${itemId}" on ${task.frontmatter.id}.`);
+  }
+  return item;
+}
+
+function requireNote(task: Task, noteId: string | undefined, usage: string): Note {
+  if (noteId === undefined) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  const note = (task.frontmatter.notes ?? []).find((n) => n.id === noteId);
+  if (note === undefined) {
+    throw new CliError('ITEM_NOT_FOUND', `No note "${noteId}" on ${task.frontmatter.id}.`);
+  }
+  return note;
+}
+
+function taskChecklist(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const op = args.positionals[2];
+  const taskId = args.positionals[3];
+  switch (op) {
+    case 'add':
+      return checklistAdd(args, ctx, taskId);
+    case 'done':
+      return checklistSetDone(args, ctx, taskId, true);
+    case 'undone':
+      return checklistSetDone(args, ctx, taskId, false);
+    case 'edit':
+      return checklistEdit(args, ctx, taskId);
+    case 'rm':
+    case 'remove':
+      return checklistRm(args, ctx, taskId);
+    default:
+      throw new CliError(
+        'USAGE',
+        `Unknown checklist subcommand "${op ?? ''}". Use: add | done | undone | edit | rm.`,
+        2,
+      );
+  }
+}
+
+function checklistAdd(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task checklist add <task-id> <text>.';
+  const text = requireText(args.positionals[4], usage);
+  return mutateTask(ctx, taskId, usage, (task) => {
+    const items = task.frontmatter.checklist ?? [];
+    const item: ChecklistItem = { id: nextChecklistItemId(items), text, done: false };
+    return {
+      patch: { checklist: [...items, item] },
+      human: `Added checklist item ${item.id} to ${task.frontmatter.id}.`,
+      extra: { item },
+    };
+  });
+}
+
+function checklistSetDone(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+  done: boolean,
+): Promise<CommandOutput> {
+  const usage = `Usage: boardown task checklist ${done ? 'done' : 'undone'} <task-id> <item-id>.`;
+  const itemId = args.positionals[4];
+  return mutateTask(ctx, taskId, usage, (task) => {
+    requireChecklistItem(task, itemId, usage);
+    const items = task.frontmatter.checklist ?? [];
+    return {
+      patch: { checklist: items.map((it) => (it.id === itemId ? { ...it, done } : it)) },
+      human: `${itemId} on ${task.frontmatter.id} → ${done ? 'done' : 'not done'}.`,
+    };
+  });
+}
+
+function checklistEdit(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task checklist edit <task-id> <item-id> <text>.';
+  const itemId = args.positionals[4];
+  const text = requireText(args.positionals[5], usage);
+  return mutateTask(ctx, taskId, usage, (task) => {
+    requireChecklistItem(task, itemId, usage);
+    const items = task.frontmatter.checklist ?? [];
+    return {
+      patch: { checklist: items.map((it) => (it.id === itemId ? { ...it, text } : it)) },
+      human: `Edited checklist item ${itemId} on ${task.frontmatter.id}.`,
+    };
+  });
+}
+
+function checklistRm(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task checklist rm <task-id> <item-id>.';
+  const itemId = args.positionals[4];
+  return mutateTask(ctx, taskId, usage, (task) => {
+    requireChecklistItem(task, itemId, usage);
+    const items = task.frontmatter.checklist ?? [];
+    return {
+      patch: { checklist: items.filter((it) => it.id !== itemId) },
+      human: `Removed checklist item ${itemId} from ${task.frontmatter.id}.`,
+      extra: { removed: itemId },
+    };
+  });
+}
+
+function taskNotes(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const op = args.positionals[2];
+  const taskId = args.positionals[3];
+  switch (op) {
+    case 'add':
+      return noteAdd(args, ctx, taskId);
+    case 'edit':
+      return noteEdit(args, ctx, taskId);
+    case 'rm':
+    case 'remove':
+      return noteRm(args, ctx, taskId);
+    default:
+      throw new CliError(
+        'USAGE',
+        `Unknown notes subcommand "${op ?? ''}". Use: add | edit | rm.`,
+        2,
+      );
+  }
+}
+
+function noteAdd(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task notes add <task-id> <text>.';
+  const text = requireText(args.positionals[4], usage);
+  return mutateTask(ctx, taskId, usage, (task) => {
+    const notes = task.frontmatter.notes ?? [];
+    const note: Note = { id: nextNoteId(notes), text, createdAt: new Date().toISOString() };
+    return {
+      patch: { notes: [...notes, note] },
+      human: `Added note ${note.id} to ${task.frontmatter.id}.`,
+      extra: { note },
+    };
+  });
+}
+
+function noteEdit(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task notes edit <task-id> <note-id> <text>.';
+  const noteId = args.positionals[4];
+  const text = requireText(args.positionals[5], usage);
+  return mutateTask(ctx, taskId, usage, (task) => {
+    requireNote(task, noteId, usage);
+    const notes = task.frontmatter.notes ?? [];
+    return {
+      patch: { notes: notes.map((n) => (n.id === noteId ? { ...n, text } : n)) },
+      human: `Edited note ${noteId} on ${task.frontmatter.id}.`,
+    };
+  });
+}
+
+function noteRm(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  taskId: string | undefined,
+): Promise<CommandOutput> {
+  const usage = 'Usage: boardown task notes rm <task-id> <note-id>.';
+  const noteId = args.positionals[4];
+  return mutateTask(ctx, taskId, usage, (task) => {
+    requireNote(task, noteId, usage);
+    const notes = task.frontmatter.notes ?? [];
+    return {
+      patch: { notes: notes.filter((n) => n.id !== noteId) },
+      human: `Removed note ${noteId} from ${task.frontmatter.id}.`,
+      extra: { removed: noteId },
+    };
+  });
 }

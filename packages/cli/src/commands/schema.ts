@@ -17,6 +17,8 @@ const DESCRIPTOR = {
     status: 'one of taskStatuses',
     epic: 'optional epic slug',
     order: 'number, managed by boardown',
+    checklist: 'optional array of { id, text, done }; managed via `task checklist`',
+    notes: 'optional array of { id, text, createdAt }; managed via `task notes`',
   },
   commands: [
     { name: 'board', usage: 'boardown board [--json]', summary: 'Print the whole board.' },
@@ -50,6 +52,18 @@ const DESCRIPTOR = {
       summary: "Change a task's priority (order) within its container.",
     },
     { name: 'task rm', usage: 'boardown task rm <id>', summary: 'Delete a task.' },
+    {
+      name: 'task checklist',
+      usage:
+        'boardown task checklist (add <id> <text> | done <id> <item> | undone <id> <item> | edit <id> <item> <text> | rm <id> <item>)',
+      summary: 'Manage a task checklist (alias: check). Item ids are c1, c2, …',
+    },
+    {
+      name: 'task notes',
+      usage:
+        'boardown task notes (add <id> <text> | edit <id> <note> <text> | rm <id> <note>)',
+      summary: 'Manage task notes (alias: note). Note ids are n1, n2, …, each with a createdAt timestamp.',
+    },
     {
       name: 'release get',
       usage: 'boardown release get <file|slug>',
