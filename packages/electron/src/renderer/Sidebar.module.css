@@ -247,6 +247,19 @@
   gap: 4px;
 }
 
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--shell-text);
+  cursor: pointer;
+}
+
+.checkboxRow input {
+  cursor: pointer;
+}
+
 .themeOption {
   flex: 1;
   padding: 6px 4px;

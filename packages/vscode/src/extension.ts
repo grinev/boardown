@@ -3,6 +3,13 @@ import type { FsRequestMessage } from './messages';
 
 let panel: vscode.WebviewPanel | undefined;
 
+// How long after the host writes a file its own filesystem event is ignored, so
+// the webview's own saves don't bounce back as an "external change" refresh.
+const ECHO_WINDOW_MS = 2000;
+// Collapse a burst of changes (e.g. a `git checkout` touching many files) into a
+// single refresh.
+const REFRESH_DEBOUNCE_MS = 200;
+
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('boardown');
   context.subscriptions.push(output);
@@ -37,17 +44,29 @@ export function activate(context: vscode.ExtensionContext): void {
 
       created.webview.html = getHtml(created.webview, context.extensionUri);
 
+      // Records fsPath -> timestamp of the host's own writes so the watcher can
+      // tell its own saves apart from genuinely external changes (see below).
+      const recentWrites = new Map<string, number>();
+
       created.webview.onDidReceiveMessage((message: { type?: string }) => {
         if (message.type === 'ready') {
           output.appendLine('webview ready');
           return;
         }
         if (message.type === 'fs-request') {
-          void handleFsRequest(created.webview, boardRootUri, message as FsRequestMessage);
+          void handleFsRequest(
+            created.webview,
+            boardRootUri,
+            message as FsRequestMessage,
+            recentWrites,
+          );
         }
       });
 
+      const autoRefresh = setupAutoRefresh(created, boardRootUri, recentWrites);
+
       created.onDidDispose(() => {
+        autoRefresh.dispose();
         panel = undefined;
       });
     }),
@@ -76,6 +95,7 @@ async function handleFsRequest(
   webview: vscode.Webview,
   boardRootUri: vscode.Uri,
   message: FsRequestMessage,
+  recentWrites: Map<string, number>,
 ): Promise<void> {
   const respond = (ok: boolean, result?: unknown, error?: string): void => {
     void webview.postMessage({ type: 'fs-response', id: message.id, ok, result, error });
@@ -96,6 +116,7 @@ async function handleFsRequest(
       }
       case 'write': {
         await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(message.content ?? ''));
+        recentWrites.set(target.fsPath, Date.now());
         respond(true);
         return;
       }
@@ -130,6 +151,83 @@ async function handleFsRequest(
 
 function isFileNotFound(err: unknown): boolean {
   return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
+}
+
+// Watches the board's .boardown/ directory and tells the webview to refresh when
+// its files change on disk outside the board (git, the CLI, another editor).
+// Three concerns: (1) gate on the boardown.autoRefresh setting and react to it
+// being toggled live; (2) ignore the host's own writes — without this every save
+// from the board would echo back as an "external change"; (3) debounce bursts so
+// one `git checkout` is a single refresh, not one per file.
+function setupAutoRefresh(
+  panel: vscode.WebviewPanel,
+  boardRootUri: vscode.Uri,
+  recentWrites: Map<string, number>,
+): vscode.Disposable {
+  let watcher: vscode.FileSystemWatcher | undefined;
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const isOwnWrite = (fsPath: string): boolean => {
+    const at = recentWrites.get(fsPath);
+    if (at === undefined) return false;
+    if (Date.now() - at > ECHO_WINDOW_MS) {
+      recentWrites.delete(fsPath);
+      return false;
+    }
+    return true;
+  };
+
+  const scheduleRefresh = (): void => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = undefined;
+      void panel.webview.postMessage({ type: 'board-changed' });
+    }, REFRESH_DEBOUNCE_MS);
+  };
+
+  const onFsEvent = (uri: vscode.Uri): void => {
+    if (isOwnWrite(uri.fsPath)) return;
+    scheduleRefresh();
+  };
+
+  const startWatching = (): void => {
+    if (watcher) return;
+    watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(boardRootUri, '**'),
+    );
+    watcher.onDidChange(onFsEvent);
+    watcher.onDidCreate(onFsEvent);
+    watcher.onDidDelete(onFsEvent);
+  };
+
+  const stopWatching = (): void => {
+    watcher?.dispose();
+    watcher = undefined;
+  };
+
+  const applySetting = (): void => {
+    const enabled = vscode.workspace
+      .getConfiguration('boardown')
+      .get<boolean>('autoRefresh', true);
+    if (enabled) startWatching();
+    else stopWatching();
+  };
+
+  applySetting();
+  const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('boardown.autoRefresh')) applySetting();
+  });
+
+  return {
+    dispose: (): void => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      stopWatching();
+      configSub.dispose();
+      // A path is only evicted from recentWrites when a matching watcher event
+      // arrives; entries that never get one would otherwise outlive the panel.
+      recentWrites.clear();
+    },
+  };
 }
 
 function themeName(kind: vscode.ColorThemeKind): 'light' | 'dark' {

@@ -63,4 +63,17 @@ describe('settings', () => {
     await saveSettings({ themeChoice: 'dark' });
     expect(await fsp.readdir(state.userData)).toEqual(['settings.json']);
   });
+
+  it('leaves autoRefresh absent when not set (on by default)', async () => {
+    expect((await loadSettings()).autoRefresh).toBeUndefined();
+  });
+
+  it('keeps autoRefresh only when explicitly disabled', async () => {
+    await fsp.writeFile(
+      path.join(state.userData, 'settings.json'),
+      JSON.stringify({ themeChoice: 'system', autoRefresh: false }),
+      'utf-8',
+    );
+    expect((await loadSettings()).autoRefresh).toBe(false);
+  });
 });

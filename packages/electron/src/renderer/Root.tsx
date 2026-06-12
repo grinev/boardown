@@ -5,7 +5,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { App } from '@boardown/ui';
+import { App, useBoardStore } from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
 import { Sidebar } from './Sidebar';
 import { folderName, suggestIdPrefix } from './project-name';
@@ -36,6 +36,7 @@ export function Root() {
   const [theme, setTheme] = useState(bridge.theme);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>(bridge.themeChoice);
+  const [autoRefresh, setAutoRefreshState] = useState(bridge.autoRefresh);
 
   // App's defaultTheme only seeds a brand-new board's onboarding; it must stay
   // stable for each mount, or an OS theme change (which updates `theme`) would
@@ -94,6 +95,13 @@ export function Root() {
     [themeChoice],
   );
 
+  const chooseAutoRefresh = useCallback((enabled: boolean) => {
+    setAutoRefreshState(enabled);
+    // Revert on a failed save, so the checkbox never shows a state that wasn't
+    // persisted (previous value of a boolean toggle is just its negation).
+    void bridge.setAutoRefresh(enabled).catch(() => setAutoRefreshState(!enabled));
+  }, []);
+
   useEffect(() => {
     refreshProjects();
   }, [refreshProjects]);
@@ -111,6 +119,10 @@ export function Root() {
   );
   useEffect(() => bridge.onBoardClosed(() => setActiveFolder(null)), []);
   useEffect(() => bridge.onThemeChange(setTheme), []);
+  // The host signals when .boardown/ changed on disk outside this window; refresh
+  // the board in place via reloadSilent (no loading flash). A no-op when no board
+  // is mounted (store has no rawFs yet).
+  useEffect(() => bridge.onBoardChanged(() => void useBoardStore.getState().reloadSilent()), []);
 
   // With no board mounted, @boardown/ui's theme.css isn't loaded; keep the shell
   // palette in sync with the OS theme. Once App mounts it drives data-theme from
@@ -136,6 +148,8 @@ export function Root() {
         }}
         themeChoice={themeChoice}
         onThemeChoice={chooseTheme}
+        autoRefresh={autoRefresh}
+        onAutoRefresh={chooseAutoRefresh}
         showMenuButton={bridge.showMenuButton}
         onMenuButton={() => bridge.popupMenu()}
       />

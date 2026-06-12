@@ -35,6 +35,8 @@ export interface BootstrapState {
   // where the native menu bar is removed; false on macOS, which keeps its
   // system menu bar at the top of the screen.
   showMenuButton: boolean;
+  // Whether auto-refresh on external file changes is on, for the Settings panel.
+  autoRefresh: boolean;
 }
 
 // The surface exposed on window.boardown by the preload. The renderer talks to
@@ -63,9 +65,17 @@ export interface BoardownBridge {
   // Change the app-wide theme mode (persisted). The resolved value arrives via
   // `theme` / onThemeChange; the current mode is `themeChoice`.
   readonly setThemeChoice: (choice: ThemeChoice) => Promise<void>;
+  // Whether auto-refresh is on (initial state for the Settings checkbox).
+  readonly autoRefresh: boolean;
+  // Toggle auto-refresh on external file changes (persisted, applies to all
+  // open windows). Rejects/throws on a failed save so the UI can revert.
+  readonly setAutoRefresh: (enabled: boolean) => Promise<void>;
   readonly onBoardOpened: (listener: (folder: string) => void) => () => void;
   readonly onBoardClosed: (listener: () => void) => () => void;
   readonly onThemeChange: (listener: (theme: Theme) => void) => () => void;
+  // The board's .boardown/ files changed on disk outside this window (git, the
+  // CLI, another editor). The renderer refreshes in place; see Root.tsx.
+  readonly onBoardChanged: (listener: () => void) => () => void;
 }
 
 export const IPC = {
@@ -78,8 +88,10 @@ export const IPC = {
   removeRecent: 'boardown:remove-recent',
   getRecents: 'boardown:get-recents',
   setThemeChoice: 'boardown:set-theme-choice',
+  setAutoRefresh: 'boardown:set-auto-refresh',
   boardOpened: 'boardown:board-opened',
   boardClosed: 'boardown:board-closed',
+  boardChanged: 'boardown:board-changed',
   themeChanged: 'boardown:theme-changed',
 } as const;
 

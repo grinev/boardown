@@ -60,6 +60,11 @@ Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`). If the workspace has no
 `.boardown/` folder yet, an onboarding screen walks you through creating the
 board.
 
+The open board refreshes itself when its `.boardown/` files change on disk —
+switching branches, pulling, editing a file, or running the CLI all update the
+board in place, without the Reload button. Turn it off with the
+`boardown.autoRefresh` setting.
+
 ### Desktop app
 
 Each [GitHub Release](https://github.com/grinev/boardown/releases) also ships a
@@ -83,6 +88,10 @@ To run anyway:
 
 On launch the app shows recent project folders and an **Open Folder…** button;
 pick a folder and the board loads from its `.boardown/`.
+
+The board refreshes itself when those files change on disk — from git, an
+editor, or the CLI — updating in place without the Reload button. Toggle it
+under **Settings → Auto-refresh on file changes** in the sidebar.
 
 ## Building the `.vsix` from sources
 

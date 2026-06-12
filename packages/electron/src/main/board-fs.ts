@@ -31,7 +31,14 @@ function isENOENT(err: unknown): boolean {
 // throwing keeps Electron's IPC layer from logging a stack for every absent
 // file. The preload turns a null read back into the rejection FsAdapter.read
 // promises, so the renderer contract is unchanged.
-export async function handleFsRequest(boardRoot: string, req: FsRequest): Promise<unknown> {
+export async function handleFsRequest(
+  boardRoot: string,
+  req: FsRequest,
+  // Called with the absolute path after a successful write, so the caller can
+  // record its own writes and tell them apart from external changes in the
+  // file watcher (echo suppression). Kept here so board-fs stays fs-only.
+  onWrite?: (absPath: string) => void,
+): Promise<unknown> {
   const target = resolveTarget(boardRoot, req.path);
   if (target === null) {
     throw new Error(`Invalid path: ${req.path}`);
@@ -48,6 +55,7 @@ export async function handleFsRequest(boardRoot: string, req: FsRequest): Promis
     case 'write':
       await fsp.mkdir(path.dirname(target), { recursive: true });
       await fsp.writeFile(target, req.content ?? '', 'utf-8');
+      onWrite?.(target);
       return undefined;
     case 'list':
       try {

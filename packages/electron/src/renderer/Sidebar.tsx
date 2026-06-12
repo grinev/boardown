@@ -12,6 +12,8 @@ interface SidebarProps {
   onRemove: (folder: string) => void;
   themeChoice: ThemeChoice;
   onThemeChoice: (choice: ThemeChoice) => void;
+  autoRefresh: boolean;
+  onAutoRefresh: (enabled: boolean) => void;
   showMenuButton: boolean;
   onMenuButton: () => void;
 }
@@ -31,6 +33,8 @@ export function Sidebar({
   onRemove,
   themeChoice,
   onThemeChoice,
+  autoRefresh,
+  onAutoRefresh,
   showMenuButton,
   onMenuButton,
 }: SidebarProps) {
@@ -126,6 +130,15 @@ export function Sidebar({
                 </button>
               ))}
             </div>
+            <span className={styles.settingsLabel}>Board</span>
+            <label className={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(event) => onAutoRefresh(event.target.checked)}
+              />
+              Auto-refresh on file changes
+            </label>
           </div>
         )}
         <button

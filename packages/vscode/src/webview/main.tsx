@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Theme } from '@boardown/core';
-import { App } from '@boardown/ui';
+import { App, useBoardStore } from '@boardown/ui';
 import { VsCodeFsAdapter } from './VsCodeFsAdapter';
 import './webview.css';
 
@@ -39,5 +39,16 @@ createRoot(container).render(
     <App fs={new VsCodeFsAdapter(vscode)} defaultTheme={detectTheme()} />
   </StrictMode>,
 );
+
+// The host pushes 'board-changed' when .boardown/ changed on disk outside the
+// webview (git, the CLI, another editor). Refresh in place via reloadSilent so
+// the board updates without flashing the loading screen. Separate from the FS
+// request/response channel in VsCodeFsAdapter; both listeners filter by type.
+window.addEventListener('message', (event: MessageEvent) => {
+  const data = event.data as { type?: string } | null;
+  if (data?.type === 'board-changed') {
+    void useBoardStore.getState().reloadSilent();
+  }
+});
 
 vscode.postMessage({ type: 'ready' });

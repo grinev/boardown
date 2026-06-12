@@ -17,6 +17,7 @@ const bridge: BoardownBridge = {
   themeChoice: bootstrap.themeChoice,
   initialFolder: bootstrap.initialFolder,
   showMenuButton: bootstrap.showMenuButton,
+  autoRefresh: bootstrap.autoRefresh,
   fs: {
     read: async (filePath) => {
       // Host returns null for a missing file (no IPC error log); restore the
@@ -38,6 +39,7 @@ const bridge: BoardownBridge = {
   removeRecent: (folder) => ipcRenderer.invoke(IPC.removeRecent, folder) as Promise<void>,
   getRecents: () => ipcRenderer.invoke(IPC.getRecents) as Promise<ProjectEntry[]>,
   setThemeChoice: (choice) => ipcRenderer.invoke(IPC.setThemeChoice, choice) as Promise<void>,
+  setAutoRefresh: (enabled) => ipcRenderer.invoke(IPC.setAutoRefresh, enabled) as Promise<void>,
   onBoardOpened: (listener) => {
     const handler = (_event: IpcRendererEvent, folder: string): void => listener(folder);
     ipcRenderer.on(IPC.boardOpened, handler);
@@ -47,6 +49,11 @@ const bridge: BoardownBridge = {
     const handler = (): void => listener();
     ipcRenderer.on(IPC.boardClosed, handler);
     return () => ipcRenderer.removeListener(IPC.boardClosed, handler);
+  },
+  onBoardChanged: (listener) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(IPC.boardChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.boardChanged, handler);
   },
   onThemeChange: (listener) => {
     const handler = (_event: IpcRendererEvent, theme: Theme): void => listener(theme);
