@@ -32,14 +32,25 @@ See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
 ## Installation
 
 boardown comes as a VS Code extension and a desktop app — pick whichever fits
-your workflow. Both are attached to each
-[GitHub Release](https://github.com/grinev/boardown/releases) and open the same
-`.boardown/` board.
+your workflow. The extension lives on the
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=grinev.boardown);
+the desktop app is attached to each
+[GitHub Release](https://github.com/grinev/boardown/releases). Both open the
+same `.boardown/` board.
 
 ### VS Code extension
 
-A Marketplace listing is coming soon. For now, install the extension from the
-`.vsix` attached to each [GitHub Release](https://github.com/grinev/boardown/releases):
+Install **boardown** straight from the
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=grinev.boardown):
+open the **Extensions** view (`Ctrl+Shift+X` / `Cmd+Shift+X`), search for
+`boardown`, and click **Install**. Or from the command line:
+
+```sh
+code --install-extension grinev.boardown
+```
+
+Prefer to install from a `.vsix`? Each
+[GitHub Release](https://github.com/grinev/boardown/releases) attaches one:
 
 1. Download `boardown-<version>.vsix` from the latest release's **Assets**.
 2. Open VS Code and go to the **Extensions** view (`Ctrl+Shift+X` /
@@ -47,12 +58,6 @@ A Marketplace listing is coming soon. For now, install the extension from the
 3. Click the **`…`** menu at the top of the Extensions panel and choose
    **Install from VSIX…**.
 4. Select the downloaded `.vsix` file.
-
-Or install it from the command line:
-
-```sh
-code --install-extension boardown-0.1.0.vsix
-```
 
 Once installed, open your project folder and click the board icon in the
 top-right corner of the editor, or run **Boardown: Open Board** from the
