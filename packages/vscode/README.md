@@ -15,16 +15,30 @@ The board reads `.boardown/` from the open workspace folder. On a fresh
 project, the onboarding modal writes `config.yaml` and the board is created on
 first save. Data is saved straight back to the markdown files on every change.
 
-The board refreshes on demand only — use the **Reload** button to re-read the
-files. If a board file changes on disk while the board is open, a conflict
-modal lets you reload instead of overwriting.
+By default the board **auto-refreshes** when its `.boardown/` files change on
+disk — so edits made via git, the CLI, or another editor show up without a
+manual reload. Turn it off with the `boardown.autoRefresh` setting to refresh
+on demand via the **Reload** button instead. If a file you've changed in the
+board was also changed on disk underneath you, a conflict modal lets you reload
+instead of overwriting.
 
-## Limitations (MVP)
+## Features
 
-- A single workspace folder's `.boardown/` is used. Choosing among several
-  roots or an arbitrary folder is out of scope.
-- No file watcher: refresh is the manual **Reload** button only.
-- No automated backups — git is the safety net.
+- **Backlog, Board and Archive** views: a Jira-style backlog, a kanban for the
+  current release, and a read-only archive of finished releases.
+- **Releases** with a `future → current → finished` lifecycle, with start /
+  complete actions and unfinished-task relocation on completion.
+- **Epics** that group tasks across releases and double as the backlog's
+  storage, usable as a filter dimension.
+- **Task checklists and notes**: each task can carry a lightweight todo
+  checklist (shown as a `done/total` badge) and timestamped notes (shown as a
+  count badge), edited in the task dialog.
+- **Drag & drop** to move tasks between statuses, releases and the backlog, and
+  to reorder within a section.
+- **Auto-refresh** on external file changes (toggle via `boardown.autoRefresh`).
+- **Plain-markdown storage** in `.boardown/`, committed to git like the rest of
+  your code — no cloud, no server, no account, and git is your history and
+  backup.
 
 See [PRODUCT.md](https://github.com/grinev/boardown/blob/main/PRODUCT.md) for
 the full spec.

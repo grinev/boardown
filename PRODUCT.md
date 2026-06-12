@@ -464,9 +464,11 @@ task that has neither an epic nor a release.
 
 ## Out of scope (for now)
 
-- Automatic refresh of any kind, in **both** the web and VS Code shells:
-  no file watching, no focus/visibility reload. Re-reading the board is
-  always a manual user action via the **Reload** button.
+- Automatic refresh in the **web** dev shell: no file watching, no
+  focus/visibility reload — re-reading there is always the manual **Reload**
+  button. (The VS Code and Electron shells *do* auto-refresh on external
+  `.boardown/` changes via a host file watcher, gated by a setting; that
+  landed after the initial MVP cut.)
 - Customizable statuses and status colors (hardcoded in MVP).
 - Customizable task types.
 - Markdown formatting inside task descriptions (plain text only).
@@ -658,8 +660,10 @@ Development Host.
       `.boardown/` on first write). Multi-root selection is out of scope.
 - [x] **Stage 3 — Refresh & conflicts**: the shared `ui` Reload button and the
       external-change conflict modal (via `lastModified`) light up in the webview
-      automatically — no vscode-side work beyond reusing `@boardown/ui`. No file
-      watcher; refresh stays user-triggered only.
+      automatically by reusing `@boardown/ui`. The host additionally watches the
+      board's `.boardown/` and pushes a refresh on external changes (git, the
+      CLI, another editor), gated by the `boardown.autoRefresh` setting (default
+      on) and ignoring its own writes so saves don't echo back.
 
 **Packaging (`.vsix`)** — separate track (not a numbered stage):
 

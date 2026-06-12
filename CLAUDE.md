@@ -135,8 +135,11 @@ CLI inherits them rather than re-implementing them.
 - External-change safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
   (`packages/core`), which compares each write target's `lastModified` against
   the value captured at load and refuses to clobber a file changed on disk,
-  opening the Reload conflict modal instead. Shared by all shells; there is no
-  automatic refresh — re-reading is the manual Reload button only.
+  opening the Reload conflict modal instead. Shared by all shells. Re-reading on
+  demand is the manual Reload button; in addition the VS Code and Electron shells
+  auto-refresh on external `.boardown/` changes via a host file watcher (gated by
+  the `boardown.autoRefresh` setting), while the `web` dev shell stays
+  manual-only.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
   CSS Modules for component-specific styles (`Foo.module.css`). Components

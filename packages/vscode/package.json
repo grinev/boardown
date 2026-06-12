@@ -2,7 +2,7 @@
   "name": "boardown",
   "version": "0.2.0",
   "private": true,
-  "publisher": "boardown",
+  "publisher": "grinev",
   "displayName": "boardown",
   "description": "A lightweight, local-first task board stored as markdown inside your repo.",
   "license": "MIT",
