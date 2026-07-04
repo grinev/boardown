@@ -137,15 +137,6 @@ status: todo
 order: 2300
 ---
 
-## Publish to open-vsx.org
-
----
-id: BD-46
-type: tech
-status: todo
-order: 100
----
-
 ## Display task links in tasks
 
 ---
