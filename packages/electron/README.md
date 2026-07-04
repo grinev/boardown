@@ -44,7 +44,7 @@ to regenerate them after a logo change, not by hand.
 > (or add `electron` to the root `pnpm.onlyBuiltDependencies`). The lint /
 > typecheck / build / test gates do **not** need the binary.
 
-The repo's [`Publish`](../../.github/workflows/publish.yml) workflow runs a
+The repo's [`Release`](../../.github/workflows/release.yml) workflow runs a
 per-OS matrix that calls `dist` on each runner and attaches the installers to
 every GitHub Release alongside the `.vsix`. The builds are currently
 **unsigned** (macOS uses `mac.identity: null`); code-signing on Windows and

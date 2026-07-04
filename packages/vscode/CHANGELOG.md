@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Fix: epics were not selectable for new tasks created in the Backlog.
+
 ## 0.1.0
 
 First packaged build (`.vsix`).

@@ -164,8 +164,10 @@ CLI inherits them rather than re-implementing them.
   with the **root `package.json` as the single source of truth**. Never bump a
   package version by hand — use `pnpm release:prepare` (which mirrors the root
   version into all packages via `scripts/sync-versions.mjs`). Releases are
-  cut by bumping the version on `main`; the `Publish` workflow tags and attaches
-  the built `.vsix` to a GitHub Release. See [README](./README.md#releasing).
+  cut by bumping the version on `main`; the `Release` workflow tags and attaches
+  the built `.vsix` to a GitHub Release, then calls the reusable
+  `publish-marketplace.yml` workflow to publish that `.vsix` to the VS Code
+  Marketplace. See [README](./README.md#releasing).
 
 ## Verifying changes
 

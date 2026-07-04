@@ -676,18 +676,21 @@ Development Host.
       open / load / drag & drop / Reload / conflict against a sample
       `.boardown/`.
 - [x] Automated GitHub Release: bumping the repo version on `main`
-      (`pnpm release:prepare`) triggers the `Publish` workflow, which builds the
+      (`pnpm release:prepare`) triggers the `Release` workflow, which builds the
       `.vsix`, tags `vX.Y.Z`, and attaches the artifact to a GitHub Release.
       The whole monorepo shares one lockstep version (see
       [Releasing](./README.md#releasing)).
-- [x] Desktop installers in the same release: the `Publish` workflow runs a
+- [x] Desktop installers in the same release: the `Release` workflow runs a
       per-OS matrix (`electron-builder`) and attaches the Electron installers
       (Windows `Setup.exe` + `.zip`, macOS `.dmg` + `.zip`, Linux `.AppImage` +
       `.deb`) to each GitHub Release alongside the `.vsix`. Builds are unsigned;
       code-signing / notarization are deferred to their own round.
-- [ ] Marketplace publishing (`vsce publish`, registered publisher, PAT) —
-      still deferred, planned in its own round; will slot in as a gated step in
-      the same `Publish` workflow.
+- [x] Marketplace publishing (`vsce publish`, registered publisher, PAT):
+      automated by the reusable `publish-marketplace.yml` workflow, which the
+      `Release` workflow calls after the GitHub Release is created (and which can
+      be re-run on its own via `workflow_dispatch`). It downloads the released
+      `.vsix` and publishes it with a `VSCE_PAT` secret; RC prereleases and
+      already-published versions are skipped.
 
 ### Quality
 

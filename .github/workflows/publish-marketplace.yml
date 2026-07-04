@@ -1,0 +1,79 @@
+name: Publish to Marketplace
+
+# Publishes an already-released .vsix to the VS Code Marketplace. Reusable: the
+# Release workflow calls it (workflow_call) right after creating the GitHub
+# Release, and it can be re-run on its own (workflow_dispatch) against any tag if
+# the store publish fails after the release already exists.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.2.1)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.2.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  marketplace:
+    name: Publish .vsix to the VS Code Marketplace
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Decide whether to publish before touching the release or the store.
+      # RC prereleases never go to the Marketplace as stable, and re-running
+      # against an already-published version must be a safe no-op.
+      - name: Determine skip conditions
+        id: guard
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "Skipping: $VERSION is a prerelease (RC); not publishing to the Marketplace."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PUBLISHED=$(npx --yes @vscode/vsce@3.9.1 show grinev.boardown --json \
+            | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).versions[0].version')
+          if [[ "$PUBLISHED" == "$VERSION" ]]; then
+            echo "Skipping: $VERSION is already published on the Marketplace."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Publishing $VERSION (currently on the Marketplace: ${PUBLISHED:-none})."
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download .vsix from the GitHub Release
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.vsix' --dir vsix
+
+      - name: Publish to the Marketplace
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          set -euo pipefail
+          VSIX=$(ls vsix/*.vsix)
+          npx --yes @vscode/vsce@3.9.1 publish --packagePath "$VSIX" --pat "$VSCE_PAT"

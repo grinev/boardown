@@ -1,4 +1,4 @@
-name: Publish
+name: Release
 
 on:
   push:
@@ -210,3 +210,16 @@ jobs:
           body_path: ${{ steps.notes.outputs.body_file }}
           prerelease: ${{ needs.determine.outputs.is_prerelease == 'true' }}
           files: artifacts/**/*
+
+  # Publish the freshly released .vsix to the VS Code Marketplace. Called
+  # explicitly so its result shows up in this run; a separate reusable workflow
+  # so it can also be re-run on its own (workflow_dispatch) if the store publish
+  # fails after the GitHub Release already exists.
+  publish-marketplace:
+    name: Publish to VS Code Marketplace
+    needs: [determine, release]
+    if: needs.determine.outputs.should_release == 'true'
+    uses: ./.github/workflows/publish-marketplace.yml
+    with:
+      tag: ${{ needs.determine.outputs.tag_name }}
+    secrets: inherit

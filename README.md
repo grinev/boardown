@@ -245,7 +245,7 @@ OS you're targeting (or in a CI matrix, one runner per OS):
 - **Linux** → `.AppImage` (run directly) + `.deb`
 
 Cross-building from another OS is fiddly (Windows would need Wine), so the
-[`Publish`](./.github/workflows/publish.yml) workflow runs a per-OS matrix to
+[`Release`](./.github/workflows/release.yml) workflow runs a per-OS matrix to
 build all three and attach them to each GitHub Release (see
 [Releasing](#releasing)). Signed / notarized artifacts (Apple notarization,
 Windows code-signing) need certificates and are deferred, so distributed builds
@@ -306,7 +306,7 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    git push origin main
    ```
 
-3. The [`Publish`](./.github/workflows/publish.yml) workflow notices that the
+3. The [`Release`](./.github/workflows/release.yml) workflow notices that the
    tag `vX.Y.Z` for the current version does not exist yet. It runs in three
    stages: a `determine` job decides whether the bump is releasable; a `build`
    matrix then runs the checks and builds the `.vsix` once on Linux and the
@@ -315,6 +315,16 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    notes from the commit log, creates and pushes the tag, and publishes a GitHub
    Release with the `.vsix` and the desktop installers in **Assets**. If the tag
    already exists (no version bump), the workflow skips the release.
+
+4. Once the GitHub Release exists, `Release` calls the reusable
+   [`Publish to Marketplace`](./.github/workflows/publish-marketplace.yml)
+   workflow, which downloads the released `.vsix` and pushes it to the VS Code
+   Marketplace (`vsce publish`). It needs a `VSCE_PAT` repository secret (an
+   Azure DevOps Personal Access Token with the *Marketplace → Manage* scope for
+   the `grinev` publisher); prerelease (`-rc.N`) versions and versions already on
+   the Marketplace are skipped. If the store publish fails after the release is
+   cut, re-run it on its own from **Actions → Publish to Marketplace → Run
+   workflow** against the same tag — no rebuild needed.
 
 boardown tracks its own work on a board stored in `.boardown/`. Commits that
 only touch that board data use the `chore(board): …` scope and are excluded

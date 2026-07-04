@@ -5,7 +5,7 @@
 # package.json — no node_modules tree.
 #
 # Producing builds for all three OSes (each on its own runner) is automated by
-# the repo's `Publish` workflow (.github/workflows/publish.yml), which attaches
+# the repo's `Release` workflow (.github/workflows/release.yml), which attaches
 # the installers to each GitHub Release alongside the .vsix.
 # `pnpm --filter @boardown/electron dist` is the local entry point. Builds are
 # currently unsigned: code-signing on Windows and Apple notarization on macOS
