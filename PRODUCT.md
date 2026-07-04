@@ -19,8 +19,9 @@ License: MIT.
   Everything is committed to git as-is.
 - **Distribution:** the primary MVP target is a **VS Code extension** that
   reads `.boardown/` from the open workspace. A slim browser shell exists as
-  a development tool for working on the UI from sources. An Electron build
-  is post-MVP. See "Distribution & shells" below.
+  a development tool for working on the UI from sources. A standalone Electron
+  desktop app (Windows / macOS / Linux) is also shipped, and a headless **CLI**
+  for agents and scripts is published to npm. See "Distribution & shells" below.
 
 ## Core concepts
 
@@ -297,24 +298,31 @@ Refresh strategy: a manual **Reload** button in the UI is the only way to
 re-read files. There is no automatic refresh (no focus/visibility reload, no
 file watching) — see "Out of scope".
 
-### Electron (post-MVP)
+### Electron
 
-When it lands, it will follow the standard pattern of an IDE-class desktop
-app: a recent-folders list on launch, an "Open Folder…" menu using the OS
-native dialog, and an optional CLI argument for opening a specific folder.
-Out of scope for the MVP.
+A standalone cross-platform desktop app (Windows / macOS / Linux) built on
+Electron. It reuses `@boardown/ui` unchanged behind a Node `FsAdapter` and
+follows the standard IDE-class pattern: a recent-folders list on launch, an
+"Open Folder…" button using the OS native dialog, and an optional CLI argument
+for opening a specific folder. Installers are attached to each GitHub Release
+(see roadmap). Code-signing / notarization are still deferred, so the
+distributed builds are unsigned for now.
 
-### CLI (post-MVP)
+### CLI
 
 A headless shell that does not mount `@boardown/ui` — it consumes
 `@boardown/core` directly and implements `FsAdapter` over Node's filesystem.
 It finds the board by walking up from the working directory to a `.boardown/`
 folder (or via `--data-dir`), and maps commands onto board operations
-(`board`, `task`, `release`, `epic`, `init`). It is aimed primarily at **agents
-and scripts**: output is a stable JSON envelope when stdout is not a TTY (or
-with `--json`), with stable error codes and exit codes, plus a `schema` command
-that prints the contract. Because every change is a plain-markdown git diff, an
-agent's edits stay reviewable and revertible. Out of scope for the MVP.
+(`board`, `init`, `task`, `release`, `epic`, `schema`). It is aimed primarily at
+**agents and scripts**: output is a stable JSON envelope when stdout is not a TTY
+(or with `--json`), with stable error codes and exit codes, plus a `schema`
+command that prints the contract. Because every change is a plain-markdown git
+diff, an agent's edits stay reviewable and revertible.
+
+Shipped and published to npm as
+[`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli)
+(the `boardown` command), releasing in lockstep with the other shells.
 
 ## Lenient parsing
 
@@ -487,9 +495,6 @@ task that has neither an epic nor a release.
   dev-only.
 - Firefox / Safari support, hosted version, mobile.
 - AI features of any kind.
-- Electron build is a deferred *implementation* — the product spec covers it,
-  but no Electron code lands in MVP. (The VS Code extension, by contrast, is
-  the primary MVP shell — see its roadmap section above.)
 - Folder selection / multiple boards in one shell — the VS Code extension always
   uses the single open workspace folder's `.boardown/` (separate windows already
   scope independently). Choosing among several roots in one window, or an

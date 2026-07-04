@@ -61,10 +61,11 @@ boardown/
 │   │                  # PRODUCT.md roadmap.
 │   ├── electron/      # Desktop shell (macOS / Windows / Linux): Electron main
 │   │                  # (esbuild) + renderer (Vite) hosting @boardown/ui over a
-│   │                  # Node FsAdapter. Post-MVP.
+│   │                  # Node FsAdapter. Shipped (installers per release).
 │   └── cli/           # Command-line / agent-facing shell: maps argv onto
 │                      # @boardown/core board-ops over a Node FsAdapter, with
-│                      # machine-readable JSON output. Post-MVP.
+│                      # machine-readable JSON output. Published to npm as
+│                      # @grinev/boardown-cli.
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -88,8 +89,8 @@ webview mounts the real `@boardown/ui` with a `VsCodeFsAdapter` that proxies
 `read/write/list/stat` to the host over `postMessage`, where the host serves
 them from `vscode.workspace.fs`. The board root is the single open workspace
 folder's `.boardown/`; choosing among multiple roots or an arbitrary folder is
-out of scope (Electron territory). An Electron build is post-MVP and follows the
-same shell pattern.
+out of scope (Electron territory). The Electron desktop build follows the same
+shell pattern and ships installers with each release.
 
 `packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
@@ -99,7 +100,7 @@ working environment for `@boardown/ui` development, not a stepping stone to
 a production browser app. A production browser shell (with the FS Access
 API or otherwise) is post-MVP and may or may not happen.
 
-`packages/cli` is a post-MVP shell that does **not** mount `@boardown/ui` — it has
+`packages/cli` is a headless shell that does **not** mount `@boardown/ui` — it has
 no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,
 serializer, schemas) and implements `FsAdapter` over `node:fs/promises`, mapping
 CLI commands onto board operations. It is aimed at agents and scripts: output is a

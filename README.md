@@ -10,10 +10,11 @@ your project's git repo. Releases, epics and tasks live in `.boardown/` next
 to your code, so they version, branch and diff with the rest of the project —
 no cloud, no server, no account.
 
-boardown ships two ways: a **VS Code extension** that reads `.boardown/` from
-the open workspace, and a **standalone desktop app** (Windows / macOS / Linux)
-that opens any project folder. Both reuse the same board UI and read the same
-markdown files.
+boardown ships as a **VS Code extension** that reads `.boardown/` from the open
+workspace and a **standalone desktop app** (Windows / macOS / Linux) that opens
+any project folder — both reuse the same board UI and read the same markdown
+files. A headless **CLI** (`@grinev/boardown-cli`) rounds it out for scripts and
+AI agents, driving the same `.boardown/` files from the command line.
 
 <p align="center">
   <img src="./assets/Board.png" alt="boardown board view" width="80%" />
@@ -31,11 +32,11 @@ See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
 
 ## Installation
 
-boardown comes as a VS Code extension and a desktop app — pick whichever fits
-your workflow. The extension is published to the VS Code Marketplace and
-Open VSX; the desktop app is attached to each
-[GitHub Release](https://github.com/grinev/boardown/releases). Both open the
-same `.boardown/` board.
+boardown comes as a VS Code extension, a desktop app, and a command-line tool —
+pick whichever fits your workflow. The extension is published to the VS Code
+Marketplace and Open VSX; the desktop app is attached to each
+[GitHub Release](https://github.com/grinev/boardown/releases); the CLI is on
+npm. All of them read and write the same `.boardown/` board.
 
 ### VS Code extension
 
@@ -100,6 +101,29 @@ The board refreshes itself when those files change on disk — from git, an
 editor, or the CLI — updating in place without the Reload button. Toggle it
 under **Settings → Auto-refresh on file changes** in the sidebar.
 
+### Command-line interface (CLI)
+
+A headless `boardown` command for scripts and AI agents, published to npm as
+[`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli). It
+reads and writes the same `.boardown/` markdown files as the apps, so every
+change is a reviewable git diff.
+
+Install it globally, or run it on demand with `npx`:
+
+```sh
+npm i -g @grinev/boardown-cli   # installs the `boardown` command
+boardown --help
+
+npx @grinev/boardown-cli board  # or run without installing
+```
+
+It finds the board by walking up from the current directory to a `.boardown/`
+folder (like git finds `.git`), or takes `--data-dir <path>`. Output is a stable
+JSON envelope when piped (or with `--json`) and human-readable in a terminal,
+which makes it a good surface for automation. See the
+[CLI README](./packages/cli/README.md) for the full command list and the
+machine-readable `schema` contract.
+
 ## Building the `.vsix` from sources
 
 To build an installable `.vsix` yourself instead of downloading it:
@@ -155,7 +179,7 @@ Install dependencies once if you skipped the quick start above:
 pnpm install
 ```
 
-The repo is a pnpm workspace with five packages:
+The repo is a pnpm workspace with six packages:
 
 - [`packages/core`](./packages/core) — platform-agnostic logic (schemas,
   parser, board operations). Pure TypeScript, runs in Node.
@@ -173,6 +197,11 @@ The repo is a pnpm workspace with five packages:
   (macOS / Windows / Linux): an Electron main process + preload behind the same
   `FsAdapter`, with a Vite-built renderer that reuses `@boardown/ui`. See
   [Desktop app (Electron)](#desktop-app-electron) below.
+- [`packages/cli`](./packages/cli) — a headless command-line / agent-facing
+  shell: it does not mount `@boardown/ui`, mapping commands onto `@boardown/core`
+  board operations over a Node `FsAdapter`, with machine-readable JSON output.
+  Bundled with esbuild and published to npm as `@grinev/boardown-cli`. See
+  [Command-line interface (CLI)](#command-line-interface-cli) above.
 
 ### Common scripts (run from the repo root)
 
@@ -196,6 +225,7 @@ pnpm --filter @boardown/web dev      # only the web dev server
 pnpm --filter @boardown/core build   # only the core build
 pnpm --filter @boardown/core test    # only core tests
 pnpm --filter @boardown/ui test      # only ui tests
+pnpm --filter @grinev/boardown-cli test   # only cli tests
 ```
 
 The dev server runs in any modern browser — it talks to the selected
