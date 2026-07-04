@@ -1,0 +1,102 @@
+name: Publish to npm
+
+# Publishes the CLI package (@grinev/boardown-cli) to the npm registry.
+# Reusable: the Release workflow calls it (workflow_call) right after creating
+# the GitHub Release, and it can be re-run on its own (workflow_dispatch) against
+# any tag if the npm publish fails after the release already exists.
+#
+# Auth is tokenless via npm Trusted Publishing (OIDC): the repo is registered as
+# a trusted publisher for the package on npmjs.com, so no NPM token secret is
+# needed. `id-token: write` lets npm exchange an OIDC token for publish auth and
+# attach build provenance. Trusted publishing needs npm >= 11.5.1, hence Node 24.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.3.0)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.3.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm:
+    name: Publish @grinev/boardown-cli to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+
+      - name: Show tool versions
+        run: |
+          node --version
+          npm --version
+
+      # Derive the version and dist-tag from the release tag, and skip when this
+      # version is already on npm (a safe re-run). Stable versions publish under
+      # `latest`, RC prereleases under `next` — unlike the store publishers, RCs
+      # are not skipped here; they get their own dist-tag.
+      - name: Determine skip conditions
+        id: guard
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "dist_tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+          if npm view "@grinev/boardown-cli@$VERSION" version >/dev/null 2>&1; then
+            echo "Skipping: @grinev/boardown-cli@$VERSION is already published on npm."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Publishing @grinev/boardown-cli@$VERSION."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the CLI bundle
+        if: steps.guard.outputs.skip != 'true'
+        run: pnpm --filter @grinev/boardown-cli build
+
+      # pnpm pack rewrites the workspace:* devDependency to a concrete version so
+      # the tarball manifest is valid for npm; the esbuild bundle already inlines
+      # @boardown/core, so the published package has no runtime dependencies.
+      - name: Pack the tarball
+        if: steps.guard.outputs.skip != 'true'
+        run: pnpm --filter @grinev/boardown-cli pack --pack-destination "$RUNNER_TEMP/npm-pack"
+
+      - name: Publish to npm
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          TARBALL=$(ls "$RUNNER_TEMP"/npm-pack/*.tgz)
+          npm publish "$TARBALL" --access public --tag "${{ steps.guard.outputs.dist_tag }}" --provenance

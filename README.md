@@ -287,8 +287,9 @@ the UI. The web dev shell only ensures the board root directory exists.
 The whole monorepo ships under **one lockstep version**: the same number lives
 in every `package.json`, with the **root `package.json` as the single source of
 truth**. Each release attaches the VS Code `.vsix` plus the Electron desktop
-installers for all three OSes (Windows / macOS / Linux); future shells (web,
-JetBrains) will release together under the same version.
+installers for all three OSes (Windows / macOS / Linux), and publishes the CLI
+to npm; future shells (web, JetBrains) will release together under the same
+version.
 
 Releases are driven by a version bump on `main`, not by pushing tags by hand:
 
@@ -338,6 +339,17 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    prerelease (`-rc.N`) versions and versions already on Open VSX are skipped.
    It can likewise be re-run on its own from **Actions → Publish to Open VSX →
    Run workflow** against any tag.
+
+6. `Release` finally calls the reusable
+   [`Publish to npm`](./.github/workflows/publish-npm.yml) workflow, which builds
+   and publishes the CLI package (`@grinev/boardown-cli`, the `boardown` command)
+   to the [npm registry](https://www.npmjs.com/package/@grinev/boardown-cli).
+   Auth is **tokenless** via [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers)
+   (OIDC) — the repo is registered as a trusted publisher for the package, so no
+   npm secret is needed; the workflow only mints an `id-token` for auth and build
+   provenance. Stable versions publish under the `latest` dist-tag and RC
+   prereleases under `next`; versions already on npm are skipped. Re-runnable on
+   its own from **Actions → Publish to npm → Run workflow** against any tag.
 
 boardown tracks its own work on a board stored in `.boardown/`. Commits that
 only touch that board data use the `chore(board): …` scope and are excluded

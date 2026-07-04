@@ -165,9 +165,11 @@ CLI inherits them rather than re-implementing them.
   package version by hand — use `pnpm release:prepare` (which mirrors the root
   version into all packages via `scripts/sync-versions.mjs`). Releases are
   cut by bumping the version on `main`; the `Release` workflow tags and attaches
-  the built `.vsix` to a GitHub Release, then calls the reusable
-  `publish-marketplace.yml` workflow to publish that `.vsix` to the VS Code
-  Marketplace. See [README](./README.md#releasing).
+  the built `.vsix` and desktop installers to a GitHub Release, then calls the
+  reusable per-target `publish-*.yml` workflows: `publish-marketplace.yml`
+  (VS Code Marketplace) and `publish-openvsx.yml` (Open VSX) publish the `.vsix`,
+  and `publish-npm.yml` publishes the CLI package (`@grinev/boardown-cli`) to npm
+  via tokenless Trusted Publishing (OIDC). See [README](./README.md#releasing).
 
 ## Verifying changes
 

@@ -8,6 +8,10 @@ on:
 
 permissions:
   contents: write
+  # Lets the called publish-npm workflow mint an OIDC token for npm Trusted
+  # Publishing + provenance. Reusable workflows are capped by the caller's
+  # token scopes, so it must be granted here, not only in publish-npm.yml.
+  id-token: write
 
 concurrency:
   group: publish-${{ github.workflow }}-${{ github.ref }}
@@ -236,3 +240,15 @@ jobs:
     with:
       tag: ${{ needs.determine.outputs.tag_name }}
     secrets: inherit
+
+  # Publish the CLI package to npm. Auth is tokenless via npm Trusted Publishing
+  # (OIDC), so no secret is inherited — the caller only forwards its id-token
+  # permission. Same shape as the store publishers: a separate reusable workflow
+  # re-runnable on its own (workflow_dispatch) against a tag.
+  publish-npm:
+    name: Publish to npm
+    needs: [determine, release]
+    if: needs.determine.outputs.should_release == 'true'
+    uses: ./.github/workflows/publish-npm.yml
+    with:
+      tag: ${{ needs.determine.outputs.tag_name }}
