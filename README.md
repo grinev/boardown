@@ -326,6 +326,17 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    cut, re-run it on its own from **Actions → Publish to Marketplace → Run
    workflow** against the same tag — no rebuild needed.
 
+5. `Release` then also calls the reusable
+   [`Publish to Open VSX`](./.github/workflows/publish-openvsx.yml) workflow,
+   which publishes the same released `.vsix` to the
+   [Open VSX registry](https://open-vsx.org) (`ovsx publish`) — the open
+   marketplace used by VSCodium, Gitpod, Cursor and others. It needs an
+   `OVSX_PAT` repository secret (an Open VSX access token whose owner owns the
+   `grinev` namespace, created once via `ovsx create-namespace grinev`);
+   prerelease (`-rc.N`) versions and versions already on Open VSX are skipped.
+   It can likewise be re-run on its own from **Actions → Publish to Open VSX →
+   Run workflow** against any tag.
+
 boardown tracks its own work on a board stored in `.boardown/`. Commits that
 only touch that board data use the `chore(board): …` scope and are excluded
 from the generated release notes (just like the `chore(release): …` bump

@@ -223,3 +223,16 @@ jobs:
     with:
       tag: ${{ needs.determine.outputs.tag_name }}
     secrets: inherit
+
+  # Publish the same released .vsix to the Open VSX registry (open-vsx.org).
+  # Mirrors publish-marketplace: a separate reusable workflow so it can also be
+  # re-run on its own (workflow_dispatch) if the store publish fails after the
+  # GitHub Release already exists.
+  publish-openvsx:
+    name: Publish to Open VSX
+    needs: [determine, release]
+    if: needs.determine.outputs.should_release == 'true'
+    uses: ./.github/workflows/publish-openvsx.yml
+    with:
+      tag: ${{ needs.determine.outputs.tag_name }}
+    secrets: inherit

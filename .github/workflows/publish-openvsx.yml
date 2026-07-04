@@ -1,0 +1,87 @@
+name: Publish to Open VSX
+
+# Publishes an already-released .vsix to the Open VSX registry (open-vsx.org).
+# Reusable: the Release workflow calls it (workflow_call) right after creating
+# the GitHub Release, and it can be re-run on its own (workflow_dispatch) against
+# any tag if the store publish fails after the release already exists.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.3.0)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.3.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  openvsx:
+    name: Publish .vsix to Open VSX
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Decide whether to publish before touching the release or the store.
+      # RC prereleases never go to Open VSX as stable, and re-running against an
+      # already-published version must be a safe no-op. Open VSX has no vsce-style
+      # `show`, so the currently published version comes from its public REST API;
+      # a 404 means the extension has never been published yet.
+      - name: Determine skip conditions
+        id: guard
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "Skipping: $VERSION is a prerelease (RC); not publishing to Open VSX."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          HTTP=$(curl -sSL -o body.json -w '%{http_code}' \
+            https://open-vsx.org/api/grinev/boardown/latest)
+          if [[ "$HTTP" == "200" ]]; then
+            PUBLISHED=$(node -pe 'JSON.parse(require("fs").readFileSync("body.json","utf8")).version')
+          else
+            PUBLISHED=""
+          fi
+
+          if [[ "$PUBLISHED" == "$VERSION" ]]; then
+            echo "Skipping: $VERSION is already published on Open VSX."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Publishing $VERSION (currently on Open VSX: ${PUBLISHED:-none})."
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download .vsix from the GitHub Release
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.vsix' --dir vsix
+
+      - name: Publish to Open VSX
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          set -euo pipefail
+          VSIX=$(ls vsix/*.vsix)
+          npx --yes ovsx@1.0.2 publish "$VSIX" --pat "$OVSX_PAT"

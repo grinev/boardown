@@ -691,6 +691,11 @@ Development Host.
       be re-run on its own via `workflow_dispatch`). It downloads the released
       `.vsix` and publishes it with a `VSCE_PAT` secret; RC prereleases and
       already-published versions are skipped.
+- [x] Open VSX publishing (`ovsx publish`, `grinev` namespace, PAT): a sibling
+      reusable `publish-openvsx.yml` workflow, called by `Release` right after
+      `publish-marketplace` (and re-runnable on its own via `workflow_dispatch`),
+      mirrors the Marketplace flow against the open-vsx.org registry using an
+      `OVSX_PAT` secret; RC prereleases and already-published versions are skipped.
 
 ### Quality
 
