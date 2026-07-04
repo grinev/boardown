@@ -32,17 +32,19 @@ See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
 ## Installation
 
 boardown comes as a VS Code extension and a desktop app — pick whichever fits
-your workflow. The extension lives on the
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=grinev.boardown);
-the desktop app is attached to each
+your workflow. The extension is published to the VS Code Marketplace and
+Open VSX; the desktop app is attached to each
 [GitHub Release](https://github.com/grinev/boardown/releases). Both open the
 same `.boardown/` board.
 
 ### VS Code extension
 
-Install **boardown** straight from the
-[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=grinev.boardown):
-open the **Extensions** view (`Ctrl+Shift+X` / `Cmd+Shift+X`), search for
+Install **boardown** from either registry:
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=grinev.boardown)
+- [Open VSX](https://open-vsx.org/extension/grinev/boardown) — for VSCodium, Cursor, Gitpod, Windsurf and other VS Code forks
+
+Open the **Extensions** view (`Ctrl+Shift+X` / `Cmd+Shift+X`), search for
 `boardown`, and click **Install**. Or from the command line:
 
 ```sh
