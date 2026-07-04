@@ -46,11 +46,10 @@ importers:
         version: 8.59.2(eslint@9.39.4)(typescript@5.9.3)
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@boardown/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@types/node':
         specifier: ^20.17.10
         version: 20.19.39

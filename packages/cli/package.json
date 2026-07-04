@@ -1,27 +1,52 @@
 {
-  "name": "@boardown/cli",
+  "name": "@grinev/boardown-cli",
   "version": "0.3.0",
   "description": "Command-line and agent-facing interface for boardown task boards.",
-  "private": true,
+  "license": "MIT",
+  "author": "Ruslan Grinev",
   "type": "module",
   "bin": {
     "boardown": "./dist/cli.cjs"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grinev/boardown.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/grinev/boardown#readme",
+  "bugs": {
+    "url": "https://github.com/grinev/boardown/issues"
+  },
+  "keywords": [
+    "boardown",
+    "cli",
+    "kanban",
+    "markdown",
+    "tasks",
+    "scrum",
+    "agent"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@boardown/core": "workspace:*"
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
+    "@boardown/core": "workspace:*",
     "@types/node": "^20.17.10",
     "esbuild": "^0.24.0",
     "vitest": "^2.1.8"
