@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Task cards now support checklists and free-form notes.
+- Auto-refresh the board when its `.boardown/` files change on disk (e.g. via
+  git, the CLI, or external edits), toggleable with the `boardown.autoRefresh`
+  setting.
+- Updated app icon.
+
 ## 0.2.0
 
 - Fix: epics were not selectable for new tasks created in the Backlog.
