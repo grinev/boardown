@@ -15,7 +15,9 @@ import { parseArgs } from '../args';
 import { loadBoardOrThrow } from '../persistence';
 import type { CommandContext } from '../types';
 import { boardCommand } from './board';
+import { epicCommand } from './epic';
 import { initCommand } from './init';
+import { releaseCommand } from './release';
 import { taskCommand } from './task';
 
 interface BoardData {
@@ -193,6 +195,150 @@ describe('cli commands (integration)', () => {
 
     await expect(fs.write('epics/no_epic.md', 'whatever')).rejects.toMatchObject({
       code: 'CONFLICT',
+    });
+  });
+
+  describe('task list', () => {
+    // A known board: backlog (TS-1 bug/todo, TS-2 feature/done), epic file
+    // (TS-3 tech/todo, epic bug-audit), current release (TS-4 bug/todo, retagged
+    // into epic bug-audit while living in the release).
+    async function seed(): Promise<string> {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await epicCommand(parseArgs(['epic', 'add', 'Bug Audit']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Alpha bug fix', '--type', 'bug']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Beta feature', '--type', 'feature']), ctx);
+      await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
+      await taskCommand(
+        parseArgs(['task', 'add', 'Gamma tech', '--type', 'tech', '--epic', 'bug-audit']),
+        ctx,
+      );
+      const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
+      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
+      await taskCommand(
+        parseArgs(['task', 'add', 'Delta ship', '--type', 'bug', '--release', relFile]),
+        ctx,
+      );
+      await taskCommand(parseArgs(['task', 'edit', 'TS-4', '--epic', 'bug-audit']), ctx);
+      return relFile;
+    }
+
+    const listIds = (data: unknown): string[] =>
+      (data as { tasks: { task: Task }[] }).tasks.map((e) => e.task.frontmatter.id).sort();
+
+    it('lists every task with no filters', async () => {
+      await seed();
+      const out = await taskCommand(parseArgs(['task', 'list']), ctx);
+      expect(listIds(out.data)).toEqual(['TS-1', 'TS-2', 'TS-3', 'TS-4']);
+      expect((out.data as { count: number }).count).toBe(4);
+    });
+
+    it('each entry carries the task and its container location', async () => {
+      await seed();
+      const out = await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx);
+      const tasks = (out.data as { tasks: { task: Task; in: { kind: string; file: string } }[] })
+        .tasks;
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]?.task.frontmatter.id).toBe('TS-4');
+      expect(tasks[0]?.in.kind).toBe('release');
+      expect(tasks[0]?.in.file).toBe('releases/active.md');
+    });
+
+    it('filters by status', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--status', 'todo']), ctx)).data),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--status', 'done']), ctx)).data),
+      ).toEqual(['TS-2']);
+    });
+
+    it('filters by type', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--type', 'bug']), ctx)).data),
+      ).toEqual(['TS-1', 'TS-4']);
+    });
+
+    it('filters by epic, catching both epic-file and release-tagged tasks', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--epic', 'bug-audit']), ctx)).data),
+      ).toEqual(['TS-3', 'TS-4']);
+    });
+
+    it('filters by release', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx)).data),
+      ).toEqual(['TS-4']);
+    });
+
+    it('filters to backlog only', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--backlog']), ctx)).data),
+      ).toEqual(['TS-1', 'TS-2']);
+    });
+
+    it('filters by case-insensitive text on title/description', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--text', 'SHIP']), ctx)).data),
+      ).toEqual(['TS-4']);
+    });
+
+    it('AND-combines filters', async () => {
+      await seed();
+      expect(
+        listIds(
+          (
+            await taskCommand(
+              parseArgs(['task', 'list', '--status', 'todo', '--type', 'bug']),
+              ctx,
+            )
+          ).data,
+        ),
+      ).toEqual(['TS-1', 'TS-4']);
+      expect(
+        listIds(
+          (
+            await taskCommand(
+              parseArgs(['task', 'list', '--status', 'todo', '--type', 'bug', '--epic', 'bug-audit']),
+              ctx,
+            )
+          ).data,
+        ),
+      ).toEqual(['TS-4']);
+    });
+
+    it('returns an empty list (not an error) when nothing matches', async () => {
+      await seed();
+      const out = await taskCommand(parseArgs(['task', 'list', '--status', 'done', '--type', 'bug']), ctx);
+      expect((out.data as { tasks: unknown[]; count: number }).tasks).toEqual([]);
+      expect((out.data as { count: number }).count).toBe(0);
+    });
+
+    it('rejects an invalid --type with a USAGE error', async () => {
+      await seed();
+      await expect(
+        taskCommand(parseArgs(['task', 'list', '--type', 'nonsense']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+    });
+
+    it('rejects an unknown --epic with EPIC_NOT_FOUND', async () => {
+      await seed();
+      await expect(
+        taskCommand(parseArgs(['task', 'list', '--epic', 'ghost']), ctx),
+      ).rejects.toMatchObject({ code: 'EPIC_NOT_FOUND' });
+    });
+
+    it('rejects an unknown --release with RELEASE_NOT_FOUND', async () => {
+      await seed();
+      await expect(
+        taskCommand(parseArgs(['task', 'list', '--release', 'ghost']), ctx),
+      ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND' });
     });
   });
 });

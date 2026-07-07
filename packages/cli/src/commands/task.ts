@@ -17,6 +17,8 @@ import {
   type NewTaskInput,
   type Note,
   type ParseProblem,
+  type Release,
+  type ReleaseStatus,
   type Task,
   type TaskPatch,
   type TaskStatus,
@@ -25,6 +27,7 @@ import {
 import { flagBool, flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
 import {
+  epicMembers,
   findEpic,
   findRelease,
   loadBoardOrThrow,
@@ -32,8 +35,10 @@ import {
   resolveBoardRoot,
   writeConfig,
   writeContainer,
+  type ContainerKind,
   type ContainerRef,
 } from '../persistence';
+import { statusMark } from './board';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 
 export const taskCommand: CommandHandler = (args, ctx) => {
@@ -42,6 +47,9 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     case 'get':
     case 'show':
       return taskGet(args, ctx);
+    case 'list':
+    case 'ls':
+      return taskList(args, ctx);
     case 'add':
       return taskAdd(args, ctx);
     case 'edit':
@@ -63,7 +71,7 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | add | edit | status | reorder | rm | checklist | notes.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes.`,
         2,
       );
   }
@@ -75,12 +83,15 @@ const isTaskType = (value: string): value is TaskType =>
 const isTaskStatus = (value: string): value is TaskStatus =>
   (TASK_STATUSES as readonly string[]).includes(value);
 
-function requireType(value: string | undefined, fallback: TaskType): TaskType {
-  if (value === undefined) return fallback;
+function parseTaskType(value: string): TaskType {
   if (!isTaskType(value)) {
     throw new CliError('USAGE', `Invalid --type "${value}" (one of ${TASK_TYPES.join(', ')}).`, 2);
   }
   return value;
+}
+
+function requireType(value: string | undefined, fallback: TaskType): TaskType {
+  return value === undefined ? fallback : parseTaskType(value);
 }
 
 function requireStatus(value: string): TaskStatus {
@@ -417,6 +428,95 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   return {
     data: { task, in: { kind: location.kind, file: location.container.filename } },
     human: renderTask(task, location.kind, location.container.filename),
+    ...problemsField(problems),
+  };
+}
+
+interface TaskListEntry {
+  task: Task;
+  in: { kind: ContainerKind; file: string };
+}
+
+// Flatten every task across the board, each paired with its physical container.
+// Order mirrors the board view (current → future releases, backlog, epics,
+// finished releases) so a filtered list reads in the same order as `board`.
+function collectEntries(snapshot: BoardSnapshot): TaskListEntry[] {
+  const entries: TaskListEntry[] = [];
+  const push = (kind: ContainerKind, filename: string, tasks: readonly Task[]): void => {
+    for (const task of tasks) entries.push({ task, in: { kind, file: filename } });
+  };
+  const releasesByStatus = (status: ReleaseStatus): readonly Release[] =>
+    snapshot.releases.filter((r) => r.frontmatter.status === status);
+
+  for (const r of releasesByStatus('current')) push('release', r.filename, r.tasks);
+  for (const r of releasesByStatus('future')) push('release', r.filename, r.tasks);
+  if (snapshot.backlog) push('backlog', snapshot.backlog.filename, snapshot.backlog.tasks);
+  for (const e of snapshot.epics) push('epic', e.filename, e.tasks);
+  for (const r of releasesByStatus('finished')) push('release', r.filename, r.tasks);
+  return entries;
+}
+
+const renderTaskList = (entries: readonly TaskListEntry[]): string => {
+  if (entries.length === 0) return 'No matching tasks.';
+  const lines = entries.map(({ task, in: loc }) => {
+    const fm = task.frontmatter;
+    const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
+    return `${statusMark(task)} ${fm.id}  [${fm.type}/${fm.status}]${epic}  (${loc.kind}: ${loc.file})  ${task.title}`;
+  });
+  lines.push(`\n${entries.length} task(s).`);
+  return lines.join('\n');
+};
+
+async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const statusFlag = flagString(args.flags, 'status');
+  const typeFlag = flagString(args.flags, 'type');
+  const epicFlag = flagString(args.flags, 'epic');
+  const releaseFlag = flagString(args.flags, 'release');
+  const backlogOnly = flagBool(args.flags, 'backlog');
+  const textFlag = flagString(args.flags, 'text');
+
+  const status = statusFlag !== undefined ? requireStatus(statusFlag) : undefined;
+  const type = typeFlag !== undefined ? parseTaskType(typeFlag) : undefined;
+  const text = textFlag?.toLowerCase();
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { snapshot, problems } = await loadBoardOrThrow(root);
+
+  // Unknown --epic / --release is a caller mistake, not an empty result: fail
+  // loud like `task get`, resolving the ref against the loaded board.
+  let epicMemberIds: Set<string> | undefined;
+  if (epicFlag !== undefined) {
+    const epic = findEpic(snapshot, epicFlag);
+    if (epic === undefined) throw new CliError('EPIC_NOT_FOUND', `No epic "${epicFlag}".`);
+    epicMemberIds = new Set(epicMembers(snapshot, epic).map((t) => t.frontmatter.id));
+  }
+  let releaseFile: string | undefined;
+  if (releaseFlag !== undefined) {
+    const release = findRelease(snapshot, releaseFlag);
+    if (release === undefined) throw new CliError('RELEASE_NOT_FOUND', `No release "${releaseFlag}".`);
+    releaseFile = release.filename;
+  }
+
+  const entries = collectEntries(snapshot).filter(({ task, in: loc }) => {
+    const fm = task.frontmatter;
+    if (status !== undefined && fm.status !== status) return false;
+    if (type !== undefined && fm.type !== type) return false;
+    if (epicMemberIds !== undefined && !epicMemberIds.has(fm.id)) return false;
+    if (releaseFile !== undefined && !(loc.kind === 'release' && loc.file === releaseFile)) return false;
+    if (backlogOnly && loc.kind !== 'backlog') return false;
+    if (
+      text !== undefined &&
+      !task.title.toLowerCase().includes(text) &&
+      !task.description.toLowerCase().includes(text)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    data: { tasks: entries, count: entries.length },
+    human: renderTaskList(entries),
     ...problemsField(problems),
   };
 }

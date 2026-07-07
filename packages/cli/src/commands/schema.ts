@@ -29,6 +29,13 @@ const DESCRIPTOR = {
     },
     { name: 'task get', usage: 'boardown task get <id>', summary: 'Show one task and where it lives.' },
     {
+      name: 'task list',
+      usage:
+        'boardown task list [--status STATUS] [--type TYPE] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR]',
+      summary:
+        'List tasks across the whole board, filtered by any combination of status, type, epic, release, backlog-only, or a case-insensitive text match on title/description. Data is { tasks: [{ task, in: { kind, file } }], count }.',
+    },
+    {
       name: 'task add',
       usage:
         'boardown task add <title> [--type TYPE] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE]',
