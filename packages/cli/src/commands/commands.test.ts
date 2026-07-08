@@ -289,6 +289,44 @@ describe('cli commands (integration)', () => {
       ).toEqual(['TS-4']);
     });
 
+    it('matches --text against the description body, not only the title', async () => {
+      await seed();
+      // "telemetry" appears in no title — a hit proves the description branch.
+      await taskCommand(
+        parseArgs(['task', 'edit', 'TS-1', '--description', 'Investigate telemetry drift']),
+        ctx,
+      );
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--text', 'TELEMETRY']), ctx)).data),
+      ).toEqual(['TS-1']);
+    });
+
+    it('accepts the ls alias', async () => {
+      await seed();
+      const viaLs = listIds((await taskCommand(parseArgs(['task', 'ls']), ctx)).data);
+      expect(viaLs).toEqual(['TS-1', 'TS-2', 'TS-3', 'TS-4']);
+    });
+
+    it('renders human output with mark, id, type/status, epic, location and count', async () => {
+      await seed();
+      const out = await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx);
+      expect(out.human).toContain('TS-4');
+      expect(out.human).toContain('[bug/todo]');
+      expect(out.human).toContain('epic:bug-audit');
+      expect(out.human).toContain('(release: releases/active.md)');
+      expect(out.human).toContain('Delta ship');
+      expect(out.human).toContain('1 task(s).');
+    });
+
+    it('renders a placeholder line when nothing matches', async () => {
+      await seed();
+      const out = await taskCommand(
+        parseArgs(['task', 'list', '--status', 'done', '--type', 'bug']),
+        ctx,
+      );
+      expect(out.human).toBe('No matching tasks.');
+    });
+
     it('AND-combines filters', async () => {
       await seed();
       expect(
