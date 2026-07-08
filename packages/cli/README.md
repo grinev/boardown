@@ -29,6 +29,7 @@ boardown board                  Print the whole board.
 boardown init                   Create a .boardown/ board here (--id-prefix --project-name).
 
 boardown task get <id>          Show one task and where it lives.
+boardown task list              List/filter tasks (--status --type --epic --release --backlog --text).
 boardown task add <title>       Create a task (--type --status --epic --release --description).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (todo | in-progress | done).
@@ -51,6 +52,12 @@ boardown epic edit <slug>       Edit an epic (--name --description).
 
 boardown schema                 Print the machine-readable command/enum contract.
 ```
+
+`task list` filters combine with AND; with no filters it prints every task.
+`--epic <slug>` matches both tasks stored in the epic file and tasks living in a
+release that carry that epic tag. `--release <ref>` takes a slug or filename,
+`--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
+match on title and description.
 
 The board is located by walking up from the current directory to a `.boardown/`
 folder (like git finds `.git`). Use `--data-dir <path>` to point at a specific

@@ -25,6 +25,7 @@ Commands:
   board                  Print the whole board.
   init                   Create a .boardown/ board here.
   task get <id>          Show one task and where it lives.
+  task list              List/filter tasks (--status --type --epic --release --backlog --text).
   task add <title>       Create a task (--type --status --epic --release --description).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
   task status <id> <s>   Change a task status (todo | in-progress | done).

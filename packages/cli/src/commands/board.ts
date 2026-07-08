@@ -17,7 +17,7 @@ export const boardCommand: CommandHandler = async (_args, ctx) => {
   };
 };
 
-const statusMark = (task: Task): string => {
+export const statusMark = (task: Task): string => {
   switch (task.frontmatter.status) {
     case 'todo':
       return '○';
