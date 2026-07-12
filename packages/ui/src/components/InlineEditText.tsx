@@ -3,6 +3,7 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -17,6 +18,8 @@ interface InlineEditTextProps {
   placeholder?: string;
   ariaLabel: string;
   className?: string | undefined;
+  // Custom view-mode rendering of a non-empty value; edit mode always shows raw text.
+  renderView?: (value: string) => ReactNode;
 }
 
 const cx = (...parts: Array<string | false | undefined>): string =>
@@ -30,6 +33,7 @@ export function InlineEditText({
   placeholder,
   ariaLabel,
   className,
+  renderView,
 }: InlineEditTextProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [draft, setDraft] = useState(value);
@@ -115,7 +119,7 @@ export function InlineEditText({
           }
         }}
       >
-        {showPlaceholder ? placeholder : value}
+        {showPlaceholder ? placeholder : (renderView?.(value) ?? value)}
       </div>
     );
   }

@@ -16,6 +16,7 @@ import { formatStatusLabel } from '../utils/format-status';
 import { Checklist } from './Checklist';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
+import { LinkedText } from './LinkedText';
 import { Modal } from './Modal';
 import { Notes } from './Notes';
 import styles from './TaskDetailsDialog.module.css';
@@ -140,6 +141,7 @@ export function TaskDetailsDialog({
               placeholder="No description"
               ariaLabel="Task description"
               className={styles.descriptionBody}
+              renderView={(value) => <LinkedText text={value} />}
               onSave={(next) => updateTask(id, { description: next })}
             />
           </section>

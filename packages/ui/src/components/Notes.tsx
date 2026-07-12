@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-react';
 import { useState, type KeyboardEvent } from 'react';
 import { nextNoteId, type Note, type Task } from '@boardown/core';
 import { InlineEditText } from './InlineEditText';
+import { LinkedText } from './LinkedText';
 import styles from './Notes.module.css';
 
 interface NotesProps {
@@ -62,6 +63,7 @@ export function Notes({ task, onChange }: NotesProps) {
                 required
                 ariaLabel="Note text"
                 className={styles.noteText}
+                renderView={(value) => <LinkedText text={value} />}
                 onSave={(next) => editText(note.id, next)}
               />
             </li>
