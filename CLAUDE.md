@@ -190,35 +190,26 @@ resolve their types from source and never depend on a prior build.
 ### Browser testing
 
 There is deliberately **no e2e suite** — it would cost more to maintain than it
-returns on a project this size. Instead, a change that touches the UI is not done
-until it has been driven in a real browser. Use the Playwright MCP server
-(configured in `.mcp.json`) against the sandbox:
+returns on a project this size. When a UI change needs to be exercised in a real
+browser, **delegate it to the `manual-tester` agent**
+(`.claude/agents/manual-tester.md`): it owns the Playwright MCP tools, the sandbox
+board and the discipline that goes with them, and it keeps a whole browser
+transcript out of the context of whoever is writing the code. Hand it the feature
+and the acceptance criteria; it drives, breaks and reports.
 
-```sh
-pnpm dev:sandbox   # http://localhost:5199
-```
+Do not drive the browser yourself. A change that looks trivial ("just swapped two
+sections") is exactly the one that gets checked by hand, badly, and burns the
+context you still need for the work.
 
-It serves a **throwaway copy** of `tests/fixtures/board/.boardown/` and prints
-the copy's path. Two rules:
+The sandbox (`pnpm dev:sandbox`, port 5199) serves a **throwaway copy** of
+`tests/fixtures/board/.boardown/`. Never point a browser session or a CLI run at
+the repo's own `.boardown/` — every click writes markdown to disk, and you would
+corrupt the real board.
 
-- **Never point a browser session at the repo's own `.boardown/`.** Clicking the
-  board writes markdown to disk; you would corrupt the real board.
-- After a UI action, read the file in the sandbox copy and check that the
-  frontmatter actually changed as intended. Passing on screen is half the check —
-  what landed on disk is the other half.
-
-Go looking for breakage, not for confirmation: empty title, a finished release
-(read-only), a drag onto a target that should reject it, cancel out of a modal.
-
-Elements without an accessible name (board column, task card, backlog row,
-section) carry `data-testid`; everything else is reachable via role/label. If a
-new element needs neither, prefer giving it a proper accessible name over a
-testid.
-
-The MCP server writes its snapshots, console logs and screenshots to
-`.playwright-mcp/` (gitignored). A screenshot's `filename` argument, however, is
-resolved against the repo root, not that directory — so either omit it or pass
-`.playwright-mcp/<name>.png`. Never leave test artifacts in the working tree.
+Writing UI code with testing in mind: elements without an accessible name (board
+column, task card, backlog row, section) carry `data-testid`; everything else is
+reachable via role/label. If a new element needs neither, prefer giving it a
+proper accessible name over a testid.
 
 Run the full set as part of a task's Definition of Done; a green local run is
 expected before committing. If a change is scoped to one package you may iterate
