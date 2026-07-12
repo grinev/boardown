@@ -427,14 +427,14 @@ moves the task between containers (release-to-release, release-to-epic
 when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to.
 
-**Task links.** In the details dialog, the view mode of the **description** and of
-a **note** renders any token shaped like a task ID (2–5 uppercase letters, a dash,
-digits) that resolves to a task on the board as a link showing `ID title`;
-clicking it opens that task's dialog in place of the current one. Resolution is
-against the task IDs actually present on the board, not against the current
-`idPrefix`, so tasks created under an older prefix stay linkable. Tokens that
-resolve to nothing stay plain text, and edit mode always shows the raw source.
-Checklist items, cards and epic/release descriptions render no links.
+**Task links.** Any token shaped like a task ID (2–5 uppercase letters, a dash,
+digits) that resolves to a task on the board renders, in view mode, as a link
+showing `ID title`; clicking it opens that task's dialog. This applies to the
+task's **description** and its **notes** (task dialog) and to the **epic's
+description** (epic dialog). Resolution is against the task IDs actually present
+on the board, not against the current `idPrefix`, so tasks created under an older
+prefix stay linkable. Tokens that resolve to nothing stay plain text, and edit
+mode always shows the raw source. Checklist items and cards render no links.
 
 ### Epic editor
 
@@ -589,9 +589,10 @@ shell — `ui` accepts an `FsAdapter` and never imports DOM-only APIs.
 - [x] **Task creation modal**: title, type, epic, plain-text description
 - [x] **Task inline editing** in the details dialog: `title`,
       `description`, `type`, `status`, `epic`, `release`
-- [x] **Task links** in a task's description and notes: an ID-shaped token that
-      resolves to an existing task renders as an `ID title` link opening that
-      task's dialog; raw text on disk and in edit mode
+- [x] **Task links** in a task's description and notes, and in an epic's
+      description: an ID-shaped token that resolves to an existing task renders
+      as an `ID title` link opening that task's dialog; raw text on disk and in
+      edit mode
 - [x] **Release creation modal**: Name + plain-text description; filename
       is derived from the name (kebab-case lowercase, spaces and
       filesystem-forbidden characters become `-`, edges trimmed, runs

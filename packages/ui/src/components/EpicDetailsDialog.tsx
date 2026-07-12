@@ -5,6 +5,7 @@ import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
 import { InlineEditText } from './InlineEditText';
+import { LinkedText } from './LinkedText';
 import { Modal } from './Modal';
 import styles from './EpicDetailsDialog.module.css';
 
@@ -60,6 +61,7 @@ export function EpicDetailsDialog({
             placeholder="No description"
             ariaLabel="Epic description"
             className={styles.descriptionBody}
+            renderView={(value) => <LinkedText text={value} />}
             onSave={(next) => updateEpic(epic.slug, { preamble: next })}
           />
         </section>
