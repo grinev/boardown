@@ -31,6 +31,23 @@ export const NoteSchema = z.object({
 });
 export type Note = z.infer<typeof NoteSchema>;
 
+export const LINK_TYPES = ['relates'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
+// A link is stored on both tasks. `inverse` is the type the mirrored record
+// carries on the other side, so an asymmetric type (blocks / blocked-by) is one
+// more entry here rather than a branch anywhere else. `label` is how the relation
+// reads from the side that holds the record.
+export const LINK_TYPE_META: Record<LinkType, { label: string; inverse: LinkType }> = {
+  relates: { label: 'relates to', inverse: 'relates' },
+};
+
+export const TaskLinkSchema = z.object({
+  type: z.enum(LINK_TYPES),
+  to: z.string().min(1),
+});
+export type TaskLink = z.infer<typeof TaskLinkSchema>;
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
   type: z.enum(TASK_TYPES),
@@ -39,6 +56,7 @@ export const TaskFrontmatterSchema = z.object({
   order: z.number().int(),
   checklist: z.array(ChecklistItemSchema).optional(),
   notes: z.array(NoteSchema).optional(),
+  links: z.array(TaskLinkSchema).optional(),
 });
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 

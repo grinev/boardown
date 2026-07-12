@@ -1,13 +1,16 @@
 import { nextTaskId } from './id-generator.js';
+import { LINK_TYPE_META } from './schemas.js';
 import type {
   Backlog,
   BoardConfig,
   ChecklistItem,
   Epic,
+  LinkType,
   Note,
   Release,
   ReleaseStatus,
   Task,
+  TaskLink,
   TaskStatus,
   TaskType,
 } from './schemas.js';
@@ -493,6 +496,125 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
     source: newSource,
     dest: replaceTasks(destWithTask, placed),
   };
+};
+
+export interface TaskLinkResult<S extends Container, D extends Container> {
+  source: S;
+  target: D;
+  // Only the containers whose tasks actually changed, so an idempotent add or a
+  // one-sided remove does not rewrite an untouched file.
+  changedFilenames: string[];
+}
+
+const taskWithLink = (task: Task, link: TaskLink): Task => {
+  const links = task.frontmatter.links ?? [];
+  if (links.some((l) => l.type === link.type && l.to === link.to)) return task;
+  return { ...task, frontmatter: { ...task.frontmatter, links: [...links, link] } };
+};
+
+const taskWithoutLink = (task: Task, link: TaskLink): Task => {
+  const links = task.frontmatter.links;
+  if (links === undefined) return task;
+  const remaining = links.filter((l) => !(l.type === link.type && l.to === link.to));
+  if (remaining.length === links.length) return task;
+  const frontmatter = { ...task.frontmatter };
+  if (remaining.length === 0) delete frontmatter.links;
+  else frontmatter.links = remaining;
+  return { ...task, frontmatter };
+};
+
+const mapTask = <C extends Container>(
+  container: C,
+  taskId: string,
+  edit: (task: Task) => Task,
+): { container: C; changed: boolean } => {
+  let changed = false;
+  const tasks = container.tasks.map((t) => {
+    if (t.frontmatter.id !== taskId) return t;
+    const next = edit(t);
+    if (next !== t) changed = true;
+    return next;
+  });
+  return changed
+    ? { container: replaceTasks(container, tasks), changed }
+    : { container, changed };
+};
+
+const applyLinkPair = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType,
+  edit: (task: Task, link: TaskLink) => Task,
+): TaskLinkResult<S, D> => {
+  const forward: TaskLink = { type, to: targetTaskId };
+  const backward: TaskLink = { type: LINK_TYPE_META[type].inverse, to: sourceTaskId };
+
+  if (source.filename === target.filename) {
+    // Both tasks live in the same file: the second edit must be applied to the
+    // result of the first, or one of the two mirrored records is lost. Source and
+    // target are the same container, so the cast restates what the caller passed.
+    const first = mapTask(source, sourceTaskId, (t) => edit(t, forward));
+    const second = mapTask(first.container, targetTaskId, (t) => edit(t, backward));
+    const merged = second.container;
+    return {
+      source: merged,
+      target: merged as unknown as D,
+      changedFilenames: first.changed || second.changed ? [source.filename] : [],
+    };
+  }
+
+  const nextSource = mapTask(source, sourceTaskId, (t) => edit(t, forward));
+  const nextTarget = mapTask(target, targetTaskId, (t) => edit(t, backward));
+  const changedFilenames: string[] = [];
+  if (nextSource.changed) changedFilenames.push(source.filename);
+  if (nextTarget.changed) changedFilenames.push(target.filename);
+  return {
+    source: nextSource.container,
+    target: nextTarget.container,
+    changedFilenames,
+  };
+};
+
+// A link is mirrored into both tasks, so both files must be writable: an archived
+// task is refused as the target just as much as as the source.
+const assertLinkable = (source: Container, target: Container): void => {
+  if (isFinishedRelease(source) || isFinishedRelease(target)) {
+    throw new Error('Cannot change the links of a task in a finished release');
+  }
+};
+
+export const addTaskLink = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType = 'relates',
+): TaskLinkResult<S, D> => {
+  if (sourceTaskId === targetTaskId) {
+    throw new Error('Cannot link a task to itself');
+  }
+  assertLinkable(source, target);
+  findTask(source.tasks, sourceTaskId);
+  findTask(target.tasks, targetTaskId);
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithLink);
+};
+
+export const removeTaskLink = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType = 'relates',
+): TaskLinkResult<S, D> => {
+  if (sourceTaskId === targetTaskId) {
+    throw new Error('Cannot unlink a task from itself');
+  }
+  assertLinkable(source, target);
+  findTask(source.tasks, sourceTaskId);
+  findTask(target.tasks, targetTaskId);
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink);
 };
 
 export interface BacklogContainers {

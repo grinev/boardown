@@ -366,3 +366,57 @@ order: 100
     expect(serialized).not.toMatch(/^epic:/m);
   });
 });
+
+describe('links serialization', () => {
+  const withLinks = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## A task
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 100
+links:
+  - type: relates
+    to: BD-3
+  - type: relates
+    to: BD-4
+---
+
+description
+`;
+
+  it('round-trips a task with links', () => {
+    const first = parseEpic(withLinks, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-3' },
+      { type: 'relates', to: 'BD-4' },
+    ]);
+    const serialized = serializeEpic(first.value!);
+    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(second.problems).toEqual([]);
+    expect(serializeEpic(second.value!)).toBe(serialized);
+  });
+
+  it('omits an empty links array', () => {
+    const epic: Epic = {
+      filename: 'epics/ui.md',
+      slug: 'ui',
+      frontmatter: { name: 'UI', color: '#1f6feb' },
+      preamble: '',
+      tasks: [
+        {
+          title: 'A task',
+          description: '',
+          frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', order: 100, links: [] },
+        },
+      ],
+    };
+    expect(serializeEpic(epic)).not.toContain('links:');
+  });
+});

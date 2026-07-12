@@ -17,6 +17,7 @@ import { Checklist } from './Checklist';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
+import { LinkedTasks } from './LinkedTasks';
 import { Modal } from './Modal';
 import { Notes } from './Notes';
 import styles from './TaskDetailsDialog.module.css';
@@ -27,6 +28,7 @@ interface TaskDetailsDialogProps {
   release: Release | undefined;
   onClose: () => void;
   onEpicClick?: (slug: string) => void;
+  onTaskClick: (id: string) => void;
 }
 
 const NO_EPIC_VALUE = '__none__';
@@ -66,6 +68,7 @@ export function TaskDetailsDialog({
   release,
   onClose,
   onEpicClick,
+  onTaskClick,
 }: TaskDetailsDialogProps) {
   const { id, type, status } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
@@ -148,6 +151,11 @@ export function TaskDetailsDialog({
           <Checklist
             task={task}
             onChange={(items) => updateTask(id, { checklist: items })}
+          />
+          <LinkedTasks
+            task={task}
+            readOnly={release?.frontmatter.status === 'finished'}
+            onTaskClick={onTaskClick}
           />
           <Notes
             task={task}

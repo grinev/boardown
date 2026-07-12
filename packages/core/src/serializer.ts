@@ -37,6 +37,9 @@ const orderedTaskFrontmatter = (
       createdAt: note.createdAt,
     }));
   }
+  if (fm.links && fm.links.length > 0) {
+    out.links = fm.links.map((link) => ({ type: link.type, to: link.to }));
+  }
   return out;
 };
 

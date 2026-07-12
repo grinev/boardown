@@ -11,6 +11,7 @@ import {
   type BoardSnapshot,
   type Epic,
   type FsAdapter,
+  type GuardedFs,
   type ParseProblem,
   type Release,
   type Task,
@@ -29,7 +30,7 @@ export interface ContainerRef {
 }
 
 export interface LoadedBoard {
-  fs: FsAdapter;
+  fs: GuardedFs;
   snapshot: BoardSnapshot;
   problems: ParseProblem[];
 }
@@ -120,6 +121,15 @@ export function serializeContainer(ref: ContainerRef): string {
 
 export async function writeContainer(fs: FsAdapter, ref: ContainerRef): Promise<void> {
   await fs.write(ref.container.filename, serializeContainer(ref));
+}
+
+// Containers that must land together (a link mirrored into two tasks): the guard
+// checks every target before writing any of them, so an external change aborts the
+// whole operation instead of half-applying it.
+export async function writeContainers(fs: GuardedFs, refs: ContainerRef[]): Promise<void> {
+  await fs.writeAll(
+    refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
+  );
 }
 
 export async function writeConfig(fs: FsAdapter, config: BoardConfig): Promise<void> {

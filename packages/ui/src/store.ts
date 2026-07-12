@@ -5,9 +5,11 @@ import type {
   Epic,
   EpicPatch,
   FsAdapter,
+  GuardedFs,
   ParseProblem,
   Release,
   Task,
+  TaskLinkResult,
   TaskPatch,
   TaskStatus,
   TaskType,
@@ -15,6 +17,8 @@ import type {
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
+  addTaskLink as addTaskLinkInBoard,
+  removeTaskLink as removeTaskLinkInBoard,
   completeRelease as completeReleaseInBoard,
   createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
@@ -75,7 +79,7 @@ interface BoardState {
   // Host-provided fallback theme (e.g. VS Code's color theme), used only when
   // seeding a brand-new config at onboarding. Null when the shell omits it.
   defaultTheme: Theme | null;
-  fs: FsAdapter | null;
+  fs: GuardedFs | null;
   rawFs: FsAdapter | null;
   conflictOpen: boolean;
   selectedTaskId: string | null;
@@ -134,6 +138,8 @@ interface BoardState {
     beforeTaskId: string | null,
   ) => Promise<void>;
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
+  addTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
+  removeTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
 }
 
 export type BacklogMoveTarget =
@@ -214,6 +220,95 @@ const destEpicForLocation = (location: ContainerLocation): DestEpic => {
 const formatProblems = (problems: ParseProblem[]): string =>
   problems.map((p) => `${p.file}: ${p.message}`).join('\n');
 
+type LinkOp = (
+  source: Release | Epic | Backlog,
+  target: Release | Epic | Backlog,
+  sourceTaskId: string,
+  targetTaskId: string,
+) => TaskLinkResult<Release | Epic | Backlog, Release | Epic | Backlog>;
+
+// Adding and removing a link differ only in the core op: both mirror the change
+// into the two tasks' containers (one container when they share a file) and write
+// exactly the files the op reports as changed, together.
+const applyLinkOp = async (
+  snapshot: BoardSnapshot,
+  fs: GuardedFs,
+  taskId: string,
+  otherTaskId: string,
+  op: LinkOp,
+  set: (partial: Partial<BoardState>) => void,
+): Promise<void> => {
+  const source = findTaskContainer(snapshot, taskId);
+  const target = findTaskContainer(snapshot, otherTaskId);
+  if (!source) {
+    set({ errorMessage: `Task not found: ${taskId}` });
+    return;
+  }
+  if (!target) {
+    set({ errorMessage: `Task not found: ${otherTaskId}` });
+    return;
+  }
+
+  let result: TaskLinkResult<Release | Epic | Backlog, Release | Epic | Backlog>;
+  try {
+    result = op(
+      source.location.container,
+      target.location.container,
+      taskId,
+      otherTaskId,
+    );
+  } catch (err) {
+    set({ errorMessage: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+  if (result.changedFilenames.length === 0) return;
+
+  const nextReleases = [...snapshot.releases];
+  const nextEpics = [...snapshot.epics];
+  let nextBacklog = snapshot.backlog;
+  const assign = (loc: ContainerLocation, value: Release | Epic | Backlog): void => {
+    switch (loc.kind) {
+      case 'release':
+        nextReleases[loc.index] = value as Release;
+        break;
+      case 'epic':
+        nextEpics[loc.index] = value as Epic;
+        break;
+      case 'backlog':
+        nextBacklog = value as Backlog;
+        break;
+    }
+  };
+  assign(source.location, result.source);
+  assign(target.location, result.target);
+
+  const files = result.changedFilenames.map((filename) => {
+    const fromSource = source.location.container.filename === filename;
+    const location = fromSource ? source.location : target.location;
+    const container = fromSource ? result.source : result.target;
+    return {
+      path: filename,
+      content: serializeContainer({ kind: location.kind, container }),
+    };
+  });
+
+  const nextSnapshot: BoardSnapshot = {
+    ...snapshot,
+    releases: nextReleases,
+    epics: nextEpics,
+    backlog: nextBacklog,
+  };
+  set({ snapshot: nextSnapshot, errorMessage: null });
+
+  try {
+    await fs.writeAll(files);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    set({ snapshot, errorMessage: `Failed to save link: ${message}` });
+    throw err;
+  }
+};
+
 export const useBoardStore = create<BoardState>((set, get) => ({
   status: 'idle',
   snapshot: null,
@@ -240,7 +335,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({
       status: 'loading',
       errorMessage: null,
-      fs,
+      // Guarded with an empty version map until the board loads: the only write
+      // possible before that is onboarding's config.yaml, which does not exist
+      // yet, so the guard's stat check passes. Keeps `fs` a single type.
+      fs: createGuardedFs(fs, {}, () => set({ conflictOpen: true })),
       rawFs: fs,
       conflictOpen: false,
       // Keep a previously captured default when the caller (e.g. reload) omits it.
@@ -1155,6 +1253,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ snapshot, errorMessage: `Failed to move task: ${message}` });
       throw err;
     }
+  },
+
+  addTaskLink: async (taskId, otherTaskId) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+    await applyLinkOp(snapshot, fs, taskId, otherTaskId, addTaskLinkInBoard, set);
+  },
+
+  removeTaskLink: async (taskId, otherTaskId) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+    await applyLinkOp(snapshot, fs, taskId, otherTaskId, removeTaskLinkInBoard, set);
   },
 
   updateEpic: async (slug, patch) => {

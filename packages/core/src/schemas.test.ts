@@ -146,6 +146,37 @@ describe('TaskFrontmatterSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts an optional list of links', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      links: [{ type: 'relates', to: 'BD-2' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a link with an unknown type or a missing target', () => {
+    const badType = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      links: [{ type: 'blocks', to: 'BD-2' }],
+    });
+    expect(badType.success).toBe(false);
+
+    const noTarget = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      links: [{ type: 'relates' }],
+    });
+    expect(noTarget.success).toBe(false);
+  });
 });
 
 describe('ReleaseFrontmatterSchema', () => {

@@ -133,7 +133,11 @@ CLI inherits them rather than re-implementing them.
 - External-change safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
   (`packages/core`), which compares each write target's `lastModified` against
   the value captured at load and refuses to clobber a file changed on disk,
-  opening the Reload conflict modal instead. Shared by all shells. Re-reading on
+  opening the Reload conflict modal instead. Shared by all shells. The guard also
+  exposes `writeAll`, for a set of files that must land together (e.g. a task link
+  mirrored into two tasks): it checks every target before writing any of them, so
+  an external change aborts the whole operation instead of half-applying it —
+  reach for it in any new multi-file mutation. Re-reading on
   demand is the manual Reload button; in addition the VS Code and Electron shells
   auto-refresh on external `.boardown/` changes via a host file watcher (gated by
   the `boardown.autoRefresh` setting), while the `web` dev shell stays

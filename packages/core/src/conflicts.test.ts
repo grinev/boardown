@@ -77,3 +77,53 @@ describe('createGuardedFs', () => {
     expect(onConflict).toHaveBeenCalledWith('surprise.md');
   });
 });
+
+describe('createGuardedFs — writeAll', () => {
+  it('writes every file and records their versions', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('a.md', 'one');
+    await inner.write('b.md', 'one');
+    const versions: Record<string, number> = {
+      'a.md': (await inner.stat('a.md'))!.lastModified,
+      'b.md': (await inner.stat('b.md'))!.lastModified,
+    };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, versions, onConflict);
+
+    await fs.writeAll([
+      { path: 'a.md', content: 'two' },
+      { path: 'b.md', content: 'two' },
+    ]);
+
+    expect(await inner.read('a.md')).toBe('two');
+    expect(await inner.read('b.md')).toBe('two');
+    expect(versions['a.md']).toBe((await inner.stat('a.md'))!.lastModified);
+    expect(onConflict).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when any target changed on disk', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('a.md', 'one');
+    await inner.write('b.md', 'one');
+    const versions: Record<string, number> = {
+      'a.md': (await inner.stat('a.md'))!.lastModified,
+      'b.md': (await inner.stat('b.md'))!.lastModified,
+    };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, versions, onConflict);
+
+    // Only the second target moved: the first must still not be written.
+    await inner.write('b.md', 'external');
+
+    await expect(
+      fs.writeAll([
+        { path: 'a.md', content: 'mine' },
+        { path: 'b.md', content: 'mine' },
+      ]),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(onConflict).toHaveBeenCalledWith('b.md');
+    expect(await inner.read('a.md')).toBe('one');
+    expect(await inner.read('b.md')).toBe('external');
+  });
+});

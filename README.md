@@ -334,7 +334,7 @@ actually wrote.
 
 The fixture covers the interesting states: a finished, a current and a future
 release, tasks in every status and of every type, an epic with unscheduled tasks,
-and a task with a checklist and notes.
+a task with a checklist and notes, and a pair of linked tasks.
 
 Board columns, task cards, backlog rows and sections carry `data-testid`
 attributes because they have no accessible name of their own; everything else

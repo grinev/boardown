@@ -191,6 +191,7 @@ export function App({
           release={selectedTaskRelease}
           onClose={closeTask}
           onEpicClick={openEpic}
+          onTaskClick={openTask}
         />
       )}
       {selectedEpic && (

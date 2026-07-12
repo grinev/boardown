@@ -1,4 +1,5 @@
 import {
+  addTaskLink,
   changeTaskStatus,
   createTask,
   deleteTask,
@@ -7,19 +8,23 @@ import {
   moveTaskBetweenContainers,
   nextChecklistItemId,
   nextNoteId,
+  removeTaskLink,
   reorderTask,
+  LINK_TYPE_META,
   TASK_STATUSES,
   TASK_TYPES,
   type BoardSnapshot,
   type ChecklistItem,
   type DestEpic,
   type FsAdapter,
+  type LinkType,
   type NewTaskInput,
   type Note,
   type ParseProblem,
   type Release,
   type ReleaseStatus,
   type Task,
+  type TaskLink,
   type TaskPatch,
   type TaskStatus,
   type TaskType,
@@ -35,6 +40,7 @@ import {
   resolveBoardRoot,
   writeConfig,
   writeContainer,
+  writeContainers,
   type ContainerKind,
   type ContainerRef,
 } from '../persistence';
@@ -68,10 +74,13 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     case 'notes':
     case 'note':
       return taskNotes(args, ctx);
+    case 'link':
+    case 'links':
+      return taskLink(args, ctx);
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link.`,
         2,
       );
   }
@@ -401,11 +410,19 @@ const renderNotes = (notes: readonly Note[] | undefined): string => {
   return `\n\nNotes (${notes.length}):\n${lines}`;
 };
 
+const renderTaskLinks = (links: readonly TaskLink[] | undefined): string => {
+  if (links === undefined || links.length === 0) return '';
+  const lines = links
+    .map((l) => `  ${LINK_TYPE_META[l.type].label}  ${l.to}`)
+    .join('\n');
+  return `\n\nLinks (${links.length}):\n${lines}`;
+};
+
 const renderTask = (task: Task, kind: string, file: string): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}`;
+  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -874,4 +891,165 @@ function noteRm(
       extra: { removed: noteId },
     };
   });
+}
+
+function taskLink(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const op = args.positionals[2];
+  switch (op) {
+    case 'add':
+      return linkMutate(args, ctx, 'add');
+    case 'rm':
+    case 'remove':
+      return linkMutate(args, ctx, 'rm');
+    case 'ls':
+    case 'list':
+      return linkList(args, ctx);
+    default:
+      throw new CliError(
+        'USAGE',
+        `Unknown link subcommand "${op ?? ''}". Use: add | rm | ls.`,
+        2,
+      );
+  }
+}
+
+// A link is mirrored into both tasks, so add and rm differ only in the core op:
+// both resolve the two containers, apply the op, and write back exactly the files
+// the op reports as changed — together, through the guard.
+async function linkMutate(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  kind: 'add' | 'rm',
+): Promise<CommandOutput> {
+  const usage = `Usage: boardown task link ${kind} <id> <other-id>.`;
+  const id = args.positionals[3];
+  const otherId = args.positionals[4];
+  if (id === undefined || otherId === undefined) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  if (id === otherId) {
+    throw new CliError('USAGE', 'A task cannot be linked to itself.', 2);
+  }
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const source = locateTask(snapshot, id);
+  if (source === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+  const target = locateTask(snapshot, otherId);
+  if (target === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${otherId}".`);
+  }
+
+  const apply = kind === 'add' ? addTaskLink : removeTaskLink;
+  const result = applyOp(() => apply(source.container, target.container, id, otherId));
+
+  const refs: ContainerRef[] = result.changedFilenames.map((filename) =>
+    filename === source.container.filename
+      ? { kind: source.kind, container: result.source }
+      : { kind: target.kind, container: result.target },
+  );
+  if (refs.length > 0) {
+    await writeContainers(fs, refs);
+  }
+
+  const task = result.source.tasks.find((t) => t.frontmatter.id === id);
+  const unchangedNote =
+    kind === 'add' ? `${id} and ${otherId} are already linked.` : `${id} and ${otherId} are not linked.`;
+  return {
+    data: { task, files: result.changedFilenames },
+    human:
+      refs.length === 0
+        ? unchangedNote
+        : kind === 'add'
+          ? `Linked ${id} and ${otherId}.`
+          : `Unlinked ${id} and ${otherId}.`,
+    ...problemsField(problems),
+  };
+}
+
+interface LinkListEntry {
+  type: LinkType;
+  to: string;
+  title?: string;
+  status?: TaskStatus;
+  taskType?: TaskType;
+  missing: boolean;
+}
+
+// Same union the UI renders (own records plus the records other tasks point back
+// with), except a dangling target is kept and flagged: an agent cleaning up after
+// a deleted task needs to see it.
+function collectLinks(snapshot: BoardSnapshot, task: Task): LinkListEntry[] {
+  const all = collectEntries(snapshot).map((e) => e.task);
+  const taskId = task.frontmatter.id;
+  const seen = new Set<string>();
+  const entries: LinkListEntry[] = [];
+
+  const push = (type: LinkType, to: string): void => {
+    const key = `${type}:${to}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const other = all.find((t) => t.frontmatter.id === to);
+    entries.push(
+      other === undefined
+        ? { type, to, missing: true }
+        : {
+            type,
+            to,
+            title: other.title,
+            status: other.frontmatter.status,
+            taskType: other.frontmatter.type,
+            missing: false,
+          },
+    );
+  };
+
+  for (const link of task.frontmatter.links ?? []) push(link.type, link.to);
+  for (const other of all) {
+    if (other.frontmatter.id === taskId) continue;
+    for (const link of other.frontmatter.links ?? []) {
+      if (link.to !== taskId) continue;
+      push(LINK_TYPE_META[link.type].inverse, other.frontmatter.id);
+    }
+  }
+  return entries;
+}
+
+const renderLinks = (entries: readonly LinkListEntry[]): string => {
+  if (entries.length === 0) return 'No links.';
+  const lines = entries.map((e) => {
+    const label = LINK_TYPE_META[e.type].label;
+    return e.missing
+      ? `${label}  ${e.to}  (missing)`
+      : `${label}  ${e.to}  [${e.taskType}/${e.status}]  ${e.title}`;
+  });
+  lines.push(`\n${entries.length} link(s).`);
+  return lines.join('\n');
+};
+
+async function linkList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[3];
+  if (id === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown task link ls <id>.', 2);
+  }
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const location = locateTask(snapshot, id);
+  if (location === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+  const task = location.container.tasks.find((t) => t.frontmatter.id === id);
+  if (task === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+
+  const links = collectLinks(snapshot, task);
+  return {
+    data: { links, count: links.length },
+    human: renderLinks(links),
+    ...problemsField(problems),
+  };
 }

@@ -45,6 +45,7 @@ A single unit of work. Fields:
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
+| `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is currently always `relates` (symmetric); `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
 
 Task statuses and types are currently a fixed set baked into the app: each type
 has an icon and a color used for the badge on the card and as a filter dimension.
@@ -212,6 +213,9 @@ notes:
   - id: n1
     text: Keyboard reordering can reuse the same placeTask op.
     createdAt: "2026-05-02T09:30:00.000Z"
+links:
+  - type: relates
+    to: BD-2
 ---
 
 Allow tasks to be dragged between status columns and between releases.
@@ -225,6 +229,9 @@ type: tech
 status: done
 epic: parser
 order: 200
+links:
+  - type: relates
+    to: BD-1
 ---
 
 The description is plain text.
@@ -388,6 +395,26 @@ on the board, not against the current `idPrefix`, so tasks created under an olde
 prefix stay linkable. Tokens that resolve to nothing stay plain text, and edit
 mode always shows the raw source. Checklist items and cards render no links.
 
+**Linked tasks.** Above the notes, the task dialog has a **Linked tasks** section:
+a table of the tasks this one is related to (type icon, id, title, status — the
+same columns as the epic dialog's task list). A `+` button at the right end of the
+section heading opens a search field; typing part of another task's id or title
+lists the matches, and picking one creates the link. Hovering a row reveals a
+trash button that breaks the link. Only one link
+type exists — `relates`, which is symmetric — so the user never picks one; the
+stored record carries a type, and each type declares its inverse, so an asymmetric
+type (e.g. `blocks` / "is blocked by") can be added later without a redesign.
+
+A link is stored on **both** tasks (mirrored). Rendering is lenient: a task shows
+the union of its own records and the records pointing at it, deduplicated, so a
+half-written link (a hand-edited file) is still visible and still removable. A
+link whose target is not on the board is hidden in the UI and never auto-removed
+from disk. Tasks in a finished release cannot be linked or unlinked (that would
+rewrite an archived file): they show their links read-only, and they do not appear
+in the search results. Adding or removing a link rewrites two files, and the
+conflict guard checks both before writing either — an external change aborts the
+whole operation instead of leaving one side linked.
+
 ### Epic editor
 
 **Creation** uses a dedicated modal dialog with:
@@ -447,7 +474,10 @@ A headless shell that does not mount `@boardown/ui` — it consumes
 `@boardown/core` directly and implements `FsAdapter` over Node's filesystem.
 It finds the board by walking up from the working directory to a `.boardown/`
 folder (or via `--data-dir`), and maps commands onto board operations
-(`board`, `init`, `task`, `release`, `epic`, `schema`). It is aimed primarily at
+(`board`, `init`, `task`, `release`, `epic`, `schema`). Task links are managed
+with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
+records, and `ls` lists the linked tasks, flagging a link whose target is no
+longer on the board as missing. It is aimed primarily at
 **agents and scripts**: output is a stable JSON envelope when stdout is not a TTY
 (or with `--json`), with stable error codes and exit codes, plus a `schema`
 command that prints the contract. Because every change is a plain-markdown git

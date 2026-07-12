@@ -178,6 +178,107 @@ describe('cli commands (integration)', () => {
     expect(get.human).toContain('Remember this');
   });
 
+  describe('task link', () => {
+    interface LinkEntry {
+      type: string;
+      to: string;
+      title?: string;
+      missing: boolean;
+    }
+    const links = (data: unknown): LinkEntry[] => (data as { links: LinkEntry[] }).links;
+
+    beforeEach(async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'One']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Two']), ctx);
+    });
+
+    it('add mirrors the link and ls reports it from both sides', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+
+      const board = await boardCommand(parseArgs(['board']), ctx);
+      expect(findTask(board.data, 'TS-1').frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-2' },
+      ]);
+      expect(findTask(board.data, 'TS-2').frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
+
+      const forward = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
+      expect(links(forward.data)).toEqual([
+        { type: 'relates', to: 'TS-2', title: 'Two', status: 'todo', taskType: 'feature', missing: false },
+      ]);
+      const backward = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-2']), ctx);
+      expect(links(backward.data).map((l) => l.to)).toEqual(['TS-1']);
+    });
+
+    it('add is idempotent', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+      const again = await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+
+      expect((again.data as { files: string[] }).files).toEqual([]);
+      const board = await boardCommand(parseArgs(['board']), ctx);
+      expect(findTask(board.data, 'TS-1').frontmatter.links).toHaveLength(1);
+    });
+
+    it('rm removes both records, whichever side it is called from', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+      await taskCommand(parseArgs(['task', 'link', 'rm', 'TS-2', 'TS-1']), ctx);
+
+      const board = await boardCommand(parseArgs(['board']), ctx);
+      expect(findTask(board.data, 'TS-1').frontmatter.links).toBeUndefined();
+      expect(findTask(board.data, 'TS-2').frontmatter.links).toBeUndefined();
+      const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
+      expect(links(ls.data)).toEqual([]);
+    });
+
+    it('rejects a self-link with USAGE and an unknown task with TASK_NOT_FOUND', async () => {
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-1']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'NOPE-9']), ctx),
+      ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'add', 'NOPE-9', 'TS-1']), ctx),
+      ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
+    });
+
+    it('refuses a task in a finished release, as source and as target', async () => {
+      const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
+      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', relFile]), ctx);
+      // Only a done task stays in the release when it is finished; an open one
+      // would be moved back to the backlog and would not be archived at all.
+      await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
+      await releaseCommand(parseArgs(['release', 'done', relFile]), ctx);
+
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx),
+      ).rejects.toMatchObject({ code: 'ARCHIVED' });
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'add', 'TS-2', 'TS-1']), ctx),
+      ).rejects.toMatchObject({ code: 'ARCHIVED' });
+    });
+
+    it('ls flags a link whose target is no longer on the board', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+      await taskCommand(parseArgs(['task', 'rm', 'TS-2']), ctx);
+
+      const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
+      expect(links(ls.data)).toEqual([{ type: 'relates', to: 'TS-2', missing: true }]);
+      expect(ls.human).toContain('(missing)');
+    });
+
+    it('task get shows the links block', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+      const get = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
+      expect(get.human).toContain('Links (1)');
+      expect(get.human).toContain('relates to  TS-2');
+    });
+  });
+
   it('reports NO_BOARD when no board exists', async () => {
     await expect(boardCommand(parseArgs(['board']), ctx)).rejects.toMatchObject({
       code: 'NO_BOARD',

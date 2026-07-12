@@ -1,4 +1,4 @@
-import { RELEASE_STATUSES, TASK_STATUSES, TASK_TYPES } from '@boardown/core';
+import { LINK_TYPES, RELEASE_STATUSES, TASK_STATUSES, TASK_TYPES } from '@boardown/core';
 import type { CommandHandler } from '../types';
 
 // A stable, self-describing contract for agents: valid enum values, the task
@@ -19,7 +19,10 @@ const DESCRIPTOR = {
     order: 'number, managed by boardown',
     checklist: 'optional array of { id, text, done }; managed via `task checklist`',
     notes: 'optional array of { id, text, createdAt }; managed via `task notes`',
+    links:
+      'optional array of { type, to }; links to other tasks, mirrored on both sides; managed via `task link`',
   },
+  linkTypes: LINK_TYPES,
   commands: [
     { name: 'board', usage: 'boardown board [--json]', summary: 'Print the whole board.' },
     {
@@ -70,6 +73,12 @@ const DESCRIPTOR = {
       usage:
         'boardown task notes (add <id> <text> | edit <id> <note> <text> | rm <id> <note>)',
       summary: 'Manage task notes (alias: note). Note ids are n1, n2, …, each with a createdAt timestamp.',
+    },
+    {
+      name: 'task link',
+      usage: 'boardown task link (add <id> <other-id> | rm <id> <other-id> | ls <id>)',
+      summary:
+        "Manage a task's links to other tasks. Only the `relates` type exists; it is symmetric and the record is mirrored into both tasks. `add` is idempotent, `rm` removes both records. `ls` data is { links: [{ type, to, title, status, taskType, missing }], count } — `missing` marks a link whose target is not on the board.",
     },
     {
       name: 'release get',

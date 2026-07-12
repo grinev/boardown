@@ -4,7 +4,8 @@ import type {
   BoardSnapshot,
   Epic,
   FileStat,
-  FsAdapter,
+  GuardedFile,
+  GuardedFs,
   Release,
   ReleaseStatus,
   Task,
@@ -15,11 +16,15 @@ import { useBoardStore } from './store';
 
 // In-memory adapter mirroring packages/core's reference impl, plus a switch to
 // simulate write failures so we can assert optimistic-update rollback.
-class MemFs implements FsAdapter {
+class MemFs implements GuardedFs {
   files = new Map<string, { content: string; lastModified: number }>();
   writes: string[] = [];
   // When set, any write whose path includes this substring throws.
   failWritesMatching: string | null = null;
+
+  async writeAll(files: readonly GuardedFile[]): Promise<void> {
+    for (const file of files) await this.write(file.path, file.content);
+  }
 
   async read(path: string): Promise<string> {
     const entry = this.files.get(path);
@@ -454,5 +459,74 @@ describe('external-change conflict', () => {
     await state().reload();
 
     expect(state().conflictOpen).toBe(false);
+  });
+});
+
+describe('task links', () => {
+  it('mirrors a link into both files', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+
+    await state().addTaskLink('BD-1', 'BD-2');
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(fs.writes).toEqual(['releases/1.0.md', BACKLOG_PATH]);
+  });
+
+  it('removes both records and writes both files', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+    await state().addTaskLink('BD-1', 'BD-2');
+    fs.writes = [];
+
+    await state().removeTaskLink('BD-2', 'BD-1');
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toBeUndefined();
+    expect(fs.writes).toEqual([BACKLOG_PATH, 'releases/1.0.md']);
+  });
+
+  it('writes nothing when the link is already there', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+    await state().addTaskLink('BD-1', 'BD-2');
+    fs.writes = [];
+
+    await state().addTaskLink('BD-1', 'BD-2');
+
+    expect(fs.writes).toEqual([]);
+  });
+
+  it('reports an error instead of touching a finished release', async () => {
+    setup(
+      snap({
+        releases: [
+          release('1.0', 'current', [task('BD-1')]),
+          release('0.9', 'finished', [task('BD-2')]),
+        ],
+      }),
+    );
+
+    await state().addTaskLink('BD-1', 'BD-2');
+
+    expect(state().errorMessage).toMatch(/finished/);
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
 });
