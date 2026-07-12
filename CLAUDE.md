@@ -33,14 +33,13 @@ License: MIT.
 - **Drag & drop:** `@dnd-kit/core`
 - **Tests:** Vitest
 
-The primary MVP distribution channel is a **VS Code extension** (implemented
-and packaged into an installable `.vsix`; see PRODUCT.md roadmap), which reads
-`.boardown/` from the open workspace. The
-**browser shell (`packages/web`) is a development and local-from-sources tool**
-— it boots `@boardown/ui` against a selected `.boardown/` over a Vite
-middleware, and is not a production distribution channel for the MVP. File
-System Access API integration and a folder picker are explicit non-goals for
-the MVP.
+The primary distribution channel is a **VS Code extension** (packaged into an
+installable `.vsix` and published to the Marketplace and Open VSX), which reads
+`.boardown/` from the open workspace, alongside the Electron desktop app and the
+CLI. The **browser shell (`packages/web`) is a development and
+local-from-sources tool** — it boots `@boardown/ui` against a selected
+`.boardown/` over a Vite middleware, and is not a distribution channel. It has
+no folder picker and no File System Access API integration.
 
 ## Repo layout
 
@@ -55,10 +54,10 @@ boardown/
 │   ├── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
 │   │                  # over a Vite middleware that serves a selected
 │   │                  # .boardown/, manual Reload only. Mounts @boardown/ui.
-│   │                  # No production browser deployment in MVP.
-│   ├── vscode/        # Primary MVP shell: extension host (esbuild) + webview
-│   │                  # (Vite) hosting @boardown/ui. Built in stages; see
-│   │                  # PRODUCT.md roadmap.
+│   │                  # Not a distribution channel.
+│   ├── vscode/        # Primary shell: extension host (esbuild) + webview
+│   │                  # (Vite) hosting @boardown/ui. Shipped (.vsix per
+│   │                  # release; Marketplace + Open VSX).
 │   ├── electron/      # Desktop shell (macOS / Windows / Linux): Electron main
 │   │                  # (esbuild) + renderer (Vite) hosting @boardown/ui over a
 │   │                  # Node FsAdapter. Shipped (installers per release).
@@ -80,10 +79,9 @@ bundler (Vite for `web`, esbuild for the VS Code host) transpiles them, and
 `dist/`. Only the shells (`web`, `vscode`, `electron`, `cli`) have a `build`
 script — they bundle the source-only libraries into their own artifacts.
 
-`packages/vscode` is the primary MVP distribution target, built bottom-up in
-stages (see PRODUCT.md roadmap). It is a sibling shell next to `web` and reuses
-`@boardown/ui` unchanged — only the `FsAdapter` implementation and entry flow
-differ. The extension host is bundled with esbuild (`vscode` external, CJS) and
+`packages/vscode` is the primary distribution target. It is a sibling shell next
+to `web` and reuses `@boardown/ui` unchanged — only the `FsAdapter`
+implementation and entry flow differ. The extension host is bundled with esbuild (`vscode` external, CJS) and
 the webview with Vite; both run in the Extension Development Host via F5. The
 webview mounts the real `@boardown/ui` with a `VsCodeFsAdapter` that proxies
 `read/write/list/stat` to the host over `postMessage`, where the host serves
@@ -95,10 +93,9 @@ shell pattern and ships installers with each release.
 `packages/web` ships a small Vite middleware that exposes
 `/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
 folder, plus a `DevHttpFsAdapter` that talks to those
-endpoints. This is the **only** browser-side path for the MVP — it is the
-working environment for `@boardown/ui` development, not a stepping stone to
-a production browser app. A production browser shell (with the FS Access
-API or otherwise) is post-MVP and may or may not happen.
+endpoints. This is the **only** browser-side path — it is the working
+environment for `@boardown/ui` development, not a stepping stone to a deployable
+browser app.
 
 `packages/cli` is a headless shell that does **not** mount `@boardown/ui` — it has
 no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,
@@ -234,15 +231,19 @@ code that fails any of these gates.
   like library choice, module boundaries, data formats, or edge-case
   behaviour. Trivial implementation details (local variable names, import
   order, etc.) do not need to be confirmed.
-- The MVP scope is intentionally small. Push back on feature creep and link
-  to PRODUCT.md "Out of scope" when relevant.
+- The product is intentionally small. Push back on feature creep.
 - **Never commit without explicit permission.** Do not run `git commit` (or
   `git push`) on your own initiative, even when a change is finished and the
   gates pass. Stage and prepare changes if asked, but wait for the user to
   explicitly tell you to commit.
 
-## Roadmap
+## Planning
 
-The high-level MVP checklist is in [PRODUCT.md](./PRODUCT.md#mvp-roadmap).
-Tick items as they land. Add new sub-tasks under their parent if needed; do
-not silently expand the scope.
+boardown dog-foods its own board: releases, epics and tasks live in
+[`.boardown/`](./.boardown/) and are the single source of truth for what is
+planned and what is done. Read the board (or drive it with the CLI) instead of
+looking for a checklist in a markdown doc.
+
+[PRODUCT.md](./PRODUCT.md) describes what the product *is* — domain model,
+storage format, behaviour rules, shells — plus a broad "Direction" section. It
+is descriptive, not a contract: when a change makes it inaccurate, update it.

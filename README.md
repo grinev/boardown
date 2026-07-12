@@ -28,7 +28,8 @@ AI agents, driving the same `.boardown/` files from the command line.
   <img src="./assets/Backlog.png" alt="boardown backlog view" width="80%" />
 </p>
 
-See [PRODUCT.md](./PRODUCT.md) for the full spec and the roadmap.
+See [PRODUCT.md](./PRODUCT.md) for the full spec. What's planned next lives on
+boardown's own board in [`.boardown/`](./.boardown/).
 
 ## Installation
 
