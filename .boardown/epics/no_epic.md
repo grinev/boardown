@@ -101,15 +101,6 @@ status: todo
 order: 1900
 ---
 
-## Add optional file watcher
-
----
-id: BD-37
-type: feature
-status: todo
-order: 2000
----
-
 ## Add localization infrastructure
 
 ---
@@ -117,15 +108,6 @@ id: BD-38
 type: tech
 status: todo
 order: 2100
----
-
-## Add task links (related to)
-
----
-id: BD-40
-type: feature
-status: todo
-order: 2200
 ---
 
 ## Add Create task button to epic
@@ -137,13 +119,40 @@ status: todo
 order: 2300
 ---
 
-## Display task links in tasks
+## Add assignee field to task
 
 ---
-id: BD-47
+id: BD-50
 type: feature
 status: todo
-order: 650
+order: 1050
 ---
 
-When metioning task number, show task link and description
+## Customizable task statuses
+
+---
+id: BD-51
+type: feature
+status: todo
+order: 1250
+---
+
+## Customizable task types
+
+---
+id: BD-52
+type: feature
+status: todo
+order: 2400
+---
+
+## Make finished releases read-only in the UI
+
+---
+id: BD-53
+type: bug
+status: todo
+order: 2500
+---
+
+Tasks in a finished release open with fully active controls (status select, checklist, notes). core correctly rejects the write ('Cannot edit a task in a finished release') so the data is safe, but the UI surfaces nothing: the error only lands in the browser console and the click silently does nothing. Disable the controls for finished releases instead of letting them fail.
