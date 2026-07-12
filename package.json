@@ -21,6 +21,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @boardown/web dev",
+    "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

@@ -173,7 +173,7 @@ export function App({
         statuses={TASK_STATUSES}
       />
       {problems.length > 0 && (
-        <section className={styles.problems}>
+        <section className={styles.problems} data-testid="problems-banner">
           <strong>Parse warnings:</strong>
           <ul>
             {problems.map((p, i) => (

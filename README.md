@@ -208,6 +208,7 @@ The repo is a pnpm workspace with six packages:
 | Command            | What it does                                              |
 |--------------------|-----------------------------------------------------------|
 | `pnpm dev`         | Start the web dev server against this repo's `.boardown/` (Vite, `http://localhost:5173`) |
+| `pnpm dev:sandbox` | Start the web dev server against a throwaway copy of the test fixture (`http://localhost:5199`) — see [Browser testing](#browser-testing) |
 | `pnpm build`       | Build the shells that have a `build` script (web → Vite bundle, vscode → host + webview); `core` and `ui` are source-only and skipped |
 | `pnpm test`        | Run Vitest across all packages                            |
 | `pnpm typecheck`   | Run `tsc --noEmit` in every package                       |
@@ -311,6 +312,32 @@ modal that collects the project name and ID prefix and writes
 `.boardown/config.yaml` on submit (`nextId` starts at `1`). After onboarding the
 board starts empty and opens on the Backlog tab — create your first release from
 the UI. The web dev shell only ensures the board root directory exists.
+
+### Browser testing
+
+There is no e2e suite. UI changes are exercised by driving a real browser —
+either by hand or by an AI agent through the [Playwright MCP](https://github.com/microsoft/playwright-mcp)
+server configured in `.mcp.json` (first run needs `npx playwright install chromium`).
+
+```sh
+pnpm dev:sandbox
+```
+
+This copies `tests/fixtures/board/.boardown/` into a fresh temp directory, prints
+its path, and serves it at `http://localhost:5199`. The copy is what makes the
+board safe to poke at: every click writes markdown through `/api/fs/write`, so
+driving the repo's own `.boardown/` would corrupt the real board (and loading a
+board can rewrite `config.yaml` on its own, via the `nextId` check). Nothing is
+cleaned up on exit — the temp copy stays around so you can inspect what the UI
+actually wrote.
+
+The fixture covers the interesting states: a finished, a current and a future
+release, tasks in every status and of every type, an epic with unscheduled tasks,
+and a task with a checklist and notes.
+
+Board columns, task cards, backlog rows and sections carry `data-testid`
+attributes because they have no accessible name of their own; everything else
+(dialogs, form fields, buttons) is reachable through roles and labels.
 
 ## Releasing
 

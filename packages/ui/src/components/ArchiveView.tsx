@@ -77,6 +77,7 @@ export function ArchiveView() {
           return (
             <ArchiveSection
               key={key}
+              sectionKey={key}
               title={releaseTitle(release)}
               tasks={tasks}
               collapsed={collapsedKeys.has(key)}
@@ -93,6 +94,7 @@ export function ArchiveView() {
 }
 
 interface ArchiveSectionProps {
+  sectionKey: string;
   title: string;
   tasks: Task[];
   collapsed: boolean;
@@ -103,6 +105,7 @@ interface ArchiveSectionProps {
 }
 
 function ArchiveSection({
+  sectionKey,
   title,
   tasks,
   collapsed,
@@ -114,7 +117,7 @@ function ArchiveSection({
   const ChevronIcon = collapsed ? ChevronRight : ChevronDown;
 
   return (
-    <section className={styles.section}>
+    <section className={styles.section} data-testid={`section-${sectionKey}`}>
       <header className={styles.sectionHeader}>
         <button
           type="button"

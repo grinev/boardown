@@ -186,6 +186,39 @@ sure they pass (they are the same gates CI enforces):
 Order does not matter: `core` and `ui` are source-only, so `lint`/`typecheck`
 resolve their types from source and never depend on a prior build.
 
+### Browser testing
+
+There is deliberately **no e2e suite** — it would cost more to maintain than it
+returns on a project this size. Instead, a change that touches the UI is not done
+until it has been driven in a real browser. Use the Playwright MCP server
+(configured in `.mcp.json`) against the sandbox:
+
+```sh
+pnpm dev:sandbox   # http://localhost:5199
+```
+
+It serves a **throwaway copy** of `tests/fixtures/board/.boardown/` and prints
+the copy's path. Two rules:
+
+- **Never point a browser session at the repo's own `.boardown/`.** Clicking the
+  board writes markdown to disk; you would corrupt the real board.
+- After a UI action, read the file in the sandbox copy and check that the
+  frontmatter actually changed as intended. Passing on screen is half the check —
+  what landed on disk is the other half.
+
+Go looking for breakage, not for confirmation: empty title, a finished release
+(read-only), a drag onto a target that should reject it, cancel out of a modal.
+
+Elements without an accessible name (board column, task card, backlog row,
+section) carry `data-testid`; everything else is reachable via role/label. If a
+new element needs neither, prefer giving it a proper accessible name over a
+testid.
+
+The MCP server writes its snapshots, console logs and screenshots to
+`.playwright-mcp/` (gitignored). A screenshot's `filename` argument, however, is
+resolved against the repo root, not that directory — so either omit it or pass
+`.playwright-mcp/<name>.png`. Never leave test artifacts in the working tree.
+
 Run the full set as part of a task's Definition of Done; a green local run is
 expected before committing. If a change is scoped to one package you may iterate
 with `pnpm --filter @boardown/<pkg> <script>`, but do a full-repo

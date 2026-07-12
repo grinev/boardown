@@ -21,6 +21,9 @@ vite.config.*.timestamp-*
 coverage/
 .nyc_output/
 
+# Playwright MCP scratch output (snapshots, screenshots, console logs)
+.playwright-mcp/
+
 # --- Caches ---
 .cache/
 .turbo/

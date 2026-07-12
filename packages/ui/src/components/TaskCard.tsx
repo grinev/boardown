@@ -31,7 +31,7 @@ export function TaskCard({ task, epic }: TaskCardProps) {
     : undefined;
 
   return (
-    <article className={styles.card}>
+    <article className={styles.card} data-testid={`task-card-${id}`}>
       <h3 className={styles.cardTitle}>
         <button
           type="button"

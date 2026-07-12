@@ -295,7 +295,7 @@ function BacklogSection({
   const itemIds = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
-    <section ref={setNodeRef} className={styles.section}>
+    <section ref={setNodeRef} className={styles.section} data-testid={`section-${sectionKey}`}>
       <header className={styles.sectionHeader}>
         <button
           type="button"

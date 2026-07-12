@@ -35,6 +35,7 @@ export const BacklogRowView = forwardRef<HTMLLIElement, BacklogRowViewProps>(
       <li
         ref={ref}
         className={`${styles.row}${className ? ` ${className}` : ''}`}
+        data-testid={`backlog-row-${id}`}
         {...rest}
       >
         <TypeIcon

@@ -95,7 +95,7 @@ function BoardColumn({
   const items = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
-    <div className={styles.column}>
+    <div className={styles.column} data-testid={`column-${status}`}>
       <div className={styles.columnHeader}>
         <span>{formatStatusLabel(status)}</span>
         <span className={styles.columnCount}>{tasks.length}</span>

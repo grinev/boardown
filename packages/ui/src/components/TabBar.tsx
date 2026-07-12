@@ -31,6 +31,7 @@ export function TabBar({ activeTab, onSelect, hideSettings }: TabBarProps) {
             key={key}
             type="button"
             className={tabClass(activeTab === key)}
+            aria-current={activeTab === key ? 'page' : undefined}
             onClick={() => onSelect(key)}
           >
             <Icon size={16} aria-hidden />

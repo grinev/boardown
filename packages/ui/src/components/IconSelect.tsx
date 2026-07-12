@@ -181,7 +181,9 @@ export function IconSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        aria-label={ariaLabel}
+        // Without the value the accessible name is just the field name, so the
+        // current selection is invisible to screen readers and to Playwright.
+        aria-label={selectedOption ? `${ariaLabel}: ${selectedOption.label}` : ariaLabel}
         disabled={disabled}
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={handleTriggerKeyDown}
