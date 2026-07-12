@@ -9,6 +9,7 @@ import {
   startRelease,
   createTask,
   deleteTask,
+  deleteTaskWithLinks,
   editEpic,
   editTask,
   emptyBacklog,
@@ -213,6 +214,96 @@ describe('deleteTask', () => {
     const r1 = deleteTask(r0, 'BD-1');
     expect(r1.tasks).toHaveLength(1);
     expect(r1.tasks[0]!.frontmatter.id).toBe('BD-2');
+  });
+});
+
+describe('deleteTaskWithLinks', () => {
+  const linked = (id: string, ...to: string[]): Task => ({
+    ...task(id, 'todo', 100),
+    frontmatter: {
+      ...task(id, 'todo', 100).frontmatter,
+      links: to.map((t) => ({ type: 'relates' as const, to: t })),
+    },
+  });
+
+  const epicOf = (slug: string, ...tasks: Task[]): Epic => ({
+    filename: `epics/${slug}.md`,
+    slug,
+    frontmatter: { name: slug, color: '#fff' },
+    preamble: '',
+    tasks,
+  });
+
+  const finished = (...tasks: Task[]): Release => ({
+    filename: 'releases/1.0.md',
+    slug: '1.0',
+    frontmatter: { status: 'finished' },
+    preamble: '',
+    tasks,
+  });
+
+  it('removes the task and reports only its file when it has no links', () => {
+    const r0 = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
+    const result = deleteTaskWithLinks([r0, epicOf('ui', task('BD-3', 'todo', 300))], 'BD-1');
+    expect(result.changedFilenames).toEqual([r0.filename]);
+    expect(result.containers[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+  });
+
+  it('strips the mirrored record from a linked task in another container', () => {
+    const r0 = release(linked('BD-1', 'BD-2'));
+    const e0 = epicOf('ui', linked('BD-2', 'BD-1'));
+    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    expect(result.changedFilenames).toEqual([r0.filename, e0.filename]);
+    expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
+  });
+
+  it('strips the mirrored record from a sibling in the same container', () => {
+    const r0 = release(linked('BD-1', 'BD-2'), linked('BD-2', 'BD-1'));
+    const result = deleteTaskWithLinks([r0], 'BD-1');
+    expect(result.changedFilenames).toEqual([r0.filename]);
+    expect(result.containers[0]!.tasks).toHaveLength(1);
+    expect(result.containers[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
+  });
+
+  it('keeps other links of the survivor', () => {
+    const r0 = release(linked('BD-1', 'BD-2'));
+    const e0 = epicOf('ui', linked('BD-2', 'BD-1', 'BD-9'));
+    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    expect(result.containers[1]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-9' },
+    ]);
+  });
+
+  it('leaves an archived counterpart untouched', () => {
+    const r0 = release(linked('BD-1', 'BD-2'));
+    const archived = finished(linked('BD-2', 'BD-1'));
+    const result = deleteTaskWithLinks([r0, archived], 'BD-1');
+    expect(result.changedFilenames).toEqual([r0.filename]);
+    expect(result.containers[1]).toBe(archived);
+  });
+
+  it('tolerates a one-sided record', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const e0 = epicOf('ui', linked('BD-2', 'BD-1'));
+    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    expect(result.changedFilenames).toEqual([r0.filename, e0.filename]);
+    expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
+  });
+
+  it('keeps the container when its last task is deleted', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const result = deleteTaskWithLinks([r0], 'BD-1');
+    expect(result.containers[0]!.tasks).toEqual([]);
+  });
+
+  it('refuses a task in a finished release', () => {
+    const archived = finished(task('BD-1', 'done', 100));
+    expect(() => deleteTaskWithLinks([archived], 'BD-1')).toThrow(/finished release/);
+  });
+
+  it('throws on an unknown task', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    expect(() => deleteTaskWithLinks([r0], 'BD-9')).toThrow(/not found/);
   });
 });
 

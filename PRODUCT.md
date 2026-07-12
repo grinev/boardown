@@ -386,6 +386,16 @@ moves the task between containers (release-to-release, release-to-epic
 when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to.
 
+**Deletion.** The task dialog's header carries a `…` menu next to the close button
+with a single `Delete` action. It opens a confirmation modal on top of the dialog;
+confirming removes the task's section from its file permanently (no undo, no trash —
+git is the safety net) and closes both modals. Deleting a task also strips the
+mirrored `links` records the other tasks hold pointing at it, so nothing dangling is
+left on disk — except on a task in a **finished** release, whose file is never
+rewritten: that record survives and simply resolves to nothing. A task in a finished
+release cannot be deleted at all: its menu still opens, with the `Delete` item
+disabled.
+
 **Task links.** Any token shaped like a task ID (2–5 uppercase letters, a dash,
 digits) that resolves to a task on the board renders, in view mode, as a link
 showing `ID title`; clicking it opens that task's dialog. This applies to the
@@ -477,7 +487,10 @@ folder (or via `--data-dir`), and maps commands onto board operations
 (`board`, `init`, `task`, `release`, `epic`, `schema`). Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no
-longer on the board as missing. It is aimed primarily at
+longer on the board as missing. `task rm <id>` deletes a task with the same rules
+as the UI (mirrored links cleaned up, archived files untouched, a task in a
+finished release refused) and, being agent-facing, without any confirmation
+prompt. It is aimed primarily at
 **agents and scripts**: output is a stable JSON envelope when stdout is not a TTY
 (or with `--json`), with stable error codes and exit codes, plus a `schema`
 command that prints the contract. Because every change is a plain-markdown git
@@ -501,7 +514,7 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
 [`.boardown/`](./.boardown/) — read that for what is actually planned next.
 
 - **Richer task model** — labels with label filters, assignee, per-task
-  last-updated date, task deletion.
+  last-updated date.
 - **Customization** — user-defined task statuses and task types instead of the
   fixed sets baked in today.
 - **Fuller release management** — editing a release (name, description, dates),

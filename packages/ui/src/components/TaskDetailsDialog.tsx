@@ -14,12 +14,14 @@ import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
 import { Checklist } from './Checklist';
+import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
 import { LinkedTasks } from './LinkedTasks';
 import { Modal } from './Modal';
 import { Notes } from './Notes';
+import { TaskActionsMenu } from './TaskActionsMenu';
 import styles from './TaskDetailsDialog.module.css';
 
 interface TaskDetailsDialogProps {
@@ -77,6 +79,8 @@ export function TaskDetailsDialog({
   const moveTaskToRelease = useBoardStore((s) => s.moveTaskToRelease);
   const epics = useBoardStore((s) => s.snapshot?.epics ?? []);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
+  const archived = release?.frontmatter.status === 'finished';
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
     const sorted = [...releases].sort((a, b) => a.slug.localeCompare(b.slug));
@@ -118,14 +122,20 @@ export function TaskDetailsDialog({
           />
           <span className={styles.idText}>{id}</span>
         </div>
-        <button
-          type="button"
-          className={styles.closeButton}
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
+        <div className={styles.headerActions}>
+          <TaskActionsMenu
+            deleteDisabled={archived}
+            onDelete={() => setDeleteOpen(true)}
+          />
+          <button
+            type="button"
+            className={styles.closeButton}
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <div className={styles.body}>
         <main className={styles.main}>
@@ -154,7 +164,7 @@ export function TaskDetailsDialog({
           />
           <LinkedTasks
             task={task}
-            readOnly={release?.frontmatter.status === 'finished'}
+            readOnly={archived}
             onTaskClick={onTaskClick}
           />
           <Notes
@@ -227,6 +237,9 @@ export function TaskDetailsDialog({
           </div>
         </aside>
       </div>
+      {deleteOpen && (
+        <DeleteTaskDialog task={task} onClose={() => setDeleteOpen(false)} />
+      )}
     </Modal>
   );
 }

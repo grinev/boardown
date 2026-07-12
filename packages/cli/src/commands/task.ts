@@ -2,7 +2,7 @@ import {
   addTaskLink,
   changeTaskStatus,
   createTask,
-  deleteTask,
+  deleteTaskWithLinks,
   editTask,
   emptyBacklog,
   moveTaskBetweenContainers,
@@ -646,12 +646,29 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
-  const updated = applyOp(() => deleteTask(location.container, id));
-  await writeContainer(fs, { kind: location.kind, container: updated });
+  // Deleting also strips the mirrored link records the other tasks hold, so the
+  // op runs over every container and reports the files it actually touched.
+  const refs: ContainerRef[] = [
+    ...snapshot.releases.map((container): ContainerRef => ({ kind: 'release', container })),
+    ...snapshot.epics.map((container): ContainerRef => ({ kind: 'epic', container })),
+    ...(snapshot.backlog
+      ? [{ kind: 'backlog', container: snapshot.backlog } as ContainerRef]
+      : []),
+  ];
+  const result = applyOp(() =>
+    deleteTaskWithLinks(
+      refs.map((r) => r.container),
+      id,
+    ),
+  );
+  const changed = result.containers
+    .map((container, i): ContainerRef => ({ kind: refs[i]!.kind, container }))
+    .filter((ref) => result.changedFilenames.includes(ref.container.filename));
+  await writeContainers(fs, changed);
 
   return {
-    data: { removed: id, file: updated.filename },
-    human: `Removed ${id} from ${updated.filename}.`,
+    data: { removed: id, file: location.container.filename },
+    human: `Removed ${id} from ${location.container.filename}.`,
     ...problemsField(problems),
   };
 }

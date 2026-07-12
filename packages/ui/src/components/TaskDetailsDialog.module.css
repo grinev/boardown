@@ -27,6 +27,12 @@
   color: var(--text-secondary);
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .closeButton {
   background: none;
   border: 0;

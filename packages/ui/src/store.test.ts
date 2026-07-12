@@ -131,6 +131,82 @@ beforeEach(() => {
   useBoardStore.setState({ errorMessage: null });
 });
 
+describe('deleteTask', () => {
+  const linked = (id: string, ...to: string[]): Task => ({
+    ...task(id),
+    frontmatter: {
+      ...task(id).frontmatter,
+      links: to.map((t) => ({ type: 'relates' as const, to: t })),
+    },
+  });
+
+  it('removes the task, writes its file and clears the selection', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])] }),
+    );
+    useBoardStore.setState({ selectedTaskId: 'BD-1' });
+
+    await state().deleteTask('BD-1');
+
+    expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+    expect(state().selectedTaskId).toBeNull();
+    expect(fs.writes).toEqual(['releases/1.0.md']);
+  });
+
+  it('strips the mirrored link from the other task and writes both files', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [linked('BD-1', 'BD-2')])],
+        backlog: backlog([linked('BD-2', 'BD-1')]),
+      }),
+    );
+
+    await state().deleteTask('BD-1');
+
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toBeUndefined();
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
+  });
+
+  it('leaves an archived counterpart untouched', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [
+          release('0.9', 'finished', [linked('BD-2', 'BD-1')]),
+          release('1.0', 'current', [linked('BD-1', 'BD-2')]),
+        ],
+      }),
+    );
+
+    await state().deleteTask('BD-1');
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(fs.writes).toEqual(['releases/1.0.md']);
+  });
+
+  it('refuses a task in a finished release', async () => {
+    setup(snap({ releases: [release('0.9', 'finished', [task('BD-1')])] }));
+
+    await expect(state().deleteTask('BD-1')).rejects.toThrow(/finished release/);
+    expect(current().releases[0]!.tasks).toHaveLength(1);
+  });
+
+  it('keeps the task and the open dialog when the write fails', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
+    );
+    useBoardStore.setState({ selectedTaskId: 'BD-1' });
+    fs.failWritesMatching = '*';
+
+    await expect(state().deleteTask('BD-1')).rejects.toThrow();
+
+    expect(current().releases[0]!.tasks).toHaveLength(1);
+    expect(state().selectedTaskId).toBe('BD-1');
+    expect(state().errorMessage).toMatch(/Failed to delete task/);
+  });
+});
+
 describe('createTask', () => {
   it('adds a task to a release and bumps nextId in config', async () => {
     const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));

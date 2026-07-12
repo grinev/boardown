@@ -1,6 +1,8 @@
 import type {
   Backlog,
   BoardSnapshot,
+  Container,
+  DeleteTaskResult,
   DestEpic,
   Epic,
   EpicPatch,
@@ -24,6 +26,7 @@ import {
   createRelease as createReleaseInBoard,
   createGuardedFs,
   createTask as createTaskInContainer,
+  deleteTaskWithLinks,
   emptyBacklog,
   editEpic,
   editTask,
@@ -123,6 +126,7 @@ interface BoardState {
   createRelease: (input: CreateReleaseInput) => Promise<void>;
   createEpic: (input: CreateEpicInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
   moveTask: (
     taskId: string,
     status: TaskStatus,
@@ -1265,6 +1269,73 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const { snapshot, fs } = get();
     if (!snapshot || !fs) return;
     await applyLinkOp(snapshot, fs, taskId, otherTaskId, removeTaskLinkInBoard, set);
+  },
+
+  deleteTask: async (taskId) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const backlog = snapshot.backlog;
+    const containers: Container[] = [
+      ...snapshot.releases,
+      ...snapshot.epics,
+      ...(backlog ? [backlog] : []),
+    ];
+
+    let result: DeleteTaskResult;
+    try {
+      result = deleteTaskWithLinks(containers, taskId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ errorMessage: message });
+      throw err;
+    }
+
+    const releaseCount = snapshot.releases.length;
+    const epicCount = snapshot.epics.length;
+    const nextReleases = result.containers.slice(0, releaseCount) as Release[];
+    const nextEpics = result.containers.slice(
+      releaseCount,
+      releaseCount + epicCount,
+    ) as Epic[];
+    const nextBacklog = backlog
+      ? (result.containers[releaseCount + epicCount] as Backlog)
+      : null;
+
+    const kindOf = (index: number): ContainerLocation['kind'] =>
+      index < releaseCount
+        ? 'release'
+        : index < releaseCount + epicCount
+          ? 'epic'
+          : 'backlog';
+
+    const files = result.changedFilenames.map((filename) => {
+      const index = result.containers.findIndex((c) => c.filename === filename);
+      const container = result.containers[index]!;
+      return {
+        path: filename,
+        content: serializeContainer({ kind: kindOf(index), container }),
+      };
+    });
+
+    // Unlike the other mutations this one writes first: dropping the task from the
+    // snapshot unmounts its dialog, and with it the confirm dialog that would have
+    // shown a failed write. A refused delete must leave the user where they were.
+    try {
+      await fs.writeAll(files);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ errorMessage: `Failed to delete task: ${message}` });
+      throw err;
+    }
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      releases: nextReleases,
+      epics: nextEpics,
+      backlog: nextBacklog,
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null, selectedTaskId: null });
   },
 
   updateEpic: async (slug, patch) => {

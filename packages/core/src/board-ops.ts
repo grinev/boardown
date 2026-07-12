@@ -617,6 +617,63 @@ export const removeTaskLink = <S extends Container, D extends Container>(
   return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink);
 };
 
+const taskWithoutLinksTo = (task: Task, targetId: string): Task => {
+  const links = task.frontmatter.links;
+  if (links === undefined) return task;
+  const remaining = links.filter((l) => l.to !== targetId);
+  if (remaining.length === links.length) return task;
+  const frontmatter = { ...task.frontmatter };
+  if (remaining.length === 0) delete frontmatter.links;
+  else frontmatter.links = remaining;
+  return { ...task, frontmatter };
+};
+
+export interface DeleteTaskResult {
+  // Same order as the containers handed in, so the caller can put them back.
+  containers: Container[];
+  changedFilenames: string[];
+}
+
+// Deleting a task also has to clear the mirrored link records pointing at it, or
+// the surviving tasks keep dangling `links` entries. A finished release is never
+// rewritten, so a link held by an archived task is left in place — the UI hides
+// it and the CLI reports it as missing.
+export const deleteTaskWithLinks = (
+  containers: readonly Container[],
+  taskId: string,
+): DeleteTaskResult => {
+  const owner = containers.find((c) =>
+    c.tasks.some((t) => t.frontmatter.id === taskId),
+  );
+  if (owner === undefined) throw new Error(`Task not found: ${taskId}`);
+  if (isFinishedRelease(owner)) {
+    throw new Error('Cannot delete a task in a finished release');
+  }
+
+  const changedFilenames: string[] = [owner.filename];
+  const stripLinks = <C extends Container>(container: C): C | null => {
+    const tasks = container.tasks.map((t) => taskWithoutLinksTo(t, taskId));
+    const changed = tasks.some((t, i) => t !== container.tasks[i]);
+    return changed ? replaceTasks(container, tasks) : null;
+  };
+
+  const next = containers.map((container) => {
+    if (container === owner) {
+      // A sibling task in the same file can hold the mirrored record too, and the
+      // file is rewritten anyway — clean it in the same pass.
+      const withoutTask = deleteTask(container, taskId);
+      return stripLinks(withoutTask) ?? withoutTask;
+    }
+    if (isFinishedRelease(container)) return container;
+    const cleaned = stripLinks(container);
+    if (cleaned === null) return container;
+    changedFilenames.push(container.filename);
+    return cleaned;
+  });
+
+  return { containers: next, changedFilenames };
+};
+
 export interface BacklogContainers {
   epics: Epic[];
   backlog: Backlog | null;

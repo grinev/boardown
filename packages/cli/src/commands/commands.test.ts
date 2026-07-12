@@ -262,12 +262,35 @@ describe('cli commands (integration)', () => {
       ).rejects.toMatchObject({ code: 'ARCHIVED' });
     });
 
-    it('ls flags a link whose target is no longer on the board', async () => {
+    it('task rm strips the mirrored record from the surviving task', async () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       await taskCommand(parseArgs(['task', 'rm', 'TS-2']), ctx);
 
+      const board = await boardCommand(parseArgs(['board']), ctx);
+      expect(findTask(board.data, 'TS-1').frontmatter.links).toBeUndefined();
       const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
-      expect(links(ls.data)).toEqual([{ type: 'relates', to: 'TS-2', missing: true }]);
+      expect(links(ls.data)).toEqual([]);
+    });
+
+    // The one link a delete leaves behind: an archived file is never rewritten, so
+    // the record on a task in a finished release survives and shows up as missing.
+    it('task rm leaves an archived counterpart linked, and ls flags it as missing', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+      const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
+      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', relFile]), ctx);
+      await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
+      await releaseCommand(parseArgs(['release', 'done', relFile]), ctx);
+
+      await taskCommand(parseArgs(['task', 'rm', 'TS-1']), ctx);
+
+      const board = await boardCommand(parseArgs(['board']), ctx);
+      expect(findTask(board.data, 'TS-2').frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
+      const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-2']), ctx);
+      expect(links(ls.data)).toEqual([{ type: 'relates', to: 'TS-1', missing: true }]);
       expect(ls.human).toContain('(missing)');
     });
 
