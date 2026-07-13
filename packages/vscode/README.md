@@ -33,8 +33,13 @@ instead of overwriting.
 - **Task checklists and notes**: each task can carry a lightweight todo
   checklist (shown as a `done/total` badge) and timestamped notes (shown as a
   count badge), edited in the task dialog.
+- **Task links**: relate two tasks from the task dialog's **Linked tasks**
+  section — the link is stored on both sides. Any task id mentioned in a
+  description or a note renders as a link to that task.
 - **Drag & drop** to move tasks between statuses, releases and the backlog, and
   to reorder within a section.
+- **Delete a task** from the task dialog, with a confirmation step — git stays
+  the safety net.
 - **Auto-refresh** on external file changes (toggle via `boardown.autoRefresh`).
 - **Plain-markdown storage** in `.boardown/`, committed to git like the rest of
   your code — no cloud, no server, no account, and git is your history and

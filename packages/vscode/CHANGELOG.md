@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- **Task links**: the task dialog gained a **Linked tasks** section — search for
+  another task by id or title and relate the two. A link is stored on both tasks
+  and can be removed from either side.
+- Task ids mentioned in a task description, a note or an epic description now
+  render as links: they show the target's title and open its dialog on click.
+- **Delete a task** from the task dialog's actions menu (with a confirmation
+  step). Deleting also cleans up the links other tasks hold to it.
+
 ## 0.3.0
 
 - Task cards now support checklists and free-form notes.

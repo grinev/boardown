@@ -37,6 +37,7 @@ boardown task reorder <id>      Change priority (--before | --after <id> | --up 
 boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
+boardown task link <op>         Link to another task: add | rm (<id> <other-id>) | ls <id>.
 
 boardown release get <ref>      Show one release and its tasks.
 boardown release list           List releases.
@@ -58,6 +59,12 @@ boardown schema                 Print the machine-readable command/enum contract
 release that carry that epic tag. `--release <ref>` takes a slug or filename,
 `--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
 match on title and description.
+
+`task link` relates two tasks. Only one link type exists — `relates`, which is
+symmetric — so it is never passed on the command line; the record is mirrored
+into both task files, and `rm` removes both halves. Tasks in a finished release
+cannot be linked or unlinked (their file is never rewritten). `task rm` also
+strips the mirrored records other tasks hold pointing at the deleted task.
 
 The board is located by walking up from the current directory to a `.boardown/`
 folder (like git finds `.git`). Use `--data-dir <path>` to point at a specific
