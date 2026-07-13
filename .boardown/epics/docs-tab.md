@@ -9,7 +9,7 @@ color: "#3b82f6"
 id: BD-34
 type: feature
 status: todo
-order: 200
+order: 500
 ---
 
 ## Docs md editor
@@ -18,5 +18,5 @@ order: 200
 id: BD-35
 type: feature
 status: todo
-order: 300
+order: 600
 ---

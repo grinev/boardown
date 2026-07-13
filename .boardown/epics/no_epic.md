@@ -8,16 +8,7 @@
 id: BD-17
 type: tech
 status: todo
-order: 800
----
-
-## Task deletion
-
----
-id: BD-18
-type: feature
-status: todo
-order: 1100
+order: 900
 ---
 
 ## Edit release
@@ -26,7 +17,7 @@ order: 1100
 id: BD-19
 type: feature
 status: todo
-order: 1200
+order: 1300
 ---
 
 ## Add release dates
@@ -35,7 +26,7 @@ order: 1200
 id: BD-20
 type: feature
 status: todo
-order: 1400
+order: 1600
 ---
 
 ## Edit epic color
@@ -44,7 +35,7 @@ order: 1400
 id: BD-21
 type: feature
 status: todo
-order: 1500
+order: 1700
 ---
 
 ## Multiple active releases support
@@ -53,7 +44,7 @@ order: 1500
 id: BD-22
 type: feature
 status: todo
-order: 1600
+order: 1800
 ---
 
 ## Change releases order in backlog
@@ -62,7 +53,7 @@ order: 1600
 id: BD-23
 type: feature
 status: todo
-order: 1700
+order: 1900
 ---
 
 ## View and edit release description
@@ -71,7 +62,7 @@ order: 1700
 id: BD-28
 type: feature
 status: todo
-order: 1300
+order: 1500
 ---
 
 ## Add labels to tasks and label filters
@@ -80,7 +71,7 @@ order: 1300
 id: BD-29
 type: feature
 status: todo
-order: 1800
+order: 2000
 ---
 
 ## Add optimistic locks on item save
@@ -98,7 +89,7 @@ order: 1000
 id: BD-32
 type: feature
 status: todo
-order: 1900
+order: 2100
 ---
 
 ## Add localization infrastructure
@@ -107,7 +98,7 @@ order: 1900
 id: BD-38
 type: tech
 status: todo
-order: 2100
+order: 2200
 ---
 
 ## Add Create task button to epic
@@ -125,7 +116,7 @@ order: 2300
 id: BD-50
 type: feature
 status: todo
-order: 1050
+order: 1100
 ---
 
 ## Customizable task statuses
@@ -134,7 +125,7 @@ order: 1050
 id: BD-51
 type: feature
 status: todo
-order: 1250
+order: 1400
 ---
 
 ## Customizable task types
