@@ -17,6 +17,7 @@ export function ArchiveView() {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
+  const openRelease = useBoardStore((s) => s.openRelease);
 
   const epics = useMemo(() => snapshot?.epics ?? [], [snapshot?.epics]);
   const epicsBySlug = useMemo(
@@ -82,6 +83,7 @@ export function ArchiveView() {
               epicsBySlug={epicsBySlug}
               onOpenTask={openTask}
               onOpenEpic={openEpic}
+              onOpenRelease={() => openRelease(release.filename)}
             />
           );
         })}
@@ -99,6 +101,7 @@ interface ArchiveSectionProps {
   epicsBySlug: Map<string, Epic>;
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
+  onOpenRelease: () => void;
 }
 
 function ArchiveSection({
@@ -110,6 +113,7 @@ function ArchiveSection({
   epicsBySlug,
   onOpenTask,
   onOpenEpic,
+  onOpenRelease,
 }: ArchiveSectionProps) {
   const ChevronIcon = collapsed ? ChevronRight : ChevronDown;
 
@@ -125,7 +129,13 @@ function ArchiveSection({
         >
           <ChevronIcon size={16} className={styles.sectionChevron} aria-hidden="true" />
         </button>
-        <span className={styles.sectionTitle}>{title}</span>
+        <button
+          type="button"
+          className={`${styles.sectionTitle} ${styles.sectionTitleButton}`}
+          onClick={onOpenRelease}
+        >
+          {title}
+        </button>
         <span className={styles.sectionStatus}>(finished)</span>
         <span className={styles.sectionCount}>{tasks.length}</span>
       </header>

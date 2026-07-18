@@ -11,6 +11,7 @@ import {
   deleteTask,
   deleteTaskWithLinks,
   editEpic,
+  editRelease,
   editTask,
   emptyBacklog,
   moveTaskBetweenContainers,
@@ -166,6 +167,81 @@ describe('editTask', () => {
     const r0 = release(t);
     const r1 = editTask(r0, 'BD-1', { notes: [] });
     expect(r1.tasks[0]!.frontmatter.notes).toBeUndefined();
+  });
+});
+
+describe('editRelease', () => {
+  const baseRelease = (): Release => ({
+    filename: 'releases/1.10.md',
+    slug: '1.10',
+    frontmatter: {
+      status: 'current',
+      name: '1.10',
+      description: 'old description',
+      startDate: '2026-05-01',
+    },
+    preamble: 'preamble text',
+    tasks: [task('BD-1', 'todo', 100)],
+  });
+
+  it('updates name only, leaving everything else untouched', () => {
+    const r = editRelease(baseRelease(), { name: 'Beta' });
+    expect(r.frontmatter.name).toBe('Beta');
+    expect(r.frontmatter.description).toBe('old description');
+    expect(r.frontmatter.status).toBe('current');
+    expect(r.frontmatter.startDate).toBe('2026-05-01');
+    expect(r.slug).toBe('1.10');
+    expect(r.filename).toBe('releases/1.10.md');
+    expect(r.preamble).toBe('preamble text');
+    expect(r.tasks).toHaveLength(1);
+  });
+
+  it('updates description only', () => {
+    const r = editRelease(baseRelease(), { description: 'fresh' });
+    expect(r.frontmatter.description).toBe('fresh');
+    expect(r.frontmatter.name).toBe('1.10');
+  });
+
+  it('updates name and description together', () => {
+    const r = editRelease(baseRelease(), { name: 'X', description: 'Y' });
+    expect(r.frontmatter.name).toBe('X');
+    expect(r.frontmatter.description).toBe('Y');
+  });
+
+  it('trims the values', () => {
+    const r = editRelease(baseRelease(), { name: '  X  ', description: ' Y ' });
+    expect(r.frontmatter.name).toBe('X');
+    expect(r.frontmatter.description).toBe('Y');
+  });
+
+  it('drops the description key when cleared', () => {
+    const r = editRelease(baseRelease(), { description: '   ' });
+    expect('description' in r.frontmatter).toBe(false);
+  });
+
+  it('rejects a blank name', () => {
+    expect(() => editRelease(baseRelease(), { name: '  ' })).toThrow(
+      /name is required/i,
+    );
+  });
+
+  it('adds a name to a release that has none', () => {
+    const legacy: Release = {
+      filename: 'releases/1.10.md',
+      slug: '1.10',
+      frontmatter: { status: 'future' },
+      preamble: '',
+      tasks: [],
+    };
+    expect(editRelease(legacy, { name: 'Named' }).frontmatter.name).toBe('Named');
+  });
+
+  it('refuses to edit a finished release', () => {
+    const finished: Release = {
+      ...baseRelease(),
+      frontmatter: { ...baseRelease().frontmatter, status: 'finished' },
+    };
+    expect(() => editRelease(finished, { name: 'X' })).toThrow(/finished/i);
   });
 });
 

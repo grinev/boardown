@@ -341,6 +341,12 @@ A kanban with the three status columns (`todo`, `in-progress`, `done`), showing
 **only the current release's tasks**. Drag & drop between columns updates the
 task's status; reordering within a column updates `order`.
 
+The heading above the columns is the release's name, clickable to open the
+release editor. When the release has a description, it follows the name on the
+same line in a muted style, clipped to a single line with an ellipsis (newlines
+collapsed to spaces). This preview is Board-only — the Backlog and Archive
+section headers show the name alone.
+
 If no release is currently `current`, the Board shows an empty state pointing
 the user to start one from Backlog.
 
@@ -445,6 +451,23 @@ Clicking an existing epic opens the details dialog with the list of linked tasks
 displayed below the description. Tasks in the list are clickable and open the
 task details dialog.
 
+### Release editor
+
+A release has no creation dialog beyond "Create release"; its details live in a
+**release dialog** opened by clicking the release's name wherever it is shown —
+the Board heading, a Backlog release section header, an Archive section header.
+The dialog shows three things: the **name**, the **status** (`future` /
+`current` / `finished`) as a read-only pill, and the **description**. Name and
+description are inline-editable with the same semantics as the task and epic
+dialogs and are written to the release file's frontmatter; clearing the
+description removes the key. Editing the name never touches the filename — the
+slug stays the release's stable identifier, so renaming the file is still a
+manual operation.
+
+Status is not editable here: it is owned by the Start / Complete release actions.
+A **finished** release opens the same dialog read-only — an archived file is
+never rewritten. Dates (`startDate` / `endDate`) are not shown or edited yet.
+
 ### Empty states
 
 Empty states are a first-class concern. Every screen has a meaningful
@@ -497,7 +520,9 @@ commands do not echo the entity back: they acknowledge with the identifier of
 what changed. Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no
-longer on the board as missing. `task rm <id>` deletes a task with the same rules
+longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
+release dialog: the filename never changes and a finished release is refused with
+`ARCHIVED`. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at
@@ -527,9 +552,9 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
   last-updated date.
 - **Customization** — user-defined task statuses and task types instead of the
   fixed sets baked in today.
-- **Fuller release management** — editing a release (name, description, dates),
-  reordering releases in the Backlog, and support for multiple simultaneously
-  active releases (e.g. a large release in flight plus an urgent hotfix).
+- **Fuller release management** — editing a release's dates, reordering releases
+  in the Backlog, and support for multiple simultaneously active releases (e.g. a
+  large release in flight plus an urgent hotfix).
 - **Docs tab** — a place for project documentation next to the board, with a
   markdown editor.
 - **Git integration** — surfacing the commits related to a task on the task

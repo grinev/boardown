@@ -116,6 +116,46 @@ describe('release / epic / move (deepening layer)', () => {
     expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
   });
 
+  it('release edit updates name and description without moving the file', async () => {
+    const release = (await releaseCommand(parseArgs(['release', 'add', 'v1']), ctx)).data as {
+      slug: string;
+    };
+
+    await releaseCommand(
+      parseArgs(['release', 'edit', release.slug, '--name', 'First beta', '--description', 'Ship']),
+      ctx,
+    );
+    const view = (await releaseCommand(parseArgs(['release', 'get', release.slug]), ctx))
+      .data as { release: { slug: string; name: string; description?: string; filename: string } };
+    expect(view.release.name).toBe('First beta');
+    expect(view.release.description).toBe('Ship');
+    expect(view.release.slug).toBe(release.slug);
+    expect(view.release.filename).toBe(`releases/${release.slug}.md`);
+
+    await releaseCommand(parseArgs(['release', 'edit', release.slug, '--description', '']), ctx);
+    const cleared = (await releaseCommand(parseArgs(['release', 'get', release.slug]), ctx))
+      .data as { release: { description?: string } };
+    expect(cleared.release.description).toBeUndefined();
+  });
+
+  it('release edit rejects no flags, an unknown release and a finished one', async () => {
+    const release = (await releaseCommand(parseArgs(['release', 'add', 'v2']), ctx)).data as {
+      slug: string;
+    };
+    await expect(
+      releaseCommand(parseArgs(['release', 'edit', release.slug]), ctx),
+    ).rejects.toMatchObject({ code: 'USAGE' });
+    await expect(
+      releaseCommand(parseArgs(['release', 'edit', 'nope', '--name', 'X']), ctx),
+    ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND' });
+
+    await releaseCommand(parseArgs(['release', 'start', release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'done', release.slug]), ctx);
+    await expect(
+      releaseCommand(parseArgs(['release', 'edit', release.slug, '--name', 'X']), ctx),
+    ).rejects.toMatchObject({ code: 'ARCHIVED' });
+  });
+
   it('rejects an invalid epic color and editing a color', async () => {
     await expect(
       epicCommand(parseArgs(['epic', 'add', 'Bad', '--color', 'red']), ctx),

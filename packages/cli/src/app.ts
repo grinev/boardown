@@ -44,6 +44,7 @@ Releases and epics:
   release get <ref>      Show one release and its tasks.
   release list           List releases with task counts.
   release add <name>     Create a release (--description).
+  release edit <ref>     Edit a release name/description (--name --description).
   release start <ref>    Make a release current.
   release done <ref>     Finish a release (--into <release> to carry over open tasks).
   epic get <slug>        Show one epic and its tasks.

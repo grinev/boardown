@@ -10,6 +10,7 @@ import type {
   GuardedFs,
   ParseProblem,
   Release,
+  ReleasePatch,
   Task,
   TaskLinkResult,
   TaskPatch,
@@ -29,6 +30,7 @@ import {
   deleteTaskWithLinks,
   emptyBacklog,
   editEpic,
+  editRelease,
   editTask,
   loadBoard,
   startRelease as startReleaseInBoard,
@@ -87,6 +89,7 @@ interface BoardState {
   conflictOpen: boolean;
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
+  selectedReleaseFilename: string | null;
   createTaskForReleaseFilename: string | null;
   createTaskOpen: boolean;
   createTaskBacklog: boolean;
@@ -106,6 +109,8 @@ interface BoardState {
   closeTask: () => void;
   openEpic: (slug: string) => void;
   closeEpic: () => void;
+  openRelease: (filename: string) => void;
+  closeRelease: () => void;
   openCreateTask: (releaseFilename: string) => void;
   openCreateTaskMenu: () => void;
   openCreateTaskBacklog: () => void;
@@ -142,6 +147,7 @@ interface BoardState {
     beforeTaskId: string | null,
   ) => Promise<void>;
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
+  updateRelease: (filename: string, patch: ReleasePatch) => Promise<void>;
   addTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
   removeTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
 }
@@ -326,6 +332,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   conflictOpen: false,
   selectedTaskId: null,
   selectedEpicSlug: null,
+  selectedReleaseFilename: null,
   createTaskForReleaseFilename: null,
   createTaskOpen: false,
   createTaskBacklog: false,
@@ -477,13 +484,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
   },
 
-  openTask: (id) => set({ selectedTaskId: id, selectedEpicSlug: null }),
+  openTask: (id) =>
+    set({
+      selectedTaskId: id,
+      selectedEpicSlug: null,
+      selectedReleaseFilename: null,
+    }),
 
   closeTask: () => set({ selectedTaskId: null }),
 
-  openEpic: (slug) => set({ selectedEpicSlug: slug, selectedTaskId: null }),
+  openEpic: (slug) =>
+    set({
+      selectedEpicSlug: slug,
+      selectedTaskId: null,
+      selectedReleaseFilename: null,
+    }),
 
   closeEpic: () => set({ selectedEpicSlug: null }),
+
+  openRelease: (filename) =>
+    set({
+      selectedReleaseFilename: filename,
+      selectedTaskId: null,
+      selectedEpicSlug: null,
+    }),
+
+  closeRelease: () => set({ selectedReleaseFilename: null }),
 
   openCreateTask: (releaseFilename) =>
     set({ createTaskForReleaseFilename: releaseFilename }),
@@ -1358,6 +1384,29 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ snapshot, errorMessage: `Failed to save epic: ${message}` });
+      throw err;
+    }
+  },
+
+  updateRelease: async (filename, patch) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const index = snapshot.releases.findIndex((r) => r.filename === filename);
+    if (index === -1) {
+      set({ errorMessage: `Release not found: ${filename}` });
+      return;
+    }
+    const nextRelease = editRelease(snapshot.releases[index]!, patch);
+    const nextReleases = [...snapshot.releases];
+    nextReleases[index] = nextRelease;
+    const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+    try {
+      await fs.write(nextRelease.filename, serializeRelease(nextRelease));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save release: ${message}` });
       throw err;
     }
   },

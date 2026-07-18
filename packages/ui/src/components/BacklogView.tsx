@@ -54,6 +54,7 @@ export function BacklogView() {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
+  const openRelease = useBoardStore((s) => s.openRelease);
   const openCreateRelease = useBoardStore((s) => s.openCreateRelease);
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
   const openStartRelease = useBoardStore((s) => s.openStartRelease);
@@ -219,6 +220,9 @@ export function BacklogView() {
                     ? () => openCreateTask(releaseFilename)
                     : openCreateTaskBacklog
                 }
+                {...(releaseFilename
+                  ? { onOpenRelease: () => openRelease(releaseFilename) }
+                  : {})}
                 {...(meta.hasCreateRelease
                   ? { onCreateRelease: openCreateRelease }
                   : {})}
@@ -254,6 +258,8 @@ interface BacklogSectionProps {
   onOpenTask: (id: string) => void;
   onOpenEpic: (slug: string) => void;
   onCreateTask: () => void;
+  // Absent on the plain Backlog section, which is not a release.
+  onOpenRelease?: () => void;
   onCreateRelease?: () => void;
   onCompleteRelease?: () => void;
   onStartRelease?: () => void;
@@ -273,6 +279,7 @@ function BacklogSection({
   onOpenTask,
   onOpenEpic,
   onCreateTask,
+  onOpenRelease,
   onCreateRelease,
   onCompleteRelease,
   onStartRelease,
@@ -304,7 +311,17 @@ function BacklogSection({
         >
           <ChevronIcon size={16} className={styles.sectionChevron} aria-hidden="true" />
         </button>
-        <span className={styles.sectionTitle}>{title}</span>
+        {onOpenRelease ? (
+          <button
+            type="button"
+            className={`${styles.sectionTitle} ${styles.sectionTitleButton}`}
+            onClick={onOpenRelease}
+          >
+            {title}
+          </button>
+        ) : (
+          <span className={styles.sectionTitle}>{title}</span>
+        )}
         {statusLabel && <span className={styles.sectionStatus}>({statusLabel})</span>}
         <button
           type="button"

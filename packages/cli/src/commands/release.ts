@@ -1,6 +1,7 @@
 import {
   completeRelease,
   createRelease,
+  editRelease,
   emptyBacklog,
   serializeBacklog,
   serializeEpic,
@@ -10,6 +11,7 @@ import {
   type CompleteReleaseResult,
   type NewReleaseInput,
   type Release,
+  type ReleasePatch,
 } from '@boardown/core';
 import { flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
@@ -36,6 +38,8 @@ export const releaseCommand: CommandHandler = (args, ctx) => {
       return releaseCurrent(args, ctx);
     case 'add':
       return releaseAdd(args, ctx);
+    case 'edit':
+      return releaseEdit(args, ctx);
     case 'start':
       return releaseStart(args, ctx);
     case 'done':
@@ -45,7 +49,7 @@ export const releaseCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown release subcommand "${sub ?? ''}". Use: get | list | current | add | start | done.`,
+        `Unknown release subcommand "${sub ?? ''}". Use: get | list | current | add | edit | start | done.`,
         2,
       );
   }
@@ -167,6 +171,52 @@ async function releaseAdd(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   return {
     data: { slug: release.slug },
     human: `Created release "${releaseName(release)}" (${release.filename}).`,
+    ...problemsField(board.problems),
+  };
+}
+
+async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const ref = args.positionals[2];
+  if (ref === undefined) {
+    throw new CliError(
+      'USAGE',
+      'Usage: boardown release edit <file|slug> [--name ...] [--description ...].',
+      2,
+    );
+  }
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const board = await loadBoardOrThrow(root);
+  const release = requireRelease(board, ref);
+
+  const patch: ReleasePatch = {};
+  const name = flagString(args.flags, 'name');
+  if (name !== undefined) patch.name = name;
+  const description = flagString(args.flags, 'description');
+  if (description !== undefined) patch.description = description;
+  if (Object.keys(patch).length === 0) {
+    throw new CliError(
+      'USAGE',
+      'Nothing to edit. Provide --name and/or --description.',
+      2,
+    );
+  }
+
+  let updated: Release;
+  try {
+    updated = editRelease(release, patch);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (release.frontmatter.status === 'finished') {
+      throw new CliError('ARCHIVED', message);
+    }
+    throw new CliError('RELEASE_INVALID', message, 2);
+  }
+
+  await board.fs.write(updated.filename, serializeRelease(updated));
+  return {
+    data: { slug: updated.slug },
+    human: `Updated release ${releaseName(updated)}.`,
     ...problemsField(board.problems),
   };
 }

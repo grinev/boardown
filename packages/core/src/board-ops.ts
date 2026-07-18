@@ -158,6 +158,33 @@ export const createEpic = (
   };
 };
 
+export interface ReleasePatch {
+  name?: string;
+  description?: string;
+}
+
+export const editRelease = (release: Release, patch: ReleasePatch): Release => {
+  if (isFinishedRelease(release)) {
+    throw new Error('Cannot edit a finished release');
+  }
+
+  const frontmatter = { ...release.frontmatter };
+
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (name.length === 0) throw new Error('Release name is required');
+    frontmatter.name = name;
+  }
+
+  if (patch.description !== undefined) {
+    const description = patch.description.trim();
+    if (description.length === 0) delete frontmatter.description;
+    else frontmatter.description = description;
+  }
+
+  return { ...release, frontmatter };
+};
+
 export const setReleaseStatus = (
   release: Release,
   status: ReleaseStatus,

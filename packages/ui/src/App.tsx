@@ -9,6 +9,7 @@ import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
+import { ReleaseDetailsDialog } from './components/ReleaseDetailsDialog';
 import { OnboardingDialog } from './components/OnboardingDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StartReleaseDialog } from './components/StartReleaseDialog';
@@ -55,6 +56,7 @@ export function App({
   const theme = useBoardStore((s) => s.theme);
   const selectedTaskId = useBoardStore((s) => s.selectedTaskId);
   const selectedEpicSlug = useBoardStore((s) => s.selectedEpicSlug);
+  const selectedReleaseFilename = useBoardStore((s) => s.selectedReleaseFilename);
   const createTaskForReleaseFilename = useBoardStore(
     (s) => s.createTaskForReleaseFilename,
   );
@@ -72,6 +74,7 @@ export function App({
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
   const closeEpic = useBoardStore((s) => s.closeEpic);
+  const closeRelease = useBoardStore((s) => s.closeRelease);
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
   const closeCreateTask = useBoardStore((s) => s.closeCreateTask);
@@ -149,6 +152,9 @@ export function App({
   const selectedEpicTasks = selectedEpic
     ? findTasksByEpic(snapshot, selectedEpic.slug)
     : [];
+  const selectedRelease = selectedReleaseFilename
+    ? snapshot.releases.find((r) => r.filename === selectedReleaseFilename)
+    : undefined;
   const createTaskRelease = createTaskForReleaseFilename
     ? snapshot.releases.find((r) => r.filename === createTaskForReleaseFilename)
     : undefined;
@@ -201,6 +207,9 @@ export function App({
           onClose={closeEpic}
           onTaskClick={openTask}
         />
+      )}
+      {selectedRelease && (
+        <ReleaseDetailsDialog release={selectedRelease} onClose={closeRelease} />
       )}
       {createTaskRelease && (
         <CreateTaskDialog

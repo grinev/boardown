@@ -15,6 +15,7 @@ interface TabContentProps {
 
 export function TabContent({ activeTab, releases, epics, statuses }: TabContentProps) {
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
+  const openRelease = useBoardStore((s) => s.openRelease);
 
   if (activeTab === 'backlog') {
     return <BacklogView />;
@@ -36,11 +37,26 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
   }
 
   const heading = `Release ${current.frontmatter.name ?? current.slug}`;
+  // A multiline description must not break the single-line header.
+  const descriptionPreview = current.frontmatter.description
+    ?.replace(/\s+/g, ' ')
+    .trim();
 
   return (
     <section className={styles.boardSection}>
       <header className={styles.releaseHeader}>
-        <h2>{heading}</h2>
+        <h2 className={styles.releaseHeading}>
+          <button
+            type="button"
+            className={styles.releaseNameButton}
+            onClick={() => openRelease(current.filename)}
+          >
+            {heading}
+          </button>
+        </h2>
+        {descriptionPreview && (
+          <span className={styles.releaseDescription}>{descriptionPreview}</span>
+        )}
         <button
           type="button"
           className={styles.completeButton}

@@ -124,6 +124,12 @@ const DESCRIPTOR = {
       summary: 'Create a future release.',
     },
     {
+      name: 'release edit',
+      usage: 'boardown release edit <file|slug> [--name NAME] [--description TEXT]',
+      summary:
+        'Edit a release name/description. The filename never changes; a finished release is refused.',
+    },
+    {
       name: 'release start',
       usage: 'boardown release start <file|slug>',
       summary: 'Make a release current (only one at a time).',
