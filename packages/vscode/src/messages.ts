@@ -1,4 +1,4 @@
-export type FsMethod = 'read' | 'write' | 'list' | 'stat';
+export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
 
 export interface FsRequestMessage {
   type: 'fs-request';

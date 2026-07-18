@@ -120,8 +120,13 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
             }
             try {
               const entries = await fs.readdir(target.abs, { withFileTypes: true });
-              const names = entries.filter((e) => e.isFile()).map((e) => e.name);
-              sendJson(res, 200, names);
+              sendJson(
+                res,
+                200,
+                entries
+                  .filter((e) => e.isFile() || e.isDirectory())
+                  .map((e) => ({ name: e.name, isDirectory: e.isDirectory() })),
+              );
             } catch (err) {
               if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
                 sendText(res, 404, `Not found: ${target.rel}`);
@@ -172,6 +177,41 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
             try {
               await fs.mkdir(path.dirname(target.abs), { recursive: true });
               await fs.writeFile(target.abs, body.content, 'utf-8');
+              res.statusCode = 204;
+              res.end();
+            } catch (err) {
+              sendText(res, 500, (err as Error).message);
+            }
+            return;
+          }
+
+          if (
+            req.method === 'POST' &&
+            (url.pathname === '/api/fs/mkdir' || url.pathname === '/api/fs/remove')
+          ) {
+            const raw = await readBody(req);
+            let body: { path?: unknown };
+            try {
+              body = JSON.parse(raw) as typeof body;
+            } catch {
+              sendText(res, 400, 'Invalid JSON body');
+              return;
+            }
+            if (typeof body.path !== 'string') {
+              sendText(res, 400, 'Body must be { path: string }');
+              return;
+            }
+            const target = resolveTarget(body.path);
+            if (!target.ok) {
+              sendText(res, target.status, target.message);
+              return;
+            }
+            try {
+              if (url.pathname === '/api/fs/mkdir') {
+                await fs.mkdir(target.abs, { recursive: true });
+              } else {
+                await fs.rm(target.abs, { recursive: true, force: true });
+              }
               res.statusCode = 204;
               res.end();
             } catch (err) {

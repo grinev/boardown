@@ -1,0 +1,156 @@
+/* Fills what the header and tab bar leave, so the tabs never scroll away: each
+   column scrolls inside itself instead of the page scrolling as a whole. */
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  padding: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pane {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.paneTitle {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.paneActions {
+  display: flex;
+  gap: 2px;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.iconButton:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.content {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.contentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex: 0 0 auto;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.titleInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 1.5rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.editor {
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 200px;
+  resize: none;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--inset-bg);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.hint {
+  color: var(--text-muted);
+}
+
+.primary {
+  padding: 0.45rem 0.9rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  cursor: pointer;
+}

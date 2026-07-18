@@ -1,4 +1,5 @@
 import type { BoardSnapshot, Task } from '@boardown/core';
+import { emptyDocsTree } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import { findReleaseOfTask } from './find-release-of-task';
 
@@ -21,6 +22,7 @@ const snapshot: BoardSnapshot = {
   ],
   epics: [],
   backlog: null,
+  docs: emptyDocsTree(),
   problems: [],
 };
 

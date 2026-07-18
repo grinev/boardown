@@ -64,10 +64,37 @@ describe('handleFsRequest', () => {
     expect(await handleFsRequest(root, { method: 'list', path: 'releases' })).toEqual([]);
   });
 
-  it('list returns file names only, skipping subdirectories', async () => {
+  it('list reports files and subdirectories, flagging which is which', async () => {
     await handleFsRequest(root, { method: 'write', path: 'releases/a.md', content: 'a' });
     await fsp.mkdir(path.join(root, 'releases', 'sub'), { recursive: true });
-    expect(await handleFsRequest(root, { method: 'list', path: 'releases' })).toEqual(['a.md']);
+    expect(await handleFsRequest(root, { method: 'list', path: 'releases' })).toEqual([
+      { name: 'a.md', isDirectory: false },
+      { name: 'sub', isDirectory: true },
+    ]);
+  });
+
+  it('mkdir creates an empty directory that list then reports', async () => {
+    await handleFsRequest(root, { method: 'mkdir', path: 'docs/drafts' });
+    expect(await handleFsRequest(root, { method: 'list', path: 'docs' })).toEqual([
+      { name: 'drafts', isDirectory: true },
+    ]);
+  });
+
+  it('remove deletes a file, and a directory with everything under it', async () => {
+    await handleFsRequest(root, { method: 'write', path: 'docs/a.md', content: 'a' });
+    await handleFsRequest(root, { method: 'write', path: 'docs/sub/b.md', content: 'b' });
+
+    await handleFsRequest(root, { method: 'remove', path: 'docs/a.md' });
+    expect(await handleFsRequest(root, { method: 'stat', path: 'docs/a.md' })).toBeNull();
+
+    await handleFsRequest(root, { method: 'remove', path: 'docs/sub' });
+    expect(await handleFsRequest(root, { method: 'list', path: 'docs' })).toEqual([]);
+  });
+
+  it('remove refuses a path escaping the board root', async () => {
+    await expect(
+      handleFsRequest(root, { method: 'remove', path: '../outside.md' }),
+    ).rejects.toThrow(/Invalid path/);
   });
 
   it('read returns null for a missing file (preload reconstructs the error)', async () => {

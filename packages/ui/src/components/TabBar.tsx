@@ -1,4 +1,4 @@
-import { Archive, ClipboardList, SquareKanban, type LucideIcon } from 'lucide-react';
+import { Archive, BookText, ClipboardList, SquareKanban, type LucideIcon } from 'lucide-react';
 import type { ActiveTab } from '../store';
 import { CreateMenu } from './CreateMenu';
 import { ReloadButton } from './ReloadButton';
@@ -17,6 +17,7 @@ const TABS: ReadonlyArray<{ key: ActiveTab; label: string; icon: LucideIcon }> =
   { key: 'backlog', label: 'Backlog', icon: ClipboardList },
   { key: 'board', label: 'Board', icon: SquareKanban },
   { key: 'archive', label: 'Archive', icon: Archive },
+  { key: 'docs', label: 'Docs', icon: BookText },
 ];
 
 const tabClass = (active: boolean): string =>

@@ -41,13 +41,36 @@ describe('NodeFsAdapter', () => {
     expect(await new NodeFsAdapter(root).list('releases')).toEqual([]);
   });
 
-  it('list returns only files, not subdirectories', async () => {
+  it('list reports files and subdirectories, flagging which is which', async () => {
     const fs = new NodeFsAdapter(root);
     await fs.write('releases/v1.md', 'x');
     await mkdir(join(root, 'releases', 'nested'), { recursive: true });
-    const names = await fs.list('releases');
-    expect(names).toContain('v1.md');
-    expect(names).not.toContain('nested');
+    const entries = await fs.list('releases');
+    expect(entries).toContainEqual({ name: 'v1.md', isDirectory: false });
+    expect(entries).toContainEqual({ name: 'nested', isDirectory: true });
+  });
+
+  it('mkdir creates a directory that list then reports', async () => {
+    const fs = new NodeFsAdapter(root);
+    await fs.mkdir('docs/guides');
+    expect(await fs.list('docs')).toContainEqual({ name: 'guides', isDirectory: true });
+  });
+
+  it('remove deletes a file, and a directory with everything under it', async () => {
+    const fs = new NodeFsAdapter(root);
+    await fs.write('docs/a.md', 'x');
+    await fs.write('docs/guides/b.md', 'y');
+
+    await fs.remove('docs/a.md');
+    expect(await fs.stat('docs/a.md')).toBeNull();
+
+    await fs.remove('docs/guides');
+    expect(await fs.stat('docs/guides/b.md')).toBeNull();
+    expect(await fs.list('docs')).toEqual([]);
+  });
+
+  it('remove is a no-op for a path that does not exist', async () => {
+    await expect(new NodeFsAdapter(root).remove('docs/missing.md')).resolves.toBeUndefined();
   });
 
   it('stat returns null for a missing file', async () => {

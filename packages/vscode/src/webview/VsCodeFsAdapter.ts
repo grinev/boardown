@@ -1,4 +1,4 @@
-import type { FileStat, FsAdapter } from '@boardown/core';
+import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
 import type { FsMethod, FsResponseMessage } from '../messages';
 
 interface VsCodeApi {
@@ -48,11 +48,19 @@ export class VsCodeFsAdapter implements FsAdapter {
     await this.request('write', path, content);
   }
 
-  async list(dir: string): Promise<string[]> {
-    return (await this.request('list', dir)) as string[];
+  async list(dir: string): Promise<FsEntry[]> {
+    return (await this.request('list', dir)) as FsEntry[];
   }
 
   async stat(path: string): Promise<FileStat | null> {
     return (await this.request('stat', path)) as FileStat | null;
+  }
+
+  async mkdir(dir: string): Promise<void> {
+    await this.request('mkdir', dir);
+  }
+
+  async remove(path: string): Promise<void> {
+    await this.request('remove', path);
   }
 }

@@ -4,13 +4,14 @@ import type {
   BoardSnapshot,
   Epic,
   FileStat,
+  FsEntry,
   GuardedFile,
   GuardedFs,
   Release,
   ReleaseStatus,
   Task,
 } from '@boardown/core';
-import { BACKLOG_PATH, CONFIG_FILENAME } from '@boardown/core';
+import { BACKLOG_PATH, CONFIG_FILENAME, emptyDocsTree } from '@boardown/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBoardStore } from './store';
 
@@ -18,12 +19,36 @@ import { useBoardStore } from './store';
 // simulate write failures so we can assert optimistic-update rollback.
 class MemFs implements GuardedFs {
   files = new Map<string, { content: string; lastModified: number }>();
+  dirs = new Set<string>();
   writes: string[] = [];
+  removes: string[] = [];
   // When set, any write whose path includes this substring throws.
   failWritesMatching: string | null = null;
 
   async writeAll(files: readonly GuardedFile[]): Promise<void> {
     for (const file of files) await this.write(file.path, file.content);
+  }
+
+  async removeDir(path: string): Promise<void> {
+    await this.remove(path);
+  }
+
+  async mkdir(dir: string): Promise<void> {
+    this.dirs.add(dir);
+    this.writes.push(dir);
+  }
+
+  async remove(path: string): Promise<void> {
+    if (this.failWritesMatching !== null &&
+      (this.failWritesMatching === '*' || path.includes(this.failWritesMatching))) {
+      throw new Error('disk full');
+    }
+    this.files.delete(path);
+    this.dirs.delete(path);
+    const prefix = `${path}/`;
+    for (const key of [...this.files.keys()]) if (key.startsWith(prefix)) this.files.delete(key);
+    for (const d of [...this.dirs]) if (d.startsWith(prefix)) this.dirs.delete(d);
+    this.removes.push(path);
   }
 
   async read(path: string): Promise<string> {
@@ -43,16 +68,23 @@ class MemFs implements GuardedFs {
     this.writes.push(path);
   }
 
-  async list(dir: string): Promise<string[]> {
+  async list(dir: string): Promise<FsEntry[]> {
     const prefix = dir.endsWith('/') ? dir : `${dir}/`;
-    const out = new Set<string>();
+    const out = new Map<string, boolean>();
     for (const key of this.files.keys()) {
       if (!key.startsWith(prefix)) continue;
       const tail = key.slice(prefix.length);
       const slash = tail.indexOf('/');
-      out.add(slash === -1 ? tail : tail.slice(0, slash));
+      if (slash === -1) out.set(tail, false);
+      else out.set(tail.slice(0, slash), true);
     }
-    return [...out];
+    for (const d of this.dirs) {
+      if (!d.startsWith(prefix)) continue;
+      const tail = d.slice(prefix.length);
+      const slash = tail.indexOf('/');
+      out.set(slash === -1 ? tail : tail.slice(0, slash), true);
+    }
+    return [...out].map(([name, isDirectory]) => ({ name, isDirectory }));
   }
 
   async stat(path: string): Promise<FileStat | null> {
@@ -105,6 +137,7 @@ const snap = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
   releases: [],
   epics: [],
   backlog: null,
+  docs: emptyDocsTree(),
   problems: [],
   ...over,
 });
@@ -120,6 +153,7 @@ const setup = (snapshot: BoardSnapshot): { fs: MemFs } => {
     theme: snapshot.config.theme ?? 'light',
     selectedTaskId: null,
     selectedEpicSlug: null,
+    selectedDocPath: null,
   });
   return { fs };
 };
@@ -604,5 +638,162 @@ describe('task links', () => {
 
     expect(state().errorMessage).toMatch(/finished/);
     expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
+  });
+});
+
+describe('docs', () => {
+  const docsTree = () => ({
+    path: 'docs',
+    name: 'docs',
+    folders: [
+      {
+        path: 'docs/guides',
+        name: 'guides',
+        folders: [],
+        pages: [
+          {
+            path: 'docs/guides/setup.md',
+            slug: 'setup',
+            frontmatter: { title: 'Setup' },
+            body: 'steps',
+          },
+        ],
+        otherEntries: [],
+      },
+    ],
+    pages: [
+      { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
+    ],
+    otherEntries: [],
+  });
+
+  it('creates a page in the docs root when nothing is selected', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+
+    await state().createDocPage('Release Process');
+
+    expect(fs.writes).toEqual(['docs/release-process.md']);
+    expect(state().selectedDocPath).toBe('docs/release-process.md');
+    expect(current().docs.pages.map((p) => p.path)).toContain('docs/release-process.md');
+    expect(fs.files.get('docs/release-process.md')!.content).toContain('title: Release Process');
+  });
+
+  it('creates a page inside the selected folder', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+    state().selectDoc('docs/guides');
+
+    await state().createDocPage('Deploy');
+
+    expect(fs.writes).toEqual(['docs/guides/deploy.md']);
+  });
+
+  it('creates a page beside the selected page', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+    state().selectDoc('docs/guides/setup.md');
+
+    await state().createDocPage('Deploy');
+
+    expect(fs.writes).toEqual(['docs/guides/deploy.md']);
+  });
+
+  it('suffixes a colliding filename instead of overwriting the existing page', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+
+    await state().createDocPage('Intro');
+
+    expect(fs.writes).toEqual(['docs/intro-2.md']);
+    expect(current().docs.pages).toHaveLength(2);
+  });
+
+  it('creates an empty folder with mkdir, writing no file', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+
+    await state().createDocFolder('drafts');
+
+    expect(fs.dirs.has('docs/drafts')).toBe(true);
+    expect(fs.files.size).toBe(0);
+    expect(current().docs.folders.map((f) => f.name)).toEqual(['drafts', 'guides']);
+  });
+
+  it('saves a page title and body in one write, keeping the filename', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+
+    await state().saveDocPage('docs/intro.md', 'Introduction', '# New body');
+
+    expect(fs.writes).toEqual(['docs/intro.md']);
+    const written = fs.files.get('docs/intro.md')!.content;
+    expect(written).toContain('title: Introduction');
+    expect(written).toContain('# New body');
+    expect(current().docs.pages[0]!.path).toBe('docs/intro.md');
+  });
+
+  it('deletes a page and clears the selection when it was selected', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+    state().selectDoc('docs/intro.md');
+
+    await state().deleteDocPage('docs/intro.md');
+
+    expect(fs.removes).toEqual(['docs/intro.md']);
+    expect(state().selectedDocPath).toBeNull();
+    expect(current().docs.pages).toEqual([]);
+  });
+
+  it('keeps the selection when another page is deleted', async () => {
+    setup(snap({ docs: docsTree() }));
+    state().selectDoc('docs/guides/setup.md');
+
+    await state().deleteDocPage('docs/intro.md');
+
+    expect(state().selectedDocPath).toBe('docs/guides/setup.md');
+  });
+
+  it('deletes an empty folder and clears the selection when it was selected', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+    await state().createDocFolder('drafts');
+
+    await state().deleteDocFolder('docs/drafts');
+
+    expect(fs.removes).toEqual(['docs/drafts']);
+    expect(state().selectedDocPath).toBeNull();
+    expect(current().docs.folders.map((f) => f.name)).toEqual(['guides']);
+  });
+
+  it('refuses to delete a folder that still has pages in it', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+
+    await state().deleteDocFolder('docs/guides');
+
+    expect(fs.removes).toEqual([]);
+    expect(current().docs.folders.map((f) => f.name)).toEqual(['guides']);
+    expect(state().errorMessage).toMatch(/empty folder/);
+  });
+
+  it('restores the previous tree and selection when a write fails', async () => {
+    const { fs } = setup(snap({ docs: docsTree() }));
+    fs.failWritesMatching = '*';
+
+    await expect(state().createDocPage('Doomed')).rejects.toThrow();
+
+    expect(current().docs.pages.map((p) => p.path)).toEqual(['docs/intro.md']);
+    expect(state().selectedDocPath).toBeNull();
+    expect(state().errorMessage).toMatch(/Failed to create page/);
+  });
+
+  it('touches only paths under docs/ — never releases, epics or the config', async () => {
+    const { fs } = setup(
+      snap({ docs: docsTree(), releases: [release('1.0', 'current', [task('BD-1')])] }),
+    );
+
+    await state().createDocPage('One');
+    await state().createDocFolder('drafts');
+    await state().saveDocPage('docs/intro.md', 'Intro', 'x');
+    await state().deleteDocPage('docs/intro.md');
+    await state().deleteDocPage('docs/guides/setup.md');
+    await state().deleteDocFolder('docs/guides');
+
+    for (const path of [...fs.writes, ...fs.removes]) {
+      expect(path.startsWith('docs/')).toBe(true);
+    }
+    expect(fs.files.has(CONFIG_FILENAME)).toBe(false);
   });
 });

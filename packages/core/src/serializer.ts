@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import type { Backlog, Epic, Release, Task, TaskFrontmatter } from './schemas.js';
+import type { Backlog, DocPage, Epic, Release, Task, TaskFrontmatter } from './schemas.js';
 
 const FENCE = '---';
 
@@ -85,3 +85,18 @@ export const serializeEpic = (epic: Epic): string => {
 
 export const serializeBacklog = (backlog: Backlog): string =>
   buildFile({}, backlog.preamble, backlog.tasks, { omitEpic: true });
+
+export const serializeDocPage = (page: DocPage): string => {
+  const title = page.frontmatter.title;
+  // Only the trailing newlines are normalised — exactly what the parser strips —
+  // so serialize is the inverse of parse and saving a title never rewrites the
+  // body's own whitespace.
+  const body = page.body.replace(/\n+$/, '');
+  // A page with no title carries no frontmatter block at all, so a hand-authored
+  // page stays hand-authored after a round trip.
+  if (title === undefined || title.trim() === '') {
+    return body === '' ? '' : `${body}\n`;
+  }
+  const fmBlock = `${FENCE}\n${dumpYaml({ title })}\n${FENCE}`;
+  return body === '' ? `${fmBlock}\n` : `${fmBlock}\n\n${body}\n`;
+};

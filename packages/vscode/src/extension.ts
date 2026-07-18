@@ -125,12 +125,30 @@ async function handleFsRequest(
           const entries = await vscode.workspace.fs.readDirectory(target);
           respond(
             true,
-            entries.filter(([, type]) => type === vscode.FileType.File).map(([name]) => name),
+            entries
+              .filter(([, type]) => type === vscode.FileType.File || type === vscode.FileType.Directory)
+              .map(([name, type]) => ({ name, isDirectory: type === vscode.FileType.Directory })),
           );
         } catch (err) {
           if (isFileNotFound(err)) respond(true, []);
           else throw err;
         }
+        return;
+      }
+      case 'mkdir': {
+        await vscode.workspace.fs.createDirectory(target);
+        recentWrites.set(target.fsPath, Date.now());
+        respond(true);
+        return;
+      }
+      case 'remove': {
+        try {
+          await vscode.workspace.fs.delete(target, { recursive: true, useTrash: false });
+        } catch (err) {
+          if (!isFileNotFound(err)) throw err;
+        }
+        recentWrites.set(target.fsPath, Date.now());
+        respond(true);
         return;
       }
       case 'stat': {

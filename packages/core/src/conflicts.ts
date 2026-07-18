@@ -14,14 +14,18 @@ export interface GuardedFile {
   content: string;
 }
 
-// An FsAdapter plus a multi-file write. Shells keep implementing the three-method
-// FsAdapter; writeAll lives on the guard, which is the only thing that owns the
-// version map.
+// An FsAdapter plus the multi-target operations. Shells keep implementing the
+// plain FsAdapter; these live on the guard, which is the only thing that owns
+// the version map.
 export interface GuardedFs extends FsAdapter {
   // Writes files that must land together (e.g. a link mirrored into two tasks):
   // every target is checked before any of them is written, so an external change
   // aborts the whole operation instead of half-applying it.
   writeAll(files: readonly GuardedFile[]): Promise<void>;
+  // Removes a directory, which has no recorded version of its own, after
+  // confirming it is still empty on disk. Anything that appeared in it since the
+  // load is an external change, so this refuses rather than deleting it too.
+  removeDir(path: string): Promise<void>;
 }
 
 // Wraps an FsAdapter so that every write first checks the target's lastModified
@@ -54,10 +58,16 @@ export function createGuardedFs(
     }
   };
 
+  const drop = async (path: string): Promise<void> => {
+    await inner.remove(path);
+    delete versions[path];
+  };
+
   return {
     read: (path) => inner.read(path),
     list: (dir) => inner.list(dir),
     stat: (path) => inner.stat(path),
+    mkdir: (dir) => inner.mkdir(dir),
 
     async write(path, content) {
       await check(path);
@@ -67,6 +77,20 @@ export function createGuardedFs(
     async writeAll(files) {
       for (const file of files) await check(file.path);
       for (const file of files) await put(file.path, file.content);
+    },
+
+    async remove(path) {
+      await check(path);
+      await drop(path);
+    },
+
+    async removeDir(path) {
+      const entries = await inner.list(path);
+      if (entries.length > 0) {
+        onConflict(path);
+        throw new ConflictError(path);
+      }
+      await inner.remove(path);
     },
   };
 }

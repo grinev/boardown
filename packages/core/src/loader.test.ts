@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { FileStat, FsAdapter } from './fs-adapter.js';
+import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
 import { loadBoard } from './loader.js';
 
 class InMemoryFs implements FsAdapter {
   files = new Map<string, string>();
+  dirs = new Set<string>();
 
   async read(path: string): Promise<string> {
     const content = this.files.get(path);
@@ -13,21 +14,41 @@ class InMemoryFs implements FsAdapter {
   async write(path: string, content: string): Promise<void> {
     this.files.set(path, content);
   }
-  async list(dir: string): Promise<string[]> {
+  async list(dir: string): Promise<FsEntry[]> {
     const prefix = dir.endsWith('/') ? dir : `${dir}/`;
-    const out = new Set<string>();
+    const out = new Map<string, boolean>();
     for (const key of this.files.keys()) {
       if (!key.startsWith(prefix)) continue;
       const tail = key.slice(prefix.length);
       const slash = tail.indexOf('/');
-      out.add(slash === -1 ? tail : tail.slice(0, slash));
+      if (slash === -1) out.set(tail, false);
+      else out.set(tail.slice(0, slash), true);
     }
-    return [...out];
+    for (const d of this.dirs) {
+      if (!d.startsWith(prefix)) continue;
+      const tail = d.slice(prefix.length);
+      const slash = tail.indexOf('/');
+      out.set(slash === -1 ? tail : tail.slice(0, slash), true);
+    }
+    return [...out].map(([name, isDirectory]) => ({ name, isDirectory }));
   }
   async stat(path: string): Promise<FileStat | null> {
     return this.files.has(path) ? { lastModified: 0 } : null;
   }
+
+  async mkdir(dir: string): Promise<void> {
+    this.dirs.add(dir);
+  }
+
+  async remove(path: string): Promise<void> {
+    this.files.delete(path);
+    this.dirs.delete(path);
+    const prefix = `${path}/`;
+    for (const key of [...this.files.keys()]) if (key.startsWith(prefix)) this.files.delete(key);
+    for (const d of [...this.dirs]) if (d.startsWith(prefix)) this.dirs.delete(d);
+  }
 }
+
 
 const CONFIG = `idPrefix: BD
 nextId: 5
@@ -222,5 +243,72 @@ body
     if (result.kind !== 'loaded') throw new Error('expected loaded');
     expect(result.snapshot.config.nextId).toBe(8);
     expect(result.snapshot.backlog!.tasks).toHaveLength(1);
+  });
+
+  it('builds a nested docs tree, ignoring non-markdown files', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write('docs/intro.md', '---\ntitle: Intro\n---\n\nHello\n');
+    await fs.write('docs/guides/setup.md', '---\ntitle: Setup\n---\n\nSteps\n');
+    await fs.write('docs/guides/deep/more.md', 'no frontmatter here');
+    await fs.write('docs/diagram.png', 'binary-ish');
+
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+
+    const docs = result.snapshot.docs;
+    expect(docs.pages.map((p) => p.path)).toEqual(['docs/intro.md']);
+    expect(docs.folders.map((f) => f.name)).toEqual(['guides']);
+    const guides = docs.folders[0]!;
+    expect(guides.pages.map((p) => p.path)).toEqual(['docs/guides/setup.md']);
+    expect(guides.folders[0]!.pages[0]!.path).toBe('docs/guides/deep/more.md');
+    // The .png is not a page, but its name is remembered so nothing overwrites it.
+    expect(docs.pages.map((p) => p.path)).not.toContain('docs/diagram.png');
+    expect(docs.otherEntries).toEqual(['diagram.png']);
+  });
+
+  it('records a version for every doc page, so the first save is guarded', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write('docs/intro.md', 'hello');
+    await fs.write('docs/guides/setup.md', 'steps');
+
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.fileVersions).toHaveProperty('docs/intro.md');
+    expect(result.fileVersions).toHaveProperty('docs/guides/setup.md');
+  });
+
+  it('treats a missing docs dir as an empty tree', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.docs.pages).toEqual([]);
+    expect(result.snapshot.docs.folders).toEqual([]);
+  });
+
+  it('keeps good pages when one has broken frontmatter, and reports it', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write('docs/good.md', '---\ntitle: Good\n---\n\nfine');
+    await fs.write('docs/bad.md', '---\ntitle: [unclosed\n---\n\nbroken');
+
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.docs.pages.map((p) => p.path)).toEqual(['docs/good.md']);
+    expect(result.problems.some((p) => p.file === 'docs/bad.md')).toBe(true);
+    // Unreadable, but its name is still taken — a new page must not clobber it.
+    expect(result.snapshot.docs.otherEntries).toEqual(['bad.md']);
+  });
+
+  it('lists an empty folder the user created', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.mkdir('docs/drafts');
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.docs.folders.map((f) => f.name)).toEqual(['drafts']);
+    expect(result.snapshot.docs.folders[0]!.pages).toEqual([]);
   });
 });

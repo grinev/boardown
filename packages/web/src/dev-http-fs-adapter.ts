@@ -1,4 +1,4 @@
-import type { FileStat, FsAdapter } from '@boardown/core';
+import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
 
 export class DevHttpFsAdapter implements FsAdapter {
   constructor(private readonly base: string = '/api/fs') {}
@@ -22,13 +22,35 @@ export class DevHttpFsAdapter implements FsAdapter {
     }
   }
 
-  async list(dir: string): Promise<string[]> {
+  async list(dir: string): Promise<FsEntry[]> {
     const res = await fetch(`${this.base}/list?path=${encodeURIComponent(dir)}`);
     if (res.status === 404) return [];
     if (!res.ok) {
       throw new Error(`list ${dir} failed: ${res.status} ${await res.text()}`);
     }
-    return (await res.json()) as string[];
+    return (await res.json()) as FsEntry[];
+  }
+
+  async mkdir(dir: string): Promise<void> {
+    const res = await fetch(`${this.base}/mkdir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dir }),
+    });
+    if (!res.ok) {
+      throw new Error(`mkdir ${dir} failed: ${res.status} ${await res.text()}`);
+    }
+  }
+
+  async remove(path: string): Promise<void> {
+    const res = await fetch(`${this.base}/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+      throw new Error(`remove ${path} failed: ${res.status} ${await res.text()}`);
+    }
   }
 
   async stat(path: string): Promise<FileStat | null> {

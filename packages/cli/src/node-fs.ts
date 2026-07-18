@@ -1,6 +1,6 @@
 import { promises as fsp } from 'node:fs';
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path';
-import type { FileStat, FsAdapter } from '@boardown/core';
+import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
 
 // Join a board-relative path onto the board root, rejecting absolute paths and
 // any '..' escape — mirrors packages/electron's board-fs guard so a caller can
@@ -33,14 +33,24 @@ export class NodeFsAdapter implements FsAdapter {
     await fsp.writeFile(target, content, 'utf8');
   }
 
-  async list(dir: string): Promise<string[]> {
+  async list(dir: string): Promise<FsEntry[]> {
     try {
       const entries = await fsp.readdir(this.target(dir), { withFileTypes: true });
-      return entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+      return entries
+        .filter((entry) => entry.isFile() || entry.isDirectory())
+        .map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }));
     } catch (err) {
       if (isENOENT(err)) return [];
       throw err;
     }
+  }
+
+  async mkdir(dir: string): Promise<void> {
+    await fsp.mkdir(this.target(dir), { recursive: true });
+  }
+
+  async remove(path: string): Promise<void> {
+    await fsp.rm(this.target(path), { recursive: true, force: true });
   }
 
   async stat(path: string): Promise<FileStat | null> {

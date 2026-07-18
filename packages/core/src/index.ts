@@ -9,3 +9,4 @@ export * from './config.js';
 export * from './loader.js';
 export * from './ordering.js';
 export * from './conflicts.js';
+export * from './docs.js';

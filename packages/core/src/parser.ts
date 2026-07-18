@@ -2,6 +2,8 @@ import yaml from 'js-yaml';
 import {
   type Backlog,
   BacklogFrontmatterSchema,
+  type DocPage,
+  DocPageFrontmatterSchema,
   type Epic,
   EpicFrontmatterSchema,
   type Release,
@@ -301,4 +303,44 @@ export const parseEpic = (
     },
     problems,
   };
+};
+
+export const parseDocPage = (
+  text: string,
+  path: string,
+  slug: string,
+): ParseResult<DocPage> => {
+  const problems: ParseProblem[] = [];
+  const { fileFrontmatterText, body } = splitFileFrontmatter(text);
+
+  // The serializer writes exactly one trailing newline; dropping it here is what
+  // makes body → file → body stable, so the editor shows what round-trips.
+  const pageBody = body.replace(/\n+$/, '');
+
+  // No frontmatter at all is a normal hand-authored page, not a problem.
+  if (fileFrontmatterText === null) {
+    return { value: { path, slug, frontmatter: {}, body: pageBody }, problems };
+  }
+
+  let rawFm: unknown;
+  try {
+    rawFm = parseYaml(fileFrontmatterText);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    problems.push(fileProblem(path, `Invalid page frontmatter YAML: ${message}`));
+    return { value: null, problems };
+  }
+
+  const fmResult = DocPageFrontmatterSchema.safeParse(rawFm);
+  if (!fmResult.success) {
+    problems.push(
+      fileProblem(
+        path,
+        `Page frontmatter failed validation: ${fmResult.error.issues.map((i) => i.message).join('; ')}`,
+      ),
+    );
+    return { value: null, problems };
+  }
+
+  return { value: { path, slug, frontmatter: fmResult.data, body: pageBody }, problems };
 };

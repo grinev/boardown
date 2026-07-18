@@ -137,7 +137,9 @@ CLI inherits them rather than re-implementing them.
   exposes `writeAll`, for a set of files that must land together (e.g. a task link
   mirrored into two tasks): it checks every target before writing any of them, so
   an external change aborts the whole operation instead of half-applying it —
-  reach for it in any new multi-file mutation. Re-reading on
+  reach for it in any new multi-file mutation. Deletion is guarded the same way:
+  `remove` checks the target first, and `removeAll` checks every file beneath a
+  directory before removing it, so deleting a docs folder is all-or-nothing. Re-reading on
   demand is the manual Reload button; in addition the VS Code and Electron shells
   auto-refresh on external `.boardown/` changes via a host file watcher (gated by
   the `boardown.autoRefresh` setting), while the `web` dev shell stays

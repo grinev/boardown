@@ -1,4 +1,5 @@
 import type { BoardSnapshot, Task } from '@boardown/core';
+import { emptyDocsTree } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import { findTaskById } from './find-task';
 
@@ -34,6 +35,7 @@ const snapshot = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
     preamble: '',
     tasks: [task('BD-3')],
   },
+  docs: emptyDocsTree(),
   problems: [],
   ...over,
 });

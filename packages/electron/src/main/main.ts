@@ -12,6 +12,7 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import type { Theme } from '@boardown/core';
+import { DOCS_DIR } from '@boardown/core';
 import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { buildAppMenu } from './menu';
@@ -124,9 +125,9 @@ function disposeWatcher(id: number): void {
 
 // (Re)build the per-window watcher for the board open in `window`: replaces any
 // existing one (board switch) and tears it down when auto-refresh is off.
-// .boardown/ has a fixed shallow layout (config.yaml + releases/ + epics/), so
-// rather than rely on recursive fs.watch — unreliable on Linux — we watch the
-// root and each first-level subdirectory explicitly.
+// Rather than rely on recursive fs.watch — unreliable on Linux — we watch the
+// root and each subdirectory explicitly: one level for the flat releases/ and
+// epics/, the whole tree for docs/, which nests arbitrarily.
 function applyWatcher(window: BrowserWindow): void {
   const id = window.webContents.id;
   disposeWatcher(id);
@@ -166,10 +167,26 @@ function applyWatcher(window: BrowserWindow): void {
     }
   };
 
+  // releases/ and epics/ are flat, but docs/ nests to any depth, so it is walked
+  // rather than watched one level down.
+  const watchTree = (dir: string): void => {
+    watchDir(dir);
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) watchTree(path.join(dir, entry.name));
+      }
+    } catch {
+      // Vanished between readdir and watch — the parent watcher still covers it.
+    }
+  };
+
   watchDir(ctx.boardRoot);
   try {
     for (const entry of readdirSync(ctx.boardRoot, { withFileTypes: true })) {
-      if (entry.isDirectory()) watchDir(path.join(ctx.boardRoot, entry.name));
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(ctx.boardRoot, entry.name);
+      if (entry.name === DOCS_DIR) watchTree(dir);
+      else watchDir(dir);
     }
   } catch {
     // Board root missing — nothing to watch until files appear.

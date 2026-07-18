@@ -1,0 +1,93 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+  min-height: 28px;
+  border-radius: 4px;
+}
+
+.row:hover {
+  background: var(--surface-muted);
+}
+
+.rowSelected {
+  background: var(--accent-bg);
+}
+
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.pageIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  visibility: hidden;
+  flex: 0 0 auto;
+}
+
+.row:hover .delete,
+.delete:focus-visible {
+  visibility: visible;
+}
+
+.delete:hover {
+  color: var(--banner-error-fg);
+  background: var(--surface);
+}
+
+.delete:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.delete:disabled:hover {
+  color: var(--text-muted);
+  background: none;
+}

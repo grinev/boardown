@@ -60,11 +60,21 @@ export async function handleFsRequest(
     case 'list':
       try {
         const entries = await fsp.readdir(target, { withFileTypes: true });
-        return entries.filter((e) => e.isFile()).map((e) => e.name);
+        return entries
+          .filter((e) => e.isFile() || e.isDirectory())
+          .map((e) => ({ name: e.name, isDirectory: e.isDirectory() }));
       } catch (err) {
         if (isENOENT(err)) return [];
         throw err;
       }
+    case 'mkdir':
+      await fsp.mkdir(target, { recursive: true });
+      onWrite?.(target);
+      return undefined;
+    case 'remove':
+      await fsp.rm(target, { recursive: true, force: true });
+      onWrite?.(target);
+      return undefined;
     case 'stat':
       try {
         const s = await fsp.stat(target);

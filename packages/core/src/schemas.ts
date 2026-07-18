@@ -121,6 +121,22 @@ export const BacklogSchema = z.object({
 });
 export type Backlog = z.infer<typeof BacklogSchema>;
 
+// A doc page's frontmatter is optional in every part: a page authored by hand
+// with no frontmatter at all is valid and falls back to its filename slug for
+// display, the way a release without `name` falls back to its slug.
+export const DocPageFrontmatterSchema = z.object({
+  title: z.string().optional(),
+});
+export type DocPageFrontmatter = z.infer<typeof DocPageFrontmatterSchema>;
+
+export const DocPageSchema = z.object({
+  path: z.string().min(1),
+  slug: z.string().min(1),
+  frontmatter: DocPageFrontmatterSchema,
+  body: z.string(),
+});
+export type DocPage = z.infer<typeof DocPageSchema>;
+
 export const ThemeSchema = z.enum(['light', 'dark']);
 export type Theme = z.infer<typeof ThemeSchema>;
 

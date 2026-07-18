@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseBacklog, parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
 import type { Epic } from './schemas.js';
-import { serializeBacklog, serializeEpic, serializeRelease } from './serializer.js';
+import { serializeBacklog, serializeDocPage, serializeEpic, serializeRelease } from './serializer.js';
 
 const RELEASE = `---
 status: current
@@ -418,5 +418,64 @@ description
       ],
     };
     expect(serializeEpic(epic)).not.toContain('links:');
+  });
+});
+
+describe('serializeDocPage', () => {
+  it('round-trips a page through parse → serialize → parse', () => {
+    const text = serializeDocPage({
+      path: 'docs/intro.md',
+      slug: 'intro',
+      frontmatter: { title: 'Intro' },
+      body: '# Hello\n\nSome *markdown*.',
+    });
+    const reparsed = parseDocPage(text, 'docs/intro.md', 'intro');
+    expect(reparsed.problems).toEqual([]);
+    expect(reparsed.value?.frontmatter.title).toBe('Intro');
+    expect(reparsed.value?.body).toBe('# Hello\n\nSome *markdown*.');
+    expect(serializeDocPage(reparsed.value!)).toBe(text);
+  });
+
+  it('quotes a title full of YAML metacharacters and reads it back unchanged', () => {
+    const title = '--- Deploy: "staging" #1 [urgent] @now';
+    const text = serializeDocPage({
+      path: 'docs/a.md',
+      slug: 'a',
+      frontmatter: { title },
+      body: 'body',
+    });
+    expect(parseDocPage(text, 'docs/a.md', 'a').value?.frontmatter.title).toBe(title);
+  });
+
+  it('writes no frontmatter block for a page with no title', () => {
+    const text = serializeDocPage({
+      path: 'docs/a.md',
+      slug: 'a',
+      frontmatter: {},
+      body: 'just prose',
+    });
+    expect(text).toBe('just prose\n');
+    expect(parseDocPage(text, 'docs/a.md', 'a').value?.frontmatter.title).toBeUndefined();
+  });
+
+  it('preserves the body’s own leading whitespace when only the title changes', () => {
+    const body = '   indented first line\n\nlast line with a hard break  ';
+    const text = serializeDocPage({
+      path: 'docs/a.md',
+      slug: 'a',
+      frontmatter: { title: 'Renamed' },
+      body,
+    });
+    expect(parseDocPage(text, 'docs/a.md', 'a').value?.body).toBe(body);
+  });
+
+  it('handles an empty body', () => {
+    const text = serializeDocPage({
+      path: 'docs/a.md',
+      slug: 'a',
+      frontmatter: { title: 'T' },
+      body: '',
+    });
+    expect(parseDocPage(text, 'docs/a.md', 'a').value?.body).toBe('');
   });
 });

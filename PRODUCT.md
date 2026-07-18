@@ -21,8 +21,8 @@ License: MIT.
   sprint-style lifecycle (`future → current → finished`). Tasks move between
   these via drag & drop.
 - **Storage:** a `.boardown/` folder in the project root, containing a config
-  file and two subfolders (`releases/`, `epics/`). Everything is committed to
-  git as-is.
+  file and three subfolders (`releases/`, `epics/`, `docs/`). Everything is
+  committed to git as-is.
 - **Distribution:** a **VS Code extension** (the canonical way to use boardown),
   a standalone **Electron desktop app** (Windows / macOS / Linux), and a headless
   **CLI** for agents and scripts, published to npm. A slim browser shell exists
@@ -165,10 +165,14 @@ Everything lives under `.boardown/` at the project root:
     │   ├── v0.1.md
     │   ├── 1.10.md
     │   └── 1.11.md
-    └── epics/
-        ├── no_epic.md     # tasks without an epic and without a release
-        ├── ui-foundation.md
-        └── parser.md
+    ├── epics/
+    │   ├── no_epic.md     # tasks without an epic and without a release
+    │   ├── ui-foundation.md
+    │   └── parser.md
+    └── docs/              # the project wiki; folders nest to any depth
+        ├── architecture.md
+        └── guides/
+            └── release-process.md
 ```
 
 The shell chooses which `.boardown/` directory to open. The `config.yaml` file
@@ -264,6 +268,25 @@ frontmatter above).
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
 by hand).
 
+### Doc page
+
+A markdown file under `docs/`, at any depth. Unlike a release or an epic it holds
+no tasks — the whole body is the page's content. Its only frontmatter field is
+`title`, and the whole block is optional:
+
+| Field   | Type    | Notes                                                            |
+|---------|---------|------------------------------------------------------------------|
+| `title` | string? | Human-readable title shown in the tree. Absent ⇒ the filename slug is shown, and the first title edit writes a real `title`. |
+
+The filename is derived from the title at creation with the same slug rules
+releases use, and is stable thereafter — editing the title never moves the file.
+A derived filename that collides with an existing page gets a numeric suffix, so
+creating a second "Setup" yields `setup-2.md` rather than overwriting.
+
+Folders under `docs/` are real entities the user creates and deletes; an empty
+one is valid and stays listed. A file that is not markdown is ignored by the tree
+and left untouched on disk.
+
 ## Behaviour rules
 
 ### Lenient parsing
@@ -303,8 +326,8 @@ epic nor a release.
 
 ## UI
 
-The app is divided into three top-level views, presented as tabs in the top
-navigation: **Backlog**, **Board**, **Archive**.
+The app is divided into four top-level views, presented as tabs in the top
+navigation: **Backlog**, **Board**, **Archive**, **Docs**.
 
 ### Backlog
 
@@ -356,6 +379,35 @@ The same layout as Backlog, but populated only with `finished` releases
 (newest first). No Backlog section, no current section, no filter bar. All
 releases are collapsed by default. The archive is **read-only** — tasks cannot
 be dragged out. Task and epic cards are still clickable and open the editor.
+
+### Docs
+
+A project wiki over `.boardown/docs/`, and the only place in the app that renders
+markdown. The screen is split: a **page tree** on the left, the selected page's
+**content** filling the rest.
+
+The tree shows folders as collapsible nodes and pages as selectable rows, folders
+first and then alphabetically at each level, nested to any depth. Empty folders
+are listed. The pane header carries **New folder** and **New page** buttons; both
+create inside the *current folder* — the selected folder, the folder holding the
+selected page, or the docs root when nothing is selected — and each opens a small
+dialog naming that target. Hovering a page or folder row reveals a trash button.
+Deleting asks for confirmation. **Only an empty folder can be deleted** — the
+trash on a folder that still holds anything is disabled, so a deletion can never
+take content the user did not see; empty its pages and subfolders first. There is
+no moving or renaming: a page's location is fixed once created.
+
+The content area renders the page's markdown (GFM: tables, strikethrough, task
+lists). Raw HTML embedded in a page is **not** rendered — it shows as text, so a
+page can never inject markup. A **pencil** button in the top-right corner switches
+to edit mode: the title becomes a text input and the body a plain textarea holding
+the raw markdown — no toolbar, no live preview. The pencil becomes a **check**;
+pressing it commits both fields in one write and returns to the rendered view.
+There is no Save or Cancel button, matching the rest of the app; an emptied title
+reverts. A draft lives only in the view, so switching tabs mid-edit writes nothing.
+
+Docs are not connected to tasks, epics or releases in either direction, and the
+CLI has no docs commands.
 
 ### Task card
 
@@ -555,8 +607,8 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
 - **Fuller release management** — editing a release's dates, reordering releases
   in the Backlog, and support for multiple simultaneously active releases (e.g. a
   large release in flight plus an urgent hotfix).
-- **Docs tab** — a place for project documentation next to the board, with a
-  markdown editor.
+- **Richer docs** — moving and renaming pages, search across the wiki, and
+  linking a doc page from a task.
 - **Git integration** — surfacing the commits related to a task on the task
   itself, closing the loop between the board and the repo it lives in.
 - **Localization** — i18n infrastructure and translations of the UI.

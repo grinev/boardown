@@ -4,6 +4,7 @@ import type {
   Container,
   DeleteTaskResult,
   DestEpic,
+  DocPage,
   Epic,
   EpicPatch,
   FsAdapter,
@@ -25,8 +26,14 @@ import {
   completeRelease as completeReleaseInBoard,
   createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
+  addDocFolder,
+  addDocPage,
   createGuardedFs,
   createTask as createTaskInContainer,
+  docFilenameForTitle,
+  docPagePath,
+  findDocFolder,
+  isDocFolderEmpty,
   deleteTaskWithLinks,
   emptyBacklog,
   editEpic,
@@ -36,8 +43,13 @@ import {
   startRelease as startReleaseInBoard,
   moveTaskBetweenContainers,
   moveTaskInContainer,
+  removeDocFolder,
+  removeDocPage,
   reorderTaskInBacklog,
+  replaceDocPage,
   serializeBacklog,
+  serializeDocPage,
+  targetDocFolder,
   serializeConfig,
   serializeEpic,
   serializeRelease,
@@ -46,7 +58,7 @@ import { create } from 'zustand';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
 
-export type ActiveTab = 'backlog' | 'board' | 'archive';
+export type ActiveTab = 'backlog' | 'board' | 'archive' | 'docs';
 
 export interface CreateTaskInput {
   // Empty/omitted means the task is created in the backlog: in the selected
@@ -98,6 +110,12 @@ interface BoardState {
   completeReleaseOpen: boolean;
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
+  // Docs: the selected tree node (a page path or a folder path), plus the
+  // dialogs the tab owns.
+  selectedDocPath: string | null;
+  createDocPageOpen: boolean;
+  createDocFolderOpen: boolean;
+  deleteDocPath: string | null;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
@@ -127,6 +145,18 @@ interface BoardState {
   startRelease: (filename: string) => Promise<void>;
   openSettings: () => void;
   closeSettings: () => void;
+  selectDoc: (path: string | null) => void;
+  openCreateDocPage: () => void;
+  closeCreateDocPage: () => void;
+  openCreateDocFolder: () => void;
+  closeCreateDocFolder: () => void;
+  openDeleteDoc: (path: string) => void;
+  closeDeleteDoc: () => void;
+  createDocPage: (title: string) => Promise<void>;
+  createDocFolder: (name: string) => Promise<void>;
+  saveDocPage: (path: string, title: string, body: string) => Promise<void>;
+  deleteDocPage: (path: string) => Promise<void>;
+  deleteDocFolder: (path: string) => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<void>;
   createRelease: (input: CreateReleaseInput) => Promise<void>;
   createEpic: (input: CreateEpicInput) => Promise<void>;
@@ -341,6 +371,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   completeReleaseOpen: false,
   startReleaseForFilename: null,
   settingsOpen: false,
+  selectedDocPath: null,
+  createDocPageOpen: false,
+  createDocFolderOpen: false,
+  deleteDocPath: null,
 
   load: async (fs, defaultTheme) => {
     set({
@@ -544,6 +578,142 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   openSettings: () => set({ settingsOpen: true }),
 
   closeSettings: () => set({ settingsOpen: false }),
+
+  selectDoc: (path) => set({ selectedDocPath: path }),
+  openCreateDocPage: () => set({ createDocPageOpen: true }),
+  closeCreateDocPage: () => set({ createDocPageOpen: false }),
+  openCreateDocFolder: () => set({ createDocFolderOpen: true }),
+  closeCreateDocFolder: () => set({ createDocFolderOpen: false }),
+  openDeleteDoc: (path) => set({ deleteDocPath: path }),
+  closeDeleteDoc: () => set({ deleteDocPath: null }),
+
+  createDocPage: async (title) => {
+    const { snapshot, fs, selectedDocPath } = get();
+    if (!snapshot || !fs) return;
+
+    const folder = targetDocFolder(snapshot.docs, selectedDocPath);
+    const filename = docFilenameForTitle(title, folder);
+    const path = docPagePath(folder, filename);
+    const page: DocPage = {
+      path,
+      slug: filename.replace(/\.md$/, ''),
+      frontmatter: { title },
+      body: '',
+    };
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      docs: addDocPage(snapshot.docs, folder.path, page),
+    };
+    set({ snapshot: nextSnapshot, selectedDocPath: path, errorMessage: null });
+
+    try {
+      await fs.write(path, serializeDocPage(page));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, selectedDocPath, errorMessage: `Failed to create page: ${message}` });
+      throw err;
+    }
+  },
+
+  createDocFolder: async (name) => {
+    const { snapshot, fs, selectedDocPath } = get();
+    if (!snapshot || !fs) return;
+
+    const parent = targetDocFolder(snapshot.docs, selectedDocPath);
+    const path = `${parent.path}/${name}`;
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      docs: addDocFolder(snapshot.docs, parent.path, name),
+    };
+    set({ snapshot: nextSnapshot, selectedDocPath: path, errorMessage: null });
+
+    try {
+      await fs.mkdir(path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, selectedDocPath, errorMessage: `Failed to create folder: ${message}` });
+      throw err;
+    }
+  },
+
+  saveDocPage: async (path, title, body) => {
+    const { snapshot, fs } = get();
+    if (!snapshot || !fs) return;
+
+    const next: DocPage = {
+      path,
+      slug: path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, ''),
+      frontmatter: { title },
+      body,
+    };
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      docs: replaceDocPage(snapshot.docs, next),
+    };
+    set({ snapshot: nextSnapshot, errorMessage: null });
+
+    try {
+      await fs.write(path, serializeDocPage(next));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, errorMessage: `Failed to save page: ${message}` });
+      throw err;
+    }
+  },
+
+  deleteDocPage: async (path) => {
+    const { snapshot, fs, selectedDocPath } = get();
+    if (!snapshot || !fs) return;
+
+    const nextSelected = selectedDocPath === path ? null : selectedDocPath;
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      docs: removeDocPage(snapshot.docs, path),
+    };
+    set({ snapshot: nextSnapshot, selectedDocPath: nextSelected, errorMessage: null });
+
+    try {
+      await fs.remove(path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, selectedDocPath, errorMessage: `Failed to delete page: ${message}` });
+      throw err;
+    }
+  },
+
+  deleteDocFolder: async (path) => {
+    const { snapshot, fs, selectedDocPath } = get();
+    if (!snapshot || !fs) return;
+
+    const folder = findDocFolder(snapshot.docs, path);
+    if (folder === null) return;
+
+    // Only an empty folder is deletable, so a deletion can never take content the
+    // user did not see. The UI disables the affordance; this is the invariant.
+    if (!isDocFolderEmpty(folder)) {
+      set({ errorMessage: 'Only an empty folder can be deleted.' });
+      return;
+    }
+
+    const nextSelected = selectedDocPath === path ? null : selectedDocPath;
+
+    const nextSnapshot: BoardSnapshot = {
+      ...snapshot,
+      docs: removeDocFolder(snapshot.docs, path),
+    };
+    set({ snapshot: nextSnapshot, selectedDocPath: nextSelected, errorMessage: null });
+
+    try {
+      await fs.removeDir(path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ snapshot, selectedDocPath, errorMessage: `Failed to delete folder: ${message}` });
+      throw err;
+    }
+  },
 
   createTask: async (input) => {
     const { snapshot, fs } = get();

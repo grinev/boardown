@@ -25,6 +25,8 @@ export const BACKLOG_BASENAME = 'no_epic.md';
 
 export const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
 
+export const DOCS_DIR = 'docs';
+
 export type Container = Release | Epic | Backlog;
 
 // An empty backlog stand-in for boards that have no `epics/no_epic.md` yet.

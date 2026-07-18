@@ -1,6 +1,6 @@
 import type { FsAdapter, Theme } from '@boardown/core';
 
-export type FsMethod = 'read' | 'write' | 'list' | 'stat';
+export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
 
 // App-wide theme setting. 'system' follows the OS; 'light'/'dark' are fixed.
 export type ThemeChoice = 'system' | 'light' | 'dark';

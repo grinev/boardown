@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { FileStat, Theme } from '@boardown/core';
+import type { FileStat, FsEntry, Theme } from '@boardown/core';
 import {
   IPC,
   type BoardownBridge,
@@ -29,8 +29,14 @@ const bridge: BoardownBridge = {
     write: async (filePath, content) => {
       await fsCall({ method: 'write', path: filePath, content });
     },
-    list: (dir) => fsCall({ method: 'list', path: dir }) as Promise<string[]>,
+    list: (dir) => fsCall({ method: 'list', path: dir }) as Promise<FsEntry[]>,
     stat: (filePath) => fsCall({ method: 'stat', path: filePath }) as Promise<FileStat | null>,
+    mkdir: async (dir) => {
+      await fsCall({ method: 'mkdir', path: dir });
+    },
+    remove: async (filePath) => {
+      await fsCall({ method: 'remove', path: filePath });
+    },
   },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<void>,
   popupMenu: () => ipcRenderer.send(IPC.popupMenu),

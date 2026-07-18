@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBacklog, parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
 
 const RELEASE_OK = `---
 release: "1.10"
@@ -341,5 +341,27 @@ body
     expect(result.problems).toEqual([]);
     expect(result.value!.tasks).toHaveLength(1);
     expect(result.value!.tasks[0]!.frontmatter.epic).toBeUndefined();
+  });
+});
+
+describe('parseDocPage', () => {
+  it('reads a page with no frontmatter as a titleless page, not a problem', () => {
+    const result = parseDocPage('# Hi\n\ntext', 'docs/a.md', 'a');
+    expect(result.problems).toEqual([]);
+    expect(result.value?.frontmatter.title).toBeUndefined();
+    expect(result.value?.body).toBe('# Hi\n\ntext');
+  });
+
+  it('reports invalid frontmatter YAML as a file problem and keeps the file', () => {
+    const result = parseDocPage('---\ntitle: [unclosed\n---\n\nbody', 'docs/a.md', 'a');
+    expect(result.value).toBeNull();
+    expect(result.problems[0]?.scope).toBe('file');
+    expect(result.problems[0]?.file).toBe('docs/a.md');
+  });
+
+  it('reports a title of the wrong type as a validation problem', () => {
+    const result = parseDocPage('---\ntitle: 42\n---\n\nbody', 'docs/a.md', 'a');
+    expect(result.value).toBeNull();
+    expect(result.problems[0]?.message).toContain('validation');
   });
 });

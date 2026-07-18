@@ -4,6 +4,7 @@ import { useBoardStore, type ActiveTab } from '../store';
 import { ArchiveView } from './ArchiveView';
 import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
+import { DocsView } from './DocsView';
 import styles from './TabContent.module.css';
 
 interface TabContentProps {
@@ -23,6 +24,10 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
 
   if (activeTab === 'archive') {
     return <ArchiveView />;
+  }
+
+  if (activeTab === 'docs') {
+    return <DocsView />;
   }
 
   const current = releases.find((r) => r.frontmatter.status === 'current');
