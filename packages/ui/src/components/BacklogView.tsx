@@ -14,6 +14,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Epic, Release, Task } from '@boardown/core';
+import {
+  currentRelease,
+  futureReleases,
+  sortTasksByOrder,
+  unscheduledTasks,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogDndContext } from '../dnd/BacklogDndContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
@@ -37,8 +43,6 @@ interface SectionMeta {
   // Release this section creates tasks into; null means the backlog.
   releaseFilename: string | null;
 }
-
-const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
 
 const releaseTitle = (release: Release): string =>
   release.frontmatter.name ?? release.slug;
@@ -85,11 +89,8 @@ export function BacklogView() {
     const buckets: SectionBuckets = new Map();
     if (!snapshot) return { sectionMetas: metas, sourceBuckets: buckets };
 
-    const { releases, backlog } = snapshot;
-    const current = releases.find((r) => r.frontmatter.status === 'current');
-    const futures = releases
-      .filter((r) => r.frontmatter.status === 'future')
-      .sort((a, b) => a.filename.localeCompare(b.filename));
+    const current = currentRelease(snapshot);
+    const futures = futureReleases(snapshot);
 
     if (current) {
       const key = releaseSectionKey(current);
@@ -102,7 +103,7 @@ export function BacklogView() {
         startReleaseFilename: null,
         releaseFilename: current.filename,
       });
-      buckets.set(key, [...current.tasks].sort(sortByOrder));
+      buckets.set(key, sortTasksByOrder(current.tasks));
     }
     for (const r of futures) {
       const key = releaseSectionKey(r);
@@ -115,7 +116,7 @@ export function BacklogView() {
         startReleaseFilename: current ? null : r.filename,
         releaseFilename: r.filename,
       });
-      buckets.set(key, [...r.tasks].sort(sortByOrder));
+      buckets.set(key, sortTasksByOrder(r.tasks));
     }
     metas.push({
       key: BACKLOG_SECTION_KEY,
@@ -128,10 +129,7 @@ export function BacklogView() {
     });
     buckets.set(
       BACKLOG_SECTION_KEY,
-      [
-        ...epics.flatMap((e) => e.tasks),
-        ...(backlog?.tasks ?? []),
-      ].sort(sortByOrder),
+      unscheduledTasks({ epics, backlog: snapshot.backlog }),
     );
 
     return { sectionMetas: metas, sourceBuckets: buckets };

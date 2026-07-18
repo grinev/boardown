@@ -14,6 +14,7 @@ const BOOLEAN_FLAGS = new Set([
   'up',
   'down',
   'backlog',
+  'full',
 ]);
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {

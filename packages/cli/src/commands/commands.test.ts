@@ -1,45 +1,28 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type {
-  Backlog,
-  BoardConfig,
-  ChecklistItem,
-  Epic,
-  Note,
-  Release,
-  Task,
-} from '@boardown/core';
+import type { Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import { loadBoardOrThrow } from '../persistence';
 import type { CommandContext } from '../types';
-import { boardCommand } from './board';
 import { epicCommand } from './epic';
 import { initCommand } from './init';
 import { releaseCommand } from './release';
 import { taskCommand } from './task';
 
-interface BoardData {
-  config: BoardConfig;
-  releases: Release[];
-  epics: Epic[];
-  backlog: Backlog | null;
-}
-
-const allTasks = (data: unknown): Task[] => {
-  const board = data as BoardData;
-  return [
-    ...board.releases.flatMap((r) => r.tasks),
-    ...board.epics.flatMap((e) => e.tasks),
-    ...(board.backlog?.tasks ?? []),
-  ];
+// `task list --full` is the CLI's own way to read every task with its
+// frontmatter — the whole-board dump these tests used to lean on is gone.
+const allTasks = async (ctx: CommandContext): Promise<Task[]> => {
+  const out = await taskCommand(parseArgs(['task', 'list', '--full']), ctx);
+  return (out.data as { tasks: { task: Task }[] }).tasks.map((e) => e.task);
 };
 
-const ids = (data: unknown): string[] => allTasks(data).map((t) => t.frontmatter.id);
+const ids = async (ctx: CommandContext): Promise<string[]> =>
+  (await allTasks(ctx)).map((t) => t.frontmatter.id);
 
-const findTask = (data: unknown, id: string): Task => {
-  const task = allTasks(data).find((t) => t.frontmatter.id === id);
+const findTask = async (ctx: CommandContext, id: string): Promise<Task> => {
+  const task = (await allTasks(ctx)).find((t) => t.frontmatter.id === id);
   if (task === undefined) throw new Error(`task ${id} not found`);
   return task;
 };
@@ -62,7 +45,7 @@ describe('cli commands (integration)', () => {
       parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']),
       ctx,
     );
-    expect((out.data as { config: BoardConfig }).config.idPrefix).toBe('TS');
+    expect((out.data as { boardRoot: string }).boardRoot).toContain('.boardown');
     const config = await readFile(join(project, '.boardown', 'config.yaml'), 'utf8');
     expect(config).toContain('idPrefix: TS');
     expect(config).toContain('projectName: Demo');
@@ -72,29 +55,24 @@ describe('cli commands (integration)', () => {
     await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
 
     const add = await taskCommand(parseArgs(['task', 'add', 'My first task', '--type', 'feature']), ctx);
-    const added = add.data as { task: Task; file: string };
-    expect(added.task.frontmatter.id).toBe('TS-1');
-    expect(added.file).toBe('epics/no_epic.md');
-
-    const board = await boardCommand(parseArgs(['board']), ctx);
-    expect(ids(board.data)).toContain('TS-1');
+    expect(add.data).toEqual({ id: 'TS-1' });
+    expect(await ids(ctx)).toContain('TS-1');
 
     const add2 = await taskCommand(parseArgs(['task', 'add', 'Second', '--type', 'bug']), ctx);
-    expect((add2.data as { task: Task }).task.frontmatter.id).toBe('TS-2');
+    expect(add2.data).toEqual({ id: 'TS-2' });
 
-    await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
-    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--title', 'Renamed']), ctx);
+    const status = await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
+    expect(status.data).toEqual({ id: 'TS-1' });
+    const edit = await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--title', 'Renamed']), ctx);
+    expect(edit.data).toEqual({ id: 'TS-1' });
 
-    const board2 = await boardCommand(parseArgs(['board']), ctx);
-    const t1 = findTask(board2.data, 'TS-1');
+    const t1 = await findTask(ctx, 'TS-1');
     expect(t1.title).toBe('Renamed');
     expect(t1.frontmatter.status).toBe('done');
 
     const removed = await taskCommand(parseArgs(['task', 'rm', 'TS-2']), ctx);
-    expect((removed.data as { removed: string }).removed).toBe('TS-2');
-
-    const board3 = await boardCommand(parseArgs(['board']), ctx);
-    expect(ids(board3.data)).not.toContain('TS-2');
+    expect(removed.data).toEqual({ id: 'TS-2' });
+    expect(await ids(ctx)).not.toContain('TS-2');
   });
 
   it('fails to add a task to a missing epic', async () => {
@@ -109,26 +87,27 @@ describe('cli commands (integration)', () => {
     await taskCommand(parseArgs(['task', 'add', 'Has checklist']), ctx);
 
     const add = await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'First item']), ctx);
-    const added = add.data as { task: Task; item: ChecklistItem };
-    expect(added.item.id).toBe('c1');
-    expect(added.item.done).toBe(false);
-    expect(added.task.frontmatter.checklist).toHaveLength(1);
+    expect(add.data).toEqual({ id: 'TS-1', item: 'c1' });
+    expect((await findTask(ctx, 'TS-1')).frontmatter.checklist).toHaveLength(1);
 
     await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'Second item']), ctx);
 
     const checkedDone = await taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1']), ctx);
-    const afterDone = (checkedDone.data as { task: Task }).task;
-    expect(afterDone.frontmatter.checklist?.find((i) => i.id === 'c1')?.done).toBe(true);
+    expect(checkedDone.data).toEqual({ id: 'TS-1', item: 'c1' });
+    expect(
+      (await findTask(ctx, 'TS-1')).frontmatter.checklist?.find((i) => i.id === 'c1')?.done,
+    ).toBe(true);
 
     // alias `check` + idempotent undone
-    const checkedUndone = await taskCommand(parseArgs(['task', 'check', 'undone', 'TS-1', 'c1']), ctx);
-    const afterUndone = (checkedUndone.data as { task: Task }).task;
-    expect(afterUndone.frontmatter.checklist?.find((i) => i.id === 'c1')?.done).toBe(false);
+    await taskCommand(parseArgs(['task', 'check', 'undone', 'TS-1', 'c1']), ctx);
+    expect(
+      (await findTask(ctx, 'TS-1')).frontmatter.checklist?.find((i) => i.id === 'c1')?.done,
+    ).toBe(false);
 
     await taskCommand(parseArgs(['task', 'checklist', 'edit', 'TS-1', 'c1', 'Renamed item']), ctx);
     const removed = await taskCommand(parseArgs(['task', 'checklist', 'rm', 'TS-1', 'c2']), ctx);
-    const afterRm = (removed.data as { task: Task; removed: string }).task;
-    expect((removed.data as { removed: string }).removed).toBe('c2');
+    expect(removed.data).toEqual({ id: 'TS-1', item: 'c2' });
+    const afterRm = await findTask(ctx, 'TS-1');
     expect(afterRm.frontmatter.checklist).toHaveLength(1);
     expect(afterRm.frontmatter.checklist?.[0]?.id).toBe('c1');
     expect(afterRm.frontmatter.checklist?.[0]?.text).toBe('Renamed item');
@@ -139,16 +118,16 @@ describe('cli commands (integration)', () => {
     await taskCommand(parseArgs(['task', 'add', 'Has notes']), ctx);
 
     const add = await taskCommand(parseArgs(['task', 'notes', 'add', 'TS-1', 'A thought']), ctx);
-    const added = add.data as { task: Task; note: Note };
-    expect(added.note.id).toBe('n1');
-    expect(Number.isNaN(Date.parse(added.note.createdAt))).toBe(false);
-    expect(added.task.frontmatter.notes).toHaveLength(1);
+    expect(add.data).toEqual({ id: 'TS-1', note: 'n1' });
+    expect(Number.isNaN(Date.parse((await findTask(ctx, 'TS-1')).frontmatter.notes?.[0]?.createdAt ?? ''))).toBe(false);
+    expect((await findTask(ctx, 'TS-1')).frontmatter.notes).toHaveLength(1);
 
     // alias `note`
     await taskCommand(parseArgs(['task', 'note', 'add', 'TS-1', 'Another thought']), ctx);
     await taskCommand(parseArgs(['task', 'notes', 'edit', 'TS-1', 'n1', 'Edited thought']), ctx);
     const removed = await taskCommand(parseArgs(['task', 'notes', 'rm', 'TS-1', 'n2']), ctx);
-    const afterRm = (removed.data as { task: Task }).task;
+    expect(removed.data).toEqual({ id: 'TS-1', note: 'n2' });
+    const afterRm = await findTask(ctx, 'TS-1');
     expect(afterRm.frontmatter.notes).toHaveLength(1);
     expect(afterRm.frontmatter.notes?.[0]?.id).toBe('n1');
     expect(afterRm.frontmatter.notes?.[0]?.text).toBe('Edited thought');
@@ -196,11 +175,10 @@ describe('cli commands (integration)', () => {
     it('add mirrors the link and ls reports it from both sides', async () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
 
-      const board = await boardCommand(parseArgs(['board']), ctx);
-      expect(findTask(board.data, 'TS-1').frontmatter.links).toEqual([
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
         { type: 'relates', to: 'TS-2' },
       ]);
-      expect(findTask(board.data, 'TS-2').frontmatter.links).toEqual([
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
         { type: 'relates', to: 'TS-1' },
       ]);
 
@@ -216,18 +194,16 @@ describe('cli commands (integration)', () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       const again = await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
 
-      expect((again.data as { files: string[] }).files).toEqual([]);
-      const board = await boardCommand(parseArgs(['board']), ctx);
-      expect(findTask(board.data, 'TS-1').frontmatter.links).toHaveLength(1);
+      expect(again.data).toEqual({ id: 'TS-1', other: 'TS-2' });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toHaveLength(1);
     });
 
     it('rm removes both records, whichever side it is called from', async () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       await taskCommand(parseArgs(['task', 'link', 'rm', 'TS-2', 'TS-1']), ctx);
 
-      const board = await boardCommand(parseArgs(['board']), ctx);
-      expect(findTask(board.data, 'TS-1').frontmatter.links).toBeUndefined();
-      expect(findTask(board.data, 'TS-2').frontmatter.links).toBeUndefined();
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toBeUndefined();
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toBeUndefined();
       const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
       expect(links(ls.data)).toEqual([]);
     });
@@ -246,7 +222,7 @@ describe('cli commands (integration)', () => {
 
     it('refuses a task in a finished release, as source and as target', async () => {
       const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
-      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      const relFile = (rel.data as { slug: string }).slug;
       await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
       await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', relFile]), ctx);
       // Only a done task stays in the release when it is finished; an open one
@@ -266,8 +242,7 @@ describe('cli commands (integration)', () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       await taskCommand(parseArgs(['task', 'rm', 'TS-2']), ctx);
 
-      const board = await boardCommand(parseArgs(['board']), ctx);
-      expect(findTask(board.data, 'TS-1').frontmatter.links).toBeUndefined();
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toBeUndefined();
       const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
       expect(links(ls.data)).toEqual([]);
     });
@@ -277,7 +252,7 @@ describe('cli commands (integration)', () => {
     it('task rm leaves an archived counterpart linked, and ls flags it as missing', async () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
-      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      const relFile = (rel.data as { slug: string }).slug;
       await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
       await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', relFile]), ctx);
       await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
@@ -285,8 +260,7 @@ describe('cli commands (integration)', () => {
 
       await taskCommand(parseArgs(['task', 'rm', 'TS-1']), ctx);
 
-      const board = await boardCommand(parseArgs(['board']), ctx);
-      expect(findTask(board.data, 'TS-2').frontmatter.links).toEqual([
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
         { type: 'relates', to: 'TS-1' },
       ]);
       const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-2']), ctx);
@@ -303,7 +277,7 @@ describe('cli commands (integration)', () => {
   });
 
   it('reports NO_BOARD when no board exists', async () => {
-    await expect(boardCommand(parseArgs(['board']), ctx)).rejects.toMatchObject({
+    await expect(taskCommand(parseArgs(['task', 'list']), ctx)).rejects.toMatchObject({
       code: 'NO_BOARD',
     });
   });
@@ -337,7 +311,7 @@ describe('cli commands (integration)', () => {
         ctx,
       );
       const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
-      const relFile = (rel.data as { release: { filename: string } }).release.filename;
+      const relFile = (rel.data as { slug: string }).slug;
       await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
       await taskCommand(
         parseArgs(['task', 'add', 'Delta ship', '--type', 'bug', '--release', relFile]),
@@ -348,7 +322,7 @@ describe('cli commands (integration)', () => {
     }
 
     const listIds = (data: unknown): string[] =>
-      (data as { tasks: { task: Task }[] }).tasks.map((e) => e.task.frontmatter.id).sort();
+      (data as { tasks: { id: string }[] }).tasks.map((e) => e.id).sort();
 
     it('lists every task with no filters', async () => {
       await seed();
@@ -360,10 +334,10 @@ describe('cli commands (integration)', () => {
     it('each entry carries the task and its container location', async () => {
       await seed();
       const out = await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx);
-      const tasks = (out.data as { tasks: { task: Task; in: { kind: string; file: string } }[] })
+      const tasks = (out.data as { tasks: { id: string; in: { kind: string; file: string } }[] })
         .tasks;
       expect(tasks).toHaveLength(1);
-      expect(tasks[0]?.task.frontmatter.id).toBe('TS-4');
+      expect(tasks[0]?.id).toBe('TS-4');
       expect(tasks[0]?.in.kind).toBe('release');
       expect(tasks[0]?.in.file).toBe('releases/active.md');
     });

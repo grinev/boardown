@@ -1,27 +1,41 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Backlog, Epic, Release, Task } from '@boardown/core';
+import type { Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import type { CommandContext } from '../types';
-import { boardCommand } from './board';
 import { epicCommand } from './epic';
 import { initCommand } from './init';
 import { releaseCommand } from './release';
 import { taskCommand } from './task';
 
-interface BoardData {
-  releases: Release[];
-  epics: Epic[];
-  backlog: Backlog | null;
-}
+// Where a task physically lives, read back through the CLI's own list command.
+const locate = async (ctx: CommandContext, id: string): Promise<string | undefined> => {
+  const out = await taskCommand(parseArgs(['task', 'list', '--full']), ctx);
+  const entries = (out.data as { tasks: { task: Task; in: { kind: string; file: string } }[] })
+    .tasks;
+  return entries.find((e) => e.task.frontmatter.id === id)?.in.file;
+};
 
-const board = async (ctx: CommandContext): Promise<BoardData> =>
-  (await boardCommand(parseArgs(['board']), ctx)).data as BoardData;
+const taskIn = async (ctx: CommandContext, id: string): Promise<Task> => {
+  const out = await taskCommand(parseArgs(['task', 'get', id]), ctx);
+  return (out.data as { task: Task }).task;
+};
 
-const hasTask = (tasks: readonly Task[] | undefined, id: string): boolean =>
-  (tasks ?? []).some((t) => t.frontmatter.id === id);
+const releaseStatus = async (ctx: CommandContext, slug: string): Promise<string | undefined> => {
+  const out = await releaseCommand(parseArgs(['release', 'list']), ctx);
+  return (out.data as { releases: { slug: string; status: string }[] }).releases.find(
+    (r) => r.slug === slug,
+  )?.status;
+};
+
+const epicName = async (ctx: CommandContext, slug: string): Promise<string | undefined> => {
+  const out = await epicCommand(parseArgs(['epic', 'list']), ctx);
+  return (out.data as { epics: { slug: string; name: string }[] }).epics.find(
+    (e) => e.slug === slug,
+  )?.name;
+};
 
 describe('release / epic / move (deepening layer)', () => {
   let project: string;
@@ -40,86 +54,66 @@ describe('release / epic / move (deepening layer)', () => {
   it('release add → start → moves a task in → done sends it back to the backlog', async () => {
     await taskCommand(parseArgs(['task', 'add', 'Ship it']), ctx);
     const release = (await releaseCommand(parseArgs(['release', 'add', 'v1']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
-    expect(release.release.frontmatter.status).toBe('future');
+    expect(await releaseStatus(ctx, release.slug)).toBe('future');
 
-    const started = (await releaseCommand(parseArgs(['release', 'start', release.release.slug]), ctx))
-      .data as { release: Release };
-    expect(started.release.frontmatter.status).toBe('current');
+    await releaseCommand(parseArgs(['release', 'start', release.slug]), ctx);
+    expect(await releaseStatus(ctx, release.slug)).toBe('current');
 
-    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.release.slug]), ctx);
-    const afterMove = await board(ctx);
-    expect(hasTask(afterMove.releases.find((r) => r.slug === release.release.slug)?.tasks, 'TS-1')).toBe(
-      true,
-    );
-    expect(hasTask(afterMove.backlog?.tasks, 'TS-1')).toBe(false);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.slug]), ctx);
+    expect(await locate(ctx, 'TS-1')).toContain(release.slug);
 
-    await releaseCommand(parseArgs(['release', 'done', release.release.slug]), ctx);
-    const afterDone = await board(ctx);
-    expect(afterDone.releases.find((r) => r.slug === release.release.slug)?.frontmatter.status).toBe(
-      'finished',
-    );
+    await releaseCommand(parseArgs(['release', 'done', release.slug]), ctx);
+    expect(await releaseStatus(ctx, release.slug)).toBe('finished');
     // The task was still open, so it returns to the backlog (it has no epic).
-    expect(hasTask(afterDone.backlog?.tasks, 'TS-1')).toBe(true);
+    expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
   });
 
   it('only one release can be current at a time', async () => {
     const a = (await releaseCommand(parseArgs(['release', 'add', 'a']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
     const b = (await releaseCommand(parseArgs(['release', 'add', 'b']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
-    await releaseCommand(parseArgs(['release', 'start', a.release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'start', a.slug]), ctx);
     await expect(
-      releaseCommand(parseArgs(['release', 'start', b.release.slug]), ctx),
+      releaseCommand(parseArgs(['release', 'start', b.slug]), ctx),
     ).rejects.toMatchObject({ code: 'RELEASE_CONFLICT' });
   });
 
   it('epic add, reassign a task to it via edit --epic, then edit the epic name', async () => {
     await taskCommand(parseArgs(['task', 'add', 'Platform work']), ctx);
     const epic = (await epicCommand(parseArgs(['epic', 'add', 'Platform', '--color', '#ff0000']), ctx))
-      .data as { epic: Epic };
-    expect(epic.epic.frontmatter.color).toBe('#ff0000');
+      .data as { slug: string };
 
     // For a backlog task, --epic relocates it into the epic's file (where the tag
     // sticks); a task in a release would just be retagged in place.
-    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--epic', epic.epic.slug]), ctx);
-    const got = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
-    expect((got.data as { task: Task }).task.frontmatter.epic).toBe(epic.epic.slug);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--epic', epic.slug]), ctx);
+    expect((await taskIn(ctx, 'TS-1')).frontmatter.epic).toBe(epic.slug);
 
-    await epicCommand(parseArgs(['epic', 'edit', epic.epic.slug, '--name', 'Platform 2']), ctx);
-    const afterEdit = await board(ctx);
-    expect(afterEdit.epics.find((e) => e.slug === epic.epic.slug)?.frontmatter.name).toBe(
-      'Platform 2',
-    );
+    await epicCommand(parseArgs(['epic', 'edit', epic.slug, '--name', 'Platform 2']), ctx);
+    expect(await epicName(ctx, epic.slug)).toBe('Platform 2');
   });
 
   it('edit --release moves a task in, --no-release moves it back to the backlog', async () => {
     await taskCommand(parseArgs(['task', 'add', 'Roundtrip']), ctx);
     const release = (await releaseCommand(parseArgs(['release', 'add', 'rt']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
-    await releaseCommand(parseArgs(['release', 'start', release.release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'start', release.slug]), ctx);
 
     // combined field edit + move in one call
     await taskCommand(
-      parseArgs(['task', 'edit', 'TS-1', '--status', 'in-progress', '--release', release.release.slug]),
+      parseArgs(['task', 'edit', 'TS-1', '--status', 'in-progress', '--release', release.slug]),
       ctx,
     );
-    let board2 = await board(ctx);
-    const moved = board2.releases
-      .find((r) => r.slug === release.release.slug)
-      ?.tasks.find((t) => t.frontmatter.id === 'TS-1');
-    expect(moved?.frontmatter.status).toBe('in-progress');
+    expect(await locate(ctx, 'TS-1')).toContain(release.slug);
+    expect((await taskIn(ctx, 'TS-1')).frontmatter.status).toBe('in-progress');
 
     await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--no-release']), ctx);
-    board2 = await board(ctx);
-    expect(hasTask(board2.backlog?.tasks, 'TS-1')).toBe(true);
-    expect(hasTask(board2.releases.find((r) => r.slug === release.release.slug)?.tasks, 'TS-1')).toBe(
-      false,
-    );
+    expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
   });
 
   it('rejects an invalid epic color and editing a color', async () => {
@@ -128,9 +122,9 @@ describe('release / epic / move (deepening layer)', () => {
     ).rejects.toMatchObject({ code: 'USAGE' });
 
     const epic = (await epicCommand(parseArgs(['epic', 'add', 'Ok', '--color', '#00ff00']), ctx))
-      .data as { epic: Epic };
+      .data as { slug: string };
     await expect(
-      epicCommand(parseArgs(['epic', 'edit', epic.epic.slug, '--color', '#000000']), ctx),
+      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color', '#000000']), ctx),
     ).rejects.toMatchObject({ code: 'USAGE' });
   });
 
@@ -144,12 +138,12 @@ describe('release / epic / move (deepening layer)', () => {
   it('a finished release is read-only: task mutations fail with code ARCHIVED', async () => {
     await taskCommand(parseArgs(['task', 'add', 'Shipped']), ctx);
     const release = (await releaseCommand(parseArgs(['release', 'add', 'r']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
-    await releaseCommand(parseArgs(['release', 'start', release.release.slug]), ctx);
-    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'start', release.slug]), ctx);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', release.slug]), ctx);
     await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
-    await releaseCommand(parseArgs(['release', 'done', release.release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'done', release.slug]), ctx);
 
     // TS-1 was done, so it stayed in the now-finished release.
     await expect(
@@ -159,7 +153,7 @@ describe('release / epic / move (deepening layer)', () => {
       code: 'ARCHIVED',
     });
     await expect(
-      taskCommand(parseArgs(['task', 'add', 'Late', '--release', release.release.slug]), ctx),
+      taskCommand(parseArgs(['task', 'add', 'Late', '--release', release.slug]), ctx),
     ).rejects.toMatchObject({ code: 'ARCHIVED' });
   });
 });

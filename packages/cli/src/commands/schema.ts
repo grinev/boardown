@@ -5,7 +5,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 1,
+  version: 2,
   taskTypes: TASK_TYPES,
   taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
@@ -23,8 +23,30 @@ const DESCRIPTOR = {
       'optional array of { type, to }; links to other tasks, mirrored on both sides; managed via `task link`',
   },
   linkTypes: LINK_TYPES,
+  taskSummaryFields: {
+    id: 'string',
+    title: 'string',
+    type: 'one of taskTypes',
+    status: 'one of taskStatuses',
+    epic: 'epic slug; omitted when the task has none',
+    checklist: '{ done, total }; omitted when the task has no checklist',
+    notes: 'number of notes; omitted when the task has none',
+  },
+  outputModel:
+    'Listing commands return a task summary (taskSummaryFields); `task get` returns the whole task. --full takes any listing command one level deeper. Mutating commands return only the identifier of what changed.',
   commands: [
-    { name: 'board', usage: 'boardown board [--json]', summary: 'Print the whole board.' },
+    {
+      name: 'backlog',
+      usage: 'boardown backlog [--full]',
+      summary:
+        'The Backlog view: the current release, each future release, then the unscheduled backlog. Data is { sections: [{ key, title, status, filename, taskCount, tasks }] }. --full returns whole tasks instead of summaries.',
+    },
+    {
+      name: 'archive',
+      usage: 'boardown archive [--full]',
+      summary:
+        'The Archive view: finished releases, newest first. Data is { releases: [{ slug, name, status, taskCount }] }; --full adds task summaries.',
+    },
     {
       name: 'init',
       usage: 'boardown init [--id-prefix PP] [--project-name NAME]',
@@ -34,9 +56,9 @@ const DESCRIPTOR = {
     {
       name: 'task list',
       usage:
-        'boardown task list [--status STATUS] [--type TYPE] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR]',
+        'boardown task list [--status STATUS] [--type TYPE] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR] [--full]',
       summary:
-        'List tasks across the whole board, filtered by any combination of status, type, epic, release, backlog-only, or a case-insensitive text match on title/description. Data is { tasks: [{ task, in: { kind, file } }], count }.',
+        'List tasks across the whole board, filtered by any combination of status, type, epic, release, backlog-only, or a case-insensitive text match on title/description. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
     },
     {
       name: 'task add',
@@ -82,18 +104,19 @@ const DESCRIPTOR = {
     },
     {
       name: 'release get',
-      usage: 'boardown release get <file|slug>',
-      summary: 'Show one release and its tasks.',
+      usage: 'boardown release get <file|slug> [--full]',
+      summary: 'Show one release and its task summaries; --full returns whole tasks.',
     },
     {
       name: 'release list',
-      usage: 'boardown release list',
-      summary: 'List releases (slug, status, task count).',
+      usage: 'boardown release list [--full]',
+      summary: 'List releases (slug, name, status, task count); --full adds task summaries.',
     },
     {
       name: 'release current',
-      usage: 'boardown release current',
-      summary: 'Show the current release and its tasks (null if none).',
+      usage: 'boardown release current [--full]',
+      summary:
+        'The Board view: the current release and its task summaries in order (release is null if none). --full returns whole tasks.',
     },
     {
       name: 'release add',
@@ -112,13 +135,13 @@ const DESCRIPTOR = {
     },
     {
       name: 'epic get',
-      usage: 'boardown epic get <slug>',
-      summary: 'Show one epic and all its tasks.',
+      usage: 'boardown epic get <slug> [--full]',
+      summary: 'Show one epic and its task summaries; --full returns whole tasks.',
     },
     {
       name: 'epic list',
-      usage: 'boardown epic list',
-      summary: 'List epics (slug, name, color, task count).',
+      usage: 'boardown epic list [--full]',
+      summary: 'List epics (slug, name, color, task count); --full adds task summaries.',
     },
     {
       name: 'epic add',
@@ -135,6 +158,7 @@ const DESCRIPTOR = {
   globalFlags: {
     '--json': 'Emit a JSON envelope (default when stdout is not a TTY).',
     '--data-dir': 'Point at a specific .boardown/ directory instead of searching upward.',
+    '--full': 'On a listing command, go one level deeper than its default.',
   },
 } as const;
 

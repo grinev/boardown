@@ -1,23 +1,22 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Backlog, Epic, Release, Task } from '@boardown/core';
+import type { Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import type { CommandContext } from '../types';
-import { boardCommand } from './board';
+import { backlogCommand } from './backlog';
 import { epicCommand } from './epic';
 import { initCommand } from './init';
 import { releaseCommand } from './release';
 import { taskCommand } from './task';
 
 const backlogOrder = async (ctx: CommandContext): Promise<string[]> => {
-  const data = (await boardCommand(parseArgs(['board']), ctx)).data as {
-    backlog: Backlog | null;
+  const data = (await backlogCommand(parseArgs(['backlog']), ctx)).data as {
+    sections: { key: string; tasks: { id: string }[] }[];
   };
-  return [...(data.backlog?.tasks ?? [])]
-    .sort((a, b) => a.frontmatter.order - b.frontmatter.order)
-    .map((t) => t.frontmatter.id);
+  const section = data.sections.find((s) => s.key === 'backlog');
+  return (section?.tasks ?? []).map((t) => t.id);
 };
 
 describe('read + reorder commands', () => {
@@ -48,44 +47,45 @@ describe('read + reorder commands', () => {
   it('epic list and epic get report epic membership', async () => {
     const created = (
       await epicCommand(parseArgs(['epic', 'add', 'Core', '--color', '#1f6feb']), ctx)
-    ).data as { epic: Epic };
-    await taskCommand(parseArgs(['task', 'add', 'x', '--epic', created.epic.slug]), ctx);
+    ).data as { slug: string };
+    await taskCommand(parseArgs(['task', 'add', 'x', '--epic', created.slug]), ctx);
 
     const list = (await epicCommand(parseArgs(['epic', 'list']), ctx)).data as {
       epics: { slug: string; taskCount: number }[];
     };
-    expect(list.epics.find((e) => e.slug === created.epic.slug)?.taskCount).toBe(1);
+    expect(list.epics.find((e) => e.slug === created.slug)?.taskCount).toBe(1);
 
-    const get = (await epicCommand(parseArgs(['epic', 'get', created.epic.slug]), ctx)).data as {
-      tasks: Task[];
+    const get = (await epicCommand(parseArgs(['epic', 'get', created.slug]), ctx)).data as {
+      epic: { taskCount: number; tasks: { id: string }[] };
     };
-    expect(get.tasks).toHaveLength(1);
+    expect(get.epic.tasks).toHaveLength(1);
+    expect(get.epic.taskCount).toBe(1);
   });
 
   it('release list, get, and current', async () => {
     const created = (await releaseCommand(parseArgs(['release', 'add', 'v1']), ctx)).data as {
-      release: Release;
+      slug: string;
     };
 
     const list = (await releaseCommand(parseArgs(['release', 'list']), ctx)).data as {
       releases: { slug: string; status: string }[];
     };
-    expect(list.releases.some((r) => r.slug === created.release.slug)).toBe(true);
+    expect(list.releases.some((r) => r.slug === created.slug)).toBe(true);
 
     const noCurrent = (await releaseCommand(parseArgs(['release', 'current']), ctx)).data as {
-      release: Release | null;
+      release: { slug: string } | null;
     };
     expect(noCurrent.release).toBeNull();
 
-    await releaseCommand(parseArgs(['release', 'start', created.release.slug]), ctx);
+    await releaseCommand(parseArgs(['release', 'start', created.slug]), ctx);
     const current = (await releaseCommand(parseArgs(['release', 'current']), ctx)).data as {
-      release: Release | null;
+      release: { slug: string } | null;
     };
-    expect(current.release?.slug).toBe(created.release.slug);
+    expect(current.release?.slug).toBe(created.slug);
 
-    const get = (await releaseCommand(parseArgs(['release', 'get', created.release.slug]), ctx))
-      .data as { release: Release };
-    expect(get.release.slug).toBe(created.release.slug);
+    const get = (await releaseCommand(parseArgs(['release', 'get', created.slug]), ctx))
+      .data as { release: { slug: string } };
+    expect(get.release.slug).toBe(created.slug);
   });
 
   it('task reorder moves a card up / down / before within its container', async () => {

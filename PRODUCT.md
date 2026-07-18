@@ -484,7 +484,17 @@ A headless shell that does not mount `@boardown/ui` — it consumes
 `@boardown/core` directly and implements `FsAdapter` over Node's filesystem.
 It finds the board by walking up from the working directory to a `.boardown/`
 folder (or via `--data-dir`), and maps commands onto board operations
-(`board`, `init`, `task`, `release`, `epic`, `schema`). Task links are managed
+(`backlog`, `archive`, `init`, `task`, `release`, `epic`, `schema`).
+
+Its output follows the way the UI is read — **a view, then one task**. The three
+UI tabs are three commands: `release current` is the Board, `backlog` is the
+Backlog tab (current release, future releases, then the unscheduled tasks) and
+`archive` is the Archive. Any task appearing in a list is rendered as a **task
+summary** — the fields the task card carries (id, title, type, status, epic,
+checklist `done/total`, notes count) — while `task get` returns the whole task.
+A single `--full` flag takes any listing command one level deeper. Mutating
+commands do not echo the entity back: they acknowledge with the identifier of
+what changed. Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no
 longer on the board as missing. `task rm <id>` deletes a task with the same rules

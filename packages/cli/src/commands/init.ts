@@ -36,7 +36,7 @@ export const initCommand: CommandHandler = async (args, ctx) => {
   await fs.write(CONFIG_FILENAME, serializeConfig(config));
 
   return {
-    data: { boardRoot, config },
+    data: { boardRoot },
     human: `Initialized boardown at ${boardRoot} (idPrefix ${idPrefix}, project "${projectName}").`,
   };
 };

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Epic, Release, Task } from '@boardown/core';
+import { finishedReleases, sortTasksByOrder } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogRowView } from './BacklogRowView';
 import styles from './BacklogView.module.css';
 import archiveStyles from './ArchiveView.module.css';
-
-const sortByOrder = (a: Task, b: Task) => a.frontmatter.order - b.frontmatter.order;
 
 const releaseTitle = (release: Release): string =>
   release.frontmatter.name ?? release.slug;
@@ -25,12 +24,10 @@ export function ArchiveView() {
     [epics],
   );
 
-  const finished = useMemo(() => {
-    const releases = snapshot?.releases ?? [];
-    return releases
-      .filter((r) => r.frontmatter.status === 'finished')
-      .sort((a, b) => b.filename.localeCompare(a.filename));
-  }, [snapshot?.releases]);
+  const finished = useMemo(
+    () => finishedReleases({ releases: snapshot?.releases ?? [] }),
+    [snapshot?.releases],
+  );
 
   // All releases start collapsed; any newly appearing release defaults to
   // collapsed too.
@@ -73,7 +70,7 @@ export function ArchiveView() {
       <div className={`${styles.scrollArea} ${archiveStyles.scrollArea}`}>
         {finished.map((release) => {
           const key = releaseSectionKey(release);
-          const tasks = [...release.tasks].sort(sortByOrder);
+          const tasks = sortTasksByOrder(release.tasks);
           return (
             <ArchiveSection
               key={key}

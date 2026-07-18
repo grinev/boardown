@@ -44,7 +44,7 @@ import {
   type ContainerKind,
   type ContainerRef,
 } from '../persistence';
-import { statusMark } from './board';
+import { isFull, statusMark, taskSummary } from '../summary';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 
 export const taskCommand: CommandHandler = (args, ctx) => {
@@ -189,7 +189,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   await writeConfig(fs, result.config);
 
   return {
-    data: { task: result.task, file: result.container.filename },
+    data: { id: result.task.frontmatter.id },
     human: `Created ${result.task.frontmatter.id} "${result.task.title}" in ${result.container.filename}.`,
     ...problemsField(problems),
   };
@@ -248,8 +248,7 @@ async function moveAndReport(
 ): Promise<CommandOutput> {
   if (edited.filename === dest.container.filename) {
     await writeContainer(fs, { kind: location.kind, container: edited });
-    const task = edited.tasks.find((t) => t.frontmatter.id === taskId);
-    return { data: { task, file: edited.filename }, human: `Updated ${taskId}.`, ...problemsField(problems) };
+    return { data: { id: taskId }, human: `Updated ${taskId}.`, ...problemsField(problems) };
   }
   const movingTask = edited.tasks.find((t) => t.frontmatter.id === taskId);
   if (movingTask === undefined) {
@@ -264,9 +263,8 @@ async function moveAndReport(
   );
   await writeContainer(fs, { kind: location.kind, container: result.source });
   await writeContainer(fs, { kind: dest.kind, container: result.dest });
-  const task = result.dest.tasks.find((t) => t.frontmatter.id === taskId);
   return {
-    data: { task, from: result.source.filename, to: result.dest.filename },
+    data: { id: taskId },
     human: `Updated ${taskId}; moved to ${result.dest.filename}.`,
     ...problemsField(problems),
   };
@@ -332,8 +330,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     const dest = resolveReleaseMove(snapshot, location, edited, id, releaseRef, noRelease);
     if (dest === null) {
       await writeContainer(fs, { kind: location.kind, container: edited });
-      const task = edited.tasks.find((t) => t.frontmatter.id === id);
-      return { data: { task, file: edited.filename }, human: `Updated ${id}.`, ...problemsField(problems) };
+      return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
     }
     return moveAndReport(fs, location, edited, dest, id, problems);
   }
@@ -371,8 +368,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (nextEpic !== undefined) patch.epic = nextEpic;
   const edited = applyOp(() => editTask(location.container, id, patch));
   await writeContainer(fs, { kind: location.kind, container: edited });
-  const task = edited.tasks.find((t) => t.frontmatter.id === id);
-  return { data: { task, file: edited.filename }, human: `Updated ${id}.`, ...problemsField(problems) };
+  return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
 }
 
 async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -392,9 +388,8 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
 
   const updated = applyOp(() => changeTaskStatus(location.container, id, status));
   await writeContainer(fs, { kind: location.kind, container: updated });
-  const task = updated.tasks.find((t) => t.frontmatter.id === id);
 
-  return { data: { task }, human: `${id} → ${status}.`, ...problemsField(problems) };
+  return { data: { id }, human: `${id} → ${status}.`, ...problemsField(problems) };
 }
 
 const renderChecklist = (items: readonly ChecklistItem[] | undefined): string => {
@@ -476,9 +471,13 @@ function collectEntries(snapshot: BoardSnapshot): TaskListEntry[] {
 const renderTaskList = (entries: readonly TaskListEntry[]): string => {
   if (entries.length === 0) return 'No matching tasks.';
   const lines = entries.map(({ task, in: loc }) => {
-    const fm = task.frontmatter;
-    const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
-    return `${statusMark(task)} ${fm.id}  [${fm.type}/${fm.status}]${epic}  (${loc.kind}: ${loc.file})  ${task.title}`;
+    const s = taskSummary(task);
+    const parts = [`${statusMark(task)} ${s.id}`, s.title, `[${s.type}/${s.status}]`];
+    if (s.epic !== undefined) parts.push(`epic:${s.epic}`);
+    if (s.checklist !== undefined) parts.push(`☑${s.checklist.done}/${s.checklist.total}`);
+    if (s.notes !== undefined) parts.push(`✎${s.notes}`);
+    parts.push(`(${loc.kind}: ${loc.file})`);
+    return parts.join('  ');
   });
   lines.push(`\n${entries.length} task(s).`);
   return lines.join('\n');
@@ -531,8 +530,15 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     return true;
   });
 
+  const full = isFull(args.flags);
   return {
-    data: { tasks: entries, count: entries.length },
+    data: {
+      tasks: entries.map(({ task, in: loc }) => ({
+        ...(full ? { task } : taskSummary(task)),
+        in: loc,
+      })),
+      count: entries.length,
+    },
     human: renderTaskList(entries),
     ...problemsField(problems),
   };
@@ -614,9 +620,8 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 
   const beforeTaskId = beforeIdForReorder(location.container.tasks, id, target);
   if (beforeTaskId === undefined) {
-    const task = location.container.tasks.find((t) => t.frontmatter.id === id);
     return {
-      data: { task, file: location.container.filename, moved: false },
+      data: { id },
       human: `${id} is already at the edge; nothing to do.`,
       ...problemsField(problems),
     };
@@ -624,10 +629,9 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 
   const updated = applyOp(() => reorderTask(location.container, id, beforeTaskId));
   await writeContainer(fs, { kind: location.kind, container: updated });
-  const task = updated.tasks.find((t) => t.frontmatter.id === id);
 
   return {
-    data: { task, file: updated.filename, moved: true },
+    data: { id },
     human: `Reordered ${id} in ${updated.filename}.`,
     ...problemsField(problems),
   };
@@ -667,7 +671,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
   await writeContainers(fs, changed);
 
   return {
-    data: { removed: id, file: location.container.filename },
+    data: { id },
     human: `Removed ${id} from ${location.container.filename}.`,
     ...problemsField(problems),
   };
@@ -701,10 +705,9 @@ async function mutateTask(
   const { patch, human, extra } = build(task);
   const edited = applyOp(() => editTask(location.container, taskId, patch));
   await writeContainer(fs, { kind: location.kind, container: edited });
-  const updated = edited.tasks.find((t) => t.frontmatter.id === taskId);
 
   return {
-    data: { task: updated, file: edited.filename, ...(extra ?? {}) },
+    data: { id: taskId, ...(extra ?? {}) },
     human,
     ...problemsField(problems),
   };
@@ -777,7 +780,7 @@ function checklistAdd(
     return {
       patch: { checklist: [...items, item] },
       human: `Added checklist item ${item.id} to ${task.frontmatter.id}.`,
-      extra: { item },
+      extra: { item: item.id },
     };
   });
 }
@@ -796,6 +799,7 @@ function checklistSetDone(
     return {
       patch: { checklist: items.map((it) => (it.id === itemId ? { ...it, done } : it)) },
       human: `${itemId} on ${task.frontmatter.id} → ${done ? 'done' : 'not done'}.`,
+      extra: { item: itemId },
     };
   });
 }
@@ -814,6 +818,7 @@ function checklistEdit(
     return {
       patch: { checklist: items.map((it) => (it.id === itemId ? { ...it, text } : it)) },
       human: `Edited checklist item ${itemId} on ${task.frontmatter.id}.`,
+      extra: { item: itemId },
     };
   });
 }
@@ -831,7 +836,7 @@ function checklistRm(
     return {
       patch: { checklist: items.filter((it) => it.id !== itemId) },
       human: `Removed checklist item ${itemId} from ${task.frontmatter.id}.`,
-      extra: { removed: itemId },
+      extra: { item: itemId },
     };
   });
 }
@@ -869,7 +874,7 @@ function noteAdd(
     return {
       patch: { notes: [...notes, note] },
       human: `Added note ${note.id} to ${task.frontmatter.id}.`,
-      extra: { note },
+      extra: { note: note.id },
     };
   });
 }
@@ -888,6 +893,7 @@ function noteEdit(
     return {
       patch: { notes: notes.map((n) => (n.id === noteId ? { ...n, text } : n)) },
       human: `Edited note ${noteId} on ${task.frontmatter.id}.`,
+      extra: { note: noteId },
     };
   });
 }
@@ -905,7 +911,7 @@ function noteRm(
     return {
       patch: { notes: notes.filter((n) => n.id !== noteId) },
       human: `Removed note ${noteId} from ${task.frontmatter.id}.`,
-      extra: { removed: noteId },
+      extra: { note: noteId },
     };
   });
 }
@@ -971,11 +977,10 @@ async function linkMutate(
     await writeContainers(fs, refs);
   }
 
-  const task = result.source.tasks.find((t) => t.frontmatter.id === id);
   const unchangedNote =
     kind === 'add' ? `${id} and ${otherId} are already linked.` : `${id} and ${otherId} are not linked.`;
   return {
-    data: { task, files: result.changedFilenames },
+    data: { id, other: otherId },
     human:
       refs.length === 0
         ? unchangedNote

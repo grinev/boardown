@@ -48,8 +48,9 @@ describe('run() — routing, envelopes, exit codes', () => {
     const { code, stdout } = await capture([]);
     expect(code).toBe(0);
     const env = parse(stdout);
-    expect(env).toMatchObject({ ok: true, command: 'help' });
-    expect((env.data as { commands: string[] }).commands).toContain('board');
+    expect(env).toMatchObject({ ok: true });
+    expect(env).not.toHaveProperty('command');
+    expect((env.data as { commands: string[] }).commands).toContain('backlog');
   });
 
   it('--help and `help` print the human help under a TTY', async () => {
@@ -65,8 +66,8 @@ describe('run() — routing, envelopes, exit codes', () => {
     const { code, stdout } = await capture(['schema']);
     expect(code).toBe(0);
     const env = parse(stdout);
-    expect(env).toMatchObject({ ok: true, command: 'schema' });
-    expect((env.data as { version: number }).version).toBe(1);
+    expect(env).toMatchObject({ ok: true });
+    expect((env.data as { version: number }).version).toBe(2);
   });
 
   it('unknown command: JSON error envelope on stdout, exit 2', async () => {
@@ -74,8 +75,17 @@ describe('run() — routing, envelopes, exit codes', () => {
     expect(code).toBe(2);
     expect(stderr).toBe('');
     const env = parse(stdout);
-    expect(env).toMatchObject({ ok: false, command: 'frobnicate' });
+    expect(env).toMatchObject({ ok: false });
+    expect(env).not.toHaveProperty('command');
     expect(errorCode(env)).toBe('UNKNOWN_COMMAND');
+  });
+
+  // `board` is gone, replaced by the three view commands; it must not linger as
+  // a silent alias.
+  it('the removed board command is an unknown command, exit 2', async () => {
+    const { code, stdout } = await capture(['board']);
+    expect(code).toBe(2);
+    expect(errorCode(parse(stdout))).toBe('UNKNOWN_COMMAND');
   });
 
   it('unknown command under a TTY: human error on stderr, nothing on stdout', async () => {
@@ -90,7 +100,7 @@ describe('run() — routing, envelopes, exit codes', () => {
     const missingSub = await capture(['task']);
     expect(missingSub.code).toBe(2);
     const env = parse(missingSub.stdout);
-    expect(env).toMatchObject({ ok: false, command: 'task' });
+    expect(env).toMatchObject({ ok: false });
     expect(errorCode(env)).toBe('USAGE');
 
     const badSub = await capture(['task', 'bogus']);
@@ -101,7 +111,7 @@ describe('run() — routing, envelopes, exit codes', () => {
   it('an operation failure (no board) maps to exit 1 with a NO_BOARD envelope', async () => {
     const empty = await mkdtemp(join(tmpdir(), 'bd-cli-run-nb-'));
     try {
-      const { code, stdout } = await capture(['board'], { cwd: empty });
+      const { code, stdout } = await capture(['backlog'], { cwd: empty });
       expect(code).toBe(1);
       const env = parse(stdout);
       expect(env.ok).toBe(false);
@@ -127,24 +137,25 @@ describe('run() — routing, envelopes, exit codes', () => {
     });
 
     it('a successful command is a JSON ok envelope when piped, exit 0', async () => {
-      const { code, stdout } = await capture(['board'], { cwd: project });
+      const { code, stdout } = await capture(['backlog'], { cwd: project });
       expect(code).toBe(0);
       const env = parse(stdout);
-      expect(env).toMatchObject({ ok: true, command: 'board' });
+      expect(env).toMatchObject({ ok: true });
+      expect(env).not.toHaveProperty('command');
       expect(env.data).toBeTypeOf('object');
     });
 
     it('under a TTY the same command prints human text, not JSON', async () => {
-      const { stdout } = await capture(['board'], { cwd: project, tty: true });
-      expect(stdout).toContain('Demo — board');
+      const { stdout } = await capture(['backlog'], { cwd: project, tty: true });
+      expect(stdout).toContain('Demo — backlog');
       expect(() => {
         JSON.parse(stdout.trim());
       }).toThrow();
     });
 
     it('--json forces the JSON envelope even under a TTY', async () => {
-      const { stdout } = await capture(['board', '--json'], { cwd: project, tty: true });
-      expect(parse(stdout)).toMatchObject({ ok: true, command: 'board' });
+      const { stdout } = await capture(['backlog', '--json'], { cwd: project, tty: true });
+      expect(parse(stdout)).toMatchObject({ ok: true });
     });
   });
 });

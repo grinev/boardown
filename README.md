@@ -115,13 +115,15 @@ Install it globally, or run it on demand with `npx`:
 npm i -g @grinev/boardown-cli   # installs the `boardown` command
 boardown --help
 
-npx @grinev/boardown-cli board  # or run without installing
+npx @grinev/boardown-cli release current  # or run without installing
 ```
 
 It finds the board by walking up from the current directory to a `.boardown/`
 folder (like git finds `.git`), or takes `--data-dir <path>`. Output is a stable
 JSON envelope when piped (or with `--json`) and human-readable in a terminal,
-which makes it a good surface for automation. See the
+which makes it a good surface for automation. It reads the way the app does —
+`release current`, `backlog` and `archive` mirror the three tabs and list tasks
+as compact summaries; `task get <id>` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 

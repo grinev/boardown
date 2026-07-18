@@ -17,32 +17,23 @@ export class CliError extends Error {
 
 export interface OkEnvelope {
   ok: true;
-  command: string;
   data: unknown;
   problems?: ParseProblem[];
 }
 
 export interface ErrEnvelope {
   ok: false;
-  command: string;
   error: { code: string; message: string };
   problems?: ParseProblem[];
 }
 
-export function okEnvelope(
-  command: string,
-  data: unknown,
-  problems: ParseProblem[],
-): OkEnvelope {
-  return problems.length > 0
-    ? { ok: true, command, data, problems }
-    : { ok: true, command, data };
+export function okEnvelope(data: unknown, problems: ParseProblem[]): OkEnvelope {
+  return problems.length > 0 ? { ok: true, data, problems } : { ok: true, data };
 }
 
-export function errEnvelope(command: string, err: CliError): ErrEnvelope {
+export function errEnvelope(err: CliError): ErrEnvelope {
   const base: ErrEnvelope = {
     ok: false,
-    command,
     error: { code: err.code, message: err.message },
   };
   return err.problems.length > 0 ? { ...base, problems: err.problems } : base;

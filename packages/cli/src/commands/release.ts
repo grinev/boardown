@@ -5,6 +5,7 @@ import {
   serializeBacklog,
   serializeEpic,
   serializeRelease,
+  sortTasksByOrder,
   startRelease,
   type CompleteReleaseResult,
   type NewReleaseInput,
@@ -12,6 +13,7 @@ import {
 } from '@boardown/core';
 import { flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
+import { isFull, summaryLines, taskPayload, summarizeTasks } from '../summary';
 import {
   currentRelease,
   findRelease,
@@ -49,12 +51,31 @@ export const releaseCommand: CommandHandler = (args, ctx) => {
   }
 };
 
+const releaseName = (release: Release): string => release.frontmatter.name ?? release.slug;
+
+const releaseView = (release: Release, full: boolean) => {
+  const tasks = sortTasksByOrder(release.tasks);
+  const { status, description, startDate, endDate } = release.frontmatter;
+  return {
+    slug: release.slug,
+    filename: release.filename,
+    name: releaseName(release),
+    status,
+    ...(description !== undefined ? { description } : {}),
+    ...(startDate !== undefined ? { startDate } : {}),
+    ...(endDate !== undefined ? { endDate } : {}),
+    taskCount: tasks.length,
+    tasks: taskPayload(tasks, full),
+  };
+};
+
 const renderRelease = (release: Release): string => {
-  const name = release.frontmatter.name ?? release.slug;
-  const lines = [`[${release.frontmatter.status}] ${name}  (${release.filename})`];
-  for (const task of release.tasks) {
-    lines.push(`  ${task.frontmatter.id}  [${task.frontmatter.status}]  ${task.title}`);
-  }
+  const tasks = sortTasksByOrder(release.tasks);
+  const lines = [
+    `[${release.frontmatter.status}] ${releaseName(release)}  (${release.filename})  ${tasks.length}`,
+  ];
+  if (tasks.length === 0) lines.push('  no tasks');
+  else lines.push(...summaryLines(tasks));
   return lines.join('\n');
 };
 
@@ -67,20 +88,22 @@ async function releaseGet(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   const board = await loadBoardOrThrow(root);
   const release = requireRelease(board, ref);
   return {
-    data: { release },
+    data: { release: releaseView(release, isFull(args.flags)) },
     human: renderRelease(release),
     ...problemsField(board.problems),
   };
 }
 
-async function releaseList(_args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+async function releaseList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);
+  const full = isFull(args.flags);
   const releases = board.snapshot.releases.map((release) => ({
     slug: release.slug,
     name: release.frontmatter.name ?? release.slug,
     status: release.frontmatter.status,
     taskCount: release.tasks.length,
+    ...(full ? { tasks: summarizeTasks(sortTasksByOrder(release.tasks)) } : {}),
   }));
   const human =
     releases.length > 0
@@ -89,7 +112,7 @@ async function releaseList(_args: ParsedArgs, ctx: CommandContext): Promise<Comm
   return { data: { releases }, human, ...problemsField(board.problems) };
 }
 
-async function releaseCurrent(_args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+async function releaseCurrent(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);
   const release = currentRelease(board.snapshot);
@@ -101,7 +124,7 @@ async function releaseCurrent(_args: ParsedArgs, ctx: CommandContext): Promise<C
     };
   }
   return {
-    data: { release },
+    data: { release: releaseView(release, isFull(args.flags)) },
     human: renderRelease(release),
     ...problemsField(board.problems),
   };
@@ -142,8 +165,8 @@ async function releaseAdd(args: ParsedArgs, ctx: CommandContext): Promise<Comman
 
   await board.fs.write(release.filename, serializeRelease(release));
   return {
-    data: { release },
-    human: `Created release "${release.frontmatter.name ?? release.slug}" (${release.filename}).`,
+    data: { slug: release.slug },
+    human: `Created release "${releaseName(release)}" (${release.filename}).`,
     ...problemsField(board.problems),
   };
 }
@@ -167,8 +190,8 @@ async function releaseStart(args: ParsedArgs, ctx: CommandContext): Promise<Comm
 
   await board.fs.write(started.filename, serializeRelease(started));
   return {
-    data: { release: started },
-    human: `Started release ${started.frontmatter.name ?? started.slug} (now current).`,
+    data: { slug: started.slug },
+    human: `Started release ${releaseName(started)} (now current).`,
     ...problemsField(board.problems),
   };
 }
@@ -216,12 +239,8 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   }
 
   return {
-    data: {
-      release: result.release,
-      movedTo: result.targetRelease?.filename ?? null,
-      changedFiles: result.changedFilenames,
-    },
-    human: `Finished release ${result.release.frontmatter.name ?? result.release.slug}.`,
+    data: { slug: result.release.slug },
+    human: `Finished release ${releaseName(result.release)}.`,
     ...problemsField(board.problems),
   };
 }

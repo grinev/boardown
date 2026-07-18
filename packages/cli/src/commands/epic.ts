@@ -2,12 +2,14 @@ import {
   createEpic,
   editEpic,
   serializeEpic,
+  sortTasksByOrder,
   type Epic,
   type EpicPatch,
   type NewEpicInput,
 } from '@boardown/core';
 import { flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
+import { isFull, summaryLines, summarizeTasks, taskPayload } from '../summary';
 import {
   epicMembers,
   findEpic,
@@ -58,28 +60,42 @@ async function epicGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   if (epic === undefined) {
     throw new CliError('EPIC_NOT_FOUND', `No epic "${slug}".`);
   }
-  const tasks = epicMembers(board.snapshot, epic);
+  const tasks = sortTasksByOrder(epicMembers(board.snapshot, epic));
 
-  const lines = [`Epic ${epic.frontmatter.name}  (${epic.slug})  ${epic.frontmatter.color}`];
-  for (const task of tasks) {
-    lines.push(`  ${task.frontmatter.id}  [${task.frontmatter.status}]  ${task.title}`);
-  }
+  const lines = [
+    `Epic ${epic.frontmatter.name}  (${epic.slug})  ${epic.frontmatter.color}  ${tasks.length}`,
+  ];
+  if (tasks.length === 0) lines.push('  no tasks');
+  else lines.push(...summaryLines(tasks));
   return {
-    data: { epic, tasks },
+    data: {
+      epic: {
+        slug: epic.slug,
+        name: epic.frontmatter.name,
+        color: epic.frontmatter.color,
+        taskCount: tasks.length,
+        tasks: taskPayload(tasks, isFull(args.flags)),
+      },
+    },
     human: lines.join('\n'),
     ...problemsField(board.problems),
   };
 }
 
-async function epicList(_args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+async function epicList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);
-  const epics = board.snapshot.epics.map((epic) => ({
-    slug: epic.slug,
-    name: epic.frontmatter.name,
-    color: epic.frontmatter.color,
-    taskCount: epicMembers(board.snapshot, epic).length,
-  }));
+  const full = isFull(args.flags);
+  const epics = board.snapshot.epics.map((epic) => {
+    const tasks = sortTasksByOrder(epicMembers(board.snapshot, epic));
+    return {
+      slug: epic.slug,
+      name: epic.frontmatter.name,
+      color: epic.frontmatter.color,
+      taskCount: tasks.length,
+      ...(full ? { tasks: summarizeTasks(tasks) } : {}),
+    };
+  });
 
   const human =
     epics.length > 0
@@ -118,7 +134,7 @@ async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
 
   await board.fs.write(epic.filename, serializeEpic(epic));
   return {
-    data: { epic },
+    data: { slug: epic.slug },
     human: `Created epic "${epic.frontmatter.name}" (${epic.slug}).`,
     ...problemsField(board.problems),
   };
@@ -153,7 +169,7 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const updated = editEpic(epic, patch);
   await board.fs.write(updated.filename, serializeEpic(updated));
   return {
-    data: { epic: updated },
+    data: { slug: updated.slug },
     human: `Updated epic ${slug}.`,
     ...problemsField(board.problems),
   };
