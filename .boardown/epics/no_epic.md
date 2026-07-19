@@ -2,13 +2,24 @@
 {}
 ---
 
+## Navigation in popup windows
+
+---
+id: BD-55
+type: feature
+status: todo
+order: 200
+---
+
+Back arrow when open one popup from another
+
 ## Add task links types
 
 ---
 id: BD-57
 type: feature
 status: todo
-order: 300
+order: 400
 ---
 
 ## Add Create task button to epic
@@ -130,13 +141,11 @@ order: 2200
 
 Tasks in a finished release open with fully active controls (status select, checklist, notes). core correctly rejects the write ('Cannot edit a task in a finished release') so the data is safe, but the UI surfaces nothing: the error only lands in the browser console and the click silently does nothing. Disable the controls for finished releases instead of letting them fail.
 
-## Navigation in popup windows
+## Customizable task statuses
 
 ---
-id: BD-55
+id: BD-51
 type: feature
 status: todo
 order: 100
 ---
-
-Back arrow when open one popup from another
