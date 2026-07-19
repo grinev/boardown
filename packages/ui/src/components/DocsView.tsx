@@ -1,10 +1,12 @@
 import { Check, FilePlus, FolderPlus, Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { docPageTitle, findDocPage } from '@boardown/core';
+import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
 import { useBoardStore } from '../store';
 import { CreateDocFolderDialog } from './CreateDocFolderDialog';
 import { CreateDocPageDialog } from './CreateDocPageDialog';
 import { DeleteDocDialog } from './DeleteDocDialog';
+import { DocRefSuggestions } from './DocRefSuggestions';
 import { DocTree } from './DocTree';
 import { MarkdownContent } from './MarkdownContent';
 import styles from './DocsView.module.css';
@@ -22,14 +24,29 @@ export function DocsView() {
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const suggestions = useDocRefSuggestions(bodyRef, draftBody, setDraftBody);
 
   const page = docs && selectedDocPath ? findDocPage(docs, selectedDocPath) : null;
 
   // A draft belongs to the page it was opened on: selecting another page (or
   // losing this one to a deletion) drops edit mode rather than carrying the text
-  // across.
+  // across. A selection can also arrive from a doc link somewhere else on the
+  // board, so the folders on the way to it are expanded — a selected page the
+  // tree does not show would look like nothing happened.
   useEffect(() => {
     setEditing(false);
+    if (selectedDocPath === null) return;
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      let ancestor = selectedDocPath;
+      let changed = false;
+      while (ancestor.includes('/')) {
+        ancestor = ancestor.slice(0, ancestor.lastIndexOf('/'));
+        if (next.delete(ancestor)) changed = true;
+      }
+      return changed ? next : prev;
+    });
   }, [selectedDocPath]);
 
   if (!docs) return null;
@@ -138,13 +155,25 @@ export function DocsView() {
               </button>
             </header>
             {editing ? (
-              <textarea
-                className={styles.editor}
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                aria-label="Page content"
-                spellCheck={false}
-              />
+              <>
+                <textarea
+                  ref={bodyRef}
+                  className={styles.editor}
+                  value={draftBody}
+                  onChange={(e) => {
+                    setDraftBody(e.target.value);
+                    suggestions.sync();
+                  }}
+                  onSelect={suggestions.sync}
+                  onKeyDown={(e) => suggestions.onKeyDown(e)}
+                  // Picking a row keeps focus (the popup swallows mousedown), so
+                  // a real blur means the caret is gone and the popup is stale.
+                  onBlur={suggestions.close}
+                  aria-label="Page content"
+                  spellCheck={false}
+                />
+                <DocRefSuggestions suggestions={suggestions} />
+              </>
             ) : (
               <MarkdownContent source={page.body} />
             )}

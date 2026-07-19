@@ -479,3 +479,62 @@ describe('serializeDocPage', () => {
     expect(parseDocPage(text, 'docs/a.md', 'a').value?.body).toBe('');
   });
 });
+
+describe('doc reference tokens in frontmatter', () => {
+  // A wiki token is the one value in this feature that YAML could reinterpret:
+  // a plain scalar starting with `[` is a flow sequence. Both surfaces that store
+  // free text in frontmatter have to bring it back as the literal string.
+  const TOKEN = '[[architecture]]';
+
+  it('round-trips a note whose whole text is a token', () => {
+    const source = `---
+name: UI Foundation
+color: "#1f6feb"
+---
+
+## A task
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 100
+notes:
+  - id: n1
+    text: "${TOKEN}"
+    createdAt: "2026-01-01T00:00:00.000Z"
+---
+
+body
+`;
+    const first = parseEpic(source, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.notes![0]!.text).toBe(TOKEN);
+
+    const second = parseEpic(
+      serializeEpic(first.value!),
+      'epics/ui-foundation.md',
+      'ui-foundation',
+    );
+    expect(second.problems).toEqual([]);
+    expect(second.value!.tasks[0]!.frontmatter.notes![0]!.text).toBe(TOKEN);
+  });
+
+  it('round-trips a release description that is a token', () => {
+    const source = `---
+status: future
+name: "1.11"
+description: "${TOKEN}"
+---
+
+# Release
+`;
+    const first = parseRelease(source, 'releases/1.11.md', '1.11');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.frontmatter.description).toBe(TOKEN);
+
+    const second = parseRelease(serializeRelease(first.value!), 'releases/1.11.md', '1.11');
+    expect(second.problems).toEqual([]);
+    expect(second.value!.frontmatter.description).toBe(TOKEN);
+  });
+});

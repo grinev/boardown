@@ -1,0 +1,62 @@
+/* Positioned against the window, so a dialog's own overflow cannot clip it. The
+   portal target is the dialog itself when there is one — see the hook. */
+.list {
+  position: fixed;
+  z-index: 20;
+  min-width: 14rem;
+  max-width: 22rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover,
+.itemActive {
+  background: var(--surface-muted);
+}
+
+.icon {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--text-secondary);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path {
+  overflow: hidden;
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 0.4rem 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}

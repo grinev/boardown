@@ -146,6 +146,7 @@ interface BoardState {
   openSettings: () => void;
   closeSettings: () => void;
   selectDoc: (path: string | null) => void;
+  openDocPage: (path: string) => void;
   openCreateDocPage: () => void;
   closeCreateDocPage: () => void;
   openCreateDocFolder: () => void;
@@ -580,6 +581,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   closeSettings: () => set({ settingsOpen: false }),
 
   selectDoc: (path) => set({ selectedDocPath: path }),
+
+  // Following a doc link from anywhere: land on the page, and get out of the
+  // dialog the link was clicked in — forgetting that part is a bug per caller,
+  // so it lives here rather than at each call site.
+  openDocPage: (path) =>
+    set({
+      activeTab: 'docs',
+      selectedDocPath: path,
+      selectedTaskId: null,
+      selectedEpicSlug: null,
+      selectedReleaseFilename: null,
+    }),
+
   openCreateDocPage: () => set({ createDocPageOpen: true }),
   closeCreateDocPage: () => set({ createDocPageOpen: false }),
   openCreateDocFolder: () => set({ createDocFolderOpen: true }),

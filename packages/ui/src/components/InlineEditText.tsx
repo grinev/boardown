@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
+import { DocRefSuggestions } from './DocRefSuggestions';
 import styles from './InlineEditText.module.css';
 
 interface InlineEditTextProps {
@@ -41,6 +43,9 @@ export function InlineEditText({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committingRef = useRef(false);
+  // Multiline only: single-line fields (title, checklist item) render no links,
+  // so a reference typed there would be dead text.
+  const suggestions = useDocRefSuggestions(textareaRef, draft, setDraft);
 
   useEffect(() => {
     if (mode !== 'edit') return;
@@ -127,6 +132,12 @@ export function InlineEditText({
   const onKeyDown = (
     e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
+    if (
+      multiline &&
+      suggestions.onKeyDown(e as KeyboardEvent<HTMLTextAreaElement>)
+    ) {
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       cancel();
@@ -156,6 +167,7 @@ export function InlineEditText({
     ) {
       return;
     }
+    suggestions.close();
     void commit();
   };
 
@@ -166,16 +178,23 @@ export function InlineEditText({
   return (
     <div className={styles.editWrapper} ref={wrapperRef}>
       {multiline ? (
-        <textarea
-          ref={textareaRef}
-          className={cx(styles.textarea, className)}
-          value={draft}
-          aria-label={ariaLabel}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={onBlur}
-          rows={4}
-        />
+        <>
+          <textarea
+            ref={textareaRef}
+            className={cx(styles.textarea, className)}
+            value={draft}
+            aria-label={ariaLabel}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              suggestions.sync();
+            }}
+            onSelect={suggestions.sync}
+            onKeyDown={onKeyDown}
+            onBlur={onBlur}
+            rows={4}
+          />
+          <DocRefSuggestions suggestions={suggestions} />
+        </>
       ) : (
         <input
           ref={inputRef}

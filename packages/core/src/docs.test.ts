@@ -6,6 +6,9 @@ import {
   docFilenameForTitle,
   docPageTitle,
   docPagesBeneath,
+  docPathFromRefToken,
+  docRefCandidates,
+  docRefToken,
   emptyDocsTree,
   findDocFolder,
   findDocPage,
@@ -13,6 +16,7 @@ import {
   isInsideDocFolder,
   removeDocFolder,
   removeDocPage,
+  resolveDocRef,
   sortDocsTree,
   targetDocFolder,
   validateDocFolderName,
@@ -228,5 +232,58 @@ describe('docPagesBeneath / isInsideDocFolder', () => {
     expect(isInsideDocFolder(guides, 'docs/intro.md')).toBe(false);
     // A sibling whose name merely starts the same must not count as inside.
     expect(isInsideDocFolder(guides, 'docs/guides-old/x.md')).toBe(false);
+  });
+});
+
+describe('doc reference tokens', () => {
+  it('drops the docs prefix and the extension', () => {
+    expect(docRefToken(page('docs/guides/setup.md'))).toBe('guides/setup');
+    expect(docRefToken(page('docs/intro.md'))).toBe('intro');
+  });
+
+  it('round-trips a token back to a path', () => {
+    expect(docPathFromRefToken('guides/setup')).toBe('docs/guides/setup.md');
+  });
+
+  it('tolerates the docs prefix and the extension a human would type', () => {
+    expect(docPathFromRefToken('docs/guides/setup')).toBe('docs/guides/setup.md');
+    expect(docPathFromRefToken('guides/setup.md')).toBe('docs/guides/setup.md');
+    expect(docPathFromRefToken('docs/guides/setup.md')).toBe('docs/guides/setup.md');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(docPathFromRefToken('  intro  ')).toBe('docs/intro.md');
+  });
+
+  it('rejects a token that names nothing', () => {
+    expect(docPathFromRefToken('')).toBeNull();
+    expect(docPathFromRefToken('   ')).toBeNull();
+    expect(docPathFromRefToken('docs/')).toBeNull();
+    expect(docPathFromRefToken('.md')).toBeNull();
+  });
+
+  it('resolves a token against the tree', () => {
+    const root = tree();
+    expect(resolveDocRef(root, 'guides/setup')?.path).toBe('docs/guides/setup.md');
+    expect(resolveDocRef(root, 'intro')?.path).toBe('docs/intro.md');
+    expect(resolveDocRef(root, 'nope')).toBeNull();
+  });
+
+  it('is case-sensitive, matching how paths are stored', () => {
+    expect(resolveDocRef(tree(), 'Guides/Setup')).toBeNull();
+  });
+
+  it('lists every page with its token and title', () => {
+    expect(docRefCandidates(tree())).toEqual([
+      { token: 'intro', title: 'Intro', path: 'docs/intro.md' },
+      { token: 'guides/setup', title: 'Setup', path: 'docs/guides/setup.md' },
+    ]);
+  });
+
+  it('falls back to the slug for a page without a title', () => {
+    const root = addDocPage(emptyDocsTree(), 'docs', page('docs/untitled.md'));
+    expect(docRefCandidates(root)).toEqual([
+      { token: 'untitled', title: 'untitled', path: 'docs/untitled.md' },
+    ]);
   });
 });

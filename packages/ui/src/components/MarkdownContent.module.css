@@ -61,6 +61,37 @@
   color: var(--accent);
 }
 
+/* An in-app reference: a button that has to read as an ordinary markdown link. */
+.refLink {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.refLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+.refLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+.refIcon {
+  display: inline;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
 .markdown code {
   background: var(--inset-bg);
   border-radius: 4px;

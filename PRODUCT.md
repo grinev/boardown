@@ -406,8 +406,15 @@ pressing it commits both fields in one write and returns to the rendered view.
 There is no Save or Cancel button, matching the rest of the app; an emptied title
 reverts. A draft lives only in the view, so switching tabs mid-edit writes nothing.
 
-Docs are not connected to tasks, epics or releases in either direction, and the
-CLI has no docs commands.
+A page's body renders the same in-app references the task dialogs do (see "Task
+links" below): a `[[page]]` token links to another doc page, and a task ID opens
+that task's dialog over the Docs tab. Tokens inside inline code or a fenced block
+stay literal, so a page can document the syntax itself. The editor's textarea
+offers the same `[[` autocomplete.
+
+Beyond those text references, docs are not connected to tasks, epics or releases —
+nothing is stored on either side, there are no backlinks, and the CLI has no docs
+commands.
 
 ### Task card
 
@@ -456,12 +463,30 @@ disabled.
 
 **Task links.** Any token shaped like a task ID (2–5 uppercase letters, a dash,
 digits) that resolves to a task on the board renders, in view mode, as a link
-showing `ID title`; clicking it opens that task's dialog. This applies to the
-task's **description** and its **notes** (task dialog) and to the **epic's
-description** (epic dialog). Resolution is against the task IDs actually present
-on the board, not against the current `idPrefix`, so tasks created under an older
-prefix stay linkable. Tokens that resolve to nothing stay plain text, and edit
-mode always shows the raw source. Checklist items and cards render no links.
+showing `ID title`; clicking it opens that task's dialog. Resolution is against
+the task IDs actually present on the board, not against the current `idPrefix`, so
+tasks created under an older prefix stay linkable.
+
+**Doc links.** A `[[…]]` token holding a doc page's path relative to `docs/`
+without the `.md` extension (e.g. `[[guides/release-process]]`) renders as a link
+showing the page's title with a page icon; clicking it closes the dialog, switches
+to the Docs tab and selects that page. A leading `docs/` and a trailing `.md` are
+tolerated, since that is what a hand-typed reference tends to look like; matching
+is otherwise case-sensitive. Nothing is stored: the text on disk stays exactly what
+the user typed, and the link is a rendering affordance, not a data format.
+
+Both kinds render in the task's **description** and **notes** (task dialog), the
+**epic's description** (epic dialog), the **release's description** (release
+dialog) and a **doc page's body** (Docs tab). Tokens that resolve to nothing stay
+plain text, and edit mode always shows the raw source. Checklist items and cards
+render no links.
+
+**Inserting a doc link.** In any of those multiline fields, typing `[[` opens a
+suggestion list of doc pages, filtered by title and path as the user keeps typing.
+↑/↓ move, Enter or a click inserts the page's token and closes the brackets,
+Escape dismisses the list without leaving edit mode. There is no autocomplete for
+task IDs — those are short enough to type — and none in single-line fields, which
+render no links.
 
 **Linked tasks.** Above the notes, the task dialog has a **Linked tasks** section:
 a table of the tasks this one is related to (type icon, id, title, status — the
@@ -607,8 +632,7 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
 - **Fuller release management** — editing a release's dates, reordering releases
   in the Backlog, and support for multiple simultaneously active releases (e.g. a
   large release in flight plus an urgent hotfix).
-- **Richer docs** — moving and renaming pages, search across the wiki, and
-  linking a doc page from a task.
+- **Richer docs** — moving and renaming pages, and search across the wiki.
 - **Git integration** — surfacing the commits related to a task on the task
   itself, closing the loop between the board and the repo it lives in.
 - **Localization** — i18n infrastructure and translations of the UI.

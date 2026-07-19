@@ -1,6 +1,8 @@
 import { Trash2 } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { nextNoteId, type Note, type Task } from '@boardown/core';
+import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
+import { DocRefSuggestions } from './DocRefSuggestions';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
 import styles from './Notes.module.css';
@@ -81,6 +83,8 @@ interface AddNoteProps {
 
 function AddNote({ onAdd }: AddNoteProps) {
   const [text, setText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const suggestions = useDocRefSuggestions(textareaRef, text, setText);
 
   const commit = () => {
     const trimmed = text.trim();
@@ -90,6 +94,7 @@ function AddNote({ onAdd }: AddNoteProps) {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (suggestions.onKeyDown(e)) return;
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       commit();
@@ -100,15 +105,26 @@ function AddNote({ onAdd }: AddNoteProps) {
 
   return (
     <div className={styles.addRow}>
-      <textarea
-        className={styles.addInput}
-        value={text}
-        placeholder="Add a note"
-        aria-label="Add note"
-        rows={2}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
-      />
+      <>
+        <textarea
+          ref={textareaRef}
+          className={styles.addInput}
+          value={text}
+          placeholder="Add a note"
+          aria-label="Add note"
+          rows={2}
+          onChange={(e) => {
+            setText(e.target.value);
+            suggestions.sync();
+          }}
+          onSelect={suggestions.sync}
+          onKeyDown={onKeyDown}
+          // Picking a row keeps focus (the popup swallows mousedown), so a real
+          // blur means the caret is gone and the popup is stale.
+          onBlur={suggestions.close}
+        />
+        <DocRefSuggestions suggestions={suggestions} />
+      </>
       <button
         type="button"
         className={styles.addButton}

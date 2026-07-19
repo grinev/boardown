@@ -169,3 +169,39 @@ export const removeDocFolder = (root: DocFolder, path: string): DocFolder => ({
   ...root,
   folders: root.folders.filter((f) => f.path !== path).map((f) => removeDocFolder(f, path)),
 });
+
+const MD_EXT = '.md';
+
+// A doc reference token is the page's path relative to `docs/`, without the `.md`
+// extension — `guides/release-process` for `docs/guides/release-process.md`.
+export const docRefToken = (page: DocPage): string =>
+  page.path.slice(DOCS_DIR.length + 1, -MD_EXT.length);
+
+// The inverse. A token typed by hand may well carry the `docs/` prefix or the
+// `.md` extension; both are what a human writes, so both resolve rather than
+// producing a dead link. Matching is otherwise exact — paths are case-sensitive.
+export const docPathFromRefToken = (token: string): string | null => {
+  let rest = token.trim();
+  if (rest.startsWith(`${DOCS_DIR}/`)) rest = rest.slice(DOCS_DIR.length + 1);
+  if (rest.endsWith(MD_EXT)) rest = rest.slice(0, -MD_EXT.length);
+  if (rest === '') return null;
+  return `${DOCS_DIR}/${rest}${MD_EXT}`;
+};
+
+export const resolveDocRef = (root: DocFolder, token: string): DocPage | null => {
+  const path = docPathFromRefToken(token);
+  return path === null ? null : findDocPage(root, path);
+};
+
+export interface DocRefCandidate {
+  token: string;
+  title: string;
+  path: string;
+}
+
+export const docRefCandidates = (root: DocFolder): DocRefCandidate[] =>
+  docPagesBeneath(root).map((page) => ({
+    token: docRefToken(page),
+    title: docPageTitle(page),
+    path: page.path,
+  }));

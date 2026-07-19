@@ -12,6 +12,13 @@
   text-underline-offset: 2px;
 }
 
+/* Inline with the text baseline, so a doc link sits in a sentence like a word. */
+.docIcon {
+  display: inline;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
 .link:hover {
   text-decoration-thickness: 2px;
 }
