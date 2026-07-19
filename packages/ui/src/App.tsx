@@ -38,6 +38,9 @@ interface AppProps {
   // data-theme and the board's own config.theme is ignored for display. The
   // per-board theme control is hidden so there is a single source of truth.
   forcedTheme?: Theme;
+  // The running build's version, supplied by the shell. Shown read-only in the
+  // settings dialog; omitted by shells that surface it their own way.
+  version?: string | undefined;
 }
 
 export function App({
@@ -47,6 +50,7 @@ export function App({
   defaultIdPrefix,
   onCancel,
   forcedTheme,
+  version,
 }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
@@ -243,7 +247,9 @@ export function App({
           onClose={closeStartRelease}
         />
       )}
-      {settingsOpen && !forcedTheme && <SettingsDialog onClose={closeSettings} />}
+      {settingsOpen && !forcedTheme && (
+        <SettingsDialog onClose={closeSettings} version={version} />
+      )}
       {conflictOpen && <ConflictDialog />}
     </main>
   );

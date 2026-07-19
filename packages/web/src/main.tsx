@@ -23,6 +23,6 @@ const fs = new DevHttpFsAdapter();
 
 createRoot(container).render(
   <StrictMode>
-    <App fs={fs} />
+    <App fs={fs} version={__BOARDOWN_VERSION__} />
   </StrictMode>,
 );

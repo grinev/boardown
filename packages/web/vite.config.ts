@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -15,11 +16,18 @@ const boardRoot = configuredDataDir
 // dev:sandbox writes next to the sources rather than into its temp board.
 const logsDir = path.resolve(repoRoot, 'logs');
 
+// The root package.json is the single source of truth for the version; this is
+// a from-sources shell, so the checkout's version is the running version.
+const { version } = createRequire(import.meta.url)(
+  path.join(repoRoot, 'package.json'),
+) as { version: string };
+
 export default defineConfig({
   plugins: [react(), devFsPlugin({ boardRoot, logsDir })],
   define: {
     // core never reads process.env, and the browser has no environment to read,
     // so the level travels into the bundle as a build-time constant.
     __BOARDOWN_LOG_LEVEL__: JSON.stringify(process.env.BOARDOWN_LOG_LEVEL ?? ''),
+    __BOARDOWN_VERSION__: JSON.stringify(version),
   },
 });

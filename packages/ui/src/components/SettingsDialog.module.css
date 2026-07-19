@@ -64,6 +64,12 @@
   letter-spacing: 0.04em;
 }
 
+.value {
+  font-size: 14px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .select {
   font: inherit;
   font-size: 14px;

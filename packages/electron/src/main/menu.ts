@@ -52,6 +52,11 @@ export function buildAppMenu(actions: MenuActions): Menu {
       ],
     },
     { role: 'windowMenu' },
+    // macOS already carries About in the application menu (the appMenu role);
+    // elsewhere it needs a home of its own.
+    ...(isMac
+      ? []
+      : [{ label: 'Help', submenu: [{ role: 'about' as const, label: 'About boardown' }] }]),
   ];
 
   return Menu.buildFromTemplate(template);

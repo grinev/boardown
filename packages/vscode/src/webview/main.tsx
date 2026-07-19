@@ -18,6 +18,11 @@ function detectTheme(): Theme {
   return 'light';
 }
 
+// The host stamps the extension's version onto <html> when it builds the page.
+function detectVersion(): string | undefined {
+  return document.documentElement.dataset.boardownVersion || undefined;
+}
+
 interface VsCodeApi {
   postMessage(message: unknown): void;
 }
@@ -36,7 +41,11 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App fs={new VsCodeFsAdapter(vscode)} defaultTheme={detectTheme()} />
+    <App
+      fs={new VsCodeFsAdapter(vscode)}
+      defaultTheme={detectTheme()}
+      version={detectVersion()}
+    />
   </StrictMode>,
 );
 

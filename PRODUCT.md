@@ -545,6 +545,15 @@ Status is not editable here: it is owned by the Start / Complete release actions
 A **finished** release opens the same dialog read-only — an archived file is
 never rewritten. Dates (`startDate` / `endDate`) are not shown or edited yet.
 
+### Settings
+
+A dialog opened from the gear button in the top navigation. It holds the board's
+**Theme** selector and, below it, a read-only **Version** row showing the version of the
+build the user is running — the shell supplies it, so it is the installed
+extension's version in VS Code and the checkout's version in the `web` dev shell.
+The Electron shell hides this dialog (it owns the theme app-wide) and surfaces
+the version through the OS-native About window instead.
+
 ### Empty states
 
 Empty states are a first-class concern. Every screen has a meaningful
@@ -574,7 +583,10 @@ A standalone cross-platform desktop app (Windows / macOS / Linux). It reuses
 `@boardown/ui` unchanged behind a Node `FsAdapter` and follows the standard
 IDE-class pattern: a recent-folders list on launch, an "Open Folder…" button
 using the OS native dialog, and an optional CLI argument for opening a specific
-folder. It auto-refreshes on external changes like the VS Code shell. Installers
+folder. It auto-refreshes on external changes like the VS Code shell. The app
+menu carries **About boardown** (under Help on Windows/Linux, in the system
+application menu on macOS), which opens the OS-native About window with the app's
+version. Installers
 are attached to each GitHub Release. Builds are currently unsigned —
 code-signing / notarization are a separate round.
 

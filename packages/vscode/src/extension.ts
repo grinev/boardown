@@ -42,7 +42,8 @@ export function activate(context: vscode.ExtensionContext): void {
       panel = created;
       created.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'board.svg');
 
-      created.webview.html = getHtml(created.webview, context.extensionUri);
+      const { version } = context.extension.packageJSON as { version: string };
+      created.webview.html = getHtml(created.webview, context.extensionUri, version);
 
       // Records fsPath -> timestamp of the host's own writes so the watcher can
       // tell its own saves apart from genuinely external changes (see below).
@@ -254,7 +255,11 @@ function themeName(kind: vscode.ColorThemeKind): 'light' | 'dark' {
     : 'dark';
 }
 
-function getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+function getHtml(
+  webview: vscode.Webview,
+  extensionUri: vscode.Uri,
+  version: string,
+): string {
   const assetUri = (...segments: string[]): vscode.Uri =>
     webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', ...segments));
 
@@ -277,7 +282,7 @@ function getHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   ].join('; ');
 
   return `<!doctype html>
-<html lang="en" data-theme="${theme}">
+<html lang="en" data-theme="${theme}" data-boardown-version="${version}">
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}" />

@@ -446,6 +446,13 @@ app
   .whenReady()
   .then(async () => {
     settings = await loadSettings();
+    // app.getName() is the scoped package name in a from-sources run, so the
+    // product name is stated here rather than derived.
+    app.setAboutPanelOptions({
+      applicationName: 'boardown',
+      applicationVersion: app.getVersion(),
+      copyright: `© ${new Date().getFullYear()} Ruslan Grinev — MIT`,
+    });
     buildMenu();
     registerIpc();
     applySecurityHeaders();

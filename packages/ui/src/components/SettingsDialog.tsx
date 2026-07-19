@@ -6,9 +6,10 @@ import styles from './SettingsDialog.module.css';
 
 interface SettingsDialogProps {
   onClose: () => void;
+  version?: string | undefined;
 }
 
-export function SettingsDialog({ onClose }: SettingsDialogProps) {
+export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
   const theme = useBoardStore((s) => s.theme);
   const status = useBoardStore((s) => s.status);
   const setTheme = useBoardStore((s) => s.setTheme);
@@ -39,6 +40,12 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
             <option value="dark">Dark</option>
           </select>
         </label>
+        {version && (
+          <div className={styles.field}>
+            <span className={styles.label}>Version</span>
+            <span className={styles.value}>{version}</span>
+          </div>
+        )}
       </div>
     </Modal>
   );
