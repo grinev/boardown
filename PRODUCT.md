@@ -620,6 +620,18 @@ local-from-sources shell**, not a distribution channel: there is no folder picke
 and no File System Access API. Refresh is the manual **Reload** button only — no
 file watching.
 
+It is also the only shell that writes a **log file**. Each `pnpm dev` /
+`pnpm dev:sandbox` run opens a fresh `logs/web-<timestamp>.log` at the repo root
+(gitignored), holding both the dev server's own events and the log lines the
+browser-side app forwards to it, so a crash a tester hits can be handed to a
+developer as a file. At the default `info` level it carries the trail needed to
+reconstruct a session: each action the user triggered with its arguments, each
+write to the board, and every failure on either side. `BOARDOWN_LOG_LEVEL=debug`
+adds individual reads, lists and stats. The folder keeps the 10 most recent runs. This is a debugging tool
+for working on boardown from sources: the shipped shells install no log
+destination, so a user of the extension, the desktop app or the CLI gets no logs
+and no `logs/` folder.
+
 ## Direction
 
 Broad strokes only. The concrete backlog lives on boardown's own board in

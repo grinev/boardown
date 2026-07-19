@@ -10,3 +10,4 @@ export * from './loader.js';
 export * from './ordering.js';
 export * from './conflicts.js';
 export * from './docs.js';
+export * from './logger.js';

@@ -21,6 +21,11 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+      // Application source logs through @boardown/core's logger, never the
+      // console: only the web dev shell installs a sink, so a shipped shell
+      // cannot leak output. Build and dev scripts are .mjs and stay exempt —
+      // their output is ordinary tool output.
+      'no-console': 'error',
     },
   },
   {

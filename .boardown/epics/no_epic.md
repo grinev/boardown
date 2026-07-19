@@ -11,15 +11,6 @@ status: todo
 order: 300
 ---
 
-## Add logs for dev mode
-
----
-id: BD-17
-type: tech
-status: todo
-order: 400
----
-
 ## Add Create task button to epic
 
 ---

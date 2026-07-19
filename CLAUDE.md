@@ -144,6 +144,14 @@ CLI inherits them rather than re-implementing them.
   auto-refresh on external `.boardown/` changes via a host file watcher (gated by
   the `boardown.autoRefresh` setting), while the `web` dev shell stays
   manual-only.
+- Logging goes through the logger in `packages/core` (`createLogger`), never
+  `console.*` — ESLint enforces `no-console` across `packages/**` source. Build
+  and dev scripts (`*.mjs`) are exempt: their output is ordinary tool output.
+  The logger is a no-op until a shell installs a sink, and **only the `web` dev
+  shell does** (a per-run file under `logs/` at the repo root, plus the lines the
+  browser forwards to it). Electron installs a stderr sink for its bootstrap crash
+  and nothing else; VS Code and the CLI install none. A shipped shell emitting log
+  output to a user is a bug, not a feature.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
   CSS Modules for component-specific styles (`Foo.module.css`). Components

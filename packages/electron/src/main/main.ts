@@ -12,7 +12,7 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import type { Theme } from '@boardown/core';
-import { DOCS_DIR } from '@boardown/core';
+import { DOCS_DIR, configureLogging, createLogger, formatLogRecord } from '@boardown/core';
 import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { buildAppMenu } from './menu';
@@ -31,6 +31,14 @@ import {
 // ('boardown'), so the two would keep their recent-folders list in different
 // directories. Setting it here makes both use the same `boardown` userData dir.
 app.setName('boardown');
+
+// The only sink any shipped shell installs, and only so a bootstrap failure
+// still leaves a trace on stderr. Nothing else in Electron logs, so a normal run
+// prints nothing; file logging belongs to the web dev shell alone.
+configureLogging({
+  sink: (record) => process.stderr.write(`${formatLogRecord(record)}\n`),
+});
+const log = createLogger('electron.main');
 
 // Set by the dev script; when present the renderer is served from Vite with HMR
 // instead of the packaged files, and we skip the production CSP (Vite needs its
@@ -456,7 +464,7 @@ app
     });
   })
   .catch((err: unknown) => {
-    console.error(err);
+    log.error('failed to start', err);
     app.quit();
   });
 

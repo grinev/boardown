@@ -160,6 +160,15 @@ directory:
 pnpm dev -- --data-dir /path/to/project/.boardown
 ```
 
+Each run writes a log file to `logs/` at the repo root (gitignored), named for the
+run's start time — `logs/web-2026-07-19T14-32-08-123Z.log`. At the default `info`
+level it records every action taken in the app (with its arguments), every write
+to the board, and every failure on either side, which makes it the thing to attach
+to a bug report. `BOARDOWN_LOG_LEVEL=debug` adds each individual read/list/stat;
+`warn` or `error` narrows it to problems. The folder keeps the 10 most recent runs.
+Only this dev shell writes logs — the VS Code, Electron and CLI builds a user
+installs write none.
+
 Then open `http://localhost:5173` in a browser. In VS Code, run
 **Simple Browser: Show** from the Command Palette, enter
 `http://localhost:5173`, and pin the tab if you want it to behave like a local
