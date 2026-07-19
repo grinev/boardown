@@ -152,6 +152,23 @@ CLI inherits them rather than re-implementing them.
   browser forwards to it). Electron installs a stderr sink for its bootstrap crash
   and nothing else; VS Code and the CLI install none. A shipped shell emitting log
   output to a user is a bug, not a feature.
+- **When to add a log line.** The rule is *what a developer needs to reconstruct a
+  session from the file alone*, not "log everything interesting".
+  - `error` — a failure the user is shown, or one that is swallowed. In
+    `packages/ui` these are already covered: the store logs every transition of
+    `errorMessage`, so a new `catch` that sets it needs **no** log call. Add one
+    by hand only where a failure never reaches `errorMessage`.
+  - `info` — a user action, or a change that lands on disk. Actions in the store
+    are covered automatically by the wrapper around its `set`/actions at creation,
+    so a new store action needs no log call either. A **new write path outside the
+    store** does need one.
+  - `debug` — individual reads and other per-request chatter. Fine to add freely;
+    it is off in any narrowed level.
+  - Do not log inside render, inside a loop over board items, or on every
+    keystroke. Do not log file *contents*, and remember lines carry absolute paths
+    and user text — the file is local and gitignored, but it is not a secrets vault.
+  - `packages/core` and `packages/ui` may import `createLogger`, never a sink.
+    Choosing a destination is the shell's job.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
   CSS Modules for component-specific styles (`Foo.module.css`). Components
@@ -210,6 +227,12 @@ and the acceptance criteria; it drives, breaks and reports.
 Do not drive the browser yourself. A change that looks trivial ("just swapped two
 sections") is exactly the one that gets checked by hand, badly, and burns the
 context you still need for the work.
+
+Every dev-server run writes a log file to `logs/` at the repo root (gitignored),
+named for the run's start time. It holds the user-action trail, every write to the
+board and every failure on either side — read it when a UI problem is hard to see
+from the screen alone, and attach it to a bug report. See "Logging" under
+Conventions for what goes in it.
 
 The sandbox (`pnpm dev:sandbox`, port 5199) serves a **throwaway copy** of
 `tests/fixtures/board/.boardown/`. Never point a browser session or a CLI run at

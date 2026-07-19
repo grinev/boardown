@@ -1,15 +1,10 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import {
-  configureLogging,
-  createLogger,
-  isLogLevel,
-  parseLogLevel,
-  type LogRecord,
-} from '../../core/src/logger';
+import { configureLogging, createLogger, isLogLevel, type LogRecord } from '../../core/src/logger';
 import type { Connect, Plugin } from 'vite';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
 import { createLogFileSink } from './log-file-sink.js';
+import { resolveDevLogLevel } from './log-level.js';
 
 interface DevFsPluginOptions {
   boardRoot: string;
@@ -127,13 +122,13 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
       await ensureBoardRoot(boardRoot);
       server.config.logger.info(`boardown data dir: ${boardRoot}`);
 
-      const level = parseLogLevel(process.env.BOARDOWN_LOG_LEVEL);
+      const level = resolveDevLogLevel(process.env.BOARDOWN_LOG_LEVEL);
       const fileSink = createLogFileSink(logsDir);
       if (fileSink === null) {
         server.config.logger.warn(`boardown: could not open a log file in ${logsDir}`);
       } else {
-        configureLogging({ sink: fileSink.sink, ...(level === null ? {} : { level }) });
-        server.config.logger.info(`boardown log file: ${fileSink.filePath}`);
+        configureLogging({ sink: fileSink.sink, level });
+        server.config.logger.info(`boardown log file: ${fileSink.filePath} (level ${level})`);
         log.info(`dev server started, board root ${boardRoot}`);
       }
 
