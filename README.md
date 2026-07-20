@@ -369,38 +369,38 @@ version.
 
 Releases are driven by a version bump on `main`, not by pushing tags by hand:
 
-1. Bump the version and commit it:
+1. Bump the version:
 
    ```sh
    pnpm release:prepare patch     # or minor / major / an explicit 0.3.0
    pnpm release:rc                # cut a 0.3.0-rc.1 prerelease
    ```
 
-   This updates the root version, mirrors it into every package, and creates a
-   `chore(release): vX.Y.Z` commit (no tag). For a **stable** version it also
-   seeds `docs/release-notes/vX.Y.Z.md` — prefilled with the same notes the
-   workflow would auto-generate — and includes it in that commit.
+   This updates the root version and mirrors it into every package. For a
+   **stable** version it also seeds `docs/release-notes/vX.Y.Z.md` with a draft
+   (the same notes the workflow would auto-generate). It does **not** commit and
+   does **not** tag.
 
-   Curated release notes are optional. To hand-edit them, tweak the seeded
-   file and fold the change back into the release commit before pushing:
+2. Curate the release docs, then commit them together:
 
-   ```sh
-   $EDITOR docs/release-notes/vX.Y.Z.md
-   git commit --amend --no-edit          # keep it in the chore(release) commit
-   ```
+   - Rewrite `docs/release-notes/vX.Y.Z.md` into user-facing notes — the
+     workflow publishes it verbatim as the GitHub Release body (and falls back to
+     generating from the commit log if the file is absent; RC prereleases always
+     generate).
+   - Add a `## X.Y.Z` section to `packages/vscode/CHANGELOG.md` and, if the
+     release adds a headline capability, a bullet to the extension README's
+     Features list — these are the VS Code Marketplace listing.
+   - Run the gates (`pnpm lint && pnpm typecheck && pnpm build && pnpm test`),
+     then stage the version bump plus those docs and commit as a single
+     `chore(release): vX.Y.Z` (this scope is excluded from generated notes).
 
-   Amend rather than adding a second commit: a separate `docs:` commit would
-   otherwise surface in the *next* release's notes. If you leave the file
-   untouched (or delete it), the workflow falls back to generating notes from
-   the commit log. RC prereleases are never seeded and always generate.
-
-2. Push to `main`:
+3. Push to `main`:
 
    ```sh
    git push origin main
    ```
 
-3. The [`Release`](./.github/workflows/release.yml) workflow notices that the
+4. The [`Release`](./.github/workflows/release.yml) workflow notices that the
    tag `vX.Y.Z` for the current version does not exist yet. It runs in three
    stages: a `determine` job decides whether the bump is releasable; a `build`
    matrix then runs the checks and builds the `.vsix` once on Linux and the
@@ -412,7 +412,7 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    **Assets**. If the tag already exists (no version bump), the workflow skips
    the release.
 
-4. Once the GitHub Release exists, `Release` calls the reusable
+5. Once the GitHub Release exists, `Release` calls the reusable
    [`Publish to Marketplace`](./.github/workflows/publish-marketplace.yml)
    workflow, which downloads the released `.vsix` and pushes it to the VS Code
    Marketplace (`vsce publish`). It needs a `VSCE_PAT` repository secret (an
@@ -422,7 +422,7 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    cut, re-run it on its own from **Actions → Publish to Marketplace → Run
    workflow** against the same tag — no rebuild needed.
 
-5. `Release` then also calls the reusable
+6. `Release` then also calls the reusable
    [`Publish to Open VSX`](./.github/workflows/publish-openvsx.yml) workflow,
    which publishes the same released `.vsix` to the
    [Open VSX registry](https://open-vsx.org) (`ovsx publish`) — the open
@@ -433,7 +433,7 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    It can likewise be re-run on its own from **Actions → Publish to Open VSX →
    Run workflow** against any tag.
 
-6. `Release` finally calls the reusable
+7. `Release` finally calls the reusable
    [`Publish to npm`](./.github/workflows/publish-npm.yml) workflow, which builds
    and publishes the CLI package (`@grinev/boardown-cli`, the `boardown` command)
    to the [npm registry](https://www.npmjs.com/package/@grinev/boardown-cli).

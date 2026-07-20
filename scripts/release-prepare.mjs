@@ -48,9 +48,10 @@ function resolveRepository() {
 }
 
 // Seed a curated release-notes file for a stable version, prefilled with the
-// same auto-generated content the publish workflow would produce. It rides in
-// the release commit so it can be hand-edited (amend) before pushing; the
-// workflow uses it verbatim when present. RC releases keep pure CI generation.
+// same auto-generated content the publish workflow would produce. This script
+// does NOT commit — the release preparer (see the prepare-release skill) curates
+// this file and the other release docs, then makes a single commit. The workflow
+// uses the file verbatim when present. RC releases keep pure CI generation.
 function seedReleaseNotes(version) {
   const notesDir = resolve(process.cwd(), "docs", "release-notes");
   const notesPath = join(notesDir, `v${version}.md`);
@@ -101,10 +102,9 @@ function printUsage() {
       "",
       "Notes:",
       "  - Updates the root package.json and mirrors the version into all packages",
-      "  - For a stable version, seeds docs/release-notes/v<version>.md (edit it,",
-      "    then `git commit --amend` before pushing; the workflow uses it verbatim)",
-      "  - Creates commit: chore(release): v<version>",
-      "  - Does not create a git tag (the publish workflow tags after building)",
+      "  - For a stable version, seeds docs/release-notes/v<version>.md with a draft",
+      "  - Does NOT commit and does NOT tag: curate the notes and release docs, then",
+      "    commit them together as chore(release): v<version> (see prepare-release skill)",
     ].join("\n") + "\n",
   );
 }
@@ -147,17 +147,11 @@ const { version } = syncVersions();
 const isStable = /^\d+\.\d+\.\d+$/.test(version);
 const notesPath = isStable ? seedReleaseNotes(version) : null;
 
-const addTargets = ["package.json", "packages/*/package.json"];
+process.stdout.write(`\nBumped version to v${version} (not committed).\n`);
 if (notesPath) {
-  addTargets.push(relative(process.cwd(), notesPath));
+  process.stdout.write(`Seeded ${relative(process.cwd(), notesPath)} — curate it.\n`);
 }
-
-run("git", ["add", ...addTargets]);
-run("git", ["commit", "-m", `chore(release): v${version}`]);
-
-process.stdout.write(`Prepared release commit for v${version}\n`);
-if (notesPath) {
-  const relPath = relative(process.cwd(), notesPath);
-  process.stdout.write(`Edit ${relPath}, then: git commit --amend --no-edit\n`);
-}
-process.stdout.write("Next step: git push origin main\n");
+process.stdout.write(
+  "Next: curate the release docs and commit them together as " +
+    `chore(release): v${version} (do not push). See the prepare-release skill.\n`,
+);
