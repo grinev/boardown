@@ -192,8 +192,11 @@ CLI inherits them rather than re-implementing them.
 - Versioning is **lockstep**: every `package.json` carries the same version,
   with the **root `package.json` as the single source of truth**. Never bump a
   package version by hand — use `pnpm release:prepare` (which mirrors the root
-  version into all packages via `scripts/sync-versions.mjs`). Releases are
-  cut by bumping the version on `main`; the `Release` workflow tags and attaches
+  version into all packages via `scripts/sync-versions.mjs`, and for a stable
+  version seeds a curated `docs/release-notes/v<version>.md` into the release
+  commit — edit it and `git commit --amend` before pushing; the workflow uses
+  it verbatim when present, else generates notes from the commit log). Releases
+  are cut by bumping the version on `main`; the `Release` workflow tags and attaches
   the built `.vsix` and desktop installers to a GitHub Release, then calls the
   reusable per-target `publish-*.yml` workflows: `publish-marketplace.yml`
   (VS Code Marketplace) and `publish-openvsx.yml` (Open VSX) publish the `.vsix`,

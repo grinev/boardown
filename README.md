@@ -370,7 +370,22 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    ```
 
    This updates the root version, mirrors it into every package, and creates a
-   `chore(release): vX.Y.Z` commit (no tag).
+   `chore(release): vX.Y.Z` commit (no tag). For a **stable** version it also
+   seeds `docs/release-notes/vX.Y.Z.md` — prefilled with the same notes the
+   workflow would auto-generate — and includes it in that commit.
+
+   Curated release notes are optional. To hand-edit them, tweak the seeded
+   file and fold the change back into the release commit before pushing:
+
+   ```sh
+   $EDITOR docs/release-notes/vX.Y.Z.md
+   git commit --amend --no-edit          # keep it in the chore(release) commit
+   ```
+
+   Amend rather than adding a second commit: a separate `docs:` commit would
+   otherwise surface in the *next* release's notes. If you leave the file
+   untouched (or delete it), the workflow falls back to generating notes from
+   the commit log. RC prereleases are never seeded and always generate.
 
 2. Push to `main`:
 
@@ -383,10 +398,12 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    stages: a `determine` job decides whether the bump is releasable; a `build`
    matrix then runs the checks and builds the `.vsix` once on Linux and the
    desktop installers on one runner per OS (electron-builder packages only for
-   its host); finally a `release` job gathers every artifact, generates release
-   notes from the commit log, creates and pushes the tag, and publishes a GitHub
-   Release with the `.vsix` and the desktop installers in **Assets**. If the tag
-   already exists (no version bump), the workflow skips the release.
+   its host); finally a `release` job gathers every artifact, resolves the
+   release notes (the committed `docs/release-notes/vX.Y.Z.md` if present,
+   otherwise generated from the commit log), creates and pushes the tag, and
+   publishes a GitHub Release with the `.vsix` and the desktop installers in
+   **Assets**. If the tag already exists (no version bump), the workflow skips
+   the release.
 
 4. Once the GitHub Release exists, `Release` calls the reusable
    [`Publish to Marketplace`](./.github/workflows/publish-marketplace.yml)
@@ -430,6 +447,9 @@ Preview the notes that would be generated for the current version with:
 ```sh
 pnpm release:notes:preview
 ```
+
+This is also the starting point curated notes are seeded from: the preview and
+`docs/release-notes/vX.Y.Z.md` share the same generator.
 
 Every push and pull request to `main` also runs the
 [`CI`](./.github/workflows/ci.yml) workflow (lint, typecheck, build, test).

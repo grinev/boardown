@@ -190,11 +190,22 @@ jobs:
         run: |
           set -euo pipefail
           BODY_FILE="$RUNNER_TEMP/release-notes.md"
-          node scripts/generate-release-notes.mjs \
-            --version "${{ needs.determine.outputs.current_version }}" \
-            --kind "${{ needs.determine.outputs.release_kind }}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --output "$BODY_FILE"
+          VERSION="${{ needs.determine.outputs.current_version }}"
+          CURATED_FILE="docs/release-notes/v${VERSION}.md"
+
+          # Prefer curated release notes committed alongside the version bump;
+          # fall back to generating them from the commit log when absent.
+          if [[ -f "$CURATED_FILE" ]]; then
+            echo "Using curated release notes: $CURATED_FILE"
+            cp "$CURATED_FILE" "$BODY_FILE"
+          else
+            echo "No curated release notes found; generating from commit log"
+            node scripts/generate-release-notes.mjs \
+              --version "$VERSION" \
+              --kind "${{ needs.determine.outputs.release_kind }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --output "$BODY_FILE"
+          fi
 
           echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
 

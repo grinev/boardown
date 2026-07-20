@@ -5,8 +5,8 @@
 // Does NOT create a git tag — the publish workflow does that after a build.
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 
 import { syncVersions } from "./sync-versions.mjs";
 
@@ -35,6 +35,59 @@ function run(command, args, shell = false) {
   }
 }
 
+function resolveRepository() {
+  if (process.env.GITHUB_REPOSITORY) {
+    return process.env.GITHUB_REPOSITORY;
+  }
+
+  const repositoryField = JSON.parse(readFileSync(packageJsonPath, "utf8")).repository;
+  const url = typeof repositoryField === "string" ? repositoryField : repositoryField?.url;
+  const match = typeof url === "string" ? url.match(/github\.com[/:]([^/]+\/[^/.]+)(?:\.git)?$/i) : null;
+
+  return match ? match[1] : "";
+}
+
+// Seed a curated release-notes file for a stable version, prefilled with the
+// same auto-generated content the publish workflow would produce. It rides in
+// the release commit so it can be hand-edited (amend) before pushing; the
+// workflow uses it verbatim when present. RC releases keep pure CI generation.
+function seedReleaseNotes(version) {
+  const notesDir = resolve(process.cwd(), "docs", "release-notes");
+  const notesPath = join(notesDir, `v${version}.md`);
+  const relPath = relative(process.cwd(), notesPath);
+
+  if (existsSync(notesPath)) {
+    process.stdout.write(`Release notes already exist at ${relPath}, keeping them\n`);
+    return notesPath;
+  }
+
+  const repository = resolveRepository();
+
+  if (!repository) {
+    process.stderr.write(
+      "Could not resolve the GitHub repository; skipping release-notes seed. " +
+        "Set GITHUB_REPOSITORY or a repository.url in package.json.\n",
+    );
+    return null;
+  }
+
+  mkdirSync(notesDir, { recursive: true });
+  run(process.execPath, [
+    resolve(process.cwd(), "scripts", "generate-release-notes.mjs"),
+    "--version",
+    version,
+    "--kind",
+    "stable",
+    "--repo",
+    repository,
+    "--output",
+    notesPath,
+  ]);
+  process.stdout.write(`Seeded release notes at ${relPath}\n`);
+
+  return notesPath;
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -48,6 +101,8 @@ function printUsage() {
       "",
       "Notes:",
       "  - Updates the root package.json and mirrors the version into all packages",
+      "  - For a stable version, seeds docs/release-notes/v<version>.md (edit it,",
+      "    then `git commit --amend` before pushing; the workflow uses it verbatim)",
       "  - Creates commit: chore(release): v<version>",
       "  - Does not create a git tag (the publish workflow tags after building)",
     ].join("\n") + "\n",
@@ -89,8 +144,20 @@ if (semverInputPattern.test(input) && input === versionBefore) {
 
 const { version } = syncVersions();
 
-run("git", ["add", "package.json", "packages/*/package.json"]);
+const isStable = /^\d+\.\d+\.\d+$/.test(version);
+const notesPath = isStable ? seedReleaseNotes(version) : null;
+
+const addTargets = ["package.json", "packages/*/package.json"];
+if (notesPath) {
+  addTargets.push(relative(process.cwd(), notesPath));
+}
+
+run("git", ["add", ...addTargets]);
 run("git", ["commit", "-m", `chore(release): v${version}`]);
 
 process.stdout.write(`Prepared release commit for v${version}\n`);
+if (notesPath) {
+  const relPath = relative(process.cwd(), notesPath);
+  process.stdout.write(`Edit ${relPath}, then: git commit --amend --no-edit\n`);
+}
 process.stdout.write("Next step: git push origin main\n");
