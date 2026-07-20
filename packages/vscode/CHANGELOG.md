@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- **Docs tab**: a new top-level **Docs** view turns `.boardown/docs/` into a
+  small project wiki — a page tree beside the selected markdown page, with view
+  and raw-edit modes.
+- **Doc links**: reference a doc page from a task description, a task note or an
+  epic description and click through to it in the Docs tab.
+- **Release details dialog**: click a release's name to view its details and
+  edit its name and description inline; finished releases open read-only.
+- The Settings dialog now shows the running extension version.
+
 ## 0.4.0
 
 - **Task links**: the task dialog gained a **Linked tasks** section — search for

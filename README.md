@@ -16,6 +16,13 @@ any project folder — both reuse the same board UI and read the same markdown
 files. A headless **CLI** (`@grinev/boardown-cli`) rounds it out for scripts and
 AI agents, driving the same `.boardown/` files from the command line.
 
+**AI-agent friendly.** The board *is* plain markdown in your repo, so an AI
+coding agent (Claude Code, Cursor, …) already sees it next to your code. The CLI
+gives it a first-class way to drive that board: every command speaks JSON, so an
+agent can read the backlog, pick up the current release, and add or move tasks —
+the very same board you see in the editor. Plan with your agent, watch the board
+update live.
+
 <p align="center">
   <img src="./assets/Board.png" alt="boardown board view" width="80%" />
 </p>

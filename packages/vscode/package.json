@@ -20,7 +20,14 @@
     "kanban",
     "markdown",
     "tasks",
-    "scrum"
+    "scrum",
+    "ai",
+    "ai-agent",
+    "agent",
+    "llm",
+    "cli",
+    "local-first",
+    "git"
   ],
   "main": "./dist/extension.js",
   "engines": {
