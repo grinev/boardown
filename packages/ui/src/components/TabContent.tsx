@@ -50,18 +50,22 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
   return (
     <section className={styles.boardSection}>
       <header className={styles.releaseHeader}>
-        <h2 className={styles.releaseHeading}>
-          <button
-            type="button"
-            className={styles.releaseNameButton}
-            onClick={() => openRelease(current.filename)}
-          >
-            {heading}
-          </button>
-        </h2>
-        {descriptionPreview && (
-          <span className={styles.releaseDescription}>{descriptionPreview}</span>
-        )}
+        <div className={styles.releaseTitleGroup}>
+          <h2 className={styles.releaseHeading}>
+            <button
+              type="button"
+              className={styles.releaseNameButton}
+              onClick={() => openRelease(current.filename)}
+            >
+              {heading}
+            </button>
+          </h2>
+          {descriptionPreview && (
+            <span className={styles.releaseDescription}>
+              {descriptionPreview}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           className={styles.completeButton}

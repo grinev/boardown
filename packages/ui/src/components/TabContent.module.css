@@ -31,10 +31,23 @@
   padding: 16px 16px 0;
 }
 
+/* Name and description share one shrinkable box so the Complete button never
+   moves: inside it only the description gives up space. */
+.releaseTitleGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .releaseHeading {
   margin: 0;
-  flex: 0 1 auto;
-  min-width: 0;
+  /* Never shrinks — any shrink at all, however small, trips the ellipsis and
+     eats characters while the name still fits. max-width caps it at the row so
+     an absurdly long name clips instead of pushing the button off screen. */
+  flex: 0 0 auto;
+  max-width: 100%;
   color: var(--text-primary);
   font-size: 18px;
 }

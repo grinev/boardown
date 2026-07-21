@@ -2,17 +2,6 @@
 {}
 ---
 
-## Navigation in popup windows
-
----
-id: BD-55
-type: feature
-status: todo
-order: 200
----
-
-Back arrow when open one popup from another
-
 ## Add task links types
 
 ---
