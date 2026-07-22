@@ -119,17 +119,6 @@ status: todo
 order: 2100
 ---
 
-## Make finished releases read-only in the UI
-
----
-id: BD-53
-type: bug
-status: todo
-order: 2200
----
-
-Tasks in a finished release open with fully active controls (status select, checklist, notes). core correctly rejects the write ('Cannot edit a task in a finished release') so the data is safe, but the UI surfaces nothing: the error only lands in the browser console and the click silently does nothing. Disable the controls for finished releases instead of letting them fail.
-
 ## Customizable task statuses
 
 ---

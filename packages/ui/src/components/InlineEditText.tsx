@@ -20,6 +20,8 @@ interface InlineEditTextProps {
   placeholder?: string;
   ariaLabel: string;
   className?: string | undefined;
+  // The value belongs to a finished release: show it, never offer to edit it.
+  readOnly?: boolean;
   // Custom view-mode rendering of a non-empty value; edit mode always shows raw text.
   renderView?: (value: string) => ReactNode;
 }
@@ -35,6 +37,7 @@ export function InlineEditText({
   placeholder,
   ariaLabel,
   className,
+  readOnly = false,
   renderView,
 }: InlineEditTextProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
@@ -103,9 +106,22 @@ export function InlineEditText({
     finish(value);
   };
 
-  if (mode === 'view') {
+  if (readOnly || mode === 'view') {
     const trimmedValue = value.trim();
     const showPlaceholder = trimmedValue === '' && placeholder !== undefined;
+    if (readOnly) {
+      return (
+        <div
+          className={cx(
+            styles.readOnly,
+            showPlaceholder && styles.viewPlaceholder,
+            className,
+          )}
+        >
+          {showPlaceholder ? placeholder : (renderView?.(value) ?? value)}
+        </div>
+      );
+    }
     return (
       <div
         role="button"

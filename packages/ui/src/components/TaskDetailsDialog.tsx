@@ -83,7 +83,11 @@ export function TaskDetailsDialog({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
-    const sorted = [...releases].sort((a, b) => a.slug.localeCompare(b.slug));
+    // A finished release is archived: core refuses a task moved into one, so it is
+    // never offered as a destination (same rule as the create-task dialog).
+    const sorted = releases
+      .filter((r) => r.frontmatter.status !== 'finished')
+      .sort((a, b) => a.slug.localeCompare(b.slug));
     const items: IconSelectOption[] = sorted.map((r) => ({
       value: r.filename,
       label: r.frontmatter.name ?? r.slug,
@@ -142,6 +146,7 @@ export function TaskDetailsDialog({
           <InlineEditText
             value={task.title}
             required
+            readOnly={archived}
             ariaLabel="Task title"
             className={styles.title}
             onSave={(next) => updateTask(id, { title: next })}
@@ -151,6 +156,7 @@ export function TaskDetailsDialog({
             <InlineEditText
               value={task.description}
               multiline
+              readOnly={archived}
               placeholder="No description"
               ariaLabel="Task description"
               className={styles.descriptionBody}
@@ -160,6 +166,7 @@ export function TaskDetailsDialog({
           </section>
           <Checklist
             task={task}
+            readOnly={archived}
             onChange={(items) => updateTask(id, { checklist: items })}
           />
           <LinkedTasks
@@ -169,37 +176,57 @@ export function TaskDetailsDialog({
           />
           <Notes
             task={task}
+            readOnly={archived}
             onChange={(notes) => updateTask(id, { notes })}
           />
         </main>
         <aside className={styles.sidebar}>
-          <IconSelect
-            value={status}
-            options={STATUS_OPTIONS}
-            ariaLabel="Status"
-            hideChevron
-            hideTriggerIcon
-            triggerClassName={`${styles.statusPill} ${styles.statusPillTrigger} ${STATUS_PILL_CLASS[status] ?? ''}`}
-            onChange={(next) => {
-              void updateTask(id, { status: next as TaskStatus });
-            }}
-          />
+          {archived ? (
+            <span
+              className={`${styles.statusPill} ${STATUS_PILL_CLASS[status] ?? ''}`}
+            >
+              {formatStatusLabel(status)}
+            </span>
+          ) : (
+            <IconSelect
+              value={status}
+              options={STATUS_OPTIONS}
+              ariaLabel="Status"
+              hideChevron
+              hideTriggerIcon
+              triggerClassName={`${styles.statusPill} ${styles.statusPillTrigger} ${STATUS_PILL_CLASS[status] ?? ''}`}
+              onChange={(next) => {
+                void updateTask(id, { status: next as TaskStatus });
+              }}
+            />
+          )}
           <div className={styles.detailsCard}>
             <h3 className={styles.detailsHeading}>Details</h3>
             <dl className={styles.detailsList}>
               <div className={styles.detailRow}>
                 <dt className={styles.detailLabel}>Type</dt>
                 <dd className={styles.detailValue}>
-                  <IconSelect
-                    value={type}
-                    options={TYPE_OPTIONS}
-                    ariaLabel="Type"
-                    hideChevron
-                    triggerClassName={styles.inlineSelectTrigger}
-                    onChange={(next) => {
-                      void updateTask(id, { type: next as TaskType });
-                    }}
-                  />
+                  {archived ? (
+                    <span className={styles.staticValue}>
+                      <TypeIcon
+                        size={14}
+                        style={{ color: typeMeta.colorVar }}
+                        aria-hidden="true"
+                      />
+                      {typeMeta.label}
+                    </span>
+                  ) : (
+                    <IconSelect
+                      value={type}
+                      options={TYPE_OPTIONS}
+                      ariaLabel="Type"
+                      hideChevron
+                      triggerClassName={styles.inlineSelectTrigger}
+                      onChange={(next) => {
+                        void updateTask(id, { type: next as TaskType });
+                      }}
+                    />
+                  )}
                 </dd>
               </div>
               <div className={styles.detailRow}>
@@ -208,6 +235,7 @@ export function TaskDetailsDialog({
                   <EpicEditor
                     epic={epic}
                     options={epicOptions}
+                    readOnly={archived}
                     onSelect={(slug) => {
                       void updateTask(id, { epic: slug });
                     }}
@@ -218,19 +246,25 @@ export function TaskDetailsDialog({
               <div className={styles.detailRow}>
                 <dt className={styles.detailLabel}>Release</dt>
                 <dd className={styles.detailValue}>
-                  <IconSelect
-                    value={release ? release.filename : NO_RELEASE_VALUE}
-                    options={releaseOptions}
-                    ariaLabel="Release"
-                    hideChevron
-                    triggerClassName={styles.inlineSelectTrigger}
-                    onChange={(next) => {
-                      void moveTaskToRelease(
-                        id,
-                        next === NO_RELEASE_VALUE ? null : next,
-                      );
-                    }}
-                  />
+                  {archived && release ? (
+                    <span className={styles.staticValue}>
+                      {release.frontmatter.name ?? release.slug}
+                    </span>
+                  ) : (
+                    <IconSelect
+                      value={release ? release.filename : NO_RELEASE_VALUE}
+                      options={releaseOptions}
+                      ariaLabel="Release"
+                      hideChevron
+                      triggerClassName={styles.inlineSelectTrigger}
+                      onChange={(next) => {
+                        void moveTaskToRelease(
+                          id,
+                          next === NO_RELEASE_VALUE ? null : next,
+                        );
+                      }}
+                    />
+                  )}
                 </dd>
               </div>
             </dl>
@@ -247,17 +281,26 @@ export function TaskDetailsDialog({
 interface EpicEditorProps {
   epic: Epic | undefined;
   options: IconSelectOption[];
+  readOnly: boolean;
   onSelect: (slug: string | null) => void;
   onNavigate?: ((slug: string) => void) | undefined;
 }
 
-function EpicEditor({ epic, options, onSelect, onNavigate }: EpicEditorProps) {
+function EpicEditor({
+  epic,
+  options,
+  readOnly,
+  onSelect,
+  onNavigate,
+}: EpicEditorProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
 
   const enterEdit = () => setMode('edit');
   const exitEdit = () => setMode('view');
 
-  if (mode === 'edit') {
+  // The release can finish under an open dropdown (an external edit plus Reload),
+  // so read-only has to win over the mode this component is already in.
+  if (!readOnly && mode === 'edit') {
     return (
       <IconSelect
         value={epic?.slug ?? NO_EPIC_VALUE}
@@ -288,6 +331,34 @@ function EpicEditor({ epic, options, onSelect, onNavigate }: EpicEditorProps) {
       }
     : undefined;
 
+  const badge = epic ? (
+    onNavigate ? (
+      <button
+        type="button"
+        className={styles.epicBadge}
+        style={epicStyle}
+        onClick={(e) => {
+          e.stopPropagation();
+          onNavigate(epic.slug);
+        }}
+      >
+        {epic.frontmatter.name}
+      </button>
+    ) : (
+      <span className={styles.epicBadge} style={epicStyle}>
+        {epic.frontmatter.name}
+      </span>
+    )
+  ) : (
+    <span className={styles.detailEmpty}>—</span>
+  );
+
+  // Read-only keeps the badge — navigating to the epic is not a mutation — but
+  // drops the wrapper that opens the picker.
+  if (readOnly) {
+    return <span className={styles.staticValue}>{badge}</span>;
+  }
+
   return (
     <div
       role="button"
@@ -297,27 +368,7 @@ function EpicEditor({ epic, options, onSelect, onNavigate }: EpicEditorProps) {
       onClick={enterEdit}
       onKeyDown={handleViewKeyDown}
     >
-      {epic ? (
-        onNavigate ? (
-          <button
-            type="button"
-            className={styles.epicBadge}
-            style={epicStyle}
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate(epic.slug);
-            }}
-          >
-            {epic.frontmatter.name}
-          </button>
-        ) : (
-          <span className={styles.epicBadge} style={epicStyle}>
-            {epic.frontmatter.name}
-          </span>
-        )
-      ) : (
-        <span className={styles.detailEmpty}>—</span>
-      )}
+      {badge}
     </div>
   );
 }

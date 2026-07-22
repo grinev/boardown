@@ -6,10 +6,12 @@ import styles from './Checklist.module.css';
 
 interface ChecklistProps {
   task: Task;
+  // The task lives in a finished release: items are visible but frozen.
+  readOnly: boolean;
   onChange: (items: ChecklistItem[]) => void | Promise<void>;
 }
 
-export function Checklist({ task, onChange }: ChecklistProps) {
+export function Checklist({ task, readOnly, onChange }: ChecklistProps) {
   const items = task.frontmatter.checklist ?? [];
   const doneCount = items.filter((it) => it.done).length;
 
@@ -53,6 +55,7 @@ export function Checklist({ task, onChange }: ChecklistProps) {
                 type="checkbox"
                 className={styles.checkbox}
                 checked={item.done}
+                disabled={readOnly}
                 aria-label="Toggle checklist item"
                 onChange={() => toggle(item.id)}
               />
@@ -60,24 +63,27 @@ export function Checklist({ task, onChange }: ChecklistProps) {
                 <InlineEditText
                   value={item.text}
                   required
+                  readOnly={readOnly}
                   ariaLabel="Checklist item"
                   className={`${styles.itemText} ${item.done ? styles.itemTextDone : ''}`}
                   onSave={(next) => editText(item.id, next)}
                 />
               </div>
-              <button
-                type="button"
-                className={styles.deleteButton}
-                aria-label="Delete checklist item"
-                onClick={() => remove(item.id)}
-              >
-                <Trash2 size={14} aria-hidden="true" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className={styles.deleteButton}
+                  aria-label="Delete checklist item"
+                  onClick={() => remove(item.id)}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
-      <AddItem onAdd={add} />
+      {!readOnly && <AddItem onAdd={add} />}
     </section>
   );
 }

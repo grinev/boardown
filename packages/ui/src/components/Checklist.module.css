@@ -47,6 +47,10 @@
   cursor: pointer;
 }
 
+.checkbox:disabled {
+  cursor: default;
+}
+
 .itemTextWrap {
   flex: 1 1 auto;
   min-width: 0;

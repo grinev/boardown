@@ -25,6 +25,21 @@
   background: var(--inline-edit-hover-bg);
 }
 
+/* Same box metrics as .view, so a read-only dialog lays out identically. */
+.readOnly {
+  display: block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: inherit;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .viewPlaceholder {
   color: var(--text-muted);
   font-style: italic;

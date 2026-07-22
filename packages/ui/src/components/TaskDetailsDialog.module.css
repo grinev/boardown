@@ -223,6 +223,15 @@
   color: var(--text-muted);
 }
 
+/* The read-only stand-in for a details-row editor: same line box, no affordance. */
+.staticValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .inlineSelectTrigger {
   display: flex;
   align-items: center;

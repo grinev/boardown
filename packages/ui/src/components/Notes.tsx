@@ -9,6 +9,8 @@ import styles from './Notes.module.css';
 
 interface NotesProps {
   task: Task;
+  // The task lives in a finished release: notes are visible but frozen.
+  readOnly: boolean;
   onChange: (notes: Note[]) => void | Promise<void>;
 }
 
@@ -17,7 +19,7 @@ const formatDate = (iso: string): string => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 };
 
-export function Notes({ task, onChange }: NotesProps) {
+export function Notes({ task, readOnly, onChange }: NotesProps) {
   const notes = task.frontmatter.notes ?? [];
 
   const editText = (id: string, text: string): Promise<void> =>
@@ -50,19 +52,22 @@ export function Notes({ task, onChange }: NotesProps) {
                 <time className={styles.date} dateTime={note.createdAt}>
                   {formatDate(note.createdAt)}
                 </time>
-                <button
-                  type="button"
-                  className={styles.deleteButton}
-                  aria-label="Delete note"
-                  onClick={() => remove(note.id)}
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className={styles.deleteButton}
+                    aria-label="Delete note"
+                    onClick={() => remove(note.id)}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                  </button>
+                )}
               </div>
               <InlineEditText
                 value={note.text}
                 multiline
                 required
+                readOnly={readOnly}
                 ariaLabel="Note text"
                 className={styles.noteText}
                 renderView={(value) => <LinkedText text={value} />}
@@ -72,7 +77,7 @@ export function Notes({ task, onChange }: NotesProps) {
           ))}
         </ul>
       )}
-      <AddNote onAdd={add} />
+      {!readOnly && <AddNote onAdd={add} />}
     </section>
   );
 }

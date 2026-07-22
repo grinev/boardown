@@ -449,7 +449,19 @@ epic badge stays clickable to navigate to the epic — the surrounding row
 opens the dropdown, and a "—" option clears the epic. Changing release
 moves the task between containers (release-to-release, release-to-epic
 when "—" is chosen, epic-to-release); the "—" option only appears when
-the task has an epic to fall back to.
+the task has an epic to fall back to. A **finished** release is never
+offered as a destination — the same exclusion the creation dialog applies.
+
+**A task in a finished release opens read-only**, wherever the dialog is opened
+from. Every value is still shown — and every way to change one is gone rather
+than disabled-looking: title, description, checklist item text and note text
+render as plain text; status, type and release render as plain values instead of
+dropdowns; the epic renders as its badge, still clickable to navigate to the
+epic. Checklist checkboxes are disabled, the add-item row and the note composer
+are absent, and the per-item trash buttons do not appear. Linked tasks are
+frozen and the `…` menu's `Delete` item is disabled, as described below. An
+archived file is never rewritten, so there is nothing to fail: the operations
+`@boardown/core` would refuse are simply not reachable.
 
 **Deletion.** The task dialog's header carries a `…` menu next to the close button
 with a single `Delete` action. It opens a confirmation modal on top of the dialog;
