@@ -275,6 +275,22 @@ describe('createTask', () => {
     expect(written).not.toMatch(/^epic:/m);
   });
 
+  it('stores the epic in frontmatter when the task goes into a release', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current')], epics: [epic('parser')] }),
+    );
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'Scheduled',
+      type: 'feature',
+      epic: 'parser',
+    });
+
+    // A release file mixes epics, so there the `epic` key is the only link.
+    expect(fs.files.get('releases/1.0.md')!.content).toMatch(/^epic: parser$/m);
+  });
+
   it('lazily creates the no_epic backlog for an epic-less, release-less task', async () => {
     const { fs } = setup(snap({ backlog: null }));
 
@@ -283,6 +299,19 @@ describe('createTask', () => {
     expect(current().backlog).not.toBeNull();
     expect(current().backlog!.tasks).toHaveLength(1);
     expect(fs.files.has(BACKLOG_PATH)).toBe(true);
+  });
+
+  it('opens the create dialog bound to an epic and clears it on close', () => {
+    setup(snap({ epics: [epic('parser')] }));
+
+    state().openEpic('parser');
+    state().openCreateTaskForEpic('parser');
+    expect(state().createTaskForEpicSlug).toBe('parser');
+    // The create dialog stacks over the epic dialog rather than replacing it.
+    expect(state().selectedEpicSlug).toBe('parser');
+
+    state().closeCreateTask();
+    expect(state().createTaskForEpicSlug).toBeNull();
   });
 });
 

@@ -436,7 +436,8 @@ When created from a section's `+ Create`, the task is placed in that section;
 the section determines storage location. The Create menu in the top navigation
 additionally lets the user pick a release (finished releases excluded); with no
 release the task lands in the backlog — in the chosen epic's file, or
-`no_epic.md` when no epic is selected.
+`no_epic.md` when no epic is selected. The same dialog opens from the epic
+dialog's task list (see "Epic editor"), there with the epic locked.
 
 **Editing** happens **inline inside the task details dialog** (Jira-style):
 hovering a field highlights it, clicking turns it into an input/textarea
@@ -538,7 +539,12 @@ a manual operation outside this UI.
 
 Clicking an existing epic opens the details dialog with the list of linked tasks
 displayed below the description. Tasks in the list are clickable and open the
-task details dialog.
+task details dialog. A `+` button at the right end of that list's heading — the
+same shape as the one on the task dialog's "Linked tasks" heading — opens the
+creation dialog stacked over the epic dialog, with the **epic fixed** to this one
+(the chooser is shown disabled, the way a locked release is) and the release still
+freely selectable. The epic dialog stays open behind it and its list gains the new
+task.
 
 ### Release editor
 

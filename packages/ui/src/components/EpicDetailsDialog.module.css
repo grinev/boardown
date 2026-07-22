@@ -75,6 +75,38 @@
   color: var(--text-secondary);
 }
 
+.tasksHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.addButton {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.addButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .descriptionBody {
   margin: 0;
   white-space: pre-wrap;

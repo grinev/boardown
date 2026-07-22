@@ -15,6 +15,8 @@ interface CreateTaskDialogProps {
   release?: Release;
   releases?: Release[];
   backlogLocked?: boolean;
+  // When provided the task is bound to this epic and the epic selector is locked.
+  epic?: Epic;
   epics: Epic[];
   onClose: () => void;
 }
@@ -23,6 +25,7 @@ export function CreateTaskDialog({
   release,
   releases = [],
   backlogLocked = false,
+  epic,
   epics,
   onClose,
 }: CreateTaskDialogProps) {
@@ -31,7 +34,7 @@ export function CreateTaskDialog({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('feature');
-  const [epicSlug, setEpicSlug] = useState('');
+  const [epicSlug, setEpicSlug] = useState(epic?.slug ?? '');
   const [releaseFilename, setReleaseFilename] = useState(release?.filename ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -47,25 +50,26 @@ export function CreateTaskDialog({
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && !submitting;
 
+  const epicLocked = epic !== undefined;
+
   const epicOptions = useMemo<IconSelectOption[]>(() => {
+    const toOption = (e: Epic): IconSelectOption => ({
+      value: e.slug,
+      label: e.frontmatter.name,
+      icon: (
+        <span
+          className={styles.epicSwatch}
+          style={{ background: e.frontmatter.color }}
+          aria-hidden="true"
+        />
+      ),
+    });
+    if (epic) return [toOption(epic)];
     const sorted = [...epics].sort((a, b) =>
       a.frontmatter.name.localeCompare(b.frontmatter.name),
     );
-    return [
-      { value: '', label: 'No epic' },
-      ...sorted.map((epic) => ({
-        value: epic.slug,
-        label: epic.frontmatter.name,
-        icon: (
-          <span
-            className={styles.epicSwatch}
-            style={{ background: epic.frontmatter.color }}
-            aria-hidden="true"
-          />
-        ),
-      })),
-    ];
-  }, [epics]);
+    return [{ value: '', label: 'No epic' }, ...sorted.map(toOption)];
+  }, [epic, epics]);
 
   const typeOptions = useMemo<IconSelectOption[]>(
     () =>
@@ -160,6 +164,7 @@ export function CreateTaskDialog({
             options={epicOptions}
             onChange={(v) => setEpicSlug(v)}
             ariaLabel="Epic"
+            disabled={epicLocked}
           />
         </div>
         <label className={styles.field}>

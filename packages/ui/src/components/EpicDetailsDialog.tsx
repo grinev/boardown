@@ -1,4 +1,4 @@
-import { Layers, X } from 'lucide-react';
+import { Layers, Plus, X } from 'lucide-react';
 import { Fragment } from 'react';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -29,6 +29,7 @@ export function EpicDetailsDialog({
   onTaskClick,
 }: EpicDetailsDialogProps) {
   const updateEpic = useBoardStore((s) => s.updateEpic);
+  const openCreateTaskForEpic = useBoardStore((s) => s.openCreateTaskForEpic);
 
   return (
     <Modal open onClose={onClose} ariaLabel={`Epic ${epic.frontmatter.name}`}>
@@ -66,7 +67,17 @@ export function EpicDetailsDialog({
           />
         </section>
         <section className={styles.section}>
-          <h3 className={styles.sectionHeading}>Tasks ({tasks.length})</h3>
+          <div className={styles.tasksHeading}>
+            <h3 className={styles.sectionHeading}>Tasks ({tasks.length})</h3>
+            <button
+              type="button"
+              className={styles.addButton}
+              aria-label="Create task"
+              onClick={() => openCreateTaskForEpic(epic.slug)}
+            >
+              <Plus size={16} aria-hidden="true" />
+            </button>
+          </div>
           {tasks.length === 0 ? (
             <p className={styles.tasksEmpty}>No tasks</p>
           ) : (

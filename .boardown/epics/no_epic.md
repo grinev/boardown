@@ -11,15 +11,6 @@ status: todo
 order: 400
 ---
 
-## Add Create task button to epic
-
----
-id: BD-42
-type: feature
-status: todo
-order: 500
----
-
 ## Add optimistic locks on item save
 
 ---

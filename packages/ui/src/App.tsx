@@ -64,6 +64,7 @@ export function App({
   const createTaskForReleaseFilename = useBoardStore(
     (s) => s.createTaskForReleaseFilename,
   );
+  const createTaskForEpicSlug = useBoardStore((s) => s.createTaskForEpicSlug);
   const createTaskOpen = useBoardStore((s) => s.createTaskOpen);
   const createTaskBacklog = useBoardStore((s) => s.createTaskBacklog);
   const createReleaseOpen = useBoardStore((s) => s.createReleaseOpen);
@@ -162,6 +163,9 @@ export function App({
   const createTaskRelease = createTaskForReleaseFilename
     ? snapshot.releases.find((r) => r.filename === createTaskForReleaseFilename)
     : undefined;
+  const createTaskEpic = createTaskForEpicSlug
+    ? snapshot.epics.find((e) => e.slug === createTaskForEpicSlug)
+    : undefined;
   const startReleaseTarget = startReleaseForFilename
     ? snapshot.releases.find((r) => r.filename === startReleaseForFilename)
     : undefined;
@@ -218,6 +222,14 @@ export function App({
       {createTaskRelease && (
         <CreateTaskDialog
           release={createTaskRelease}
+          epics={snapshot.epics}
+          onClose={closeCreateTask}
+        />
+      )}
+      {createTaskEpic && (
+        <CreateTaskDialog
+          epic={createTaskEpic}
+          releases={snapshot.releases}
           epics={snapshot.epics}
           onClose={closeCreateTask}
         />
