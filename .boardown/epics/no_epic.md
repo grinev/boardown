@@ -109,12 +109,3 @@ type: feature
 status: todo
 order: 2100
 ---
-
-## Customizable task statuses
-
----
-id: BD-51
-type: feature
-status: todo
-order: 100
----
