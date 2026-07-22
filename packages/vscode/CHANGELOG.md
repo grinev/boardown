@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1
+
+- **Create a task from an epic**: the epic dialog's Tasks section gained a plus
+  button that creates a task in that epic without leaving the dialog.
+- Tasks in a finished release now open read-only — every value is still shown,
+  but nothing that would fail to write is clickable — and a finished release is
+  no longer offered as a destination when moving a task.
+- Fix: a long release name is no longer truncated in the board header.
+
 ## 0.5.0
 
 - **Docs tab**: a new top-level **Docs** view turns `.boardown/docs/` into a

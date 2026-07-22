@@ -1,6 +1,6 @@
 {
   "name": "@boardown/electron",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "boardown desktop app — a local-first Markdown task board.",
   "license": "MIT",

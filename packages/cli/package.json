@@ -1,6 +1,6 @@
 {
   "name": "@grinev/boardown-cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Command-line and agent-facing interface for boardown task boards.",
   "license": "MIT",
   "author": "Ruslan Grinev",
