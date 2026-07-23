@@ -15,6 +15,13 @@
   min-width: 0;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
 .headerIcon {
   width: 20px;
   height: 20px;

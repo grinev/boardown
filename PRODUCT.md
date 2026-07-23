@@ -485,12 +485,13 @@ without the `.md` extension (e.g. `[[guides/release-process]]`) renders as a lin
 showing the page's title with a page icon. Clicking it **inside a dialog** (task,
 epic or release) opens the page in a read-only **popup** — the page's title and
 its rendered body, no docs tree, the same width as the task and epic dialogs. Only
-one dialog is open at a time, so the popup replaces the dialog it was opened from.
+one dialog is on screen at a time, so the popup takes over from the dialog it was
+opened from — which goes onto the dialog back stack (see "Dialog back stack").
 The popup carries a **View in docs** button in its top-right that switches to the
 Docs tab and selects the page (the full editing surface). A link clicked **inside
 a doc page's body in the Docs tab** navigates to that page in place, as before.
 Inside the popup, a `[[…]]` link swaps the popup to the linked page and a task-ID
-reference replaces the popup with that task's dialog. A leading `docs/` and a
+reference swaps in that task's dialog. A leading `docs/` and a
 trailing `.md` are tolerated, since that is what a hand-typed reference tends to
 look like; matching is otherwise case-sensitive. Nothing is stored: the text on
 disk stays exactly what the user typed, and the link is a rendering affordance,
@@ -570,6 +571,31 @@ manual operation.
 Status is not editable here: it is owned by the Start / Complete release actions.
 A **finished** release opens the same dialog read-only — an archived file is
 never rewritten. Dates (`startDate` / `endDate`) are not shown or edited yet.
+
+### Dialog back stack
+
+The four detail dialogs — **task**, **epic**, **release** and the read-only
+**document popup** — are densely cross-linked: a task leads to its epic, to a
+linked task, to a task-ID or `[[…]]` reference in its description or notes; an
+epic leads to any of its tasks; a document popup leads to another page or to a
+task. Exactly one dialog is ever on screen, but navigating between them keeps a
+**history stack**: the dialog you left is remembered rather than discarded.
+
+A dialog reached from another one carries a **back** button — an icon-only
+control with a revert-style arrow — as the first item of its header's top-right
+action group, before the dialog's own actions and the close button. Pressing it
+shows the previous dialog, re-read from the board's current state so any edit
+made in between is visible; pressing it repeatedly walks the whole chain back. A
+dialog opened directly from a board card, a backlog row, a release name or the
+docs tab starts an empty stack and shows no back button. There is **no** forward
+navigation, no breadcrumb, and no way to jump more than one step.
+
+Closing a dialog outright — the close button, Escape or a click on the backdrop —
+discards the whole stack, as does following **View in docs** out to the Docs tab
+and deleting the open task. An entry whose entity has since disappeared is
+silently skipped on the way back; if none of them resolves, the dialog simply
+closes. The nested modals (creating a task from an epic, the delete confirmation)
+are not part of the stack — they close back to their parent on their own.
 
 ### Settings
 

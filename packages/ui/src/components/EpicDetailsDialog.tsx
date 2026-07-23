@@ -4,6 +4,7 @@ import type { Epic, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
+import { DialogBackButton } from './DialogBackButton';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
 import { Modal } from './Modal';
@@ -44,14 +45,17 @@ export function EpicDetailsDialog({
             onSave={(next) => updateEpic(epic.slug, { name: next })}
           />
         </div>
-        <button
-          type="button"
-          className={styles.closeButton}
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
+        <div className={styles.headerActions}>
+          <DialogBackButton />
+          <button
+            type="button"
+            className={styles.closeButton}
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <div className={styles.body}>
         <section className={styles.section}>

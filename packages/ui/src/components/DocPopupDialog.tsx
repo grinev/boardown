@@ -1,6 +1,7 @@
 import { ExternalLink, FileText, X } from 'lucide-react';
 import { docPageTitle, findDocPage } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { DialogBackButton } from './DialogBackButton';
 import { MarkdownContent } from './MarkdownContent';
 import { Modal } from './Modal';
 import styles from './DocPopupDialog.module.css';
@@ -25,6 +26,7 @@ export function DocPopupDialog() {
           <span className={styles.titleText}>{title}</span>
         </div>
         <div className={styles.headerActions}>
+          <DialogBackButton />
           <button
             type="button"
             className={styles.viewButton}

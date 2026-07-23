@@ -15,6 +15,7 @@ import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
 import { Checklist } from './Checklist';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
+import { DialogBackButton } from './DialogBackButton';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
@@ -127,6 +128,7 @@ export function TaskDetailsDialog({
           <span className={styles.idText}>{id}</span>
         </div>
         <div className={styles.headerActions}>
+          <DialogBackButton />
           <TaskActionsMenu
             deleteDisabled={archived}
             onDelete={() => setDeleteOpen(true)}

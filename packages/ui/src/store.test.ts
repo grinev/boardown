@@ -153,7 +153,10 @@ const setup = (snapshot: BoardSnapshot): { fs: MemFs } => {
     theme: snapshot.config.theme ?? 'light',
     selectedTaskId: null,
     selectedEpicSlug: null,
+    selectedReleaseFilename: null,
+    docPopupPath: null,
     selectedDocPath: null,
+    dialogStack: [],
   });
   return { fs };
 };
@@ -874,5 +877,151 @@ describe('doc popup', () => {
     expect(state().activeTab).toBe('docs');
     expect(state().selectedDocPath).toBe('docs/intro.md');
     expect(state().docPopupPath).toBeNull();
+  });
+});
+
+describe('dialog back stack', () => {
+  const docs = () => ({
+    path: 'docs',
+    name: 'docs',
+    folders: [],
+    pages: [
+      { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
+    ],
+    otherEntries: [],
+  });
+
+  const board = () =>
+    snap({
+      releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])],
+      epics: [epic('ui')],
+      docs: docs(),
+    });
+
+  it('pushes nothing when a dialog is opened with none already open', () => {
+    setup(board());
+
+    state().openTask('BD-1');
+
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('pushes the origin when one dialog is opened from another', () => {
+    setup(board());
+
+    state().openTask('BD-1');
+    state().openEpic('ui');
+
+    expect(state().selectedEpicSlug).toBe('ui');
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([{ kind: 'task', id: 'BD-1' }]);
+  });
+
+  it('records one entry per hop across a three-dialog chain', () => {
+    setup(board());
+
+    state().openTask('BD-1');
+    state().openEpic('ui');
+    state().openTask('BD-2');
+
+    expect(state().dialogStack).toEqual([
+      { kind: 'task', id: 'BD-1' },
+      { kind: 'epic', slug: 'ui' },
+    ]);
+  });
+
+  it('walks the chain back one step per call', () => {
+    setup(board());
+    state().openTask('BD-1');
+    state().openEpic('ui');
+    state().openTask('BD-2');
+
+    state().goBack();
+    expect(state().selectedEpicSlug).toBe('ui');
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([{ kind: 'task', id: 'BD-1' }]);
+
+    state().goBack();
+    expect(state().selectedTaskId).toBe('BD-1');
+    expect(state().selectedEpicSlug).toBeNull();
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('restores a release and a doc popup from the stack', () => {
+    setup(board());
+
+    state().openRelease('releases/1.0.md');
+    state().openDocPopup('docs/intro.md');
+    expect(state().dialogStack).toEqual([{ kind: 'release', filename: 'releases/1.0.md' }]);
+
+    state().openTask('BD-1');
+    state().goBack();
+
+    expect(state().docPopupPath).toBe('docs/intro.md');
+    expect(state().selectedTaskId).toBeNull();
+  });
+
+  it('is a no-op when the stack is empty', () => {
+    setup(board());
+    state().openTask('BD-1');
+
+    state().goBack();
+
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('skips an entry whose entity is no longer on the board', () => {
+    setup(board());
+    state().openTask('BD-1');
+    state().openEpic('ui');
+    state().openTask('BD-2');
+    // BD-1 disappears externally while the user is two dialogs deep.
+    useBoardStore.setState({
+      snapshot: snap({
+        releases: [release('1.0', 'current', [task('BD-2')])],
+        epics: [],
+        docs: docs(),
+      }),
+    });
+
+    state().goBack();
+
+    expect(state().selectedEpicSlug).toBeNull();
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('clears the stack when a dialog is closed outright', () => {
+    setup(board());
+    state().openTask('BD-1');
+    state().openEpic('ui');
+
+    state().closeEpic();
+
+    expect(state().dialogStack).toEqual([]);
+    expect(state().selectedEpicSlug).toBeNull();
+  });
+
+  it('clears the stack when leaving for the Docs tab', () => {
+    setup(board());
+    state().openTask('BD-1');
+    state().openDocPopup('docs/intro.md');
+
+    state().openDocPage('docs/intro.md');
+
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('clears the stack when the open task is deleted', async () => {
+    setup(board());
+    state().openEpic('ui');
+    state().openTask('BD-1');
+    expect(state().dialogStack).toEqual([{ kind: 'epic', slug: 'ui' }]);
+
+    await state().deleteTask('BD-1');
+
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([]);
   });
 });

@@ -34,6 +34,7 @@ import {
   docFilenameForTitle,
   docPagePath,
   findDocFolder,
+  findDocPage,
   isDocFolderEmpty,
   deleteTaskWithLinks,
   emptyBacklog,
@@ -56,6 +57,7 @@ import {
   serializeRelease,
 } from '@boardown/core';
 import { create, type StateCreator } from 'zustand';
+import { findTaskById } from './utils/find-task';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
 
@@ -87,6 +89,15 @@ export interface OnboardingInput {
   idPrefix: string;
 }
 
+// One entry of the dialog history: which of the four detail dialogs was open and
+// what it was showing. Only identifiers are kept — the entity is re-resolved on
+// the way back, so an edit made in between is visible.
+export type DialogRef =
+  | { kind: 'task'; id: string }
+  | { kind: 'epic'; slug: string }
+  | { kind: 'release'; filename: string }
+  | { kind: 'doc'; path: string };
+
 interface BoardState {
   status: BoardStatus;
   snapshot: BoardSnapshot | null;
@@ -106,6 +117,9 @@ interface BoardState {
   // The doc page shown in the read-only popup; a peer of the entity selections
   // above in the single-dialog invariant (only one dialog is open at a time).
   docPopupPath: string | null;
+  // Dialogs navigated away from, oldest first. Still one dialog on screen — this
+  // is history, not a pile of windows. Back only; there is no forward.
+  dialogStack: DialogRef[];
   createTaskForReleaseFilename: string | null;
   createTaskForEpicSlug: string | null;
   createTaskOpen: boolean;
@@ -134,6 +148,7 @@ interface BoardState {
   closeEpic: () => void;
   openRelease: (filename: string) => void;
   closeRelease: () => void;
+  goBack: () => void;
   openCreateTask: (releaseFilename: string) => void;
   openCreateTaskForEpic: (slug: string) => void;
   openCreateTaskMenu: () => void;
@@ -396,6 +411,58 @@ const logErrors =
     return withActionLogging(creator(loggingSet, get, api));
   };
 
+// The four detail dialogs are mutually exclusive, so "which one is open" is a
+// single value. A modal blocks the view underneath, which makes "a dialog is
+// already open" equivalent to "this open came from another dialog" — that is what
+// lets the openers push history without every call site saying so.
+const currentDialog = (state: BoardState): DialogRef | null => {
+  if (state.selectedTaskId !== null) return { kind: 'task', id: state.selectedTaskId };
+  if (state.selectedEpicSlug !== null) return { kind: 'epic', slug: state.selectedEpicSlug };
+  if (state.selectedReleaseFilename !== null) {
+    return { kind: 'release', filename: state.selectedReleaseFilename };
+  }
+  if (state.docPopupPath !== null) return { kind: 'doc', path: state.docPopupPath };
+  return null;
+};
+
+const pushCurrent = (state: BoardState): DialogRef[] => {
+  const current = currentDialog(state);
+  return current === null ? state.dialogStack : [...state.dialogStack, current];
+};
+
+const NO_DIALOG = {
+  selectedTaskId: null,
+  selectedEpicSlug: null,
+  selectedReleaseFilename: null,
+  docPopupPath: null,
+};
+
+const selectionFor = (ref: DialogRef) => {
+  switch (ref.kind) {
+    case 'task':
+      return { ...NO_DIALOG, selectedTaskId: ref.id };
+    case 'epic':
+      return { ...NO_DIALOG, selectedEpicSlug: ref.slug };
+    case 'release':
+      return { ...NO_DIALOG, selectedReleaseFilename: ref.filename };
+    case 'doc':
+      return { ...NO_DIALOG, docPopupPath: ref.path };
+  }
+};
+
+const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
+  switch (ref.kind) {
+    case 'task':
+      return findTaskById(snapshot, ref.id) !== null;
+    case 'epic':
+      return snapshot.epics.some((e) => e.slug === ref.slug);
+    case 'release':
+      return snapshot.releases.some((r) => r.filename === ref.filename);
+    case 'doc':
+      return findDocPage(snapshot.docs, ref.path) !== null;
+  }
+};
+
 export const useBoardStore = create<BoardState>(
   logErrors((set, get) => ({
     status: 'idle',
@@ -412,6 +479,7 @@ export const useBoardStore = create<BoardState>(
     selectedEpicSlug: null,
     selectedReleaseFilename: null,
     docPopupPath: null,
+    dialogStack: [],
     createTaskForReleaseFilename: null,
     createTaskForEpicSlug: null,
     createTaskOpen: false,
@@ -571,34 +639,46 @@ export const useBoardStore = create<BoardState>(
     },
 
     openTask: (id) =>
-      set({
+      set((state) => ({
+        ...NO_DIALOG,
         selectedTaskId: id,
-        selectedEpicSlug: null,
-        selectedReleaseFilename: null,
-        docPopupPath: null,
-      }),
+        dialogStack: pushCurrent(state),
+      })),
 
-    closeTask: () => set({ selectedTaskId: null }),
+    closeTask: () => set({ selectedTaskId: null, dialogStack: [] }),
 
     openEpic: (slug) =>
-      set({
+      set((state) => ({
+        ...NO_DIALOG,
         selectedEpicSlug: slug,
-        selectedTaskId: null,
-        selectedReleaseFilename: null,
-        docPopupPath: null,
-      }),
+        dialogStack: pushCurrent(state),
+      })),
 
-    closeEpic: () => set({ selectedEpicSlug: null }),
+    closeEpic: () => set({ selectedEpicSlug: null, dialogStack: [] }),
 
     openRelease: (filename) =>
-      set({
+      set((state) => ({
+        ...NO_DIALOG,
         selectedReleaseFilename: filename,
-        selectedTaskId: null,
-        selectedEpicSlug: null,
-        docPopupPath: null,
-      }),
+        dialogStack: pushCurrent(state),
+      })),
 
-    closeRelease: () => set({ selectedReleaseFilename: null }),
+    closeRelease: () => set({ selectedReleaseFilename: null, dialogStack: [] }),
+
+    // Back only, one step per press. Entries whose entity is gone (deleted
+    // externally between load and return) are dropped as we walk, so the user is
+    // never handed a dialog that cannot render.
+    goBack: () =>
+      set((state) => {
+        const { snapshot } = state;
+        for (let i = state.dialogStack.length - 1; i >= 0; i -= 1) {
+          const ref = state.dialogStack[i]!;
+          if (snapshot !== null && dialogExists(snapshot, ref)) {
+            return { ...selectionFor(ref), dialogStack: state.dialogStack.slice(0, i) };
+          }
+        }
+        return { ...NO_DIALOG, dialogStack: [] };
+      }),
 
     openCreateTask: (releaseFilename) => set({ createTaskForReleaseFilename: releaseFilename }),
 
@@ -645,24 +725,22 @@ export const useBoardStore = create<BoardState>(
       set({
         activeTab: 'docs',
         selectedDocPath: path,
-        selectedTaskId: null,
-        selectedEpicSlug: null,
-        selectedReleaseFilename: null,
-        docPopupPath: null,
+        ...NO_DIALOG,
+        dialogStack: [],
       }),
 
     // A doc link clicked inside a dialog opens the page in a read-only popup
     // instead of navigating to the Docs tab. The popup is a peer in the
-    // single-dialog invariant, so it replaces whichever dialog was open.
+    // single-dialog invariant, so it takes over from whichever dialog was open —
+    // and that dialog goes on the history stack.
     openDocPopup: (path) =>
-      set({
+      set((state) => ({
+        ...NO_DIALOG,
         docPopupPath: path,
-        selectedTaskId: null,
-        selectedEpicSlug: null,
-        selectedReleaseFilename: null,
-      }),
+        dialogStack: pushCurrent(state),
+      })),
 
-    closeDocPopup: () => set({ docPopupPath: null }),
+    closeDocPopup: () => set({ docPopupPath: null, dialogStack: [] }),
 
     openCreateDocPage: () => set({ createDocPageOpen: true }),
     closeCreateDocPage: () => set({ createDocPageOpen: false }),
@@ -1554,7 +1632,9 @@ export const useBoardStore = create<BoardState>(
         epics: nextEpics,
         backlog: nextBacklog,
       };
-      set({ snapshot: nextSnapshot, errorMessage: null, selectedTaskId: null });
+      // A deleted task is the end of the chain, not a step in it: close out of the
+      // whole history rather than stepping back into a dialog the user was done with.
+      set({ snapshot: nextSnapshot, errorMessage: null, selectedTaskId: null, dialogStack: [] });
     },
 
     updateEpic: async (slug, patch) => {

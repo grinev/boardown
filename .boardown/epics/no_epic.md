@@ -109,3 +109,14 @@ type: feature
 status: todo
 order: 850
 ---
+
+## Task activity/history
+
+---
+id: BD-60
+type: feature
+status: todo
+order: 2100
+---
+
+Show task history from git

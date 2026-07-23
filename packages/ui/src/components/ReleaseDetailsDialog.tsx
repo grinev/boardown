@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { Release, ReleaseStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { formatStatusLabel } from '../utils/format-status';
+import { DialogBackButton } from './DialogBackButton';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
 import { Modal } from './Modal';
@@ -47,14 +48,17 @@ export function ReleaseDetailsDialog({
             onSave={(next) => updateRelease(release.filename, { name: next })}
           />
         )}
-        <button
-          type="button"
-          className={styles.closeButton}
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
+        <div className={styles.headerActions}>
+          <DialogBackButton />
+          <button
+            type="button"
+            className={styles.closeButton}
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <div className={styles.body}>
         <section className={styles.section}>
