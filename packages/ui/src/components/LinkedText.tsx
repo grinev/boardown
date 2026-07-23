@@ -13,7 +13,7 @@ interface LinkedTextProps {
 export function LinkedText({ text }: LinkedTextProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
-  const openDocPage = useBoardStore((s) => s.openDocPage);
+  const openDocPopup = useBoardStore((s) => s.openDocPopup);
 
   const segments = splitRefs(text);
 
@@ -43,7 +43,7 @@ export function LinkedText({ text }: LinkedTextProps) {
               className={styles.link}
               onClick={(e) => {
                 e.stopPropagation();
-                openDocPage(page.path);
+                openDocPopup(page.path);
               }}
               onKeyDown={stopEditTrigger}
             >

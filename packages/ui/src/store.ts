@@ -103,6 +103,9 @@ interface BoardState {
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   selectedReleaseFilename: string | null;
+  // The doc page shown in the read-only popup; a peer of the entity selections
+  // above in the single-dialog invariant (only one dialog is open at a time).
+  docPopupPath: string | null;
   createTaskForReleaseFilename: string | null;
   createTaskForEpicSlug: string | null;
   createTaskOpen: boolean;
@@ -150,6 +153,8 @@ interface BoardState {
   closeSettings: () => void;
   selectDoc: (path: string | null) => void;
   openDocPage: (path: string) => void;
+  openDocPopup: (path: string) => void;
+  closeDocPopup: () => void;
   openCreateDocPage: () => void;
   closeCreateDocPage: () => void;
   openCreateDocFolder: () => void;
@@ -406,6 +411,7 @@ export const useBoardStore = create<BoardState>(
     selectedTaskId: null,
     selectedEpicSlug: null,
     selectedReleaseFilename: null,
+    docPopupPath: null,
     createTaskForReleaseFilename: null,
     createTaskForEpicSlug: null,
     createTaskOpen: false,
@@ -569,6 +575,7 @@ export const useBoardStore = create<BoardState>(
         selectedTaskId: id,
         selectedEpicSlug: null,
         selectedReleaseFilename: null,
+        docPopupPath: null,
       }),
 
     closeTask: () => set({ selectedTaskId: null }),
@@ -578,6 +585,7 @@ export const useBoardStore = create<BoardState>(
         selectedEpicSlug: slug,
         selectedTaskId: null,
         selectedReleaseFilename: null,
+        docPopupPath: null,
       }),
 
     closeEpic: () => set({ selectedEpicSlug: null }),
@@ -587,6 +595,7 @@ export const useBoardStore = create<BoardState>(
         selectedReleaseFilename: filename,
         selectedTaskId: null,
         selectedEpicSlug: null,
+        docPopupPath: null,
       }),
 
     closeRelease: () => set({ selectedReleaseFilename: null }),
@@ -630,8 +639,8 @@ export const useBoardStore = create<BoardState>(
     selectDoc: (path) => set({ selectedDocPath: path }),
 
     // Following a doc link from anywhere: land on the page, and get out of the
-    // dialog the link was clicked in — forgetting that part is a bug per caller,
-    // so it lives here rather than at each call site.
+    // dialog (or popup) the link was clicked in — forgetting that part is a bug
+    // per caller, so it lives here rather than at each call site.
     openDocPage: (path) =>
       set({
         activeTab: 'docs',
@@ -639,7 +648,21 @@ export const useBoardStore = create<BoardState>(
         selectedTaskId: null,
         selectedEpicSlug: null,
         selectedReleaseFilename: null,
+        docPopupPath: null,
       }),
+
+    // A doc link clicked inside a dialog opens the page in a read-only popup
+    // instead of navigating to the Docs tab. The popup is a peer in the
+    // single-dialog invariant, so it replaces whichever dialog was open.
+    openDocPopup: (path) =>
+      set({
+        docPopupPath: path,
+        selectedTaskId: null,
+        selectedEpicSlug: null,
+        selectedReleaseFilename: null,
+      }),
+
+    closeDocPopup: () => set({ docPopupPath: null }),
 
     openCreateDocPage: () => set({ createDocPageOpen: true }),
     closeCreateDocPage: () => set({ createDocPageOpen: false }),

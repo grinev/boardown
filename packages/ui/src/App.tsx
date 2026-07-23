@@ -8,6 +8,7 @@ import { ConflictDialog } from './components/ConflictDialog';
 import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
+import { DocPopupDialog } from './components/DocPopupDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { ReleaseDetailsDialog } from './components/ReleaseDetailsDialog';
 import { OnboardingDialog } from './components/OnboardingDialog';
@@ -61,6 +62,7 @@ export function App({
   const selectedTaskId = useBoardStore((s) => s.selectedTaskId);
   const selectedEpicSlug = useBoardStore((s) => s.selectedEpicSlug);
   const selectedReleaseFilename = useBoardStore((s) => s.selectedReleaseFilename);
+  const docPopupPath = useBoardStore((s) => s.docPopupPath);
   const createTaskForReleaseFilename = useBoardStore(
     (s) => s.createTaskForReleaseFilename,
   );
@@ -219,6 +221,7 @@ export function App({
       {selectedRelease && (
         <ReleaseDetailsDialog release={selectedRelease} onClose={closeRelease} />
       )}
+      {docPopupPath && <DocPopupDialog />}
       {createTaskRelease && (
         <CreateTaskDialog
           release={createTaskRelease}

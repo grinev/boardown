@@ -15,6 +15,7 @@ export function DocsView() {
   const docs = useBoardStore((s) => s.snapshot?.docs ?? null);
   const selectedDocPath = useBoardStore((s) => s.selectedDocPath);
   const selectDoc = useBoardStore((s) => s.selectDoc);
+  const openDocPage = useBoardStore((s) => s.openDocPage);
   const openCreateDocPage = useBoardStore((s) => s.openCreateDocPage);
   const openCreateDocFolder = useBoardStore((s) => s.openCreateDocFolder);
   const openDeleteDoc = useBoardStore((s) => s.openDeleteDoc);
@@ -175,7 +176,7 @@ export function DocsView() {
                 <DocRefSuggestions suggestions={suggestions} />
               </>
             ) : (
-              <MarkdownContent source={page.body} />
+              <MarkdownContent source={page.body} onDocRefClick={openDocPage} />
             )}
           </>
         )}

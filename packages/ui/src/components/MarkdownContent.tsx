@@ -15,6 +15,9 @@ import styles from './MarkdownContent.module.css';
 
 interface MarkdownContentProps {
   source: string;
+  // What a doc-ref link does when clicked: navigate the Docs tab in place
+  // (openDocPage) or swap the popup that is showing this body (openDocPopup).
+  onDocRefClick: (path: string) => void;
 }
 
 // react-markdown drops URLs with an unknown protocol, which would strip the
@@ -24,10 +27,9 @@ const urlTransform = (url: string): string =>
 
 // No rehype-raw: embedded HTML renders as text rather than markup, which is the
 // product's requirement and react-markdown's default, so no sanitizer is needed.
-export function MarkdownContent({ source }: MarkdownContentProps) {
+export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
-  const openDocPage = useBoardStore((s) => s.openDocPage);
 
   const toLink = useCallback<ToRefLink>(
     (segment) => {
@@ -60,7 +62,7 @@ export function MarkdownContent({ source }: MarkdownContentProps) {
             <button
               type="button"
               className={styles.refLink}
-              onClick={() => openDocPage(path)}
+              onClick={() => onDocRefClick(path)}
             >
               <FileText size={14} className={styles.refIcon} aria-hidden="true" />
               {children}
@@ -78,7 +80,7 @@ export function MarkdownContent({ source }: MarkdownContentProps) {
         return <a href={href}>{children}</a>;
       },
     }),
-    [openDocPage, openTask],
+    [onDocRefClick, openTask],
   );
 
   return (

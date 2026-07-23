@@ -826,3 +826,53 @@ describe('docs', () => {
     expect(fs.files.has(CONFIG_FILENAME)).toBe(false);
   });
 });
+
+describe('doc popup', () => {
+  it('opens the popup and replaces whatever dialog was open', () => {
+    setup(snap());
+    useBoardStore.setState({
+      selectedTaskId: 'BD-1',
+      selectedEpicSlug: null,
+      selectedReleaseFilename: null,
+      docPopupPath: null,
+    });
+
+    state().openDocPopup('docs/intro.md');
+
+    expect(state().docPopupPath).toBe('docs/intro.md');
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().selectedEpicSlug).toBeNull();
+    expect(state().selectedReleaseFilename).toBeNull();
+  });
+
+  it('closes the popup without revealing another dialog', () => {
+    setup(snap());
+    useBoardStore.setState({ docPopupPath: 'docs/intro.md' });
+
+    state().closeDocPopup();
+
+    expect(state().docPopupPath).toBeNull();
+    expect(state().selectedTaskId).toBeNull();
+  });
+
+  it('replaces the popup with a task dialog when a task ref is opened from it', () => {
+    setup(snap());
+    useBoardStore.setState({ docPopupPath: 'docs/intro.md' });
+
+    state().openTask('BD-1');
+
+    expect(state().docPopupPath).toBeNull();
+    expect(state().selectedTaskId).toBe('BD-1');
+  });
+
+  it('View in docs navigates to the Docs tab and dismisses the popup', () => {
+    setup(snap());
+    useBoardStore.setState({ docPopupPath: 'docs/intro.md', activeTab: 'board' });
+
+    state().openDocPage('docs/intro.md');
+
+    expect(state().activeTab).toBe('docs');
+    expect(state().selectedDocPath).toBe('docs/intro.md');
+    expect(state().docPopupPath).toBeNull();
+  });
+});

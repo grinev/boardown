@@ -482,11 +482,19 @@ tasks created under an older prefix stay linkable.
 
 **Doc links.** A `[[…]]` token holding a doc page's path relative to `docs/`
 without the `.md` extension (e.g. `[[guides/release-process]]`) renders as a link
-showing the page's title with a page icon; clicking it closes the dialog, switches
-to the Docs tab and selects that page. A leading `docs/` and a trailing `.md` are
-tolerated, since that is what a hand-typed reference tends to look like; matching
-is otherwise case-sensitive. Nothing is stored: the text on disk stays exactly what
-the user typed, and the link is a rendering affordance, not a data format.
+showing the page's title with a page icon. Clicking it **inside a dialog** (task,
+epic or release) opens the page in a read-only **popup** — the page's title and
+its rendered body, no docs tree, the same width as the task and epic dialogs. Only
+one dialog is open at a time, so the popup replaces the dialog it was opened from.
+The popup carries a **View in docs** button in its top-right that switches to the
+Docs tab and selects the page (the full editing surface). A link clicked **inside
+a doc page's body in the Docs tab** navigates to that page in place, as before.
+Inside the popup, a `[[…]]` link swaps the popup to the linked page and a task-ID
+reference replaces the popup with that task's dialog. A leading `docs/` and a
+trailing `.md` are tolerated, since that is what a hand-typed reference tends to
+look like; matching is otherwise case-sensitive. Nothing is stored: the text on
+disk stays exactly what the user typed, and the link is a rendering affordance,
+not a data format.
 
 Both kinds render in the task's **description** and **notes** (task dialog), the
 **epic's description** (epic dialog), the **release's description** (release
