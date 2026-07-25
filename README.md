@@ -134,6 +134,27 @@ as compact summaries; `task get <id>` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 
+## Working with branches
+
+The board is text in your repo, so it merges like any other file — no server
+arbitrates writes. Two habits keep merges clean.
+
+**On a branch, touch only the task that branch is about** — its status, title,
+description, checklist, notes. That is one task block in one file. Leave the
+neighbouring tasks alone even if you spot something worth fixing; note it down
+for later.
+
+**Reshape the board on the main branch:** creating tasks (a new task bumps
+`nextId` in `config.yaml` and two branches end up with the same ID, which nothing
+detects yet), dragging cards, moving a task between the backlog, an epic and a
+release (a delete in one file and an insert in another — merged badly, the task
+lands in both), and the release lifecycle.
+
+Skim the `.boardown/` diff before merging: a duplicated task block is easy to
+spot in markdown and far cheaper to fix there. Conflict markers left inside a
+task's frontmatter only drop that task — the parser flags it and the rest of the
+board keeps working.
+
 ## Building the `.vsix` from sources
 
 To build an installable `.vsix` yourself instead of downloading it:
