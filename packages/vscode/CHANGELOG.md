@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.2
+
+- **Documents open in a popup**: clicking a doc reference in a task, an epic or
+  a release description opens that page in a popup on the same tab, with a
+  **View in docs** button for the full jump to the Docs tab.
+- **Back button in dialogs**: jumping from one dialog to another (task → epic,
+  task → linked task, task → doc page) keeps a history — the dialog you land on
+  shows a Back button that returns you to the one you came from.
+- Task edits are now merge-friendly: changing a status no longer moves the
+  task's block inside the markdown file, so the change is a two-line diff and
+  two branches touching different tasks in the same release merge cleanly.
+
 ## 0.5.1
 
 - **Create a task from an epic**: the epic dialog's Tasks section gained a plus

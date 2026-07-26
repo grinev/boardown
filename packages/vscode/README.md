@@ -50,7 +50,8 @@ instead of overwriting.
   complete actions and unfinished-task relocation on completion; click a
   release's name to view and edit its details.
 - **Docs**: a **Docs** tab turns `.boardown/docs/` into a small project wiki,
-  and any doc page can be referenced from a task or epic and clicked through to.
+  and any doc page can be referenced from a task or epic and opened in a popup
+  without leaving the board.
 - **Epics** that group tasks across releases and double as the backlog's
   storage, usable as a filter dimension.
 - **Task checklists and notes**: each task can carry a lightweight todo
@@ -66,7 +67,8 @@ instead of overwriting.
 - **Auto-refresh** on external file changes (toggle via `boardown.autoRefresh`).
 - **Plain-markdown storage** in `.boardown/`, committed to git like the rest of
   your code — no cloud, no server, no account, and git is your history and
-  backup.
+  backup. Edits are written in place, so a task you moved on a feature branch
+  merges back as a two-line diff.
 - **Agent-drivable** from the companion CLI (`@grinev/boardown-cli`): the same
   board, scriptable with machine-readable JSON output for AI agents and CI.
 
