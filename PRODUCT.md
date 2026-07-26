@@ -42,7 +42,7 @@ A single unit of work. Fields:
 | `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
 | `status`      | string    | One of `todo`, `in-progress`, `done`.                           |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
-| `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. |
+| `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is currently always `relates` (symmetric); `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
@@ -242,6 +242,16 @@ The description is plain text.
 ```
 
 The H2 heading text is the task title.
+
+**Block order in a file is insertion order and carries no meaning.** A task
+section stays where it is for the life of the file: a new task is appended at the
+end, a task moved in from another container is appended too, and no write ever
+re-sorts the sections. `order` is what says where a task sits on the board, and
+every reader sorts by it. This keeps an edit — a status change above all — a
+change to a couple of lines inside one task's own frontmatter, so two git
+branches touching different tasks in the same release merge cleanly. It also
+means a file's sections are typically *not* in `order` order after a while, and
+that is expected, not damage.
 
 ## Configuration
 

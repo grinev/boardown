@@ -125,6 +125,12 @@ CLI inherits them rather than re-implementing them.
   Surface validation errors as structured problems (see "Lenient parsing"
   in PRODUCT.md), never throw away user data.
 - Never auto-rewrite a file the parser failed to fully understand.
+- A write must never re-sort the task blocks of a file. A container's `tasks`
+  array is the file's block order, so a board operation returns it in the order
+  it received it — new tasks are appended, and everything else is patched in
+  place. Sorting is the reader's job (`sortTasksByOrder` / `unscheduledTasks`);
+  a list that skips it shows whatever the markdown happens to look like. This is
+  what keeps a status change a two-line diff that merges across git branches.
 - If `.boardown/config.yaml` is missing, the UI shows an onboarding modal
   that writes it on submit. Do not auto-create `config.yaml` outside that
   flow, and do not fall back to defaults — a present-but-invalid config is

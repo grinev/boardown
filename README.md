@@ -140,9 +140,10 @@ The board is text in your repo, so it merges like any other file — no server
 arbitrates writes. Two habits keep merges clean.
 
 **On a branch, touch only the task that branch is about** — its status, title,
-description, checklist, notes. That is one task block in one file. Leave the
-neighbouring tasks alone even if you spot something worth fixing; note it down
-for later.
+description, checklist, notes. That is one task block in one file, and a status
+change is a two-line diff: task sections never move around, so nothing else in
+the file shifts. Leave the neighbouring tasks alone even if you spot something
+worth fixing; note it down for later.
 
 **Reshape the board on the main branch:** creating tasks (a new task bumps
 `nextId` in `config.yaml` and two branches end up with the same ID, which nothing

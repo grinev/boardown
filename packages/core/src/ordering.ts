@@ -5,6 +5,11 @@ import type { BoardSnapshot } from './loader.js';
  * The board's ordering rules, in one place. The loader returns releases, epics
  * and the backlog as separately-loaded, unsorted arrays; every shell that shows
  * them has to apply the same rules, so they live here rather than in each shell.
+ *
+ * A task array is in the file's block order, which writes never change, so
+ * sorting here is the only thing that puts tasks in board order — a reader that
+ * skips it shows whatever the markdown happens to look like. Ties keep load
+ * order: `Array.prototype.sort` is stable.
  */
 
 const byOrder = (a: Task, b: Task): number =>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { changeTaskStatus } from './board-ops.js';
 import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
 import type { Epic } from './schemas.js';
 import { serializeBacklog, serializeDocPage, serializeEpic, serializeRelease } from './serializer.js';
@@ -536,5 +537,63 @@ description: "${TOKEN}"
     const second = parseRelease(serializeRelease(first.value!), 'releases/1.11.md', '1.11');
     expect(second.problems).toEqual([]);
     expect(second.value!.frontmatter.description).toBe(TOKEN);
+  });
+});
+
+// The feature this guards: a status change on a branch must be a diff inside one
+// task's own frontmatter, not a block that moves to the end of the file.
+describe('a write keeps the file layout', () => {
+  const SHUFFLED = `---
+status: current
+name: v0.2.0
+---
+
+## Third
+
+---
+id: BD-3
+type: feature
+status: todo
+order: 300
+---
+
+## First
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+---
+
+Description of the first task.
+
+## Second
+
+---
+id: BD-2
+type: tech
+status: todo
+order: 200
+---
+`;
+
+  it('does not re-sort blocks that are already out of order order', () => {
+    const parsed = parseRelease(SHUFFLED, 'releases/v0.2.0.md', 'v0.2.0');
+    expect(parsed.problems).toEqual([]);
+    expect(serializeRelease(parsed.value!)).toBe(SHUFFLED);
+  });
+
+  it('changes only the edited task frontmatter lines on a status change', () => {
+    const parsed = parseRelease(SHUFFLED, 'releases/v0.2.0.md', 'v0.2.0');
+    const edited = changeTaskStatus(parsed.value!, 'BD-1', 'done');
+    const before = SHUFFLED.split('\n');
+    const after = serializeRelease(edited).split('\n');
+
+    expect(after.length).toBe(before.length);
+    const changed = after
+      .map((line, i) => (line === before[i] ? null : `${before[i]} → ${line}`))
+      .filter((entry): entry is string => entry !== null);
+    expect(changed).toEqual(['status: todo → status: done', 'order: 100 → order: 400']);
   });
 });

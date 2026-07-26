@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import type { Task, TaskStatus } from '@boardown/core';
+import { sortTasksByOrder, type Task, type TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
@@ -39,10 +39,12 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
     const needle = query.trim().toLowerCase();
     if (snapshot === null || needle === '') return [];
     const linked = new Set(rows.map((r) => r.task.frontmatter.id));
+    // Sorted per container: the pool is sliced to the first few matches, and a
+    // file's block order says nothing about where a task sits on the board.
     const candidates = [
-      ...snapshot.releases.flatMap((r) => r.tasks),
-      ...snapshot.epics.flatMap((e) => e.tasks),
-      ...(snapshot.backlog?.tasks ?? []),
+      ...snapshot.releases.flatMap((r) => sortTasksByOrder(r.tasks)),
+      ...snapshot.epics.flatMap((e) => sortTasksByOrder(e.tasks)),
+      ...sortTasksByOrder(snapshot.backlog?.tasks ?? []),
     ];
     return candidates
       .filter((t) => {

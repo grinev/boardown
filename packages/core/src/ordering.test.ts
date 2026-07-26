@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Backlog, Epic, Release, Task } from './schemas.js';
-import { finishedReleases, futureReleases, currentRelease, unscheduledTasks } from './ordering.js';
+import {
+  finishedReleases,
+  futureReleases,
+  currentRelease,
+  sortTasksByOrder,
+  unscheduledTasks,
+} from './ordering.js';
 
 const task = (id: string, order: number): Task => ({
   title: id,
@@ -75,5 +81,26 @@ describe('release ordering', () => {
 
   it('has no current release when none is current', () => {
     expect(currentRelease({ releases: [release('x', 'future')] })).toBeUndefined();
+  });
+});
+
+describe('sortTasksByOrder', () => {
+  it('puts a shuffled file into board order', () => {
+    const tasks = [task('T-3', 300), task('T-1', 100), task('T-2', 200)];
+    expect(sortTasksByOrder(tasks).map((t) => t.frontmatter.id)).toEqual([
+      'T-1',
+      'T-2',
+      'T-3',
+    ]);
+  });
+
+  // Equal orders are a merge artefact; they must not make the list flicker.
+  it('keeps load order when two tasks share an order', () => {
+    const tasks = [task('T-2', 100), task('T-1', 100), task('T-3', 50)];
+    expect(sortTasksByOrder(tasks).map((t) => t.frontmatter.id)).toEqual([
+      'T-3',
+      'T-2',
+      'T-1',
+    ]);
   });
 });

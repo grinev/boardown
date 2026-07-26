@@ -1070,3 +1070,84 @@ describe('task links', () => {
     expect(() => removeTaskLink(r, a, 'BD-1', 'BD-2')).toThrow(/finished/);
   });
 });
+
+// The array's order is the order of the task blocks in the markdown file, so a
+// write that reshuffles it moves whole sections around and turns a status change
+// into a conflict-prone diff. These pin the array down.
+describe('block order in the file', () => {
+  const ids = (tasks: Task[]): string[] => tasks.map((t) => t.frontmatter.id);
+  const orderOf = (tasks: Task[], id: string): number =>
+    tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
+
+  // Physically shuffled, the way a file looks after a few edits.
+  const shuffled = (): Release =>
+    release(
+      task('BD-3', 'todo', 300),
+      task('BD-1', 'todo', 100),
+      task('BD-2', 'done', 200),
+    );
+
+  it('survives a status change', () => {
+    const result = changeTaskStatus(shuffled(), 'BD-1', 'done');
+    expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
+    expect(orderOf(result.tasks, 'BD-1')).toBe(400);
+    expect(orderOf(result.tasks, 'BD-2')).toBe(200);
+    expect(orderOf(result.tasks, 'BD-3')).toBe(300);
+  });
+
+  it('survives a status change made through editTask', () => {
+    const result = editTask(shuffled(), 'BD-1', { status: 'in-progress' });
+    expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
+    expect(orderOf(result.tasks, 'BD-1')).toBe(400);
+  });
+
+  it('survives a reorder', () => {
+    const result = reorderTask(shuffled(), 'BD-3', 'BD-2');
+    expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
+    expect(orderOf(result.tasks, 'BD-3')).toBe(150);
+  });
+
+  it('survives a renumber, which rewrites every order in place', () => {
+    const tight = release(
+      task('BD-3', 'todo', 300),
+      task('BD-1', 'todo', 100),
+      task('BD-2', 'todo', 101),
+    );
+    const result = reorderTask(tight, 'BD-3', 'BD-2');
+
+    expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
+    // Visual order is BD-1, BD-3, BD-2 — the values say so, the array does not.
+    expect(orderOf(result.tasks, 'BD-1')).toBe(100);
+    expect(orderOf(result.tasks, 'BD-3')).toBe(200);
+    expect(orderOf(result.tasks, 'BD-2')).toBe(300);
+  });
+
+  it('appends a task moved in from another container', () => {
+    const dest = shuffled();
+    const source = epic('ui', task('BD-9', 'todo', 100));
+    const result = moveTaskBetweenContainers(source, dest, 'BD-9', {
+      newStatus: 'todo',
+      beforeTaskId: null,
+    });
+
+    expect(ids(result.dest.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2', 'BD-9']);
+    expect(orderOf(result.dest.tasks, 'BD-9')).toBe(400);
+    expect(ids(result.source.tasks)).toEqual([]);
+  });
+
+  it('appends a created task', () => {
+    const result = createTask(shuffled(), config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+    });
+    expect(ids(result.container.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2', 'BD-10']);
+  });
+
+  it('leaves its neighbours in place when a task is deleted', () => {
+    const result = deleteTask(shuffled(), 'BD-1');
+    expect(ids(result.tasks)).toEqual(['BD-3', 'BD-2']);
+    expect(orderOf(result.tasks, 'BD-2')).toBe(200);
+    expect(orderOf(result.tasks, 'BD-3')).toBe(300);
+  });
+});

@@ -232,6 +232,14 @@ interface PlaceArgs {
   beforeTaskId: string | null;
 }
 
+/**
+ * Computes where a task lands and returns the container's tasks **in the order
+ * they came in**, with `order` (and the moved task's `status`) rewritten. The
+ * array's order is the file's block order, so re-sorting it here would move task
+ * sections around inside the markdown — turning a status change on a branch into
+ * a delete-and-reinsert diff that conflicts with every other branch. Readers sort
+ * by `order` themselves.
+ */
 const placeTaskInContainer = (
   tasks: Task[],
   movingId: string,
@@ -274,23 +282,32 @@ const placeTaskInContainer = (
     }
   }
 
-  const updatedMoving: Task = {
-    ...moving,
-    frontmatter: { ...moving.frontmatter, status: args.status, order: newOrder },
-  };
+  const withMovingApplied = (task: Task, order: number): Task =>
+    task.frontmatter.id === movingId
+      ? { ...task, frontmatter: { ...task.frontmatter, status: args.status, order } }
+      : order === task.frontmatter.order
+        ? task
+        : { ...task, frontmatter: { ...task.frontmatter, order } };
 
-  const placed = [
+  if (!needsRenumber) {
+    return tasks.map((t) =>
+      t.frontmatter.id === movingId ? withMovingApplied(t, newOrder) : t,
+    );
+  }
+
+  // The gap between two peers collapsed, so every task gets a fresh order taken
+  // from its place in the visual order — while the blocks stay where they are.
+  const visual = [
     ...siblings.slice(0, insertIdx),
-    updatedMoving,
+    moving,
     ...siblings.slice(insertIdx),
   ];
-
-  return needsRenumber
-    ? placed.map((t, i) => ({
-        ...t,
-        frontmatter: { ...t.frontmatter, order: (i + 1) * ORDER_STEP },
-      }))
-    : placed;
+  const renumbered = new Map(
+    visual.map((t, i) => [t.frontmatter.id, (i + 1) * ORDER_STEP] as const),
+  );
+  return tasks.map((t) =>
+    withMovingApplied(t, renumbered.get(t.frontmatter.id) ?? t.frontmatter.order),
+  );
 };
 
 const lastOrderInContainer = (tasks: Task[]): number => {
@@ -516,6 +533,8 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
     source,
     source.tasks.filter((t) => t.frontmatter.id !== taskId),
   );
+  // Appended, deliberately: the end of the file is the only insertion point that
+  // leaves every existing block untouched.
   const destWithTask = replaceTasks(dest, [...dest.tasks, updated]);
   const placed = placeTaskInContainer(destWithTask.tasks, taskId, {
     status: args.newStatus,

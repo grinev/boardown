@@ -331,6 +331,44 @@ describe('cli commands (integration)', () => {
       expect((out.data as { count: number }).count).toBe(4);
     });
 
+    // A file's block order is insertion order and says nothing about the board,
+    // so the listing has to sort rather than trust the file.
+    it('sorts each container by order, not by position in the file', async () => {
+      await seed();
+      await writeFile(
+        join(project, '.boardown', 'epics', 'no_epic.md'),
+        [
+          '---',
+          '{}',
+          '---',
+          '',
+          '## Beta feature',
+          '',
+          '---',
+          'id: TS-2',
+          'type: feature',
+          'status: done',
+          'order: 200',
+          '---',
+          '',
+          '## Alpha bug fix',
+          '',
+          '---',
+          'id: TS-1',
+          'type: bug',
+          'status: todo',
+          'order: 100',
+          '---',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const out = await taskCommand(parseArgs(['task', 'list']), ctx);
+      const listed = (out.data as { tasks: { id: string }[] }).tasks.map((e) => e.id);
+      expect(listed.indexOf('TS-1')).toBeLessThan(listed.indexOf('TS-2'));
+    });
+
     it('each entry carries the task and its container location', async () => {
       await seed();
       const out = await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx);

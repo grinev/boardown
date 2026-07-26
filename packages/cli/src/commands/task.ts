@@ -10,6 +10,7 @@ import {
   nextNoteId,
   removeTaskLink,
   reorderTask,
+  sortTasksByOrder,
   LINK_TYPE_META,
   TASK_STATUSES,
   TASK_TYPES,
@@ -451,11 +452,15 @@ interface TaskListEntry {
 
 // Flatten every task across the board, each paired with its physical container.
 // Order mirrors the board view (current → future releases, backlog, epics,
-// finished releases) so a filtered list reads in the same order as `board`.
+// finished releases) so a filtered list reads in the same order as `board`, and
+// each container's tasks are sorted by `order` — the file's block order is
+// insertion order and says nothing about where a task sits.
 function collectEntries(snapshot: BoardSnapshot): TaskListEntry[] {
   const entries: TaskListEntry[] = [];
   const push = (kind: ContainerKind, filename: string, tasks: readonly Task[]): void => {
-    for (const task of tasks) entries.push({ task, in: { kind, file: filename } });
+    for (const task of sortTasksByOrder(tasks)) {
+      entries.push({ task, in: { kind, file: filename } });
+    }
   };
   const releasesByStatus = (status: ReleaseStatus): readonly Release[] =>
     snapshot.releases.filter((r) => r.frontmatter.status === status);
