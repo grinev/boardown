@@ -8,6 +8,7 @@ import type {
   Epic,
   EpicPatch,
   FsAdapter,
+  GuardedFile,
   GuardedFs,
   ParseProblem,
   Release,
@@ -1480,8 +1481,12 @@ export const useBoardStore = create<BoardState>(
       // target.kind === 'backlog': pure global reorder of the flat backlog
       // list, or move-from-release-into-backlog followed by such reorder.
       let workingSnapshot = snapshot;
-      let releaseWritebackFilename: string | null = null;
-      let releaseWritebackContent: string | null = null;
+      // The two files the move itself touches. The reorder below reports only
+      // the files whose `order` values changed, which says nothing about a file
+      // that gained or lost a task — leaving the destination to it drops the
+      // task off disk whenever the reorder lands on the order it already has.
+      let movedFromFilename: string | null = null;
+      let movedIntoFilename: string | null = null;
 
       if (sourceLoc.kind === 'release') {
         const epicSlug = task.frontmatter.epic;
@@ -1502,6 +1507,7 @@ export const useBoardStore = create<BoardState>(
             destEpic: { kind: 'set', slug: destEpic.slug },
           });
           movedSource = moved.source;
+          movedIntoFilename = moved.dest.filename;
           nextEpics = [...snapshot.epics];
           nextEpics[epicIdx] = moved.dest;
         } else {
@@ -1515,13 +1521,13 @@ export const useBoardStore = create<BoardState>(
             destEpic: { kind: 'clear' },
           });
           movedSource = moved.source;
+          movedIntoFilename = moved.dest.filename;
           nextBacklog = moved.dest;
         }
 
         const nextReleases = [...snapshot.releases];
         nextReleases[sourceLoc.index] = movedSource;
-        releaseWritebackFilename = movedSource.filename;
-        releaseWritebackContent = serializeRelease(movedSource);
+        movedFromFilename = movedSource.filename;
 
         workingSnapshot = {
           ...snapshot,
@@ -1544,20 +1550,31 @@ export const useBoardStore = create<BoardState>(
       };
       set({ snapshot: nextSnapshot, errorMessage: null });
 
+      const toWrite = new Set(reordered.changedFilenames);
+      if (movedFromFilename) toWrite.add(movedFromFilename);
+      if (movedIntoFilename) toWrite.add(movedIntoFilename);
+
+      const files: GuardedFile[] = [];
+      for (const filename of toWrite) {
+        const release = nextSnapshot.releases.find((r) => r.filename === filename);
+        if (release) {
+          files.push({ path: filename, content: serializeRelease(release) });
+          continue;
+        }
+        const epic = nextSnapshot.epics.find((e) => e.filename === filename);
+        if (epic) {
+          files.push({ path: filename, content: serializeEpic(epic) });
+          continue;
+        }
+        if (nextSnapshot.backlog && nextSnapshot.backlog.filename === filename) {
+          files.push({ path: filename, content: serializeBacklog(nextSnapshot.backlog) });
+        }
+      }
+
       try {
-        if (releaseWritebackFilename && releaseWritebackContent) {
-          await fs.write(releaseWritebackFilename, releaseWritebackContent);
-        }
-        for (const filename of reordered.changedFilenames) {
-          const epic = nextSnapshot.epics.find((e) => e.filename === filename);
-          if (epic) {
-            await fs.write(filename, serializeEpic(epic));
-            continue;
-          }
-          if (nextSnapshot.backlog && nextSnapshot.backlog.filename === filename) {
-            await fs.write(filename, serializeBacklog(nextSnapshot.backlog));
-          }
-        }
+        // The task leaves one file and lands in another, so the two writes have
+        // to stand or fall together.
+        await fs.writeAll(files);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to move task: ${message}` });

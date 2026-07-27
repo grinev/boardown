@@ -400,7 +400,7 @@ describe('moveTaskOnBacklog', () => {
   });
 
   it('moves an epic-less release task into the backlog', async () => {
-    setup(
+    const { fs } = setup(
       snap({
         releases: [release('1.0', 'current', [task('BD-1')])],
         backlog: backlog([task('BD-2', { order: 100 })]),
@@ -413,6 +413,44 @@ describe('moveTaskOnBacklog', () => {
     expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
       'BD-1',
     );
+    // Both ends of the move reach disk. The reorder only reports files whose
+    // orders changed, and landing at the end of the list means BD-1 keeps the
+    // order it was given — the destination must be written all the same.
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
+  });
+
+  it('writes the destination epic when it was empty before the move', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1', { epic: 'ui' })])],
+        epics: [epic('ui'), epic('core', [task('BD-3', { epic: 'core' })])],
+        backlog: backlog([task('BD-2', { order: 200 })]),
+      }),
+    );
+
+    // Dropping at the top renumbers the whole list; BD-1 lands on 100, which is
+    // what an empty destination already gave it.
+    await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, 'BD-3');
+
+    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(fs.writes).toContain('epics/ui.md');
+  });
+
+  it('leaves the task where it was when a write fails', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2', { order: 100 })]),
+      }),
+    );
+    fs.failWritesMatching = '*';
+
+    await expect(
+      state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null),
+    ).rejects.toThrow();
+
+    expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(state().errorMessage).toMatch(/Failed to move task/);
   });
 });
 
