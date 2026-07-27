@@ -340,6 +340,24 @@ describe('updateTask', () => {
       'BD-1',
     );
   });
+
+  it('lazily creates the backlog when clearing an epic on a board without one', async () => {
+    const { fs } = setup(
+      snap({
+        epics: [epic('parser', [task('BD-1', { epic: 'parser' })])],
+        backlog: null,
+      }),
+    );
+
+    await state().updateTask('BD-1', { epic: null });
+
+    expect(current().epics[0]!.tasks).toHaveLength(0);
+    expect(current().backlog!.filename).toBe(BACKLOG_PATH);
+    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(state().errorMessage).toBeNull();
+    expect(fs.files.has(BACKLOG_PATH)).toBe(true);
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'epics/parser.md'].sort());
+  });
 });
 
 describe('moveTaskToRelease', () => {
@@ -416,6 +434,24 @@ describe('moveTaskOnBacklog', () => {
     // Both ends of the move reach disk. The reorder only reports files whose
     // orders changed, and landing at the end of the list means BD-1 keeps the
     // order it was given — the destination must be written all the same.
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
+  });
+
+  it('lazily creates the backlog for an epic-less release task', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: null,
+      }),
+    );
+
+    await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null);
+
+    expect(current().releases[0]!.tasks).toHaveLength(0);
+    expect(current().backlog!.filename).toBe(BACKLOG_PATH);
+    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(state().errorMessage).toBeNull();
+    expect(fs.files.has(BACKLOG_PATH)).toBe(true);
     expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 

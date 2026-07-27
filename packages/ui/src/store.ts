@@ -1129,11 +1129,9 @@ export const useBoardStore = create<BoardState>(
       if (needsRelocation) {
         let destLoc: ContainerLocation;
         if (patch.epic === null) {
-          if (!snapshot.backlog) {
-            set({ errorMessage: 'Backlog container is missing' });
-            return;
-          }
-          destLoc = { kind: 'backlog', container: snapshot.backlog };
+          // Clearing the epic drops the task into the backlog (no_epic.md,
+          // created lazily).
+          destLoc = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog() };
         } else {
           const slug = patch.epic as string;
           const index = snapshot.epics.findIndex((e) => e.slug === slug);
@@ -1511,11 +1509,10 @@ export const useBoardStore = create<BoardState>(
           nextEpics = [...snapshot.epics];
           nextEpics[epicIdx] = moved.dest;
         } else {
-          if (!snapshot.backlog) {
-            set({ errorMessage: 'Backlog container (no_epic.md) is missing' });
-            return;
-          }
-          const moved = moveTaskBetweenContainers(sourceLoc.container, snapshot.backlog, taskId, {
+          // An epic-less task falls back to the backlog (no_epic.md, created
+          // lazily).
+          const destBacklog = snapshot.backlog ?? emptyBacklog();
+          const moved = moveTaskBetweenContainers(sourceLoc.container, destBacklog, taskId, {
             newStatus: task.frontmatter.status,
             beforeTaskId: null,
             destEpic: { kind: 'clear' },

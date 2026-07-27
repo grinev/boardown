@@ -147,3 +147,12 @@ resolve to whichever copy comes first.
 
 Keep the IDs human-readable (`BD-62`); random suffixes would dodge the collision
 but cost the thing people actually use IDs for.
+
+## Add task severity
+
+---
+id: BD-67
+type: feature
+status: todo
+order: 650
+---
