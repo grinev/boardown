@@ -1679,7 +1679,7 @@ export const useBoardStore = create<BoardState>(
     },
 
     updateRelease: async (filename, patch) => {
-      const { snapshot, fs, selectedReleaseFilename, dialogStack } = get();
+      const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
 
       const index = snapshot.releases.findIndex((r) => r.filename === filename);
@@ -1687,57 +1687,16 @@ export const useBoardStore = create<BoardState>(
         set({ errorMessage: `Release not found: ${filename}` });
         return;
       }
-      const release = snapshot.releases[index]!;
-
-      // A rename can be refused (name taken, no usable characters), so this is
-      // a real failure path now, not just a guard against impossible input.
-      let nextRelease: Release;
-      try {
-        nextRelease = editRelease(release, patch, snapshot.releases);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        set({ errorMessage: message });
-        throw err;
-      }
-
-      const moved = nextRelease.filename !== release.filename;
+      const nextRelease = editRelease(snapshot.releases[index]!, patch);
       const nextReleases = [...snapshot.releases];
       nextReleases[index] = nextRelease;
       const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
-      // The open dialog and its history are keyed by path, so a rename has to
-      // carry them across or the dialog loses the release it is showing.
-      set({
-        snapshot: nextSnapshot,
-        errorMessage: null,
-        ...(moved
-          ? {
-              selectedReleaseFilename:
-                selectedReleaseFilename === release.filename
-                  ? nextRelease.filename
-                  : selectedReleaseFilename,
-              dialogStack: dialogStack.map((ref) =>
-                ref.kind === 'release' && ref.filename === release.filename
-                  ? { ...ref, filename: nextRelease.filename }
-                  : ref,
-              ),
-            }
-          : {}),
-      });
+      set({ snapshot: nextSnapshot, errorMessage: null });
       try {
-        const content = serializeRelease(nextRelease);
-        if (moved) {
-          await fs.moveFile(release.filename, nextRelease.filename, content);
-        } else {
-          await fs.write(nextRelease.filename, content);
-        }
+        await fs.write(nextRelease.filename, serializeRelease(nextRelease));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({
-          snapshot,
-          selectedReleaseFilename,
-          dialogStack,
-          errorMessage: `Failed to save release: ${message}`,
-        });
+        set({ snapshot, errorMessage: `Failed to save release: ${message}` });
         throw err;
       }
     },
