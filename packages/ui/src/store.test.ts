@@ -29,6 +29,11 @@ class MemFs implements GuardedFs {
     for (const file of files) await this.write(file.path, file.content);
   }
 
+  async moveFile(from: string, to: string, content: string): Promise<void> {
+    await this.write(to, content);
+    await this.remove(from);
+  }
+
   async removeDir(path: string): Promise<void> {
     await this.remove(path);
   }
@@ -400,7 +405,7 @@ describe('moveTaskOnBacklog', () => {
   });
 
   it('moves an epic-less release task into the backlog', async () => {
-    setup(
+    const { fs } = setup(
       snap({
         releases: [release('1.0', 'current', [task('BD-1')])],
         backlog: backlog([task('BD-2', { order: 100 })]),
@@ -413,6 +418,44 @@ describe('moveTaskOnBacklog', () => {
     expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
       'BD-1',
     );
+    // Both ends of the move reach disk. The reorder only reports files whose
+    // orders changed, and landing at the end of the list means BD-1 keeps the
+    // order it was given — the destination must be written all the same.
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
+  });
+
+  it('writes the destination epic when it was empty before the move', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1', { epic: 'ui' })])],
+        epics: [epic('ui'), epic('core', [task('BD-3', { epic: 'core' })])],
+        backlog: backlog([task('BD-2', { order: 200 })]),
+      }),
+    );
+
+    // Dropping at the top renumbers the whole list; BD-1 lands on 100, which is
+    // what an empty destination already gave it.
+    await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, 'BD-3');
+
+    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(fs.writes).toContain('epics/ui.md');
+  });
+
+  it('leaves the task where it was when a write fails', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2', { order: 100 })]),
+      }),
+    );
+    fs.failWritesMatching = '*';
+
+    await expect(
+      state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null),
+    ).rejects.toThrow();
+
+    expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(state().errorMessage).toMatch(/Failed to move task/);
   });
 });
 
@@ -456,6 +499,80 @@ describe('release lifecycle', () => {
     await state().completeRelease({ kind: 'backlog' });
 
     expect(state().errorMessage).toMatch(/no current release/i);
+  });
+});
+
+describe('updateRelease', () => {
+  const openOn = (filename: string): void => {
+    useBoardStore.setState({ selectedReleaseFilename: filename });
+  };
+
+  it('renames the file and keeps the open dialog on the release', async () => {
+    const { fs } = setup(snap({ releases: [release('1.1', 'future')] }));
+    await fs.write('releases/1.1.md', 'stale');
+    openOn('releases/1.1.md');
+
+    await state().updateRelease('releases/1.1.md', { name: 'Beta Release' });
+
+    expect(current().releases[0]!.filename).toBe('releases/beta-release.md');
+    expect(current().releases[0]!.frontmatter.name).toBe('Beta Release');
+    expect(state().selectedReleaseFilename).toBe('releases/beta-release.md');
+    expect(fs.files.has('releases/1.1.md')).toBe(false);
+    expect(fs.files.get('releases/beta-release.md')!.content).toContain('Beta Release');
+  });
+
+  it('re-points a release entry in the dialog history at the new path', async () => {
+    setup(snap({ releases: [release('1.1', 'future')] }));
+    useBoardStore.setState({
+      selectedTaskId: null,
+      selectedReleaseFilename: 'releases/1.1.md',
+      dialogStack: [{ kind: 'release', filename: 'releases/1.1.md' }],
+    });
+
+    await state().updateRelease('releases/1.1.md', { name: '1.2' });
+
+    expect(state().dialogStack).toEqual([
+      { kind: 'release', filename: 'releases/1.2.md' },
+    ]);
+  });
+
+  it('leaves the file alone when only the description changes', async () => {
+    const { fs } = setup(snap({ releases: [release('1.1', 'future')] }));
+
+    await state().updateRelease('releases/1.1.md', { description: 'Ship it' });
+
+    expect(current().releases[0]!.filename).toBe('releases/1.1.md');
+    expect(fs.removes).toHaveLength(0);
+  });
+
+  it('refuses a name already taken by another release and writes nothing', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.1', 'future'), release('1.2', 'future')] }),
+    );
+    openOn('releases/1.1.md');
+
+    await expect(
+      state().updateRelease('releases/1.1.md', { name: '1.2' }),
+    ).rejects.toThrow(/already exists/i);
+
+    expect(current().releases[0]!.filename).toBe('releases/1.1.md');
+    expect(current().releases[0]!.frontmatter.name).toBe('1.1');
+    expect(state().selectedReleaseFilename).toBe('releases/1.1.md');
+    expect(fs.writes).toHaveLength(0);
+    expect(fs.removes).toHaveLength(0);
+  });
+
+  it('rolls the snapshot and the selection back when the move fails', async () => {
+    const { fs } = setup(snap({ releases: [release('1.1', 'future')] }));
+    openOn('releases/1.1.md');
+    fs.failWritesMatching = '*';
+
+    await expect(
+      state().updateRelease('releases/1.1.md', { name: '1.2' }),
+    ).rejects.toThrow(/disk full/);
+
+    expect(current().releases[0]!.filename).toBe('releases/1.1.md');
+    expect(state().selectedReleaseFilename).toBe('releases/1.1.md');
   });
 });
 
