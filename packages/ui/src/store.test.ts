@@ -514,7 +514,7 @@ describe('release lifecycle', () => {
   });
 
   it('completes the current release and relocates unfinished tasks to the backlog', async () => {
-    setup(
+    const { fs } = setup(
       snap({
         releases: [release('1.0', 'current', [task('BD-1', { status: 'todo' })])],
         backlog: backlog(),
@@ -527,6 +527,29 @@ describe('release lifecycle', () => {
     expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
       'BD-1',
     );
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
+  });
+
+  it('writes every container the redistribution touched, and nothing else', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [
+          release('1.0', 'current', [
+            task('BD-1', { status: 'todo', epic: 'ui' }),
+            task('BD-2', { status: 'done', order: 200 }),
+          ]),
+        ],
+        epics: [epic('ui'), epic('core')],
+        backlog: backlog(),
+      }),
+    );
+
+    await state().completeRelease({ kind: 'backlog' });
+
+    // BD-1 goes back to its epic and BD-2 stays: the untouched epic and the
+    // backlog must not be rewritten.
+    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(fs.writes.sort()).toEqual(['epics/ui.md', 'releases/1.0.md'].sort());
   });
 
   it('reports an error when there is no current release to complete', async () => {
@@ -690,6 +713,32 @@ order: 100
 body
 `;
 
+const EPIC_MD = `---
+name: UI
+color: "#1f6feb"
+---
+`;
+
+// A current release whose open task belongs to the epic above, so completing it
+// writes both files.
+const RELEASE_WITH_EPIC_MD = `---
+status: current
+name: "1.0"
+---
+
+## Task one
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+epic: ui
+---
+
+body
+`;
+
 const loadFrom = async (files: Record<string, string>): Promise<MemFs> => {
   const fs = new MemFs();
   for (const [path, content] of Object.entries(files)) {
@@ -733,6 +782,27 @@ describe('external-change conflict', () => {
 
     expect(state().conflictOpen).toBe(true);
     expect(state().snapshot).toBe(before);
+  });
+
+  it('completes no part of a release when a file it would touch changed on disk', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_WITH_EPIC_MD,
+      'epics/ui.md': EPIC_MD,
+    });
+    const before = current();
+    const releaseOnDisk = fs.files.get('releases/1.0.md')!.content;
+
+    // The epic is written after the release, so a sequence of single writes
+    // would already have finished the release by the time this one is refused.
+    fs.files.get('epics/ui.md')!.lastModified += 1000;
+
+    await expect(state().completeRelease({ kind: 'backlog' })).rejects.toThrow();
+
+    expect(state().conflictOpen).toBe(true);
+    expect(state().snapshot).toBe(before);
+    expect(fs.files.get('releases/1.0.md')!.content).toBe(releaseOnDisk);
+    expect(fs.writes).toEqual([]);
   });
 
   it('clears the conflict flag on reload', async () => {

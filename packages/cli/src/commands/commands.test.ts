@@ -1,10 +1,10 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Task } from '@boardown/core';
+import { completeRelease, emptyBacklog, type Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
-import { loadBoardOrThrow } from '../persistence';
+import { loadBoardOrThrow, writeContainers, type ContainerRef } from '../persistence';
 import type { CommandContext } from '../types';
 import { epicCommand } from './epic';
 import { initCommand } from './init';
@@ -280,6 +280,50 @@ describe('cli commands (integration)', () => {
     await expect(taskCommand(parseArgs(['task', 'list']), ctx)).rejects.toMatchObject({
       code: 'NO_BOARD',
     });
+  });
+
+  // `release done` loads the board and writes in one go, so a test cannot slip an
+  // external change between the two. It drives the same sequence the command does
+  // instead — the same guard, the same multi-file write — which is what pins that
+  // a refused write leaves none of the redistribution on disk.
+  it('completing a release writes nothing when a file it would touch changed on disk', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await epicCommand(parseArgs(['epic', 'add', 'UI']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'Still open', '--epic', 'ui']), ctx);
+    const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
+    const slug = (rel.data as { slug: string }).slug;
+    await releaseCommand(parseArgs(['release', 'start', slug]), ctx);
+    await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', slug]), ctx);
+
+    const board = await loadBoardOrThrow(join(project, '.boardown'));
+    // Simulate an external edit of the epic that would receive the open task.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(
+      join(project, '.boardown', 'epics', 'ui.md'),
+      '---\nname: UI\ncolor: "#1f6feb"\n---\n',
+      'utf8',
+    );
+
+    const release = board.snapshot.releases.find((r) => r.frontmatter.status === 'current')!;
+    const result = completeRelease({
+      release,
+      epics: board.snapshot.epics,
+      backlog: board.snapshot.backlog ?? emptyBacklog(),
+      targetRelease: null,
+    });
+    const refs: ContainerRef[] = [
+      { kind: 'release', container: result.release },
+      ...result.epics
+        .filter((e) => result.changedFilenames.includes(e.filename))
+        .map((container): ContainerRef => ({ kind: 'epic', container })),
+    ];
+
+    await expect(writeContainers(board.fs, refs)).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    // The release is written first, so a sequence of single writes would already
+    // have finished it here.
+    const onDisk = await readFile(join(project, '.boardown', 'releases', `${slug}.md`), 'utf8');
+    expect(onDisk).toContain('status: current');
   });
 
   it('refuses to clobber a file changed on disk since load (CONFLICT)', async () => {

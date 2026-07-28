@@ -3,8 +3,6 @@ import {
   createRelease,
   editRelease,
   emptyBacklog,
-  serializeBacklog,
-  serializeEpic,
   serializeRelease,
   sortTasksByOrder,
   startRelease,
@@ -21,6 +19,8 @@ import {
   findRelease,
   loadBoardOrThrow,
   resolveBoardRoot,
+  writeContainers,
+  type ContainerRef,
   type LoadedBoard,
 } from '../persistence';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
@@ -279,20 +279,20 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     throw new CliError('RELEASE_NOT_CURRENT', err instanceof Error ? err.message : String(err));
   }
 
-  // Persist every container the redistribution actually touched.
+  // Persist every container the redistribution actually touched. The tasks leave
+  // the release and land elsewhere, so the whole set has to stand or fall together.
   const changed = new Set(result.changedFilenames);
-  await board.fs.write(result.release.filename, serializeRelease(result.release));
+  const refs: ContainerRef[] = [{ kind: 'release', container: result.release }];
   if (result.targetRelease !== null && changed.has(result.targetRelease.filename)) {
-    await board.fs.write(result.targetRelease.filename, serializeRelease(result.targetRelease));
+    refs.push({ kind: 'release', container: result.targetRelease });
   }
   for (const epic of result.epics) {
-    if (changed.has(epic.filename)) {
-      await board.fs.write(epic.filename, serializeEpic(epic));
-    }
+    if (changed.has(epic.filename)) refs.push({ kind: 'epic', container: epic });
   }
   if (result.backlog !== null && changed.has(result.backlog.filename)) {
-    await board.fs.write(result.backlog.filename, serializeBacklog(result.backlog));
+    refs.push({ kind: 'backlog', container: result.backlog });
   }
+  await writeContainers(board.fs, refs);
 
   return {
     data: { slug: result.release.slug },

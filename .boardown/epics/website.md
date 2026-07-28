@@ -11,3 +11,12 @@ type: tech
 status: todo
 order: 700
 ---
+
+## Board preview in github pages
+
+---
+id: BD-68
+type: feature
+status: todo
+order: 800
+---

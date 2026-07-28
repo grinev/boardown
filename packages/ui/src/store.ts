@@ -258,6 +258,32 @@ const serializeContainer = (
   }
 };
 
+// Turns the filenames a board op reports as changed into the files to write.
+// An unknown filename throws rather than being skipped: the op declared that
+// container changed, so dropping it would lose the write silently.
+const filesFor = (snapshot: BoardSnapshot, filenames: Iterable<string>): GuardedFile[] => {
+  const files: GuardedFile[] = [];
+  for (const path of filenames) {
+    const release = snapshot.releases.find((r) => r.filename === path);
+    if (release) {
+      files.push({ path, content: serializeContainer({ kind: 'release', container: release }) });
+      continue;
+    }
+    const epic = snapshot.epics.find((e) => e.filename === path);
+    if (epic) {
+      files.push({ path, content: serializeContainer({ kind: 'epic', container: epic }) });
+      continue;
+    }
+    const backlog = snapshot.backlog;
+    if (backlog?.filename === path) {
+      files.push({ path, content: serializeContainer({ kind: 'backlog', container: backlog }) });
+      continue;
+    }
+    throw new Error(`No container for changed file: ${path}`);
+  }
+  return files;
+};
+
 const destEpicForLocation = (location: ContainerLocation): DestEpic => {
   switch (location.kind) {
     case 'release':
@@ -1060,21 +1086,10 @@ export const useBoardStore = create<BoardState>(
       set({ snapshot: nextSnapshot, errorMessage: null });
 
       try {
-        for (const filename of result.changedFilenames) {
-          const release = nextSnapshot.releases.find((r) => r.filename === filename);
-          if (release) {
-            await fs.write(filename, serializeRelease(release));
-            continue;
-          }
-          const epic = nextSnapshot.epics.find((e) => e.filename === filename);
-          if (epic) {
-            await fs.write(filename, serializeEpic(epic));
-            continue;
-          }
-          if (nextSnapshot.backlog && nextSnapshot.backlog.filename === filename) {
-            await fs.write(filename, serializeBacklog(nextSnapshot.backlog));
-          }
-        }
+        // The tasks leave the release and land in epics, the backlog or the next
+        // release, so every file the redistribution touched has to stand or fall
+        // together.
+        await fs.writeAll(filesFor(nextSnapshot, result.changedFilenames));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to complete release: ${message}` });
@@ -1551,27 +1566,10 @@ export const useBoardStore = create<BoardState>(
       if (movedFromFilename) toWrite.add(movedFromFilename);
       if (movedIntoFilename) toWrite.add(movedIntoFilename);
 
-      const files: GuardedFile[] = [];
-      for (const filename of toWrite) {
-        const release = nextSnapshot.releases.find((r) => r.filename === filename);
-        if (release) {
-          files.push({ path: filename, content: serializeRelease(release) });
-          continue;
-        }
-        const epic = nextSnapshot.epics.find((e) => e.filename === filename);
-        if (epic) {
-          files.push({ path: filename, content: serializeEpic(epic) });
-          continue;
-        }
-        if (nextSnapshot.backlog && nextSnapshot.backlog.filename === filename) {
-          files.push({ path: filename, content: serializeBacklog(nextSnapshot.backlog) });
-        }
-      }
-
       try {
         // The task leaves one file and lands in another, so the two writes have
         // to stand or fall together.
-        await fs.writeAll(files);
+        await fs.writeAll(filesFor(nextSnapshot, toWrite));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to move task: ${message}` });
