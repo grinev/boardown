@@ -57,6 +57,8 @@ instead of overwriting.
 - **Task checklists and notes**: each task can carry a lightweight todo
   checklist (shown as a `done/total` badge) and timestamped notes (shown as a
   count badge), edited in the task dialog.
+- **Custom fields** (beta): declare extra per-task fields in
+  `.boardown/config.yaml` and edit them in the task dialog's Details card.
 - **Task links**: relate two tasks from the task dialog's **Linked tasks**
   section — the link is stored on both sides. Any task id mentioned in a
   description or a note renders as a link to that task.

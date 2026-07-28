@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.3
+
+- **Custom fields (beta)**: declare extra per-task fields in
+  `.boardown/config.yaml` and each one becomes an editable row in the task
+  dialog's Details card, with long values wrapping to the line below the label.
+  Only the `string` type exists for now and the storage format may still change.
+- **Release files follow the release name**: renaming a release now renames its
+  markdown file too, so the name and the file on disk stay in sync.
+- Completing a release is now all-or-nothing — an external edit halfway through
+  can no longer leave the release marked finished with its open tasks still
+  inside it.
+- Fix: when an external change blocks a write started from a dialog, the reload
+  conflict modal comes to the front and closes that dialog, instead of opening
+  behind it where **Reload board** could not be clicked.
+- Fix: a task dragged from the current release into the Backlog no longer
+  vanishes from the board.
+- Fix: moving a task with no epic into the Backlog no longer fails on a board
+  that has never had a backlog file — it is created on demand.
+
 ## 0.5.2
 
 - **Documents open in a popup**: clicking a doc reference in a task, an epic or
