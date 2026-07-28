@@ -2,6 +2,7 @@ import {
   CONFIG_FILENAME,
   createGuardedFs,
   loadBoard,
+  parseConfig,
   serializeBacklog,
   serializeConfig,
   serializeEpic,
@@ -46,6 +47,28 @@ export async function resolveBoardRoot(cwd: string, dataDir?: string): Promise<s
     );
   }
   return root;
+}
+
+// Just the config, for a command that describes the board rather than reading it.
+// No board at all is not an error here — the caller degrades instead.
+export async function loadConfigIfAny(
+  cwd: string,
+  dataDir?: string,
+): Promise<BoardConfig | null> {
+  const root = await findBoardRoot(cwd, dataDir);
+  if (root === null) return null;
+  const fs = new NodeFsAdapter(root);
+  let text: string;
+  try {
+    text = await fs.read(CONFIG_FILENAME);
+  } catch {
+    return null;
+  }
+  const parsed = parseConfig(text);
+  if (parsed.value === null) {
+    throw new CliError('BOARD_INVALID', 'Board config failed to load.', 1, parsed.problems);
+  }
+  return parsed.value;
 }
 
 export async function loadBoardOrThrow(root: string): Promise<LoadedBoard> {

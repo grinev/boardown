@@ -206,6 +206,42 @@
   gap: 12px;
 }
 
+/* A custom field's value can be any length. Label and value share a line while
+   the value fits; a longer one wraps onto the next line at full card width.
+   The gap is 5px rather than the grid's 12px because the inline editor brings
+   7px of its own padding and border — together they put the value's text on the
+   same column as the rows above. Top-aligned, so the label stays level with the
+   first line of the value instead of centring against a tall open editor. */
+.detailRowWrapping {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: 5px;
+  row-gap: 2px;
+}
+
+.detailRowWrapping .detailLabel {
+  flex: 0 0 70px;
+  padding-top: 3px;
+}
+
+.detailValueWide {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* An unset value renders nothing, so the row still needs a line's worth of
+   height to stay clickable. */
+.customValue {
+  min-height: 1.6em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .detailLabel {
   font-size: 12px;
   color: var(--text-muted);

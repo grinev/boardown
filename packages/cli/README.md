@@ -38,7 +38,7 @@ boardown archive                Finished releases.
 
 boardown task get <id>          Show one task in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --status --epic --release --description).
+boardown task add <title>       Create a task (--type --status --epic --release --description --field).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (todo | in-progress | done).
 boardown task reorder <id>      Change priority (--before | --after <id> | --up | --down).
@@ -89,6 +89,38 @@ epic), plus the id of a checklist item or note they created.
 release that carry that epic tag. `--release <ref>` takes a slug or filename,
 `--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
 match on title and description.
+
+### Custom fields (beta)
+
+> **Beta.** Only the `string` type exists and fields are declared by hand; the
+> storage format and this flag may still change before 1.0.
+
+A board can declare extra per-task fields in `.boardown/config.yaml`:
+
+```yaml
+customFields:
+  - key: reporter
+    label: Reporter   # optional; the key is shown when absent
+    type: string      # the only type today
+  - key: env
+    type: string
+```
+
+`task add` and `task edit` set them with a repeatable `--field <key>=<value>`.
+Only the first `=` separates, so a value may contain more; an empty value clears
+the field; a key the board does not declare is a `USAGE` error. Values are stored
+as plain top-level keys in the task's frontmatter, after the built-in ones.
+
+```bash
+boardown task edit BD-1 --field reporter=alice --field env=staging
+boardown task edit BD-1 --field reporter=          # clear it
+boardown task add "Fix login" --type bug --field env=prod
+```
+
+`task get` returns the values under the task's `custom` key, and `boardown
+schema` lists the board's declarations so an agent knows what it may write —
+outside a board it prints its static contract without them. Task **summaries**
+carry no custom fields; `--full`, which returns whole tasks, does.
 
 `task link` relates two tasks. Only one link type exists — `relates`, which is
 symmetric — so it is never passed on the command line; the record is mirrored

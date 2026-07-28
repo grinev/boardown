@@ -178,3 +178,22 @@ describe('serializeConfig', () => {
     expect(back.value).toEqual(cfg);
   });
 });
+
+describe('serializeConfig customFields', () => {
+  it('round-trips declarations, so the nextId rewrite cannot erase them', () => {
+    const cfg: BoardConfig = {
+      idPrefix: 'BD',
+      nextId: 0,
+      projectName: 'My Project',
+      customFields: [
+        { key: 'reporter', label: 'Reporter', type: 'string' },
+        { key: 'env', type: 'string' },
+      ],
+    };
+    const out = serializeConfig(cfg);
+    expect(out).toContain('customFields');
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+});

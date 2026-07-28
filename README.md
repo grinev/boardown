@@ -134,6 +134,71 @@ as compact summaries; `task get <id>` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 
+## Custom task fields (beta)
+
+> **Beta.** This is the first slice of a larger customization story: only the
+> `string` type exists, fields are declared by hand in `config.yaml`, and there is
+> no UI for managing them yet. The on-disk format and the CLI flag may still
+> change before 1.0 — expect to edit your config when they do.
+
+A board can carry extra per-task fields that boardown itself knows nothing
+about — who reported a bug, which environment it reproduces on, a ticket number
+in another system. Declare them in `.boardown/config.yaml`:
+
+```yaml
+idPrefix: BD
+nextId: 47
+projectName: My Board
+
+customFields:
+  - key: reporter       # the frontmatter key, and the CLI's --field name
+    label: Reporter     # optional — the key is shown when absent
+    type: string        # the only type today
+  - key: env
+    type: string
+```
+
+`key` is 1–40 characters, starts with a letter and continues with letters,
+digits, `_` or `-`. Keys must be unique, and may not reuse a name task
+frontmatter already has (`id`, `type`, `status`, `epic`, `order`, `checklist`,
+`notes`, `links`). A bad declaration makes the config invalid — the app shows its
+config error screen and the CLI returns `BOARD_INVALID`, rather than ignoring the
+line.
+
+Every declared field becomes a row in the task dialog's **Details** panel, under
+Type / Epic / Release, edited in place like everything else there. Values land in
+the task's own frontmatter as ordinary keys:
+
+```markdown
+## Fix flaky sort order
+
+---
+id: BD-12
+type: bug
+status: in-progress
+order: 300
+reporter: alice
+env: staging
+---
+```
+
+From the CLI, set them with a repeatable `--field`, and ask `schema` which fields
+a board declares:
+
+```sh
+boardown task edit BD-12 --field reporter=alice --field env=staging
+boardown task edit BD-12 --field reporter=        # clear it
+boardown task add "Fix login" --type bug --field env=prod
+
+boardown schema --json     # includes the board's customFields
+```
+
+Two things to know while this is beta. Values are stored as plain top-level keys,
+so **removing a field from `customFields` drops its stored values** the next time
+each of those files is written — git is the recovery path. And a board that
+declares nothing sees no change at all: no new rows, no new keys on disk, no new
+CLI output.
+
 ## Working with branches
 
 The board is text in your repo, so it merges like any other file — no server

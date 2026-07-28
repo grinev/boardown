@@ -83,6 +83,8 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     .filter(isMarkdownFile)
     .filter((name) => name !== BACKLOG_BASENAME);
 
+  const customFields = config.customFields ?? [];
+
   const releases: Release[] = [];
   for (const name of releaseFiles) {
     const path = `${RELEASES_DIR}/${name}`;
@@ -96,7 +98,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
       continue;
     }
     await recordVersion(path);
-    const parsed = parseRelease(text, path, slug);
+    const parsed = parseRelease(text, path, slug, customFields);
     problems.push(...parsed.problems);
     if (parsed.value !== null) releases.push(parsed.value);
   }
@@ -114,7 +116,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
       continue;
     }
     await recordVersion(path);
-    const parsed = parseEpic(text, path, slug);
+    const parsed = parseEpic(text, path, slug, customFields);
     problems.push(...parsed.problems);
     if (parsed.value !== null) epics.push(parsed.value);
   }
@@ -123,7 +125,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   try {
     const backlogText = await fs.read(BACKLOG_PATH);
     await recordVersion(BACKLOG_PATH);
-    const parsed = parseBacklog(backlogText, BACKLOG_PATH);
+    const parsed = parseBacklog(backlogText, BACKLOG_PATH, customFields);
     problems.push(...parsed.problems);
     if (parsed.value !== null) backlog = parsed.value;
   } catch {

@@ -1,3 +1,9 @@
 idPrefix: TS
 nextId: 11
 projectName: Test Board
+customFields:
+  - key: reporter
+    label: Reporter
+    type: string
+  - key: env
+    type: string

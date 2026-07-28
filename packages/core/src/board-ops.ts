@@ -4,6 +4,7 @@ import type {
   Backlog,
   BoardConfig,
   ChecklistItem,
+  CustomField,
   Epic,
   LinkType,
   Note,
@@ -356,7 +357,25 @@ export interface NewTaskInput {
   status: TaskStatus;
   description?: string;
   epic?: string;
+  custom?: Record<string, string>;
 }
+
+// Rebuilds the bag in the config's declaration order, so the on-disk key order
+// never depends on the order edits arrived in. An empty value clears the key,
+// and a key the config no longer declares is dropped.
+const applyCustomValues = (
+  current: Record<string, string> | undefined,
+  patch: Record<string, string> | undefined,
+  fields: readonly CustomField[],
+): Record<string, string> | undefined => {
+  const next: Record<string, string> = {};
+  for (const field of fields) {
+    const incoming = patch?.[field.key];
+    const value = (incoming ?? current?.[field.key] ?? '').trim();
+    if (value !== '') next[field.key] = value;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+};
 
 export const createTask = <C extends Container>(
   container: C,
@@ -368,6 +387,7 @@ export const createTask = <C extends Container>(
   }
   const { id, config: nextConfig } = nextTaskId(config);
   const order = lastOrderInContainer(container.tasks) + ORDER_STEP;
+  const custom = applyCustomValues(undefined, input.custom, config.customFields ?? []);
   const task: Task = {
     title: input.title,
     description: input.description ?? '',
@@ -377,6 +397,7 @@ export const createTask = <C extends Container>(
       status: input.status,
       ...(input.epic !== undefined ? { epic: input.epic } : {}),
       order,
+      ...(custom !== undefined ? { custom } : {}),
     },
   };
   return {
@@ -394,10 +415,13 @@ export interface TaskPatch {
   status?: TaskStatus;
   checklist?: ChecklistItem[];
   notes?: Note[];
+  // Only the keys present are touched; an empty value clears one.
+  custom?: Record<string, string>;
 }
 
 export const editTask = <C extends Container>(
   container: C,
+  config: BoardConfig,
   taskId: string,
   patch: TaskPatch,
 ): C => {
@@ -437,6 +461,16 @@ export const editTask = <C extends Container>(
       } else {
         nextFrontmatter.notes = patch.notes;
       }
+    }
+    const custom = applyCustomValues(
+      nextFrontmatter.custom,
+      patch.custom,
+      config.customFields ?? [],
+    );
+    if (custom === undefined) {
+      delete nextFrontmatter.custom;
+    } else {
+      nextFrontmatter.custom = custom;
     }
     return {
       ...t,

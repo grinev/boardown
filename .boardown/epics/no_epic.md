@@ -29,15 +29,6 @@ status: todo
 order: 1200
 ---
 
-## View and edit release description
-
----
-id: BD-28
-type: feature
-status: todo
-order: 1300
----
-
 ## Add release dates
 
 ---

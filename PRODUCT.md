@@ -46,6 +46,7 @@ A single unit of work. Fields:
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is currently always `relates` (symmetric); `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
+| *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
 Task statuses and types are currently a fixed set baked into the app: each type
 has an icon and a color used for the badge on the card and as a filter dimension.
@@ -285,6 +286,44 @@ frontmatter above).
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
 by hand).
 
+### Custom fields (beta)
+
+**Status: beta.** This is the first slice of the "Customization" direction, and
+it is deliberately narrow: one type (`string`), declaration by hand in
+`config.yaml`, no management UI, and no filtering or display outside the task
+dialog. Both the storage format and the CLI's `--field` flag are still open to
+change before 1.0; a change here is a config edit for the user, not a migration
+boardown performs.
+
+A board can declare extra per-task fields in `config.yaml`. There is no UI for
+declaring them — the list is edited by hand:
+
+```yaml
+customFields:
+  - key: reporter       # the frontmatter key and the CLI's --field name
+    label: Reporter     # optional; the key is shown when absent
+    type: string        # the only type today
+  - key: env
+    type: string
+```
+
+`key` is 1–40 characters, starts with a letter and continues with letters,
+digits, `_` or `-`; keys must be unique and may not collide with a built-in task
+key (`id`, `type`, `status`, `epic`, `order`, `checklist`, `notes`, `links`),
+since values are stored flat beside them. `type` must be `string` —
+dates and lookup lists are later work, and the key exists so they can be added
+without changing the format. Any violation makes the config **invalid**, which is
+the existing all-or-nothing path: an error screen in the UI, `BOARD_INVALID` in
+the CLI. An absent or empty `customFields` means the board has none, and nothing
+about it changes anywhere.
+
+Values live in the task's own frontmatter as plain top-level keys. Only fields
+that have a value are written; clearing one removes its key. A top-level key no
+declaration mentions is stripped on load like any unknown key — so **removing a
+field from `customFields` drops its stored values the next time that file is
+written**, with no warning. Git is the recovery path, as everywhere else in
+boardown.
+
 ### Doc page
 
 A markdown file under `docs/`, at any depth. Unlike a release or an epic it holds
@@ -472,12 +511,23 @@ when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to. A **finished** release is never
 offered as a destination — the same exclusion the creation dialog applies.
 
+Below Type / Epic / Release, the Details card lists the board's **custom
+fields** (see "Custom fields" under Configuration) — one row per declared field,
+in declaration order, labelled by the declaration's `label` or its `key`. Each is
+an inline-editable single-line text field, left **blank** when unset — the row is
+still there and still clickable, it just shows nothing. A value too long to sit
+beside its label moves to the line below and takes the card's full width,
+wrapping from there. The label stays level with the value's first line, including
+while the editor is open. Custom fields appear in the task dialog only: not on
+the task card, not in the backlog row, not in the filter bar, and not in the
+creation dialog — a new task starts with none and is filled in afterwards.
+
 **A task in a finished release opens read-only**, wherever the dialog is opened
 from. Every value is still shown — and every way to change one is gone rather
 than disabled-looking: title, description, checklist item text and note text
 render as plain text; status, type and release render as plain values instead of
 dropdowns; the epic renders as its badge, still clickable to navigate to the
-epic. Checklist checkboxes are disabled, the add-item row and the note composer
+epic; custom field values render as plain text. Checklist checkboxes are disabled, the add-item row and the note composer
 are absent, and the per-item trash buttons do not appear. Linked tasks are
 frozen and the `…` menu's `Delete` item is disabled, as described below. An
 archived file is never rewritten, so there is nothing to fail: the operations
@@ -691,7 +741,15 @@ finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at
 **agents and scripts**: output is a stable JSON envelope when stdout is not a TTY
 (or with `--json`), with stable error codes and exit codes, plus a `schema`
-command that prints the contract. Because every change is a plain-markdown git
+command that prints the contract. **Custom fields** ride on the commands that
+already exist: `task add` and `task edit` take a repeatable
+`--field <key>=<value>` (an empty value clears the field, an undeclared key is a
+`USAGE` error), `task get` returns the task's values, and `schema` lists the
+board's declarations so an agent learns which keys it may write. Run outside a
+board, `schema` prints its static contract without that list rather than failing.
+Task summaries carry no custom fields — they mirror the task card, which shows
+none — while `--full`, which returns whole tasks, carries them like every other
+field. Because every change is a plain-markdown git
 diff, an agent's edits stay reviewable and revertible. Published to npm as
 [`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli)
 (the `boardown` command).

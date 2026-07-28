@@ -58,14 +58,21 @@ export const TaskFrontmatterSchema = z.object({
   notes: z.array(NoteSchema).optional(),
   links: z.array(TaskLinkSchema).optional(),
 });
-export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
+
+// Custom field values live flat in the file, next to the keys above, but as a
+// named bag in memory — so this type is not part of the on-disk schema.
+export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema> & {
+  custom?: Record<string, string>;
+};
 
 export const TaskSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   frontmatter: TaskFrontmatterSchema,
 });
-export type Task = z.infer<typeof TaskSchema>;
+export type Task = Omit<z.infer<typeof TaskSchema>, 'frontmatter'> & {
+  frontmatter: TaskFrontmatter;
+};
 
 const dateString = z.preprocess((value) => {
   if (value instanceof Date) {
@@ -93,7 +100,7 @@ export const ReleaseSchema = z.object({
   preamble: z.string(),
   tasks: z.array(TaskSchema),
 });
-export type Release = z.infer<typeof ReleaseSchema>;
+export type Release = Omit<z.infer<typeof ReleaseSchema>, 'tasks'> & { tasks: Task[] };
 
 export const EpicFrontmatterSchema = z.object({
   name: z.string().min(1),
@@ -108,7 +115,7 @@ export const EpicSchema = z.object({
   preamble: z.string(),
   tasks: z.array(TaskSchema),
 });
-export type Epic = z.infer<typeof EpicSchema>;
+export type Epic = Omit<z.infer<typeof EpicSchema>, 'tasks'> & { tasks: Task[] };
 
 export const BacklogFrontmatterSchema = z.object({}).strict();
 export type BacklogFrontmatter = z.infer<typeof BacklogFrontmatterSchema>;
@@ -119,7 +126,7 @@ export const BacklogSchema = z.object({
   preamble: z.string(),
   tasks: z.array(TaskSchema),
 });
-export type Backlog = z.infer<typeof BacklogSchema>;
+export type Backlog = Omit<z.infer<typeof BacklogSchema>, 'tasks'> & { tasks: Task[] };
 
 // A doc page's frontmatter is optional in every part: a page authored by hand
 // with no frontmatter at all is valid and falls back to its filename slug for
@@ -143,12 +150,75 @@ export type Theme = z.infer<typeof ThemeSchema>;
 export const ID_PREFIX_REGEX = /^[A-Z]{2,5}$/;
 export const ID_PREFIX_MESSAGE = 'idPrefix must be 2-5 uppercase letters (A-Z)';
 
+export const CUSTOM_FIELD_TYPES = ['string'] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+
+const CUSTOM_FIELD_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/;
+const CUSTOM_FIELD_KEY_MESSAGE =
+  'customFields key must start with a letter and hold 1-40 letters, digits, "_" or "-"';
+
+// Values are stored flat next to the built-in task frontmatter keys, so a custom
+// key that matched one of them would shadow it.
+export const RESERVED_TASK_KEYS = [
+  'id',
+  'type',
+  'status',
+  'epic',
+  'order',
+  'checklist',
+  'notes',
+  'links',
+] as const;
+
+export const CustomFieldSchema = z
+  .object({
+    key: z.string().regex(CUSTOM_FIELD_KEY_REGEX, CUSTOM_FIELD_KEY_MESSAGE),
+    label: z.string().min(1).optional(),
+    type: z.enum(CUSTOM_FIELD_TYPES),
+  })
+  .strict();
+export type CustomField = z.infer<typeof CustomFieldSchema>;
+
+const CustomFieldsSchema = z
+  .array(CustomFieldSchema)
+  .refine(
+    (fields) => !fields.some((f) => (RESERVED_TASK_KEYS as readonly string[]).includes(f.key)),
+    { message: `customFields key must not be one of: ${RESERVED_TASK_KEYS.join(', ')}` },
+  )
+  .refine((fields) => new Set(fields.map((f) => f.key)).size === fields.length, {
+    message: 'customFields keys must be unique',
+  });
+
 export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
     nextId: z.number().int().nonnegative(),
     projectName: z.string().min(1),
     theme: ThemeSchema.optional(),
+    customFields: CustomFieldsSchema.optional(),
   })
   .strict();
 export type BoardConfig = z.infer<typeof BoardConfigSchema>;
+
+export const customFieldLabel = (field: CustomField): string => field.label ?? field.key;
+
+// js-yaml turns an unquoted number, boolean or bare date into a non-string; a
+// string field means the text the user wrote, so coerce those back. Lists and
+// maps are not scalars and fail, which surfaces as a task-scope problem.
+const customFieldValue = z.preprocess((value) => {
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) {
+    const y = value.getUTCFullYear().toString().padStart(4, '0');
+    const m = (value.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = value.getUTCDate().toString().padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return value;
+}, z.string());
+
+// Unknown keys are stripped, so only declared fields are harvested out of a
+// task's raw frontmatter.
+export const buildCustomValuesSchema = (
+  fields: readonly CustomField[],
+): z.ZodType<Record<string, string | undefined>> =>
+  z.object(Object.fromEntries(fields.map((f) => [f.key, customFieldValue.optional()])));

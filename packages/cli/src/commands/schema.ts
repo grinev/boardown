@@ -1,11 +1,18 @@
-import { LINK_TYPES, RELEASE_STATUSES, TASK_STATUSES, TASK_TYPES } from '@boardown/core';
+import {
+  customFieldLabel,
+  LINK_TYPES,
+  RELEASE_STATUSES,
+  TASK_STATUSES,
+  TASK_TYPES,
+} from '@boardown/core';
+import { loadConfigIfAny } from '../persistence';
 import type { CommandHandler } from '../types';
 
 // A stable, self-describing contract for agents: valid enum values, the task
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 2,
+  version: 3,
   taskTypes: TASK_TYPES,
   taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
@@ -21,6 +28,8 @@ const DESCRIPTOR = {
     notes: 'optional array of { id, text, createdAt }; managed via `task notes`',
     links:
       'optional array of { type, to }; links to other tasks, mirrored on both sides; managed via `task link`',
+    custom:
+      'optional map of the board customFields values, stored flat in the task frontmatter; managed via `--field key=value` on `task add`/`task edit`',
   },
   linkTypes: LINK_TYPES,
   taskSummaryFields: {
@@ -63,15 +72,16 @@ const DESCRIPTOR = {
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE]',
-      summary: 'Create a task in the backlog (default), an epic, or a release.',
+        'boardown task add <title> [--type TYPE] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value]',
+      summary:
+        'Create a task in the backlog (default), an epic, or a release. --field is repeatable and sets a customFields value.',
     },
     {
       name: 'task edit',
       usage:
-        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release]',
+        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release] [--field key=value]',
       summary:
-        'Edit a task. --release/--no-release move it in/out of a release; --epic/--no-epic reassign the epic (relocates a backlog/epic task, retags a task in a release).',
+        'Edit a task. --release/--no-release move it in/out of a release; --epic/--no-epic reassign the epic (relocates a backlog/epic task, retags a task in a release). --field is repeatable and sets a customFields value; an empty value clears it.',
     },
     {
       name: 'task status',
@@ -165,10 +175,26 @@ const DESCRIPTOR = {
     '--json': 'Emit a JSON envelope (default when stdout is not a TTY).',
     '--data-dir': 'Point at a specific .boardown/ directory instead of searching upward.',
     '--full': 'On a listing command, go one level deeper than its default.',
+    '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
 } as const;
 
-export const schemaCommand: CommandHandler = () => ({
-  data: DESCRIPTOR,
-  human: JSON.stringify(DESCRIPTOR, null, 2),
-});
+// The declarations are board-specific, so they ride along only when a board
+// actually declares some; otherwise the command prints the static contract
+// unchanged — a board without custom fields sees no new output.
+export const schemaCommand: CommandHandler = async (_args, ctx) => {
+  const config = await loadConfigIfAny(ctx.cwd, ctx.dataDir);
+  const declared = config?.customFields ?? [];
+  if (declared.length === 0) {
+    return { data: DESCRIPTOR, human: JSON.stringify(DESCRIPTOR, null, 2) };
+  }
+  const data = {
+    ...DESCRIPTOR,
+    customFields: declared.map((field) => ({
+      key: field.key,
+      label: customFieldLabel(field),
+      type: field.type,
+    })),
+  };
+  return { data, human: JSON.stringify(data, null, 2) };
+};

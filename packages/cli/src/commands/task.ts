@@ -14,6 +14,7 @@ import {
   LINK_TYPE_META,
   TASK_STATUSES,
   TASK_TYPES,
+  type BoardConfig,
   type BoardSnapshot,
   type ChecklistItem,
   type DestEpic,
@@ -30,7 +31,7 @@ import {
   type TaskStatus,
   type TaskType,
 } from '@boardown/core';
-import { flagBool, flagString, type ParsedArgs } from '../args';
+import { flagBool, flagList, flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
 import {
   epicMembers,
@@ -118,6 +119,38 @@ function requireStatus(value: string): TaskStatus {
 const problemsField = (out: CommandOutput['problems']): Pick<CommandOutput, 'problems'> =>
   out !== undefined && out.length > 0 ? { problems: out } : {};
 
+// `--field key=value`, repeatable. Only the first `=` separates, so a value may
+// contain more. An empty value clears the field; a key the board does not
+// declare is a usage error rather than a silent write nothing would ever show.
+function parseCustomFields(
+  args: ParsedArgs,
+  config: BoardConfig,
+): Record<string, string> | undefined {
+  const raw = flagList(args.flags, 'field');
+  if (raw.length === 0) return undefined;
+  const declared = config.customFields ?? [];
+  const values: Record<string, string> = {};
+  for (const entry of raw) {
+    const eq = entry.indexOf('=');
+    if (eq <= 0) {
+      throw new CliError('USAGE', `Invalid --field "${entry}" (expected key=value).`, 2);
+    }
+    const key = entry.slice(0, eq);
+    if (!declared.some((f) => f.key === key)) {
+      const known = declared.map((f) => f.key).join(', ');
+      throw new CliError(
+        'USAGE',
+        known === ''
+          ? `Unknown field "${key}". This board declares no customFields.`
+          : `Unknown field "${key}" (declared: ${known}).`,
+        2,
+      );
+    }
+    values[key] = entry.slice(eq + 1);
+  }
+  return values;
+}
+
 // Run a core board-op, mapping its process-guard rejection (a finished release is
 // read-only and rejects new or moved work) to a structured ARCHIVED error rather
 // than the generic ERROR fallback. The task's existence is validated before
@@ -135,7 +168,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   if (title === undefined || title.length === 0) {
     throw new CliError(
       'USAGE',
-      'Usage: boardown task add <title> [--type ...] [--epic ...] [--release ...].',
+      'Usage: boardown task add <title> [--type ...] [--epic ...] [--release ...] [--field key=value].',
       2,
     );
   }
@@ -177,12 +210,15 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     epicTag = undefined;
   }
 
+  const custom = parseCustomFields(args, snapshot.config);
+
   const input: NewTaskInput = {
     title,
     type,
     status,
     ...(description !== undefined ? { description } : {}),
     ...(epicTag !== undefined ? { epic: epicTag } : {}),
+    ...(custom !== undefined ? { custom } : {}),
   };
 
   const result = applyOp(() => createTask(target.container, snapshot.config, input));
@@ -276,7 +312,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (id === undefined) {
     throw new CliError(
       'USAGE',
-      'Usage: boardown task edit <id> [--title/--description/--type/--status/--epic/--no-epic] [--release <ref> | --no-release].',
+      'Usage: boardown task edit <id> [--title/--description/--type/--status/--epic/--no-epic] [--field key=value] [--release <ref> | --no-release].',
       2,
     );
   }
@@ -315,6 +351,8 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (typeFlag !== undefined) fields.type = requireType(typeFlag, 'feature');
   const statusFlag = flagString(args.flags, 'status');
   if (statusFlag !== undefined) fields.status = requireStatus(statusFlag);
+  const custom = parseCustomFields(args, snapshot.config);
+  if (custom !== undefined) fields.custom = custom;
   const hasFields = Object.keys(fields).length > 0;
 
   if (!hasFields && !changesRelease && !changesEpic) {
@@ -327,7 +365,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   // Release relocation: move in/out of a release, keeping the epic tag.
   if (changesRelease) {
-    const edited = hasFields ? applyOp(() => editTask(location.container, id, fields)) : location.container;
+    const edited = hasFields ? applyOp(() => editTask(location.container, snapshot.config, id, fields)) : location.container;
     const dest = resolveReleaseMove(snapshot, location, edited, id, releaseRef, noRelease);
     if (dest === null) {
       await writeContainer(fs, { kind: location.kind, container: edited });
@@ -350,7 +388,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       (typeof nextEpic === 'string' && nextEpic !== current.frontmatter.epic));
 
   if (epicReallyChanges && location.kind !== 'release') {
-    const edited = hasFields ? applyOp(() => editTask(location.container, id, fields)) : location.container;
+    const edited = hasFields ? applyOp(() => editTask(location.container, snapshot.config, id, fields)) : location.container;
     let dest: MoveDest;
     if (nextEpic === null) {
       dest = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
@@ -367,7 +405,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   // Pure in-place edit (fields, plus epic tag when the task is in a release).
   const patch: TaskPatch = { ...fields };
   if (nextEpic !== undefined) patch.epic = nextEpic;
-  const edited = applyOp(() => editTask(location.container, id, patch));
+  const edited = applyOp(() => editTask(location.container, snapshot.config, id, patch));
   await writeContainer(fs, { kind: location.kind, container: edited });
   return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
 }
@@ -414,11 +452,19 @@ const renderTaskLinks = (links: readonly TaskLink[] | undefined): string => {
   return `\n\nLinks (${links.length}):\n${lines}`;
 };
 
+const renderCustom = (custom: Record<string, string> | undefined): string => {
+  if (custom === undefined) return '';
+  const entries = Object.entries(custom);
+  if (entries.length === 0) return '';
+  const lines = entries.map(([key, value]) => `  ${key}: ${value}`).join('\n');
+  return `\n\nFields:\n${lines}`;
+};
+
 const renderTask = (task: Task, kind: string, file: string): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
+  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -708,7 +754,7 @@ async function mutateTask(
   }
 
   const { patch, human, extra } = build(task);
-  const edited = applyOp(() => editTask(location.container, taskId, patch));
+  const edited = applyOp(() => editTask(location.container, snapshot.config, taskId, patch));
   await writeContainer(fs, { kind: location.kind, container: edited });
 
   return {

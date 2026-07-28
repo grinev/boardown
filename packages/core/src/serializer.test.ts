@@ -597,3 +597,77 @@ order: 200
     expect(changed).toEqual(['status: todo → status: done', 'order: 100 → order: 400']);
   });
 });
+
+describe('custom field values', () => {
+  const FIELDS = [
+    { key: 'reporter', label: 'Reporter', type: 'string' as const },
+    { key: 'env', type: 'string' as const },
+  ];
+
+  const RELEASE_WITH_FIELDS = `---
+status: current
+---
+
+# R
+
+## T
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+reporter: alice
+env: staging
+---
+
+body
+`;
+
+  it('writes custom keys flat, after every built-in key', () => {
+    const parsed = parseRelease(RELEASE_WITH_FIELDS, 'releases/r.md', 'r', FIELDS);
+    const out = serializeRelease(parsed.value!);
+    const fm = out.slice(out.indexOf('id: BD-1'));
+    expect(fm.indexOf('order: 100')).toBeLessThan(fm.indexOf('reporter: alice'));
+    expect(fm.indexOf('reporter: alice')).toBeLessThan(fm.indexOf('env: staging'));
+  });
+
+  it('round-trips idempotently', () => {
+    const first = serializeRelease(
+      parseRelease(RELEASE_WITH_FIELDS, 'releases/r.md', 'r', FIELDS).value!,
+    );
+    const second = serializeRelease(parseRelease(first, 'releases/r.md', 'r', FIELDS).value!);
+    expect(second).toBe(first);
+  });
+
+  it('round-trips a value full of YAML metacharacters', () => {
+    const text = `---
+status: current
+---
+
+# R
+
+## T
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+reporter: '#1: [a, b] — "quoted"'
+---
+`;
+    const parsed = parseRelease(text, 'releases/r.md', 'r', FIELDS);
+    const out = serializeRelease(parsed.value!);
+    const back = parseRelease(out, 'releases/r.md', 'r', FIELDS);
+    expect(back.problems).toEqual([]);
+    expect(back.value?.tasks[0]?.frontmatter.custom?.reporter).toBe('#1: [a, b] — "quoted"');
+  });
+
+  it('writes nothing extra when the board declares no fields', () => {
+    const parsed = parseRelease(RELEASE_WITH_FIELDS, 'releases/r.md', 'r');
+    const out = serializeRelease(parsed.value!);
+    expect(out).not.toContain('reporter');
+    expect(out).not.toContain('env:');
+  });
+});

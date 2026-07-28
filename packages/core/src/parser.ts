@@ -2,6 +2,8 @@ import yaml from 'js-yaml';
 import {
   type Backlog,
   BacklogFrontmatterSchema,
+  buildCustomValuesSchema,
+  type CustomField,
   type DocPage,
   DocPageFrontmatterSchema,
   type Epic,
@@ -9,6 +11,7 @@ import {
   type Release,
   ReleaseFrontmatterSchema,
   type Task,
+  type TaskFrontmatter,
   TaskFrontmatterSchema,
 } from './schemas.js';
 import {
@@ -110,9 +113,12 @@ const parseYaml = (text: string): unknown => {
 const parseTasks = (
   segments: RawTaskSegment[],
   filename: string,
+  customFields: readonly CustomField[],
 ): { tasks: Task[]; problems: ParseProblem[] } => {
   const tasks: Task[] = [];
   const problems: ParseProblem[] = [];
+  const customSchema =
+    customFields.length > 0 ? buildCustomValuesSchema(customFields) : null;
 
   segments.forEach((segment, index) => {
     if (segment.title === '') {
@@ -146,10 +152,33 @@ const parseTasks = (
       return;
     }
 
+    const frontmatter: TaskFrontmatter = result.data;
+    if (customSchema !== null) {
+      const customResult = customSchema.safeParse(rawData);
+      if (!customResult.success) {
+        problems.push(
+          taskProblem(
+            filename,
+            index,
+            `Task custom fields failed validation: ${customResult.error.issues.map((i) => i.message).join('; ')}`,
+            result.data.id,
+          ),
+        );
+        return;
+      }
+      // Declaration order, so the on-disk key order never depends on edit order.
+      const custom: Record<string, string> = {};
+      for (const field of customFields) {
+        const value = customResult.data[field.key];
+        if (value !== undefined && value !== '') custom[field.key] = value;
+      }
+      if (Object.keys(custom).length > 0) frontmatter.custom = custom;
+    }
+
     tasks.push({
       title: segment.title,
       description: segment.description,
-      frontmatter: result.data,
+      frontmatter,
     });
   });
 
@@ -160,6 +189,7 @@ export const parseRelease = (
   text: string,
   filename: string,
   slug: string,
+  customFields: readonly CustomField[] = [],
 ): ParseResult<Release> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
@@ -190,7 +220,7 @@ export const parseRelease = (
   }
 
   const { preamble, segments } = splitBody(body);
-  const { tasks, problems: taskProblems } = parseTasks(segments, filename);
+  const { tasks, problems: taskProblems } = parseTasks(segments, filename, customFields);
   problems.push(...taskProblems);
 
   return {
@@ -216,7 +246,11 @@ const withEpicOnTask = (task: Task, slug: string): Task =>
     ? task
     : { ...task, frontmatter: { ...task.frontmatter, epic: slug } };
 
-export const parseBacklog = (text: string, filename: string): ParseResult<Backlog> => {
+export const parseBacklog = (
+  text: string,
+  filename: string,
+  customFields: readonly CustomField[] = [],
+): ParseResult<Backlog> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
 
@@ -242,7 +276,7 @@ export const parseBacklog = (text: string, filename: string): ParseResult<Backlo
   }
 
   const { preamble, segments } = splitBody(body);
-  const { tasks, problems: taskProblems } = parseTasks(segments, filename);
+  const { tasks, problems: taskProblems } = parseTasks(segments, filename, customFields);
   problems.push(...taskProblems);
 
   return {
@@ -260,6 +294,7 @@ export const parseEpic = (
   text: string,
   filename: string,
   slug: string,
+  customFields: readonly CustomField[] = [],
 ): ParseResult<Epic> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
@@ -290,7 +325,7 @@ export const parseEpic = (
   }
 
   const { preamble, segments } = splitBody(body);
-  const { tasks, problems: taskProblems } = parseTasks(segments, filename);
+  const { tasks, problems: taskProblems } = parseTasks(segments, filename, customFields);
   problems.push(...taskProblems);
 
   return {

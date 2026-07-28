@@ -39,6 +39,14 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.theme !== undefined) {
     ordered.theme = config.theme;
   }
+  if (config.customFields !== undefined) {
+    ordered.customFields = config.customFields.map((field) => {
+      const entry: Record<string, unknown> = { key: field.key };
+      if (field.label !== undefined) entry.label = field.label;
+      entry.type = field.type;
+      return entry;
+    });
+  }
   return yaml.dump(ordered, {
     lineWidth: -1,
     noRefs: true,

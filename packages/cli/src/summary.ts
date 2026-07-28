@@ -1,4 +1,5 @@
 import type { Task } from '@boardown/core';
+import { flagBool, type ParsedArgs } from './args';
 
 /**
  * The compact projection of a task used everywhere a task appears in a *list* —
@@ -67,8 +68,7 @@ export const summaryLines = (tasks: readonly Task[], indent = '  '): string[] =>
   tasks.map((task) => summaryLine(task, indent));
 
 /** Shared by every listing command: `--full` means "one level deeper". */
-export const isFull = (flags: Record<string, string | boolean>): boolean =>
-  flags.full === true;
+export const isFull = (flags: ParsedArgs['flags']): boolean => flagBool(flags, 'full');
 
 /** A list payload: summaries by default, whole tasks under `--full`. */
 export const taskPayload = (

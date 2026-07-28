@@ -1,8 +1,10 @@
 import { X } from 'lucide-react';
 import { useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import {
+  customFieldLabel,
   TASK_STATUSES,
   TASK_TYPES,
+  type CustomField,
   type Epic,
   type Release,
   type Task,
@@ -36,6 +38,9 @@ interface TaskDetailsDialogProps {
 
 const NO_EPIC_VALUE = '__none__';
 const NO_RELEASE_VALUE = '__none__';
+
+// Stable identity, so the selector doesn't return a fresh array every render.
+const EMPTY_FIELDS: CustomField[] = [];
 
 const STATUS_PILL_CLASS: Record<TaskStatus, string | undefined> = {
   todo: styles.statusTodo,
@@ -80,6 +85,7 @@ export function TaskDetailsDialog({
   const moveTaskToRelease = useBoardStore((s) => s.moveTaskToRelease);
   const epics = useBoardStore((s) => s.snapshot?.epics ?? []);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
+  const customFields = useBoardStore((s) => s.snapshot?.config.customFields ?? EMPTY_FIELDS);
   const archived = release?.frontmatter.status === 'finished';
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -269,6 +275,20 @@ export function TaskDetailsDialog({
                   )}
                 </dd>
               </div>
+              {customFields.map((field) => (
+                <div key={field.key} className={styles.detailRowWrapping}>
+                  <dt className={styles.detailLabel}>{customFieldLabel(field)}</dt>
+                  <dd className={styles.detailValueWide}>
+                    <InlineEditText
+                      value={task.frontmatter.custom?.[field.key] ?? ''}
+                      readOnly={archived}
+                      ariaLabel={customFieldLabel(field)}
+                      className={styles.customValue}
+                      onSave={(next) => updateTask(id, { custom: { [field.key]: next } })}
+                    />
+                  </dd>
+                </div>
+              ))}
             </dl>
           </div>
         </aside>

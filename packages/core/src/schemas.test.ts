@@ -321,3 +321,58 @@ describe('BoardConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('BoardConfigSchema customFields', () => {
+  const withFields = (customFields: unknown): unknown => ({
+    idPrefix: 'BD',
+    nextId: 0,
+    projectName: 'My Project',
+    customFields,
+  });
+
+  it('accepts declarations with and without a label', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([
+        { key: 'reporter', label: 'Reporter', type: 'string' },
+        { key: 'env', type: 'string' },
+      ]),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a key that is not an identifier', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([{ key: 'my field', type: 'string' }]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a duplicate key', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([
+        { key: 'env', type: 'string' },
+        { key: 'env', type: 'string' },
+      ]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a key that shadows a built-in task field', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([{ key: 'status', type: 'string' }]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown type', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([{ key: 'due', type: 'date' }]),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a declaration with no type', () => {
+    const result = BoardConfigSchema.safeParse(withFields([{ key: 'due' }]));
+    expect(result.success).toBe(false);
+  });
+});

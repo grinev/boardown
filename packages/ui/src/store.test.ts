@@ -335,6 +335,36 @@ describe('updateTask', () => {
     expect(fs.writes).toContain('releases/1.0.md');
   });
 
+  it('writes a custom field value flat into the task frontmatter', async () => {
+    const { fs } = setup(
+      snap({
+        config: { ...config(), customFields: [{ key: 'env', type: 'string' }] },
+        releases: [release('1.0', 'current', [task('BD-1')])],
+      }),
+    );
+
+    await state().updateTask('BD-1', { custom: { env: 'staging' } });
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.custom).toEqual({ env: 'staging' });
+    expect(fs.files.get('releases/1.0.md')?.content).toContain('env: staging');
+  });
+
+  it('removes the key when a custom field value is cleared', async () => {
+    const { fs } = setup(
+      snap({
+        config: { ...config(), customFields: [{ key: 'env', type: 'string' }] },
+        releases: [
+          release('1.0', 'current', [task('BD-1', { custom: { env: 'staging' } })]),
+        ],
+      }),
+    );
+
+    await state().updateTask('BD-1', { custom: { env: '' } });
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.custom).toBeUndefined();
+    expect(fs.files.get('releases/1.0.md')?.content).not.toContain('env:');
+  });
+
   it('relocates a backlog task to an epic file when its epic changes', async () => {
     setup(snap({ epics: [epic('parser')], backlog: backlog([task('BD-1')]) }));
 

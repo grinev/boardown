@@ -1175,8 +1175,9 @@ export const useBoardStore = create<BoardState>(
           remainderPatch.title !== undefined ||
           remainderPatch.description !== undefined ||
           remainderPatch.type !== undefined ||
-          remainderPatch.status !== undefined
-            ? editTask(moved.dest, taskId, remainderPatch)
+          remainderPatch.status !== undefined ||
+          remainderPatch.custom !== undefined
+            ? editTask(moved.dest, snapshot.config, taskId, remainderPatch)
             : moved.dest;
 
         const nextReleases = [...snapshot.releases];
@@ -1225,7 +1226,7 @@ export const useBoardStore = create<BoardState>(
         return;
       }
 
-      const nextContainer = editTask(sourceLoc.container, taskId, patch);
+      const nextContainer = editTask(sourceLoc.container, snapshot.config, taskId, patch);
       const nextReleases = [...snapshot.releases];
       const nextEpics = [...snapshot.epics];
       let nextBacklog = snapshot.backlog;

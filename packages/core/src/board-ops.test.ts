@@ -94,7 +94,7 @@ describe('createTask', () => {
 describe('editTask', () => {
   it('updates title and description, preserves frontmatter', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const r1 = editTask(r0, 'BD-1', { title: 'Updated', description: 'desc' });
+    const r1 = editTask(r0, config, 'BD-1', { title: 'Updated', description: 'desc' });
     expect(r1.tasks[0]!.title).toBe('Updated');
     expect(r1.tasks[0]!.description).toBe('desc');
     expect(r1.tasks[0]!.frontmatter.order).toBe(100);
@@ -104,13 +104,13 @@ describe('editTask', () => {
     const t = task('BD-1', 'todo', 100);
     t.frontmatter.epic = 'parser';
     const r0 = release(t);
-    const r1 = editTask(r0, 'BD-1', { epic: null });
+    const r1 = editTask(r0, config, 'BD-1', { epic: null });
     expect(r1.tasks[0]!.frontmatter.epic).toBeUndefined();
   });
 
   it('updates type', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const r1 = editTask(r0, 'BD-1', { type: 'bug' });
+    const r1 = editTask(r0, config, 'BD-1', { type: 'bug' });
     expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
   });
 
@@ -120,7 +120,7 @@ describe('editTask', () => {
       task('BD-2', 'done', 100),
       task('BD-3', 'done', 200),
     );
-    const r1 = editTask(r0, 'BD-1', { status: 'done' });
+    const r1 = editTask(r0, config, 'BD-1', { status: 'done' });
     const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.status).toBe('done');
     expect(moved.frontmatter.order).toBe(300);
@@ -128,14 +128,14 @@ describe('editTask', () => {
 
   it('keeps order untouched when status patch matches current status', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const r1 = editTask(r0, 'BD-1', { status: 'todo', title: 'Same column' });
+    const r1 = editTask(r0, config, 'BD-1', { status: 'todo', title: 'Same column' });
     expect(r1.tasks[0]!.frontmatter.order).toBe(100);
     expect(r1.tasks[0]!.title).toBe('Same column');
   });
 
   it('sets the checklist', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const r1 = editTask(r0, 'BD-1', {
+    const r1 = editTask(r0, config, 'BD-1', {
       checklist: [{ id: 'c1', text: 'Do the thing', done: false }],
     });
     expect(r1.tasks[0]!.frontmatter.checklist).toEqual([
@@ -147,13 +147,13 @@ describe('editTask', () => {
     const t = task('BD-1', 'todo', 100);
     t.frontmatter.checklist = [{ id: 'c1', text: 'Old', done: true }];
     const r0 = release(t);
-    const r1 = editTask(r0, 'BD-1', { checklist: [] });
+    const r1 = editTask(r0, config, 'BD-1', { checklist: [] });
     expect(r1.tasks[0]!.frontmatter.checklist).toBeUndefined();
   });
 
   it('sets the notes', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const r1 = editTask(r0, 'BD-1', {
+    const r1 = editTask(r0, config, 'BD-1', {
       notes: [{ id: 'n1', text: 'A note', createdAt: '2026-01-01T00:00:00.000Z' }],
     });
     expect(r1.tasks[0]!.frontmatter.notes).toEqual([
@@ -165,7 +165,7 @@ describe('editTask', () => {
     const t = task('BD-1', 'todo', 100);
     t.frontmatter.notes = [{ id: 'n1', text: 'Old', createdAt: '2026-01-01T00:00:00.000Z' }];
     const r0 = release(t);
-    const r1 = editTask(r0, 'BD-1', { notes: [] });
+    const r1 = editTask(r0, config, 'BD-1', { notes: [] });
     expect(r1.tasks[0]!.frontmatter.notes).toBeUndefined();
   });
 });
@@ -991,7 +991,7 @@ describe('process invariants — finished release is archived', () => {
 
   it('task mutations reject a finished release', () => {
     const r = finished(task('BD-1', 'todo', 100));
-    expect(() => editTask(r, 'BD-1', { title: 'y' })).toThrow(/finished/);
+    expect(() => editTask(r, config, 'BD-1', { title: 'y' })).toThrow(/finished/);
     expect(() => changeTaskStatus(r, 'BD-1', 'done')).toThrow(/finished/);
     expect(() => deleteTask(r, 'BD-1')).toThrow(/finished/);
     expect(() => reorderTask(r, 'BD-1', null)).toThrow(/finished/);
@@ -1145,7 +1145,7 @@ describe('block order in the file', () => {
   });
 
   it('survives a status change made through editTask', () => {
-    const result = editTask(shuffled(), 'BD-1', { status: 'in-progress' });
+    const result = editTask(shuffled(), config, 'BD-1', { status: 'in-progress' });
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
     expect(orderOf(result.tasks, 'BD-1')).toBe(400);
   });
@@ -1198,5 +1198,85 @@ describe('block order in the file', () => {
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-2']);
     expect(orderOf(result.tasks, 'BD-2')).toBe(200);
     expect(orderOf(result.tasks, 'BD-3')).toBe(300);
+  });
+});
+
+describe('custom field values', () => {
+  const withFields: BoardConfig = {
+    ...config,
+    customFields: [
+      { key: 'reporter', label: 'Reporter', type: 'string' },
+      { key: 'env', type: 'string' },
+    ],
+  };
+
+  const customOf = (r: Release): Record<string, string> | undefined =>
+    r.tasks[0]?.frontmatter.custom;
+
+  it('sets a value', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: 'alice' } });
+    expect(customOf(r1)).toEqual({ reporter: 'alice' });
+  });
+
+  it('leaves keys the patch does not mention alone', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: 'alice', env: 'prod' } });
+    const r2 = editTask(r1, withFields, 'BD-1', { custom: { env: 'staging' } });
+    expect(customOf(r2)).toEqual({ reporter: 'alice', env: 'staging' });
+  });
+
+  it('rebuilds the bag in declaration order whatever order edits arrive in', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { env: 'staging' } });
+    const r2 = editTask(r1, withFields, 'BD-1', { custom: { reporter: 'alice' } });
+    expect(Object.keys(customOf(r2) ?? {})).toEqual(['reporter', 'env']);
+  });
+
+  it('clears a key on an empty or whitespace-only value', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: 'alice', env: 'prod' } });
+    const r2 = editTask(r1, withFields, 'BD-1', { custom: { reporter: '   ' } });
+    expect(customOf(r2)).toEqual({ env: 'prod' });
+  });
+
+  it('drops the bag entirely when the last value is cleared', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: 'alice' } });
+    const r2 = editTask(r1, withFields, 'BD-1', { custom: { reporter: '' } });
+    expect(customOf(r2)).toBeUndefined();
+    expect('custom' in (r2.tasks[0]?.frontmatter ?? {})).toBe(false);
+  });
+
+  it('trims a stored value', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: '  alice  ' } });
+    expect(customOf(r1)).toEqual({ reporter: 'alice' });
+  });
+
+  it('drops values whose field the config no longer declares', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, withFields, 'BD-1', { custom: { reporter: 'alice', env: 'prod' } });
+    const narrowed: BoardConfig = { ...config, customFields: [{ key: 'env', type: 'string' }] };
+    const r2 = editTask(r1, narrowed, 'BD-1', { title: 'Renamed' });
+    expect(customOf(r2)).toEqual({ env: 'prod' });
+  });
+
+  it('seeds values on creation', () => {
+    const result = createTask(release(), withFields, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+      custom: { env: 'prod' },
+    });
+    expect(result.task.frontmatter.custom).toEqual({ env: 'prod' });
+  });
+
+  it('refuses a task in a finished release', () => {
+    const r: Release = {
+      ...release(task('BD-1', 'todo', 100)),
+      frontmatter: { status: 'finished' },
+    };
+    expect(() => editTask(r, withFields, 'BD-1', { custom: { env: 'x' } })).toThrow(/finished/);
   });
 });

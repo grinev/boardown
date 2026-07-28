@@ -40,6 +40,13 @@ const orderedTaskFrontmatter = (
   if (fm.links && fm.links.length > 0) {
     out.links = fm.links.map((link) => ({ type: link.type, to: link.to }));
   }
+  // Custom values are flat on disk. The bag is already in declaration order —
+  // board-ops owns that — so this only spreads it out.
+  if (fm.custom) {
+    for (const [key, value] of Object.entries(fm.custom)) {
+      if (value !== '') out[key] = value;
+    }
+  }
   return out;
 };
 

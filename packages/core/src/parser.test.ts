@@ -365,3 +365,142 @@ describe('parseDocPage', () => {
     expect(result.problems[0]?.message).toContain('validation');
   });
 });
+
+describe('custom fields', () => {
+  const FIELDS = [
+    { key: 'reporter', label: 'Reporter', type: 'string' as const },
+    { key: 'env', type: 'string' as const },
+  ];
+
+  const release = (taskYaml: string): string => `---
+status: current
+---
+
+# R
+
+## T
+
+---
+${taskYaml}
+---
+
+body
+`;
+
+  it('harvests declared keys into the custom bag', () => {
+    const result = parseRelease(
+      release('id: BD-1\ntype: feature\nstatus: todo\norder: 100\nreporter: alice\nenv: staging'),
+      'releases/r.md',
+      'r',
+      FIELDS,
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.value?.tasks[0]?.frontmatter.custom).toEqual({
+      reporter: 'alice',
+      env: 'staging',
+    });
+  });
+
+  it('orders the bag by declaration, not by file order', () => {
+    const result = parseRelease(
+      release('id: BD-1\ntype: feature\nstatus: todo\norder: 100\nenv: staging\nreporter: alice'),
+      'releases/r.md',
+      'r',
+      FIELDS,
+    );
+    expect(Object.keys(result.value?.tasks[0]?.frontmatter.custom ?? {})).toEqual([
+      'reporter',
+      'env',
+    ]);
+  });
+
+  it('coerces a number, a boolean and a bare date to strings', () => {
+    const result = parseRelease(
+      release('id: BD-1\ntype: feature\nstatus: todo\norder: 100\nreporter: 42\nenv: 2026-01-15'),
+      'releases/r.md',
+      'r',
+      [
+        { key: 'reporter', type: 'string' },
+        { key: 'env', type: 'string' },
+      ],
+    );
+    expect(result.value?.tasks[0]?.frontmatter.custom).toEqual({
+      reporter: '42',
+      env: '2026-01-15',
+    });
+  });
+
+  it('drops only the offending task when a value is not a scalar', () => {
+    const text = `---
+status: current
+---
+
+# R
+
+## Bad
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+reporter:
+  - a
+  - b
+---
+
+## Good
+
+---
+id: BD-2
+type: feature
+status: todo
+order: 200
+---
+`;
+    const result = parseRelease(text, 'releases/r.md', 'r', FIELDS);
+    expect(result.value?.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+    expect(result.problems).toHaveLength(1);
+    expect(result.problems[0]?.scope).toBe('task');
+    expect(result.problems[0]?.taskId).toBe('BD-1');
+  });
+
+  it('leaves no bag when nothing is declared', () => {
+    const result = parseRelease(
+      release('id: BD-1\ntype: feature\nstatus: todo\norder: 100\nreporter: alice'),
+      'releases/r.md',
+      'r',
+    );
+    expect(result.value?.tasks[0]?.frontmatter.custom).toBeUndefined();
+  });
+
+  it('ignores a key no declaration mentions', () => {
+    const result = parseRelease(
+      release('id: BD-1\ntype: feature\nstatus: todo\norder: 100\nstray: x\nenv: staging'),
+      'releases/r.md',
+      'r',
+      FIELDS,
+    );
+    expect(result.value?.tasks[0]?.frontmatter.custom).toEqual({ env: 'staging' });
+  });
+
+  it('harvests in an epic file too', () => {
+    const text = `---
+name: UI
+color: "#1f6feb"
+---
+
+## T
+
+---
+id: BD-1
+type: feature
+status: todo
+order: 100
+env: staging
+---
+`;
+    const result = parseEpic(text, 'epics/ui.md', 'ui', FIELDS);
+    expect(result.value?.tasks[0]?.frontmatter.custom).toEqual({ env: 'staging' });
+  });
+});
