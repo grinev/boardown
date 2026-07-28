@@ -518,7 +518,10 @@ an inline-editable single-line text field, left **blank** when unset — the row
 still there and still clickable, it just shows nothing. A value too long to sit
 beside its label moves to the line below and takes the card's full width,
 wrapping from there. The label stays level with the value's first line, including
-while the editor is open. Custom fields appear in the task dialog only: not on
+while the editor is open. A value's task-ID and `[[…]]` tokens render as links in
+view mode, exactly as they do in the description (see "Task links" and "Doc
+links"), and typing `[[` while editing offers the same doc-page suggestions.
+Custom fields appear in the task dialog only: not on
 the task card, not in the backlog row, not in the filter bar, and not in the
 creation dialog — a new task starts with none and is filled in afterwards.
 
@@ -527,7 +530,8 @@ from. Every value is still shown — and every way to change one is gone rather
 than disabled-looking: title, description, checklist item text and note text
 render as plain text; status, type and release render as plain values instead of
 dropdowns; the epic renders as its badge, still clickable to navigate to the
-epic; custom field values render as plain text. Checklist checkboxes are disabled, the add-item row and the note composer
+epic; custom field values render as text, with their links still clickable.
+Checklist checkboxes are disabled, the add-item row and the note composer
 are absent, and the per-item trash buttons do not appear. Linked tasks are
 frozen and the `…` menu's `Delete` item is disabled, as described below. An
 archived file is never rewritten, so there is nothing to fail: the operations
@@ -568,15 +572,18 @@ not a data format.
 
 Both kinds render in the task's **description** and **notes** (task dialog), the
 **epic's description** (epic dialog), the **release's description** (release
-dialog) and a **doc page's body** (Docs tab). Tokens that resolve to nothing stay
-plain text, and edit mode always shows the raw source. Checklist items and cards
-render no links.
+dialog), a **doc page's body** (Docs tab) and a **custom field's value** (task
+dialog) — the one single-line field that renders links, since it is the natural
+place to point at the task or the page this one came from. Tokens that resolve to
+nothing stay plain text, and edit mode always shows the raw source. The task
+title, checklist items and cards render no links: those texts also show on the
+task card and in the backlog row, where nothing is linkified.
 
-**Inserting a doc link.** In any of those multiline fields, typing `[[` opens a
-suggestion list of doc pages, filtered by title and path as the user keeps typing.
-↑/↓ move, Enter or a click inserts the page's token and closes the brackets,
-Escape dismisses the list without leaving edit mode. There is no autocomplete for
-task IDs — those are short enough to type — and none in single-line fields, which
+**Inserting a doc link.** In any of those fields, typing `[[` opens a suggestion
+list of doc pages, filtered by title and path as the user keeps typing. ↑/↓ move,
+Enter or a click inserts the page's token and closes the brackets, Escape
+dismisses the list without leaving edit mode. There is no autocomplete for task
+IDs — those are short enough to type — and none in the single-line fields that
 render no links.
 
 **Linked tasks.** Above the notes, the task dialog has a **Linked tasks** section:

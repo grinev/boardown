@@ -282,8 +282,10 @@ export function TaskDetailsDialog({
                     <InlineEditText
                       value={task.frontmatter.custom?.[field.key] ?? ''}
                       readOnly={archived}
+                      docRefs
                       ariaLabel={customFieldLabel(field)}
                       className={styles.customValue}
+                      renderView={(value) => <LinkedText text={value} />}
                       onSave={(next) => updateTask(id, { custom: { [field.key]: next } })}
                     />
                   </dd>

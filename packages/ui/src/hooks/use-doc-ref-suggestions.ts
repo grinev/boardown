@@ -32,11 +32,13 @@ export interface DocRefSuggestions {
   close: () => void;
   accept: (index: number) => void;
   // Returns true when the popup consumed the key, so the host leaves it alone.
-  onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
+  onKeyDown: (e: KeyboardEvent<DocRefField>) => boolean;
 }
 
+type DocRefField = HTMLInputElement | HTMLTextAreaElement;
+
 export const useDocRefSuggestions = (
-  textareaRef: RefObject<HTMLTextAreaElement | null>,
+  fieldRef: RefObject<DocRefField | null>,
   value: string,
   setValue: (next: string) => void,
 ): DocRefSuggestions => {
@@ -68,16 +70,16 @@ export const useDocRefSuggestions = (
   }, [token?.query]);
 
   // An accepted suggestion rewrites the text, so the caret can only be restored
-  // once React has flushed the new value into the textarea.
+  // once React has flushed the new value into the field.
   useLayoutEffect(() => {
     const caret = pendingCaret.current;
     if (caret === null) return;
     pendingCaret.current = null;
-    const el = textareaRef.current;
+    const el = fieldRef.current;
     if (el === null) return;
     el.focus();
     el.setSelectionRange(caret, caret);
-  }, [value, textareaRef]);
+  }, [value, fieldRef]);
 
   const close = useCallback(() => {
     setToken(null);
@@ -86,31 +88,32 @@ export const useDocRefSuggestions = (
   }, []);
 
   const sync = useCallback(() => {
-    const el = textareaRef.current;
+    const el = fieldRef.current;
     if (el === null) return;
-    const next = findOpenDocRefToken(el.value, el.selectionStart);
+    const caret = el.selectionStart ?? el.value.length;
+    const next = findOpenDocRefToken(el.value, caret);
     setToken(next);
-    setPoint(next === null ? null : caretPoint(el, el.selectionStart));
+    setPoint(next === null ? null : caretPoint(el, caret));
     setContainer(next === null ? null : (el.closest('dialog') ?? document.body));
-  }, [textareaRef]);
+  }, [fieldRef]);
 
   const accept = useCallback(
     (index: number) => {
-      const el = textareaRef.current;
+      const el = fieldRef.current;
       const item = items[index];
       if (el === null || token === null || item === undefined) return;
-      const caret = el.selectionStart;
+      const caret = el.selectionStart ?? el.value.length;
       setValue(
         `${value.slice(0, token.start)}[[${item.token}]]${value.slice(caret)}`,
       );
       pendingCaret.current = token.start + item.token.length + 4;
       close();
     },
-    [textareaRef, items, token, value, setValue, close],
+    [fieldRef, items, token, value, setValue, close],
   );
 
   const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    (e: KeyboardEvent<DocRefField>): boolean => {
       if (token === null) return false;
       if (e.key === 'Escape') {
         // Consumed, so the host's cancel does not also fire: dismissing a

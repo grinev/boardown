@@ -182,6 +182,11 @@ env: staging
 ---
 ```
 
+A value that mentions another task (`BD-12`) or a doc page
+(`[[guides/release-process]]`) renders those as links, the same way the task
+description does — clicking one opens the task or the doc page. Typing `[[` while
+editing a field offers the doc-page suggestion list.
+
 From the CLI, set them with a repeatable `--field`, and ask `schema` which fields
 a board declares:
 

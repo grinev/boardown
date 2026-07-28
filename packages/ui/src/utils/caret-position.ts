@@ -36,11 +36,11 @@ const MIRRORED_STYLES = [
   'word-spacing',
 ] as const;
 
-// A textarea exposes no caret geometry, so the usual trick applies: render the
-// text up to the caret into an off-screen div carrying the textarea's own metrics
+// A text field exposes no caret geometry, so the usual trick applies: render the
+// text up to the caret into an off-screen div carrying the field's own metrics
 // and measure a marker placed at the end of it.
 export const caretPoint = (
-  el: HTMLTextAreaElement,
+  el: HTMLInputElement | HTMLTextAreaElement,
   offset: number,
 ): CaretPoint => {
   const computed = window.getComputedStyle(el);
@@ -53,9 +53,15 @@ export const caretPoint = (
   mirror.style.top = '0';
   mirror.style.left = '-9999px';
   mirror.style.visibility = 'hidden';
-  mirror.style.whiteSpace = 'pre-wrap';
-  mirror.style.overflowWrap = 'break-word';
-  mirror.style.width = `${el.clientWidth}px`;
+  // An input never wraps: it scrolls, and a wrapping mirror would put the caret
+  // on a line the field does not have.
+  if (el instanceof HTMLInputElement) {
+    mirror.style.whiteSpace = 'pre';
+  } else {
+    mirror.style.whiteSpace = 'pre-wrap';
+    mirror.style.overflowWrap = 'break-word';
+    mirror.style.width = `${el.clientWidth}px`;
+  }
 
   mirror.textContent = el.value.slice(0, offset);
   const marker = document.createElement('span');
@@ -71,8 +77,8 @@ export const caretPoint = (
   document.body.removeChild(mirror);
 
   // The marker's offsets are relative to the mirror's border box, which carries
-  // the textarea's own border and padding, so adding the field's viewport
-  // position lands on the caret.
+  // the field's own border and padding, so adding the field's viewport position
+  // lands on the caret.
   const box = el.getBoundingClientRect();
   return {
     top: box.top + top + lineHeight - el.scrollTop,

@@ -30,6 +30,10 @@ interface InlineEditTextProps {
   // A failure that only the save could discover (the write itself). Shown in the
   // same slot, and only while `validate` is happy.
   error?: string | null;
+  // Single-line only: offer the `[[` doc-page suggestions. Opt-in, because most
+  // single-line fields (title, checklist item) render no links, so a reference
+  // typed there would be dead text.
+  docRefs?: boolean;
 }
 
 const cx = (...parts: Array<string | false | undefined>): string =>
@@ -47,32 +51,34 @@ export function InlineEditText({
   renderView,
   validate,
   error = null,
+  docRefs = false,
 }: InlineEditTextProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [draft, setDraft] = useState(value);
   // A failed save reports `error` about the text as it stands; the first
   // keystroke after that makes it history.
   const [staleError, setStaleError] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committingRef = useRef(false);
-  // Multiline only: single-line fields (title, checklist item) render no links,
-  // so a reference typed there would be dead text.
-  const suggestions = useDocRefSuggestions(textareaRef, draft, setDraft);
+  // Always on for a multiline field, since every one of them renders links.
+  const suggesting = multiline || docRefs;
+  const suggestions = useDocRefSuggestions(fieldRef, draft, setDraft);
+  // One ref for both branches, so the suggestion hook binds to whichever element
+  // is rendered; a callback ref is what lets the two element types share it.
+  const setField = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+    fieldRef.current = el;
+  };
 
   useEffect(() => {
     if (mode !== 'edit') return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.focus();
     if (multiline) {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
       const len = el.value.length;
       el.setSelectionRange(len, len);
     } else {
-      const el = inputRef.current;
-      if (!el) return;
-      el.focus();
       el.select();
     }
   }, [mode, multiline]);
@@ -169,10 +175,7 @@ export function InlineEditText({
   const onKeyDown = (
     e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
-    if (
-      multiline &&
-      suggestions.onKeyDown(e as KeyboardEvent<HTMLTextAreaElement>)
-    ) {
+    if (suggesting && suggestions.onKeyDown(e)) {
       return;
     }
     if (e.key === 'Escape') {
@@ -219,35 +222,37 @@ export function InlineEditText({
   return (
     <div className={styles.editWrapper} ref={wrapperRef}>
       {multiline ? (
-        <>
-          <textarea
-            ref={textareaRef}
-            className={cx(styles.textarea, className)}
-            value={draft}
-            aria-label={ariaLabel}
-            onChange={(e) => {
-              edit(e.target.value);
-              suggestions.sync();
-            }}
-            onSelect={suggestions.sync}
-            onKeyDown={onKeyDown}
-            onBlur={onBlur}
-            rows={4}
-          />
-          <DocRefSuggestions suggestions={suggestions} />
-        </>
+        <textarea
+          ref={setField}
+          className={cx(styles.textarea, className)}
+          value={draft}
+          aria-label={ariaLabel}
+          onChange={(e) => {
+            edit(e.target.value);
+            suggestions.sync();
+          }}
+          onSelect={suggestions.sync}
+          onKeyDown={onKeyDown}
+          onBlur={onBlur}
+          rows={4}
+        />
       ) : (
         <input
-          ref={inputRef}
+          ref={setField}
           type="text"
           className={cx(styles.input, className)}
           value={draft}
           aria-label={ariaLabel}
-          onChange={(e) => edit(e.target.value)}
+          onChange={(e) => {
+            edit(e.target.value);
+            if (suggesting) suggestions.sync();
+          }}
+          onSelect={suggesting ? suggestions.sync : undefined}
           onKeyDown={onKeyDown}
           onBlur={onBlur}
         />
       )}
+      {suggesting && <DocRefSuggestions suggestions={suggestions} />}
       <div className={styles.footer}>
         {message !== null && (
           <p className={styles.error} role="alert">
