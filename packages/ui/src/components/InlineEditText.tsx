@@ -24,6 +24,12 @@ interface InlineEditTextProps {
   readOnly?: boolean;
   // Custom view-mode rendering of a non-empty value; edit mode always shows raw text.
   renderView?: (value: string) => ReactNode;
+  // Checked on every keystroke: a message means the value cannot be saved, so the
+  // field reports it while typing and refuses to commit.
+  validate?: (value: string) => string | null;
+  // A failure that only the save could discover (the write itself). Shown in the
+  // same slot, and only while `validate` is happy.
+  error?: string | null;
 }
 
 const cx = (...parts: Array<string | false | undefined>): string =>
@@ -39,9 +45,14 @@ export function InlineEditText({
   className,
   readOnly = false,
   renderView,
+  validate,
+  error = null,
 }: InlineEditTextProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [draft, setDraft] = useState(value);
+  // A failed save reports `error` about the text as it stands; the first
+  // keystroke after that makes it history.
+  const [staleError, setStaleError] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -68,7 +79,14 @@ export function InlineEditText({
 
   const enterEdit = () => {
     setDraft(value);
+    setStaleError(true);
     setMode('edit');
+  };
+
+  // Any keystroke moves the text past what the failed save was about.
+  const edit = (next: string) => {
+    setDraft(next);
+    setStaleError(true);
   };
 
   const finish = (resetDraft?: string) => {
@@ -91,6 +109,8 @@ export function InlineEditText({
       finish();
       return;
     }
+    // Stay in edit mode with the message showing: there is nothing to save.
+    if (validate?.(trimmed) != null) return;
     committingRef.current = true;
     setMode('view');
     try {
@@ -98,6 +118,7 @@ export function InlineEditText({
       committingRef.current = false;
     } catch {
       setMode('edit');
+      setStaleError(false);
       committingRef.current = false;
     }
   };
@@ -191,6 +212,10 @@ export function InlineEditText({
     e.preventDefault();
   };
 
+  // Sits on the same row as the Save/Cancel buttons, in the space they leave, so
+  // showing it never moves anything around it.
+  const message = validate?.(draft.trim()) ?? (staleError ? null : error);
+
   return (
     <div className={styles.editWrapper} ref={wrapperRef}>
       {multiline ? (
@@ -201,7 +226,7 @@ export function InlineEditText({
             value={draft}
             aria-label={ariaLabel}
             onChange={(e) => {
-              setDraft(e.target.value);
+              edit(e.target.value);
               suggestions.sync();
             }}
             onSelect={suggestions.sync}
@@ -218,32 +243,39 @@ export function InlineEditText({
           className={cx(styles.input, className)}
           value={draft}
           aria-label={ariaLabel}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => edit(e.target.value)}
           onKeyDown={onKeyDown}
           onBlur={onBlur}
         />
       )}
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.actionButton}
-          aria-label="Save"
-          onMouseDown={preventBlurSteal}
-          onClick={() => {
-            void commit();
-          }}
-        >
-          <Check size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={styles.actionButton}
-          aria-label="Cancel"
-          onMouseDown={preventBlurSteal}
-          onClick={cancel}
-        >
-          <X size={14} aria-hidden="true" />
-        </button>
+      <div className={styles.footer}>
+        {message !== null && (
+          <p className={styles.error} role="alert">
+            {message}
+          </p>
+        )}
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.actionButton}
+            aria-label="Save"
+            onMouseDown={preventBlurSteal}
+            onClick={() => {
+              void commit();
+            }}
+          >
+            <Check size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={styles.actionButton}
+            aria-label="Cancel"
+            onMouseDown={preventBlurSteal}
+            onClick={cancel}
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );

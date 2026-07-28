@@ -1,5 +1,7 @@
 import { X } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import type { Release, ReleaseStatus } from '@boardown/core';
+import { releaseFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { formatStatusLabel } from '../utils/format-status';
 import { DialogBackButton } from './DialogBackButton';
@@ -28,11 +30,46 @@ export function ReleaseDetailsDialog({
   onClose,
 }: ReleaseDetailsDialogProps) {
   const updateRelease = useBoardStore((s) => s.updateRelease);
+  const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
+  // Whatever only the write could discover; the fixable reasons are caught by
+  // validateName before anything is saved.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const { status, name, description } = release.frontmatter;
   const title = name ?? release.slug;
   const readOnly = status === 'finished';
   const descriptionText = description ?? '';
+
+  // The same check the create dialog runs while typing, minus this release
+  // itself: a rename now decides the file name, so a name it cannot produce a
+  // free path for is refused before the user leaves the field.
+  const validateName = useCallback(
+    (next: string): string | null => {
+      if (next.length === 0) return null;
+      const slug = sanitizeFilenameForFs(next);
+      if (slug.length === 0) return 'The name has no characters allowed in a filename.';
+      if (slug.toLowerCase() === release.slug.toLowerCase()) return null;
+      const taken = releases.some(
+        (r) =>
+          r.filename !== release.filename &&
+          r.slug.toLowerCase() === slug.toLowerCase(),
+      );
+      return taken
+        ? `A release already exists at ${releaseFilenameForSlug(slug)}.`
+        : null;
+    },
+    [releases, release.filename, release.slug],
+  );
+
+  const save = async (patch: Parameters<typeof updateRelease>[1]) => {
+    try {
+      await updateRelease(release.filename, patch);
+      setSaveError(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  };
 
   return (
     <Modal open onClose={onClose} ariaLabel={`Release ${title}`}>
@@ -45,7 +82,9 @@ export function ReleaseDetailsDialog({
             required
             ariaLabel="Release name"
             className={styles.nameText}
-            onSave={(next) => updateRelease(release.filename, { name: next })}
+            validate={validateName}
+            error={saveError}
+            onSave={(next) => save({ name: next })}
           />
         )}
         <div className={styles.headerActions}>
@@ -87,9 +126,7 @@ export function ReleaseDetailsDialog({
               ariaLabel="Release description"
               className={styles.descriptionBody}
               renderView={(value) => <LinkedText text={value} />}
-              onSave={(next) =>
-                updateRelease(release.filename, { description: next })
-              }
+              onSave={(next) => save({ description: next })}
             />
           )}
         </section>

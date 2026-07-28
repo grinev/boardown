@@ -50,6 +50,7 @@ boardown task link <op>         Link to another task: add | rm (<id> <other-id>)
 boardown release get <ref>      Show one release and its tasks.
 boardown release list           List releases with task counts.
 boardown release add <name>     Create a release (--description).
+boardown release edit <ref>     Edit a release (--name --description); --name moves the file.
 boardown release start <ref>    Make a release current (only one at a time).
 boardown release done <ref>     Finish a release (--into <release> to carry over open tasks).
 

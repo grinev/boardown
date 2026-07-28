@@ -78,10 +78,30 @@
   border-color: var(--accent);
 }
 
+/* The buttons keep their place at the right; the message fills the room they
+   already left, so it costs the dialog no height. */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.error {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--type-bug);
+  overflow-wrap: anywhere;
+}
+
 .actions {
-  align-self: flex-end;
+  margin-left: auto;
   display: flex;
   gap: 4px;
+  flex: 0 0 auto;
 }
 
 .actionButton {

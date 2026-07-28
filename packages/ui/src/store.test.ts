@@ -33,6 +33,11 @@ class MemFs implements GuardedFs {
     await this.remove(path);
   }
 
+  async moveFile(from: string, to: string, content: string): Promise<void> {
+    await this.write(to, content);
+    await this.remove(from);
+  }
+
   async mkdir(dir: string): Promise<void> {
     this.dirs.add(dir);
     this.writes.push(dir);
@@ -530,6 +535,73 @@ describe('release lifecycle', () => {
     await state().completeRelease({ kind: 'backlog' });
 
     expect(state().errorMessage).toMatch(/no current release/i);
+  });
+});
+
+describe('updateRelease', () => {
+  it('moves the file and re-points the open dialog when the name changes', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
+    );
+    await fs.write('releases/1.0.md', 'on disk');
+    useBoardStore.setState({
+      selectedReleaseFilename: 'releases/1.0.md',
+      dialogStack: [{ kind: 'release', filename: 'releases/1.0.md' }],
+    });
+
+    await state().updateRelease('releases/1.0.md', { name: 'Beta 2' });
+
+    const renamed = current().releases[0]!;
+    expect(renamed.filename).toBe('releases/beta-2.md');
+    expect(renamed.frontmatter.status).toBe('current');
+    expect(renamed.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+    expect(fs.files.has('releases/1.0.md')).toBe(false);
+    expect(fs.files.get('releases/beta-2.md')?.content).toMatch(/name: Beta 2/);
+    expect(state().selectedReleaseFilename).toBe('releases/beta-2.md');
+    expect(state().dialogStack).toEqual([
+      { kind: 'release', filename: 'releases/beta-2.md' },
+    ]);
+  });
+
+  it('keeps the file where it is when the name derives the same slug', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'future')] }));
+
+    await state().updateRelease('releases/1.0.md', { description: 'Ship it' });
+
+    expect(current().releases[0]!.filename).toBe('releases/1.0.md');
+    expect(fs.removes).toEqual([]);
+    expect(fs.writes).toEqual(['releases/1.0.md']);
+  });
+
+  it('rejects a name taken by another release, writing nothing', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'future'), release('2.0', 'future')] }),
+    );
+    useBoardStore.setState({ selectedReleaseFilename: 'releases/1.0.md' });
+
+    await expect(
+      state().updateRelease('releases/1.0.md', { name: '2.0' }),
+    ).rejects.toThrow(/already exists/i);
+
+    expect(current().releases[0]!.frontmatter.name).toBe('1.0');
+    expect(fs.writes).toEqual([]);
+    expect(fs.removes).toEqual([]);
+    expect(state().selectedReleaseFilename).toBe('releases/1.0.md');
+  });
+
+  it('rolls the snapshot and the selection back when the move fails', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'future')] }));
+    useBoardStore.setState({ selectedReleaseFilename: 'releases/1.0.md' });
+    fs.failWritesMatching = '*';
+
+    await expect(
+      state().updateRelease('releases/1.0.md', { name: 'Beta' }),
+    ).rejects.toThrow();
+
+    expect(current().releases[0]!.filename).toBe('releases/1.0.md');
+    expect(current().releases[0]!.frontmatter.name).toBe('1.0');
+    expect(state().selectedReleaseFilename).toBe('releases/1.0.md');
+    expect(state().errorMessage).toMatch(/Failed to save release/);
   });
 });
 

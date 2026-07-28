@@ -1684,16 +1684,56 @@ export const useBoardStore = create<BoardState>(
         set({ errorMessage: `Release not found: ${filename}` });
         return;
       }
-      const nextRelease = editRelease(snapshot.releases[index]!, patch);
+      const release = snapshot.releases[index]!;
+
+      let nextRelease: Release;
+      try {
+        nextRelease = editRelease(release, patch, snapshot.releases);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: message });
+        throw err;
+      }
+
       const nextReleases = [...snapshot.releases];
       nextReleases[index] = nextRelease;
       const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
-      set({ snapshot: nextSnapshot, errorMessage: null });
+
+      // A rename moves the file, and the release is identified by that path
+      // everywhere in the UI state — the open dialog and the history behind it
+      // have to follow it, or the dialog unmounts mid-edit.
+      const moved = nextRelease.filename !== release.filename;
+      const { selectedReleaseFilename, dialogStack } = get();
+      const nextSelected =
+        moved && selectedReleaseFilename === release.filename
+          ? nextRelease.filename
+          : selectedReleaseFilename;
+      const nextStack = moved
+        ? dialogStack.map((ref) =>
+            ref.kind === 'release' && ref.filename === release.filename
+              ? { ...ref, filename: nextRelease.filename }
+              : ref,
+          )
+        : dialogStack;
+
+      set({
+        snapshot: nextSnapshot,
+        errorMessage: null,
+        selectedReleaseFilename: nextSelected,
+        dialogStack: nextStack,
+      });
       try {
-        await fs.write(nextRelease.filename, serializeRelease(nextRelease));
+        const content = serializeRelease(nextRelease);
+        if (moved) await fs.moveFile(release.filename, nextRelease.filename, content);
+        else await fs.write(nextRelease.filename, content);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, errorMessage: `Failed to save release: ${message}` });
+        set({
+          snapshot,
+          errorMessage: `Failed to save release: ${message}`,
+          selectedReleaseFilename,
+          dialogStack,
+        });
         throw err;
       }
     },

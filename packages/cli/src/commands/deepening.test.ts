@@ -116,26 +116,49 @@ describe('release / epic / move (deepening layer)', () => {
     expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
   });
 
-  it('release edit updates name and description without moving the file', async () => {
+  it('release edit moves the file to the slug the new name derives', async () => {
     const release = (await releaseCommand(parseArgs(['release', 'add', 'v1']), ctx)).data as {
       slug: string;
     };
 
-    await releaseCommand(
+    const edited = await releaseCommand(
       parseArgs(['release', 'edit', release.slug, '--name', 'First beta', '--description', 'Ship']),
       ctx,
     );
-    const view = (await releaseCommand(parseArgs(['release', 'get', release.slug]), ctx))
+    expect((edited.data as { slug: string }).slug).toBe('first-beta');
+    expect(edited.human).toContain('releases/first-beta.md');
+
+    const view = (await releaseCommand(parseArgs(['release', 'get', 'first-beta']), ctx))
       .data as { release: { slug: string; name: string; description?: string; filename: string } };
     expect(view.release.name).toBe('First beta');
     expect(view.release.description).toBe('Ship');
-    expect(view.release.slug).toBe(release.slug);
-    expect(view.release.filename).toBe(`releases/${release.slug}.md`);
+    expect(view.release.filename).toBe('releases/first-beta.md');
 
-    await releaseCommand(parseArgs(['release', 'edit', release.slug, '--description', '']), ctx);
-    const cleared = (await releaseCommand(parseArgs(['release', 'get', release.slug]), ctx))
-      .data as { release: { description?: string } };
+    await expect(
+      releaseCommand(parseArgs(['release', 'get', release.slug]), ctx),
+    ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND' });
+
+    await releaseCommand(parseArgs(['release', 'edit', 'first-beta', '--description', '']), ctx);
+    const cleared = (await releaseCommand(parseArgs(['release', 'get', 'first-beta']), ctx))
+      .data as { release: { description?: string; filename: string } };
     expect(cleared.release.description).toBeUndefined();
+    // A description-only edit leaves the file where it is.
+    expect(cleared.release.filename).toBe('releases/first-beta.md');
+  });
+
+  it('release edit refuses a name already taken by another release', async () => {
+    await releaseCommand(parseArgs(['release', 'add', 'Alpha']), ctx);
+    await releaseCommand(parseArgs(['release', 'add', 'Bravo']), ctx);
+
+    await expect(
+      releaseCommand(parseArgs(['release', 'edit', 'alpha', '--name', 'BRAVO']), ctx),
+    ).rejects.toMatchObject({ code: 'RELEASE_INVALID' });
+
+    const list = (await releaseCommand(parseArgs(['release', 'list']), ctx)).data as {
+      releases: { slug: string; name: string }[];
+    };
+    expect(list.releases.map((r) => r.slug).sort()).toEqual(['alpha', 'bravo']);
+    expect(list.releases.find((r) => r.slug === 'alpha')?.name).toBe('Alpha');
   });
 
   it('release edit rejects no flags, an unknown release and a finished one', async () => {

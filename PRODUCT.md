@@ -68,8 +68,15 @@ At creation time, the slug/filename is derived from the name by:
 
 Unicode and emoji are preserved (e.g. `Бета релиз 🚀` → `бета-релиз-🚀`,
 `Beta Release` → `beta-release`). Windows-reserved names (`CON`, `PRN`,
-`NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`) get a `_` suffix. After creation, the
-slug never changes — renaming is a manual file move.
+`NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`) get a `_` suffix.
+
+**The filename follows the name.** Renaming a release re-derives the slug by the
+same rules and moves the file, so `name` and filename never drift apart. A name
+that derives the slug the file already has (a case change, or a change only in
+characters the rules strip) leaves the file where it is; a name whose slug is
+taken by another release, or that has no character usable in a filename, is
+refused and nothing is written. Since release lists are ordered by filename, a
+renamed release re-sorts — it lands where its new name says it should.
 
 Release lifecycle:
 
@@ -574,9 +581,11 @@ The dialog shows three things: the **name**, the **status** (`future` /
 `current` / `finished`) as a read-only pill, and the **description**. Name and
 description are inline-editable with the same semantics as the task and epic
 dialogs and are written to the release file's frontmatter; clearing the
-description removes the key. Editing the name never touches the filename — the
-slug stays the release's stable identifier, so renaming the file is still a
-manual operation.
+description removes the key. Editing the name also **moves the file** to the slug
+that name derives (see "Release" above) — silently, with no confirmation step. A
+save the rename makes impossible — the slug is taken, or the name has nothing
+usable in a filename — is refused with a message at the top of the dialog body,
+and nothing is written.
 
 Status is not editable here: it is owned by the Start / Complete release actions.
 A **finished** release opens the same dialog read-only — an archived file is
@@ -672,7 +681,8 @@ what changed. Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no
 longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
-release dialog: the filename never changes and a finished release is refused with
+release dialog: a new name moves the file to the slug it derives (the payload's
+`slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a
 finished release refused) and, being agent-facing, without any confirmation

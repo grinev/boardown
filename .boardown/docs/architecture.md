@@ -54,6 +54,10 @@ on disk, opening the Reload modal instead. It also offers:
 
 - `writeAll` — for files that must land together (a task link mirrored into two tasks): every
   target is checked before any is written, so an external change aborts the whole operation.
+- `moveFile` — for a file that changes its name (a renamed release): it checks the source and
+  refuses a target that already exists, then writes the new path and removes the old one. It is
+  composed from `write` + `remove`, so no shell adapter grows a method; if the removal fails, the
+  copy is undone.
 - `remove` — the same version check before deleting.
 - `removeDir` — re-lists a directory and refuses when it is not empty.
 

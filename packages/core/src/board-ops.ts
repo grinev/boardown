@@ -165,17 +165,47 @@ export interface ReleasePatch {
   description?: string;
 }
 
-export const editRelease = (release: Release, patch: ReleasePatch): Release => {
+// The file name follows the name: a rename re-derives the slug the way
+// createRelease derives it, so the caller gets back a release whose `filename`
+// says where it now belongs. A slug that comes out unchanged leaves the path
+// alone, and callers compare paths to decide between a write and a move.
+export const editRelease = (
+  release: Release,
+  patch: ReleasePatch,
+  existing: readonly Release[],
+): Release => {
   if (isFinishedRelease(release)) {
     throw new Error('Cannot edit a finished release');
   }
 
   const frontmatter = { ...release.frontmatter };
+  let slug = release.slug;
 
   if (patch.name !== undefined) {
     const name = patch.name.trim();
     if (name.length === 0) throw new Error('Release name is required');
     frontmatter.name = name;
+
+    const nextSlug = sanitizeFilenameForFs(name);
+    // Compared case-insensitively: a slug that differs only in case is the same
+    // file on Windows and macOS, so moving to it would collide with itself.
+    if (nextSlug.toLowerCase() !== release.slug.toLowerCase()) {
+      if (nextSlug.length === 0) {
+        throw new Error(
+          'Release name does not contain any characters allowed in a filename',
+        );
+      }
+      const nextSlugLower = nextSlug.toLowerCase();
+      const conflict = existing.find(
+        (r) =>
+          r.filename !== release.filename &&
+          r.slug.toLowerCase() === nextSlugLower,
+      );
+      if (conflict !== undefined) {
+        throw new Error(`Release already exists: ${conflict.slug}`);
+      }
+      slug = nextSlug;
+    }
   }
 
   if (patch.description !== undefined) {
@@ -184,7 +214,12 @@ export const editRelease = (release: Release, patch: ReleasePatch): Release => {
     else frontmatter.description = description;
   }
 
-  return { ...release, frontmatter };
+  return {
+    ...release,
+    slug,
+    filename: releaseFilenameForSlug(slug),
+    frontmatter,
+  };
 };
 
 export const setReleaseStatus = (

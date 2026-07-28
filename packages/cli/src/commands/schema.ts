@@ -127,7 +127,7 @@ const DESCRIPTOR = {
       name: 'release edit',
       usage: 'boardown release edit <file|slug> [--name NAME] [--description TEXT]',
       summary:
-        'Edit a release name/description. The filename never changes; a finished release is refused.',
+        'Edit a release name/description. A new name moves the file to the slug it derives; a finished release is refused.',
     },
     {
       name: 'release start',

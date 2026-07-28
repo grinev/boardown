@@ -165,6 +165,83 @@ describe('createGuardedFs — writeAll', () => {
     expect(onConflict).toHaveBeenCalledWith('docs/a.md');
   });
 
+  it('moveFile writes the target, removes the source and re-keys the versions', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/old.md', 'one');
+    const versions: Record<string, number> = {
+      'releases/old.md': inner.files.get('releases/old.md')!.lastModified,
+    };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, versions, onConflict);
+
+    await fs.moveFile('releases/old.md', 'releases/new.md', 'two');
+
+    expect(inner.files.has('releases/old.md')).toBe(false);
+    expect(await inner.read('releases/new.md')).toBe('two');
+    expect(versions['releases/old.md']).toBeUndefined();
+    expect(versions['releases/new.md']).toBe(inner.files.get('releases/new.md')!.lastModified);
+    expect(onConflict).not.toHaveBeenCalled();
+  });
+
+  it('moveFile writes nothing when the source changed on disk', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/old.md', 'one');
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, { 'releases/old.md': 999 }, onConflict);
+
+    await expect(
+      fs.moveFile('releases/old.md', 'releases/new.md', 'two'),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(await inner.read('releases/old.md')).toBe('one');
+    expect(inner.files.has('releases/new.md')).toBe(false);
+    expect(onConflict).toHaveBeenCalledWith('releases/old.md');
+  });
+
+  it('moveFile writes nothing when anything already sits at the target', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/old.md', 'one');
+    await inner.write('releases/new.md', 'someone else');
+    const versions: Record<string, number> = {
+      'releases/old.md': inner.files.get('releases/old.md')!.lastModified,
+      // Even a target we loaded is refused: the release moving there expects the
+      // path to be free.
+      'releases/new.md': inner.files.get('releases/new.md')!.lastModified,
+    };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, versions, onConflict);
+
+    await expect(
+      fs.moveFile('releases/old.md', 'releases/new.md', 'two'),
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(await inner.read('releases/old.md')).toBe('one');
+    expect(await inner.read('releases/new.md')).toBe('someone else');
+    expect(onConflict).toHaveBeenCalledWith('releases/new.md');
+  });
+
+  it('moveFile undoes the copy when the source cannot be removed', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/old.md', 'one');
+    const versions: Record<string, number> = {
+      'releases/old.md': inner.files.get('releases/old.md')!.lastModified,
+    };
+    const fs = createGuardedFs(inner, versions, vi.fn());
+    const remove = inner.remove.bind(inner);
+    inner.remove = async (path: string) => {
+      if (path === 'releases/old.md') throw new Error('locked');
+      await remove(path);
+    };
+
+    await expect(fs.moveFile('releases/old.md', 'releases/new.md', 'two')).rejects.toThrow(
+      /locked/,
+    );
+
+    expect(await inner.read('releases/old.md')).toBe('one');
+    expect(inner.files.has('releases/new.md')).toBe(false);
+    expect(versions['releases/new.md']).toBeUndefined();
+  });
+
   it('removeDir deletes a directory that is still empty on disk', async () => {
     const inner = new InMemoryFs();
     const fs = createGuardedFs(inner, {}, vi.fn());

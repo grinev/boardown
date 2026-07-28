@@ -22,6 +22,10 @@ export interface GuardedFs extends FsAdapter {
   // every target is checked before any of them is written, so an external change
   // aborts the whole operation instead of half-applying it.
   writeAll(files: readonly GuardedFile[]): Promise<void>;
+  // Writes `content` at `to` and removes `from` — a file that changes its name,
+  // e.g. a renamed release. Both ends are checked first: a source changed on disk
+  // and anything at all sitting at the target abort before a byte is written.
+  moveFile(from: string, to: string, content: string): Promise<void>;
   // Removes a directory, which has no recorded version of its own, after
   // confirming it is still empty on disk. Anything that appeared in it since the
   // load is an external change, so this refuses rather than deleting it too.
@@ -77,6 +81,34 @@ export function createGuardedFs(
     async writeAll(files) {
       for (const file of files) await check(file.path);
       for (const file of files) await put(file.path, file.content);
+    },
+
+    async moveFile(from, to, content) {
+      await check(from);
+      // Unlike a write, the target must not exist at all: the caller picked this
+      // path for a file that is not there, so anything sitting on it is a state
+      // we never loaded and must not overwrite.
+      if ((await inner.stat(to)) !== null) {
+        onConflict(to);
+        throw new ConflictError(to);
+      }
+
+      await put(to, content);
+      try {
+        await drop(from);
+      } catch (err) {
+        // No shell has an atomic rename, so the copy has already landed. Leaving
+        // both would duplicate the release on disk — worse than either outcome
+        // the guard promises — so undo the copy and report the original failure.
+        try {
+          await drop(to);
+        } catch {
+          throw new Error(
+            `Renamed ${from} to ${to} but could not remove either one; clean up by hand`,
+          );
+        }
+        throw err;
+      }
     },
 
     async remove(path) {

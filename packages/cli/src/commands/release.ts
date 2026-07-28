@@ -204,7 +204,7 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 
   let updated: Release;
   try {
-    updated = editRelease(release, patch);
+    updated = editRelease(release, patch, board.snapshot.releases);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (release.frontmatter.status === 'finished') {
@@ -213,10 +213,16 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     throw new CliError('RELEASE_INVALID', message, 2);
   }
 
-  await board.fs.write(updated.filename, serializeRelease(updated));
+  const content = serializeRelease(updated);
+  const moved = updated.filename !== release.filename;
+  if (moved) await board.fs.moveFile(release.filename, updated.filename, content);
+  else await board.fs.write(updated.filename, content);
+
   return {
     data: { slug: updated.slug },
-    human: `Updated release ${releaseName(updated)}.`,
+    human: moved
+      ? `Updated release ${releaseName(updated)} (${release.filename} -> ${updated.filename}).`
+      : `Updated release ${releaseName(updated)}.`,
     ...problemsField(board.problems),
   };
 }
