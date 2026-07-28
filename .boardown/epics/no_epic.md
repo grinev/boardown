@@ -156,3 +156,14 @@ type: feature
 status: todo
 order: 650
 ---
+
+## Conflict modal is unreachable during onboarding
+
+---
+id: BD-70
+type: bug
+status: todo
+order: 2300
+---
+
+In the status === 'onboarding' branch App.tsx early-returns and renders only OnboardingDialog, so ConflictDialog never mounts. Onboarding writes config.yaml through the pre-load guard, which carries an empty version map: if the file appeared on disk between the missing-config check and the submit, check() sees known === undefined, calls onConflict and throws ConflictError. The user gets nothing but the inline error in the onboarding form — no Reload button, no way forward — a dead end they can only leave by reopening the folder. Found while working on BD-69; a separate defect from the modal stacking.

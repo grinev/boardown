@@ -139,7 +139,7 @@ interface BoardState {
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
-  closeConflict: () => void;
+  openConflict: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
@@ -477,6 +477,26 @@ const selectionFor = (ref: DialogRef) => {
   }
 };
 
+// Every dialog's visibility in one place: the initial state spreads it, and so
+// does the conflict, which has to close whatever is on screen. A new dialog flag
+// belongs here rather than inline, or the conflict will not know about it.
+const ALL_DIALOGS_CLOSED = {
+  ...NO_DIALOG,
+  dialogStack: [] as DialogRef[],
+  createTaskForReleaseFilename: null,
+  createTaskForEpicSlug: null,
+  createTaskOpen: false,
+  createTaskBacklog: false,
+  createReleaseOpen: false,
+  createEpicOpen: false,
+  completeReleaseOpen: false,
+  startReleaseForFilename: null,
+  settingsOpen: false,
+  createDocPageOpen: false,
+  createDocFolderOpen: false,
+  deleteDocPath: null,
+};
+
 const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
   switch (ref.kind) {
     case 'task':
@@ -502,24 +522,8 @@ export const useBoardStore = create<BoardState>(
     fs: null,
     rawFs: null,
     conflictOpen: false,
-    selectedTaskId: null,
-    selectedEpicSlug: null,
-    selectedReleaseFilename: null,
-    docPopupPath: null,
-    dialogStack: [],
-    createTaskForReleaseFilename: null,
-    createTaskForEpicSlug: null,
-    createTaskOpen: false,
-    createTaskBacklog: false,
-    createReleaseOpen: false,
-    createEpicOpen: false,
-    completeReleaseOpen: false,
-    startReleaseForFilename: null,
-    settingsOpen: false,
+    ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
-    createDocPageOpen: false,
-    createDocFolderOpen: false,
-    deleteDocPath: null,
 
     load: async (fs, defaultTheme) => {
       set({
@@ -528,7 +532,7 @@ export const useBoardStore = create<BoardState>(
         // Guarded with an empty version map until the board loads: the only write
         // possible before that is onboarding's config.yaml, which does not exist
         // yet, so the guard's stat check passes. Keeps `fs` a single type.
-        fs: createGuardedFs(fs, {}, () => set({ conflictOpen: true })),
+        fs: createGuardedFs(fs, {}, () => get().openConflict()),
         rawFs: fs,
         conflictOpen: false,
         // Keep a previously captured default when the caller (e.g. reload) omits it.
@@ -560,7 +564,7 @@ export const useBoardStore = create<BoardState>(
         }
         // From here on writes go through a guard that refuses to clobber files
         // changed on disk since this load, surfacing the conflict modal instead.
-        const guarded = createGuardedFs(fs, result.fileVersions, () => set({ conflictOpen: true }));
+        const guarded = createGuardedFs(fs, result.fileVersions, () => get().openConflict());
         set({
           status: 'ready',
           fs: guarded,
@@ -605,9 +609,7 @@ export const useBoardStore = create<BoardState>(
           await get().load(rawFs);
           return;
         }
-        const guarded = createGuardedFs(rawFs, result.fileVersions, () =>
-          set({ conflictOpen: true }),
-        );
+        const guarded = createGuardedFs(rawFs, result.fileVersions, () => get().openConflict());
         set({
           fs: guarded,
           snapshot: result.snapshot,
@@ -625,7 +627,11 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
-    closeConflict: () => set({ conflictOpen: false }),
+    // A refused write is terminal: the board is untouched and the only way on is
+    // Reload. Anything still on screen would be a second dialog in the top layer
+    // next to this one — two backdrops, overlapping boxes and an inline error
+    // contradicting the modal — so the conflict closes every dialog it finds.
+    openConflict: () => set({ conflictOpen: true, ...ALL_DIALOGS_CLOSED }),
 
     completeOnboarding: async (input) => {
       const { fs } = get();

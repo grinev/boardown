@@ -50,7 +50,8 @@ Paths are board-relative to `.boardown/`, and every implementation rejects an ab
 
 `ui` never touches the raw adapter. It wraps it in `createGuardedFs`, which compares each write
 target's `lastModified` against the value captured at load and refuses to clobber a file changed
-on disk, opening the Reload modal instead. It also offers:
+on disk, opening the Reload modal instead. That modal closes every other dialog on the way in —
+two `showModal()` dialogs would otherwise stack in the top layer. It also offers:
 
 - `writeAll` — for files that must land together (a task link mirrored into two tasks): every
   target is checked before any is written, so an external change aborts the whole operation.

@@ -139,7 +139,8 @@ CLI inherits them rather than re-implementing them.
 - External-change safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
   (`packages/core`), which compares each write target's `lastModified` against
   the value captured at load and refuses to clobber a file changed on disk,
-  opening the Reload conflict modal instead. Shared by all shells. The guard also
+  opening the Reload conflict modal instead — which closes every other dialog, so
+  the two never stack in the top layer. Shared by all shells. The guard also
   exposes `writeAll`, for a set of files that must land together (e.g. a task link
   mirrored into two tasks): it checks every target before writing any of them, so
   an external change aborts the whole operation instead of half-applying it —

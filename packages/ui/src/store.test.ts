@@ -805,6 +805,73 @@ describe('external-change conflict', () => {
     expect(fs.writes).toEqual([]);
   });
 
+  it('closes every open dialog, so the Reload modal is the only one on screen', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+
+    // Not a reachable combination — one dialog is on screen at a time — but it
+    // pins the whole set of visibility fields the conflict has to reset.
+    state().openTask('BD-1');
+    state().openRelease('releases/1.0.md');
+    state().openCompleteRelease();
+    state().openStartRelease('releases/1.0.md');
+    state().openCreateTask('releases/1.0.md');
+    state().openCreateTaskForEpic('ui');
+    state().openCreateTaskMenu();
+    state().openCreateTaskBacklog();
+    state().openCreateRelease();
+    state().openCreateEpic();
+    state().openSettings();
+    state().openCreateDocPage();
+    state().openCreateDocFolder();
+    state().openDeleteDoc('docs/setup.md');
+    expect(state().completeReleaseOpen).toBe(true);
+    expect(state().dialogStack).toHaveLength(1);
+
+    fs.files.get('releases/1.0.md')!.lastModified += 1000;
+    await expect(state().updateTask('BD-1', { title: 'Renamed' })).rejects.toThrow();
+
+    expect(state()).toMatchObject({
+      conflictOpen: true,
+      selectedTaskId: null,
+      selectedEpicSlug: null,
+      selectedReleaseFilename: null,
+      docPopupPath: null,
+      dialogStack: [],
+      createTaskForReleaseFilename: null,
+      createTaskForEpicSlug: null,
+      createTaskOpen: false,
+      createTaskBacklog: false,
+      createReleaseOpen: false,
+      createEpicOpen: false,
+      completeReleaseOpen: false,
+      startReleaseForFilename: null,
+      settingsOpen: false,
+      createDocPageOpen: false,
+      createDocFolderOpen: false,
+      deleteDocPath: null,
+    });
+  });
+
+  it('closes the dialogs from any refused write, not just a task edit', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_WITH_EPIC_MD,
+      'epics/ui.md': EPIC_MD,
+    });
+    state().openCompleteRelease();
+    state().openTask('BD-1');
+
+    fs.files.get('epics/ui.md')!.lastModified += 1000;
+    await expect(state().completeRelease({ kind: 'backlog' })).rejects.toThrow();
+
+    expect(state().conflictOpen).toBe(true);
+    expect(state().completeReleaseOpen).toBe(false);
+    expect(state().selectedTaskId).toBeNull();
+  });
+
   it('clears the conflict flag on reload', async () => {
     const fs = await loadFrom({
       [CONFIG_FILENAME]: CONFIG_MD,

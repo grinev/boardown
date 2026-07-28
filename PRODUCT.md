@@ -319,7 +319,9 @@ and left untouched on disk.
 Before writing, the app re-stat's the file and compares `lastModified`
 against what it had when the data was last loaded. If the file changed
 externally, the write is refused and the user gets a modal offering to
-**Reload**.
+**Reload**. That modal takes over the screen: any dialog open when the write was
+refused is closed, so the only thing on offer is Reload — the refused change was
+not written, and reloading is the only way on.
 
 No automated backups — git is the safety net.
 
