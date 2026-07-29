@@ -3,7 +3,7 @@ name: Repo design
 color: "#a855f7"
 ---
 
-## Change semantic releases logic and release notes structure 5455
+## Change semantic releases logic and release notes structure
 
 ---
 id: BD-27
