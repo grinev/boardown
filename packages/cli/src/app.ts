@@ -1,3 +1,4 @@
+import { version as VERSION } from '../package.json';
 import { parseArgs } from './args';
 import { archiveCommand } from './commands/archive';
 import { backlogCommand } from './commands/backlog';
@@ -55,6 +56,7 @@ Releases and epics:
 Other:
   init                   Create a .boardown/ board here.
   schema                 Print the machine-readable command/enum contract.
+  version                Print the CLI version (also --version / -v).
 
 Lists show a task summary; \`task get\` shows everything. --full takes any listing
 command one level deeper. Output is JSON when stdout is piped, or with --json.
@@ -68,6 +70,15 @@ export async function run(argv: readonly string[], opts: RunOptions = {}): Promi
   const args = parseArgs(argv);
   const command = args.positionals[0];
   const json = args.flags.json === true || process.stdout.isTTY !== true;
+
+  if (command === 'version' || command === '-v' || args.flags.version === true) {
+    if (json) {
+      process.stdout.write(`${JSON.stringify(okEnvelope({ version: VERSION }, []))}\n`);
+    } else {
+      process.stdout.write(`boardown ${VERSION}\n`);
+    }
+    return 0;
+  }
 
   if (command === undefined || command === 'help' || args.flags.help === true) {
     if (json) {

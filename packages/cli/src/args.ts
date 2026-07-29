@@ -10,6 +10,7 @@ export interface ParsedArgs {
 const BOOLEAN_FLAGS = new Set([
   'json',
   'help',
+  'version',
   'dry-run',
   'no-epic',
   'no-release',

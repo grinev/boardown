@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import pkg from '../package.json';
 import { run } from './app';
 
 interface Captured {
@@ -60,6 +61,22 @@ describe('run() — routing, envelopes, exit codes', () => {
 
     const viaCmd = await capture(['help'], { tty: true });
     expect(viaCmd.stdout).toContain('Usage: boardown <command>');
+  });
+
+  it('--version, -v and `version` print the package version', async () => {
+    const { version } = pkg;
+
+    const human = await capture(['--version'], { tty: true });
+    expect(human.code).toBe(0);
+    expect(human.stdout.trim()).toBe(`boardown ${version}`);
+
+    // `--version schema` must not swallow the next token: without `version` in
+    // BOOLEAN_FLAGS it parses as a string and falls through to the help output.
+    for (const argv of [['--version'], ['-v'], ['version'], ['--version', 'schema']]) {
+      const { code, stdout } = await capture(argv);
+      expect(code).toBe(0);
+      expect(parse(stdout)).toEqual({ ok: true, data: { version } });
+    }
   });
 
   it('schema prints an ok envelope with the machine-readable contract', async () => {

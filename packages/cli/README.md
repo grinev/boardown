@@ -61,6 +61,7 @@ boardown epic edit <slug>       Edit an epic (--name --description).
 
 boardown init                   Create a .boardown/ board here (--id-prefix --project-name).
 boardown schema                 Print the machine-readable command/enum contract.
+boardown version                Print the CLI version (also --version / -v).
 ```
 
 ### Output depth

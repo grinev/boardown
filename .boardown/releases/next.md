@@ -62,3 +62,20 @@ type: tech
 status: todo
 order: 450
 ---
+
+## Add --version to the CLI
+
+---
+id: BD-76
+type: feature
+status: done
+order: 800
+---
+
+The CLI has no way to report its own version: --version / -v are parsed as unknown flags and the run silently falls through to the help output with exit code 0. Today the only way to check the version is npm ls -g @grinev/boardown-cli from outside the CLI.
+
+Handle --version / -v (and a bare 'version' command) in packages/cli/src/app.ts before command dispatch: print 'boardown <version>' in human mode, {ok:true,data:{version}} in JSON mode, and mention it in the help text.
+
+The version comes from packages/cli/package.json, injected at build time via an esbuild define in packages/cli/esbuild.mjs (versions are lockstep and synced by scripts/sync-versions.mjs, so package.json is a safe source).
+
+Out of scope: the schema version reported by 'boardown schema' stays as it is - the package version is deliberately kept out of the schema contract.
