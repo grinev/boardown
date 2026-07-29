@@ -1,5 +1,6 @@
 import {
   addTaskLink,
+  BoardOpError,
   changeTaskStatus,
   createTask,
   deleteTaskWithLinks,
@@ -151,15 +152,16 @@ function parseCustomFields(
   return values;
 }
 
-// Run a core board-op, mapping its process-guard rejection (a finished release is
-// read-only and rejects new or moved work) to a structured ARCHIVED error rather
-// than the generic ERROR fallback. The task's existence is validated before
-// these calls, so a thrown error is always the finished-release guard.
+// Run a core board-op, mapping a process-guard rejection (a finished release is
+// read-only; a status only changes in the current release) onto the matching
+// structured code. Anything else keeps the generic fallback rather than being
+// reported as a guard it is not.
 function applyOp<T>(fn: () => T): T {
   try {
     return fn();
   } catch (err) {
-    throw new CliError('ARCHIVED', err instanceof Error ? err.message : String(err));
+    if (err instanceof BoardOpError) throw new CliError(err.code, err.message);
+    throw err;
   }
 }
 
@@ -282,6 +284,7 @@ async function moveAndReport(
   dest: MoveDest,
   taskId: string,
   problems: ParseProblem[],
+  newStatus?: TaskStatus,
 ): Promise<CommandOutput> {
   if (edited.filename === dest.container.filename) {
     await writeContainer(fs, { kind: location.kind, container: edited });
@@ -293,7 +296,7 @@ async function moveAndReport(
   }
   const result = applyOp(() =>
     moveTaskBetweenContainers(edited, dest.container, taskId, {
-      newStatus: movingTask.frontmatter.status,
+      newStatus: newStatus ?? movingTask.frontmatter.status,
       beforeTaskId: null,
       destEpic: dest.destEpic,
     }),
@@ -365,13 +368,22 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   // Release relocation: move in/out of a release, keeping the epic tag.
   if (changesRelease) {
-    const edited = hasFields ? applyOp(() => editTask(location.container, snapshot.config, id, fields)) : location.container;
-    const dest = resolveReleaseMove(snapshot, location, edited, id, releaseRef, noRelease);
+    // The destination does not depend on the field patch, so it is resolved first:
+    // a relocation carries the status into the destination, and that is the
+    // container the status lock is judged against. So pulling a task into the
+    // current release and starting it stays one call.
+    const dest = resolveReleaseMove(snapshot, location, location.container, id, releaseRef, noRelease);
+    const movedStatus = dest !== null ? fields.status : undefined;
+    const patch: TaskPatch = { ...fields };
+    if (movedStatus !== undefined) delete patch.status;
+    const edited = Object.keys(patch).length > 0
+      ? applyOp(() => editTask(location.container, snapshot.config, id, patch))
+      : location.container;
     if (dest === null) {
       await writeContainer(fs, { kind: location.kind, container: edited });
       return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
     }
-    return moveAndReport(fs, location, edited, dest, id, problems);
+    return moveAndReport(fs, location, edited, dest, id, problems, movedStatus);
   }
 
   // Epic change. A task in a release carries the epic as a tag (edit in place);

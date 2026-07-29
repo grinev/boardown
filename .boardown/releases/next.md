@@ -20,7 +20,7 @@ order: 200
 id: BD-21
 type: feature
 status: todo
-order: 100
+order: 700
 ---
 
 ## Add optional wip limits
@@ -37,8 +37,8 @@ order: 300
 ---
 id: BD-74
 type: feature
-status: todo
-order: 400
+status: done
+order: 600
 ---
 
 Task statuses can be changed only in active release

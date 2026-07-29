@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { completeRelease, emptyBacklog, type Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
+import type { CliError } from '../output';
 import { loadBoardOrThrow, writeContainers, type ContainerRef } from '../persistence';
 import type { CommandContext } from '../types';
 import { epicCommand } from './epic';
@@ -54,7 +55,15 @@ describe('cli commands (integration)', () => {
   it('add → board → edit → status → rm round-trips', async () => {
     await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
 
-    const add = await taskCommand(parseArgs(['task', 'add', 'My first task', '--type', 'feature']), ctx);
+    // A status only changes in the current release, so the round-trip needs one.
+    const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
+    const relFile = (rel.data as { slug: string }).slug;
+    await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
+
+    const add = await taskCommand(
+      parseArgs(['task', 'add', 'My first task', '--type', 'feature', '--release', relFile]),
+      ctx,
+    );
     expect(add.data).toEqual({ id: 'TS-1' });
     expect(await ids(ctx)).toContain('TS-1');
 
@@ -80,6 +89,131 @@ describe('cli commands (integration)', () => {
     await expect(
       taskCommand(parseArgs(['task', 'add', 'X', '--epic', 'ghost']), ctx),
     ).rejects.toThrow(/epic/i);
+  });
+
+  describe('a status only changes in the current release', () => {
+    // A board with a current release (TS-1 in it), a future release and a backlog
+    // task (TS-2). Returns both release refs.
+    async function seedLock(): Promise<{ current: string; future: string }> {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      const cur = (
+        (await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx)).data as {
+          slug: string;
+        }
+      ).slug;
+      await releaseCommand(parseArgs(['release', 'start', cur]), ctx);
+      const next = (
+        (await releaseCommand(parseArgs(['release', 'add', 'Next']), ctx)).data as { slug: string }
+      ).slug;
+      await taskCommand(parseArgs(['task', 'add', 'In sprint', '--release', cur]), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Unscheduled']), ctx);
+      return { current: cur, future: next };
+    }
+
+    const fileOf = (rel: string): string =>
+      join(project, '.boardown', 'releases', `${rel}.md`);
+
+    it('task status succeeds in the current release', async () => {
+      await seedLock();
+      await taskCommand(parseArgs(['task', 'status', 'TS-1', 'in-progress']), ctx);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.status).toBe('in-progress');
+    });
+
+    it('task status is refused in a future release, leaving the file untouched', async () => {
+      const { current, future } = await seedLock();
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', future]), ctx);
+      const before = await readFile(fileOf(future), 'utf8');
+
+      let refusal: CliError | null = null;
+      try {
+        await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
+      } catch (err) {
+        refusal = err as CliError;
+      }
+      expect(refusal?.code).toBe('STATUS_LOCKED');
+      expect(refusal?.message).toContain('the future release "Next"');
+      expect(await readFile(fileOf(future), 'utf8')).toBe(before);
+      expect(await readFile(fileOf(current), 'utf8')).toContain('status: current');
+    });
+
+    it('task status and task edit --status are refused on an unscheduled task', async () => {
+      await seedLock();
+      const file = join(project, '.boardown', 'epics', 'no_epic.md');
+      const before = await readFile(file, 'utf8');
+
+      await expect(
+        taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx),
+      ).rejects.toMatchObject({ code: 'STATUS_LOCKED' });
+      await expect(
+        taskCommand(parseArgs(['task', 'edit', 'TS-2', '--status', 'done']), ctx),
+      ).rejects.toMatchObject({ code: 'STATUS_LOCKED' });
+      expect(await readFile(file, 'utf8')).toBe(before);
+
+      // Every other field on that same task still edits.
+      await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--title', 'Renamed']), ctx);
+      expect((await findTask(ctx, 'TS-2')).title).toBe('Renamed');
+    });
+
+    it('task add --status is refused outside the current release and creates nothing', async () => {
+      const { current, future } = await seedLock();
+      await expect(
+        taskCommand(
+          parseArgs(['task', 'add', 'Early', '--release', future, '--status', 'in-progress']),
+          ctx,
+        ),
+      ).rejects.toMatchObject({ code: 'STATUS_LOCKED' });
+      const config = await readFile(join(project, '.boardown', 'config.yaml'), 'utf8');
+      expect(config).toContain('nextId: 3');
+      expect(await ids(ctx)).toEqual(['TS-1', 'TS-2']);
+
+      await taskCommand(parseArgs(['task', 'add', 'Later', '--release', future]), ctx);
+      expect((await findTask(ctx, 'TS-3')).frontmatter.status).toBe('todo');
+      // …while the current release still takes an explicit status.
+      await taskCommand(
+        parseArgs(['task', 'add', 'Started', '--release', current, '--status', 'in-progress']),
+        ctx,
+      );
+      expect((await findTask(ctx, 'TS-4')).frontmatter.status).toBe('in-progress');
+    });
+
+    it('moving a task out of the current release preserves its status', async () => {
+      const { future } = await seedLock();
+      await taskCommand(parseArgs(['task', 'status', 'TS-1', 'in-progress']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', future]), ctx);
+      const moved = await findTask(ctx, 'TS-1');
+      expect(moved.frontmatter.status).toBe('in-progress');
+      expect(await readFile(fileOf(future), 'utf8')).toContain('status: in-progress');
+    });
+
+    it('a relocation is judged by its destination: into the current release with a status, out with one refused', async () => {
+      const { current, future } = await seedLock();
+      // Backlog → current release, setting the status in the same call.
+      await taskCommand(
+        parseArgs(['task', 'edit', 'TS-2', '--release', current, '--status', 'in-progress']),
+        ctx,
+      );
+      expect((await findTask(ctx, 'TS-2')).frontmatter.status).toBe('in-progress');
+      // …and the same call towards a future release is refused.
+      await expect(
+        taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', future, '--status', 'done']), ctx),
+      ).rejects.toMatchObject({ code: 'STATUS_LOCKED' });
+    });
+
+    it('a finished release still answers ARCHIVED, not STATUS_LOCKED', async () => {
+      const { current } = await seedLock();
+      await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
+      await releaseCommand(parseArgs(['release', 'done', current]), ctx);
+      await expect(
+        taskCommand(parseArgs(['task', 'status', 'TS-1', 'todo']), ctx),
+      ).rejects.toMatchObject({ code: 'ARCHIVED' });
+    });
+
+    it('a missing task is not reported as a guard refusal', async () => {
+      await seedLock();
+      await expect(
+        taskCommand(parseArgs(['task', 'edit', 'TS-9', '--title', 'X']), ctx),
+      ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
+    });
   });
 
   it('checklist add → done → undone → edit → rm round-trips', async () => {
@@ -347,16 +481,22 @@ describe('cli commands (integration)', () => {
     async function seed(): Promise<string> {
       await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
       await epicCommand(parseArgs(['epic', 'add', 'Bug Audit']), ctx);
+      const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
+      const relFile = (rel.data as { slug: string }).slug;
+      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
       await taskCommand(parseArgs(['task', 'add', 'Alpha bug fix', '--type', 'bug']), ctx);
-      await taskCommand(parseArgs(['task', 'add', 'Beta feature', '--type', 'feature']), ctx);
+      // A backlog task cannot be marked done in place: it is made done inside the
+      // current release, then moved back out, which preserves the status.
+      await taskCommand(
+        parseArgs(['task', 'add', 'Beta feature', '--type', 'feature', '--release', relFile]),
+        ctx,
+      );
       await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--no-release']), ctx);
       await taskCommand(
         parseArgs(['task', 'add', 'Gamma tech', '--type', 'tech', '--epic', 'bug-audit']),
         ctx,
       );
-      const rel = await releaseCommand(parseArgs(['release', 'add', 'Active']), ctx);
-      const relFile = (rel.data as { slug: string }).slug;
-      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
       await taskCommand(
         parseArgs(['task', 'add', 'Delta ship', '--type', 'bug', '--release', relFile]),
         ctx,

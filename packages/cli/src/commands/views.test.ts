@@ -146,7 +146,6 @@ describe('view commands (backlog / archive)', () => {
     const file = join(project, '.boardown', 'epics', 'no_epic.md');
     await taskCommand(parseArgs(['task', 'add', 'Write me', '--description', 'body']), ctx);
     await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'step one']), ctx);
-    await taskCommand(parseArgs(['task', 'status', 'TS-1', 'in-progress']), ctx);
 
     expect(await readFile(file, 'utf8')).toBe(
       [
@@ -159,7 +158,7 @@ describe('view commands (backlog / archive)', () => {
         '---',
         'id: TS-1',
         'type: feature',
-        'status: in-progress',
+        'status: todo',
         'order: 100',
         'checklist:',
         '  - id: c1',

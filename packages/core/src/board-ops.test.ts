@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addTaskLink,
+  BoardOpError,
   changeTaskStatus,
+  moveTaskInContainer,
   completeRelease,
   removeTaskLink,
   createEpic,
@@ -1010,6 +1012,169 @@ describe('process invariants — finished release is archived', () => {
         beforeTaskId: null,
       }),
     ).toThrow(/into a finished/);
+  });
+});
+
+describe('process invariants — a status only changes in the current release', () => {
+  const withTasks = <C extends Release | Epic | Backlog>(container: C, ...tasks: Task[]): C => ({
+    ...container,
+    tasks,
+  });
+  const epic = (...tasks: Task[]): Epic =>
+    withTasks<Epic>(
+      {
+        filename: 'epics/dnd.md',
+        slug: 'dnd',
+        frontmatter: { name: 'DnD', color: '#000000' },
+        preamble: '',
+        tasks: [],
+      },
+      ...tasks,
+    );
+  const backlog = (...tasks: Task[]): Backlog => withTasks(emptyBacklog(), ...tasks);
+  const finished = (...tasks: Task[]): Release =>
+    withTasks<Release>(
+      { ...release(), filename: 'releases/done.md', slug: 'done', frontmatter: { status: 'finished' } },
+      ...tasks,
+    );
+
+  it('changeTaskStatus succeeds in the current release', () => {
+    const r = changeTaskStatus(release(task('BD-1', 'todo', 100)), 'BD-1', 'done');
+    expect(r.tasks[0]!.frontmatter.status).toBe('done');
+  });
+
+  it('changeTaskStatus is refused in a future release, an epic and the backlog', () => {
+    const t = task('BD-1', 'todo', 100);
+    for (const container of [withTasks(futureRelease('next'), t), epic(t), backlog(t)]) {
+      expect(() => changeTaskStatus(container, 'BD-1', 'done')).toThrow(
+        /can only be changed in the current release/,
+      );
+    }
+  });
+
+  it('carries the STATUS_LOCKED code and names the container', () => {
+    try {
+      changeTaskStatus(withTasks(futureRelease('next'), task('BD-1', 'todo', 100)), 'BD-1', 'done');
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(BoardOpError);
+      expect((err as BoardOpError).code).toBe('STATUS_LOCKED');
+      expect((err as BoardOpError).message).toContain('BD-1');
+      expect((err as BoardOpError).message).toContain('the future release "next"');
+    }
+  });
+
+  it('names an epic and the backlog in the refusal', () => {
+    const t = task('BD-1', 'todo', 100);
+    expect(() => changeTaskStatus(epic(t), 'BD-1', 'done')).toThrow(/the epic "DnD"/);
+    expect(() => changeTaskStatus(backlog(t), 'BD-1', 'done')).toThrow(/the backlog/);
+  });
+
+  it('refuses a status write that changes nothing, so the rule stays predictable', () => {
+    const r = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
+    expect(() => changeTaskStatus(r, 'BD-1', 'todo')).toThrow(/STATUS_LOCKED|current release/);
+    expect(() => editTask(r, config, 'BD-1', { status: 'todo' })).toThrow(/current release/);
+  });
+
+  it('keeps the archive rule ahead of the lock in a finished release', () => {
+    const r = finished(task('BD-1', 'todo', 100));
+    try {
+      changeTaskStatus(r, 'BD-1', 'done');
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BoardOpError).code).toBe('ARCHIVED');
+    }
+  });
+
+  it('editTask refuses a status patch outside the current release but allows the rest', () => {
+    const r = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
+    expect(() => editTask(r, config, 'BD-1', { status: 'done' })).toThrow(
+      /can only be changed in the current release/,
+    );
+    const edited = editTask(r, config, 'BD-1', { title: 'Renamed', type: 'bug' });
+    expect(edited.tasks[0]!.title).toBe('Renamed');
+    expect(edited.tasks[0]!.frontmatter.type).toBe('bug');
+    expect(edited.tasks[0]!.frontmatter.status).toBe('todo');
+  });
+
+  it('createTask refuses a non-todo status outside the current release, keeping nextId', () => {
+    const r = futureRelease('next');
+    expect(() =>
+      createTask(r, config, { title: 'x', type: 'feature', status: 'in-progress' }),
+    ).toThrow(/can only be changed in the current release/);
+    expect(config.nextId).toBe(10);
+    const created = createTask(r, config, { title: 'x', type: 'feature', status: 'todo' });
+    expect(created.task.frontmatter.status).toBe('todo');
+    expect(created.config.nextId).toBe(11);
+  });
+
+  it('moveTaskBetweenContainers preserves a status into a locked destination', () => {
+    const source = release(task('BD-1', 'in-progress', 100));
+    const result = moveTaskBetweenContainers(source, futureRelease('next'), 'BD-1', {
+      newStatus: 'in-progress',
+      beforeTaskId: null,
+    });
+    expect(result.dest.tasks[0]!.frontmatter.status).toBe('in-progress');
+  });
+
+  it('moveTaskBetweenContainers refuses a status change into a locked destination', () => {
+    const source = release(task('BD-1', 'in-progress', 100));
+    expect(() =>
+      moveTaskBetweenContainers(source, futureRelease('next'), 'BD-1', {
+        newStatus: 'done',
+        beforeTaskId: null,
+      }),
+    ).toThrow(/can only be changed in the current release/);
+  });
+
+  it('moveTaskBetweenContainers allows a status change into the current release', () => {
+    const source = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
+    const result = moveTaskBetweenContainers(source, release(), 'BD-1', {
+      newStatus: 'in-progress',
+      beforeTaskId: null,
+    });
+    expect(result.dest.tasks[0]!.frontmatter.status).toBe('in-progress');
+  });
+
+  it('moveTaskInContainer allows a pure reorder in a locked container', () => {
+    const r = withTasks(
+      futureRelease('next'),
+      task('BD-1', 'todo', 100),
+      task('BD-2', 'todo', 200),
+    );
+    const moved = moveTaskInContainer(r, 'BD-2', { status: 'todo', beforeTaskId: 'BD-1' });
+    const orderOf = (id: string): number =>
+      moved.tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
+    expect(orderOf('BD-2')).toBeLessThan(orderOf('BD-1'));
+    expect(() =>
+      moveTaskInContainer(r, 'BD-1', { status: 'done', beforeTaskId: null }),
+    ).toThrow(/can only be changed in the current release/);
+  });
+
+  it('reorderTask and reorderTaskInBacklog stay allowed in a locked container', () => {
+    const r = withTasks(
+      futureRelease('next'),
+      task('BD-1', 'in-progress', 100),
+      task('BD-2', 'todo', 200),
+    );
+    expect(() => reorderTask(r, 'BD-2', 'BD-1')).not.toThrow();
+    const b = backlog(task('BD-3', 'done', 100), task('BD-4', 'todo', 200));
+    expect(() =>
+      reorderTaskInBacklog({ epics: [], backlog: b }, 'BD-4', 'BD-3'),
+    ).not.toThrow();
+  });
+
+  it('completeRelease still carries an unfinished leftover with its status', () => {
+    const current = release(task('BD-1', 'in-progress', 100), task('BD-2', 'done', 200));
+    const result = completeRelease({
+      release: current,
+      epics: [],
+      backlog: null,
+      targetRelease: futureRelease('next'),
+    });
+    expect(result.release.frontmatter.status).toBe('finished');
+    expect(result.release.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+    expect(result.targetRelease!.tasks[0]!.frontmatter.status).toBe('in-progress');
   });
 });
 

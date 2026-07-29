@@ -131,3 +131,14 @@ type: feature
 status: todo
 order: 2400
 ---
+
+## Surface core invariant refusals in the UI
+
+---
+id: BD-75
+type: tech
+status: todo
+order: 2500
+---
+
+The store calls core board-ops outside the try/catch that only wraps the fs write, so a process-invariant throw (a finished release is read-only, a status only changes in the current release) becomes an unhandled promise rejection instead of reaching errorMessage. No path into it is reachable today — the UI hides the controls that would make those calls — so it is latent rather than broken. Wrap the core calls the way deleteTask already does and let the refusal's message land in the error banner.

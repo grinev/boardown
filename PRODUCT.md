@@ -511,6 +511,12 @@ when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to. A **finished** release is never
 offered as a destination — the same exclusion the creation dialog applies.
 
+**A status only changes in the current release.** Outside it — a **future**
+release, an epic file, the backlog — the status renders as the archived task's
+static pill, with a tooltip saying so, and nothing else about the task becomes
+read-only. Relocation carries the status along and never rewrites it to `todo`, so
+a task that was `in-progress` freezes as `in-progress` wherever it lands.
+
 Below Type / Epic / Release, the Details card lists the board's **custom
 fields** (see "Custom fields" under Configuration) — one row per declared field,
 in declaration order, labelled by the declaration's `label` or its `key`. Each is
@@ -742,7 +748,9 @@ records, and `ls` lists the linked tasks, flagging a link whose target is no
 longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
-`ARCHIVED`. `task rm <id>` deletes a task with the same rules
+`ARCHIVED`. Setting a status outside the current release fails with
+`STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
+sets it is judged by its destination. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at

@@ -39,12 +39,52 @@ export const emptyBacklog = (): Backlog => ({
   tasks: [],
 });
 
+export type BoardOpErrorCode = 'ARCHIVED' | 'STATUS_LOCKED';
+
+// A process invariant refused a board operation. The code is what lets a shell
+// tell the rules apart — the CLI maps it straight onto its own error code.
+export class BoardOpError extends Error {
+  readonly code: BoardOpErrorCode;
+  constructor(code: BoardOpErrorCode, message: string) {
+    super(message);
+    this.name = 'BoardOpError';
+    this.code = code;
+  }
+}
+
 // A finished release is archived: the product treats its tasks as read-only and
 // forbids scheduling new work into it. These invariants live here so every shell
 // (UI, CLI, …) enforces them without re-implementing the rule. `status` only
 // exists on a Release frontmatter, so the `in` check narrows the union safely.
 const isFinishedRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'finished';
+
+// A task's status only means something while its release is being worked on — the
+// Board shows the current release alone. So a status may only *change* there: a
+// future release, an epic file and the backlog keep whatever status a task
+// arrived with and freeze it. Moving a task around never changes its status, so
+// it is unaffected.
+const isCurrentRelease = (container: Container): boolean =>
+  'status' in container.frontmatter && container.frontmatter.status === 'current';
+
+const describeContainer = (container: Container): string => {
+  // The backlog is the one container without a slug; a release is the one whose
+  // frontmatter carries a status.
+  if (!('slug' in container)) return 'the backlog';
+  const fm = container.frontmatter;
+  if ('status' in fm) {
+    return `the ${fm.status} release "${fm.name ?? container.slug}"`;
+  }
+  return `the epic "${fm.name}"`;
+};
+
+const refuseStatusChange = (container: Container, taskId: string): never => {
+  throw new BoardOpError(
+    'STATUS_LOCKED',
+    `Cannot change the status of ${taskId}: it is in ${describeContainer(container)}. ` +
+      "A task's status can only be changed in the current release.",
+  );
+};
 
 const ORDER_STEP = 100;
 
@@ -176,7 +216,7 @@ export const editRelease = (
   existing: readonly Release[],
 ): Release => {
   if (isFinishedRelease(release)) {
-    throw new Error('Cannot edit a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot edit a finished release');
   }
 
   const frontmatter = { ...release.frontmatter };
@@ -383,7 +423,16 @@ export const createTask = <C extends Container>(
   input: NewTaskInput,
 ): { container: C; config: BoardConfig; task: Task } => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot create a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot create a task in a finished release');
+  }
+  // A new task has no status to preserve, so outside the current release the only
+  // status it may start with is the default one.
+  if (input.status !== 'todo' && !isCurrentRelease(container)) {
+    throw new BoardOpError(
+      'STATUS_LOCKED',
+      `Cannot create a task with status "${input.status}" in ${describeContainer(container)}. ` +
+        "A task's status can only be changed in the current release.",
+    );
   }
   const { id, config: nextConfig } = nextTaskId(config);
   const order = lastOrderInContainer(container.tasks) + ORDER_STEP;
@@ -426,7 +475,10 @@ export const editTask = <C extends Container>(
   patch: TaskPatch,
 ): C => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot edit a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
+  }
+  if (patch.status !== undefined && !isCurrentRelease(container)) {
+    refuseStatusChange(container, taskId);
   }
   const current = findTask(container.tasks, taskId);
   const workingTasks =
@@ -498,7 +550,7 @@ export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
 
 export const deleteTask = <C extends Container>(container: C, taskId: string): C => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot delete a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot delete a task in a finished release');
   }
   return replaceTasks(
     container,
@@ -512,7 +564,10 @@ export const changeTaskStatus = <C extends Container>(
   newStatus: TaskStatus,
 ): C => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot change the status of a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot change the status of a task in a finished release');
+  }
+  if (!isCurrentRelease(container)) {
+    refuseStatusChange(container, taskId);
   }
   return replaceTasks(
     container,
@@ -529,7 +584,7 @@ export const reorderTask = <C extends Container>(
   beforeTaskId: string | null,
 ): C => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot reorder a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot reorder a task in a finished release');
   }
   const task = findTask(container.tasks, taskId);
   return replaceTasks(
@@ -547,7 +602,15 @@ export const moveTaskInContainer = <C extends Container>(
   args: { status: TaskStatus; beforeTaskId: string | null },
 ): C => {
   if (isFinishedRelease(container)) {
-    throw new Error('Cannot move a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot move a task in a finished release');
+  }
+  // This op carries a status incidentally — a reorder within a column passes the
+  // one the task already has — so only an actual change is refused.
+  if (
+    args.status !== findTask(container.tasks, taskId).frontmatter.status &&
+    !isCurrentRelease(container)
+  ) {
+    refuseStatusChange(container, taskId);
   }
   return replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
 };
@@ -584,12 +647,17 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   args: MoveAcrossArgs,
 ): { source: S; dest: D } => {
   if (isFinishedRelease(source)) {
-    throw new Error('Cannot move a task out of a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot move a task out of a finished release');
   }
   if (isFinishedRelease(dest)) {
-    throw new Error('Cannot move a task into a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot move a task into a finished release');
   }
   const task = findTask(source.tasks, taskId);
+  // Relocation preserves the status, so it never trips the lock. When a caller does
+  // change it, the destination is what decides — that is where the status lands.
+  if (args.newStatus !== task.frontmatter.status && !isCurrentRelease(dest)) {
+    refuseStatusChange(dest, taskId);
+  }
   const epicAction: DestEpic = args.destEpic ?? { kind: 'preserve' };
   const updated: Task = {
     ...task,
@@ -698,7 +766,7 @@ const applyLinkPair = <S extends Container, D extends Container>(
 // task is refused as the target just as much as as the source.
 const assertLinkable = (source: Container, target: Container): void => {
   if (isFinishedRelease(source) || isFinishedRelease(target)) {
-    throw new Error('Cannot change the links of a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot change the links of a task in a finished release');
   }
 };
 
@@ -764,7 +832,7 @@ export const deleteTaskWithLinks = (
   );
   if (owner === undefined) throw new Error(`Task not found: ${taskId}`);
   if (isFinishedRelease(owner)) {
-    throw new Error('Cannot delete a task in a finished release');
+    throw new BoardOpError('ARCHIVED', 'Cannot delete a task in a finished release');
   }
 
   const changedFilenames: string[] = [owner.filename];

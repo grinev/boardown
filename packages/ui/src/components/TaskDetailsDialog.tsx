@@ -54,6 +54,8 @@ const STATUS_DOT_CLASS: Record<TaskStatus, string | undefined> = {
   done: styles.statusDotDone,
 };
 
+const STATUS_LOCKED_HINT = 'Status changes only in the current release.';
+
 const STATUS_OPTIONS: IconSelectOption[] = TASK_STATUSES.map((s) => ({
   value: s,
   label: formatStatusLabel(s),
@@ -87,6 +89,9 @@ export function TaskDetailsDialog({
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
   const customFields = useBoardStore((s) => s.snapshot?.config.customFields ?? EMPTY_FIELDS);
   const archived = release?.frontmatter.status === 'finished';
+  // A status only changes in the current release, so everywhere else — a future
+  // release, an epic file, the backlog, the archive — it is a value, not a control.
+  const statusLocked = release?.frontmatter.status !== 'current';
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
@@ -189,9 +194,12 @@ export function TaskDetailsDialog({
           />
         </main>
         <aside className={styles.sidebar}>
-          {archived ? (
+          {statusLocked ? (
             <span
               className={`${styles.statusPill} ${STATUS_PILL_CLASS[status] ?? ''}`}
+              // An archived task explains none of its frozen fields, so it gets no
+              // hint here either; the lock is the only one worth a reason.
+              title={archived ? undefined : STATUS_LOCKED_HINT}
             >
               {formatStatusLabel(status)}
             </span>
