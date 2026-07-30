@@ -51,7 +51,7 @@ Releases and epics:
   epic get <slug>        Show one epic and its tasks.
   epic list              List epics with task counts.
   epic add <name>        Create an epic (--color #rrggbb --description).
-  epic edit <slug>       Edit an epic (--name --description).
+  epic edit <slug>       Edit an epic (--name --description --color).
 
 Other:
   init                   Create a .boardown/ board here.

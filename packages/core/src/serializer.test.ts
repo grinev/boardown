@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeTaskStatus } from './board-ops.js';
+import { changeTaskStatus, editEpic } from './board-ops.js';
 import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
 import type { Epic } from './schemas.js';
 import { serializeBacklog, serializeDocPage, serializeEpic, serializeRelease } from './serializer.js';
@@ -181,6 +181,41 @@ name: Parser
     const nameIdx = out.indexOf('name: ');
     const colorIdx = out.indexOf('color: ');
     expect(nameIdx).toBeLessThan(colorIdx);
+  });
+
+  it('a color edit changes only the color line', () => {
+    const text = `---
+name: Parser
+color: "#8957e5"
+---
+
+Some preamble.
+
+## Second
+
+---
+id: BD-9
+type: feature
+status: todo
+order: 200
+---
+
+## First
+
+---
+id: BD-4
+type: bug
+status: done
+order: 100
+---
+`;
+    const first = parseEpic(text, 'epics/parser.md', 'parser');
+    const before = serializeEpic(first.value!);
+    const after = serializeEpic(editEpic(first.value!, { color: '#22c55e' }));
+    const changed = after
+      .split('\n')
+      .filter((line, i) => line !== before.split('\n')[i]);
+    expect(changed).toEqual(['color: "#22c55e"']);
   });
 
   it('omits task.epic in serialized output even if the model carries it', () => {

@@ -1,6 +1,6 @@
 ---
 name: Website
-color: "#10b981"
+color: "#14b8a6"
 ---
 
 ## Create landing page on github pages

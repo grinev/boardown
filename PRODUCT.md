@@ -625,6 +625,9 @@ whole operation instead of leaving one side linked.
 
 **Editing** happens inline inside the epic details dialog, same UX as the task
 editor: **name** and **description** (the file preamble) are inline-editable.
+Above the description, a **color** swatch opens the creation dialog's palette in
+its place, with Save and Cancel — the only way to change the color in the UI, so
+the palette stays the whole vocabulary.
 The epic's slug never changes through editing — renaming the underlying file is
 a manual operation outside this UI.
 
@@ -748,7 +751,9 @@ records, and `ls` lists the linked tasks, flagging a link whose target is no
 longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
-`ARCHIVED`. Setting a status outside the current release fails with
+`ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /
+`--color`; unlike the UI's palette-only picker it accepts any 6-digit hex, and an
+invalid one is a `USAGE` error. Setting a status outside the current release fails with
 `STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
 sets it is judged by its destination. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a

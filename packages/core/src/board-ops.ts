@@ -537,6 +537,7 @@ export const editTask = <C extends Container>(
 export interface EpicPatch {
   name?: string;
   preamble?: string;
+  color?: string;
 }
 
 export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
@@ -545,6 +546,7 @@ export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
   frontmatter: {
     ...epic.frontmatter,
     name: patch.name ?? epic.frontmatter.name,
+    color: patch.color ?? epic.frontmatter.color,
   },
 });
 

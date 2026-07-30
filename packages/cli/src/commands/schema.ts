@@ -12,7 +12,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 3,
+  version: 4,
   taskTypes: TASK_TYPES,
   taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
@@ -166,8 +166,8 @@ const DESCRIPTOR = {
     },
     {
       name: 'epic edit',
-      usage: 'boardown epic edit <slug> [--name NAME] [--description TEXT]',
-      summary: 'Rename an epic or change its description.',
+      usage: 'boardown epic edit <slug> [--name NAME] [--description TEXT] [--color #rrggbb]',
+      summary: 'Rename an epic or change its description or color.',
     },
     { name: 'schema', usage: 'boardown schema [--json]', summary: 'Print this contract.' },
   ],

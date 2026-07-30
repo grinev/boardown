@@ -19,8 +19,8 @@ order: 200
 ---
 id: BD-21
 type: feature
-status: todo
-order: 700
+status: done
+order: 550
 ---
 
 ## Add optional wip limits
@@ -53,15 +53,6 @@ order: 500
 ---
 
 low, medium, high, critical
-
-## Add optimistic locks on item save
-
----
-id: BD-30
-type: tech
-status: todo
-order: 450
----
 
 ## Add --version to the CLI
 

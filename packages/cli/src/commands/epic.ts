@@ -143,10 +143,18 @@ async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
 async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const slug = args.positionals[2];
   if (slug === undefined) {
-    throw new CliError('USAGE', 'Usage: boardown epic edit <slug> [--name ...] [--description ...].', 2);
+    throw new CliError(
+      'USAGE',
+      'Usage: boardown epic edit <slug> [--name ...] [--description ...] [--color #rrggbb].',
+      2,
+    );
   }
-  if (flagString(args.flags, 'color') !== undefined) {
-    throw new CliError('USAGE', 'Editing an epic color is not supported; edit the file directly.', 2);
+  // A bare `--color` parses as boolean true: the flag is present with a
+  // malformed value, which must fail rather than be dropped from the patch.
+  const color =
+    args.flags['color'] === undefined ? undefined : (flagString(args.flags, 'color') ?? '');
+  if (color !== undefined && !HEX_COLOR.test(color)) {
+    throw new CliError('USAGE', `--color must be a 6-digit hex like #1f6feb (got "${color}").`, 2);
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
@@ -161,9 +169,14 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (name !== undefined) patch.name = name;
   const description = flagString(args.flags, 'description');
   if (description !== undefined) patch.preamble = description;
+  if (color !== undefined) patch.color = color;
 
   if (Object.keys(patch).length === 0) {
-    throw new CliError('USAGE', 'Nothing to edit. Provide --name and/or --description.', 2);
+    throw new CliError(
+      'USAGE',
+      'Nothing to edit. Provide --name, --description and/or --color.',
+      2,
+    );
   }
 
   const updated = editEpic(epic, patch);

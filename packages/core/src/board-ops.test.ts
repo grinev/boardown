@@ -327,9 +327,24 @@ describe('editEpic', () => {
     expect(e.preamble).toBe('Y');
   });
 
+  it('updates color only', () => {
+    const e = editEpic(baseEpic(), { color: '#22c55e' });
+    expect(e.frontmatter.color).toBe('#22c55e');
+    expect(e.frontmatter.name).toBe('Parser');
+    expect(e.preamble).toBe('old preamble');
+    expect(e.tasks).toHaveLength(1);
+  });
+
+  it('updates color together with name and preamble', () => {
+    const e = editEpic(baseEpic(), { name: 'X', preamble: 'Y', color: '#eab308' });
+    expect(e.frontmatter).toEqual({ name: 'X', color: '#eab308' });
+    expect(e.preamble).toBe('Y');
+  });
+
   it('empty patch returns equivalent epic', () => {
     const e = editEpic(baseEpic(), {});
     expect(e.frontmatter.name).toBe('Parser');
+    expect(e.frontmatter.color).toBe('#1f6feb');
     expect(e.preamble).toBe('old preamble');
     expect(e.tasks).toHaveLength(1);
   });

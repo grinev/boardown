@@ -1,9 +1,9 @@
-import { Check, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { epicFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { EPIC_COLORS, pickDefaultEpicColor } from '../epic-colors';
-import { pickContrastText } from '../utils/contrast-color';
+import { pickDefaultEpicColor } from '../epic-colors';
+import { EpicColorSwatches } from './EpicColorSwatches';
 import { Modal } from './Modal';
 import styles from './CreateEpicDialog.module.css';
 
@@ -120,30 +120,7 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
         </label>
         <div className={styles.field}>
           <span className={styles.label}>Color</span>
-          <div className={styles.swatches} role="radiogroup" aria-label="Epic color">
-            {EPIC_COLORS.map((c) => {
-              const selected = c.toLowerCase() === color.toLowerCase();
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  className={
-                    selected ? `${styles.swatch} ${styles.swatchSelected}` : styles.swatch
-                  }
-                  // The value is data, not a theme token, so it is set inline.
-                  style={{ background: c }}
-                  role="radio"
-                  aria-checked={selected}
-                  aria-label={c}
-                  onClick={() => setColor(c)}
-                >
-                  {selected && (
-                    <Check size={14} color={pickContrastText(c)} aria-hidden="true" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <EpicColorSwatches value={color} onSelect={setColor} />
         </div>
         {submitError !== null && (
           <p className={styles.error} role="alert">

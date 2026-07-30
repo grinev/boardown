@@ -82,6 +82,59 @@
   color: var(--text-secondary);
 }
 
+.colorRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.colorValue {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.colorValue:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Same shape as the inline text editor's Save / Cancel pair. */
+.colorActionButton {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+}
+
+.colorActionButton:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.colorActionButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Matches the width the same grid gets inside the 440px create-epic dialog. */
+.colorSwatches {
+  width: 400px;
+  max-width: 100%;
+}
+
 .tasksHeading {
   display: flex;
   align-items: baseline;

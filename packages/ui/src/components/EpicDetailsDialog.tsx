@@ -1,10 +1,11 @@
-import { Layers, Plus, X } from 'lucide-react';
-import { Fragment } from 'react';
+import { Check, Layers, Plus, X } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
 import { DialogBackButton } from './DialogBackButton';
+import { EpicColorSwatches } from './EpicColorSwatches';
 import { InlineEditText } from './InlineEditText';
 import { LinkedText } from './LinkedText';
 import { Modal } from './Modal';
@@ -31,6 +32,25 @@ export function EpicDetailsDialog({
 }: EpicDetailsDialogProps) {
   const updateEpic = useBoardStore((s) => s.updateEpic);
   const openCreateTaskForEpic = useBoardStore((s) => s.openCreateTaskForEpic);
+  // Non-null while the palette is open; holds the pick that Save would write.
+  const [pendingColor, setPendingColor] = useState<string | null>(null);
+  const colorRowRef = useRef<HTMLDivElement>(null);
+  const paletteOpen = pendingColor !== null;
+
+  // Opening the palette unmounts the swatch button that was clicked, and closing it
+  // unmounts the palette: without moving focus it would fall back to the body, and
+  // Escape would reach the dialog instead of the panel.
+  const paletteWasOpen = useRef(false);
+  useEffect(() => {
+    if (paletteOpen) {
+      const radios = colorRowRef.current?.querySelectorAll<HTMLElement>('[role="radio"]');
+      const checked = [...(radios ?? [])].find((r) => r.getAttribute('aria-checked') === 'true');
+      (checked ?? radios?.[0])?.focus();
+    } else if (paletteWasOpen.current) {
+      colorRowRef.current?.querySelector('button')?.focus();
+    }
+    paletteWasOpen.current = paletteOpen;
+  }, [paletteOpen]);
 
   return (
     <Modal open onClose={onClose} ariaLabel={`Epic ${epic.frontmatter.name}`}>
@@ -57,7 +77,60 @@ export function EpicDetailsDialog({
           </button>
         </div>
       </header>
-      <div className={styles.body}>
+      <div
+        className={styles.body}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || pendingColor === null) return;
+          // Escape cancels the palette; preventDefault keeps the dialog's own close
+          // watcher from firing on the same press.
+          event.preventDefault();
+          setPendingColor(null);
+        }}
+      >
+        <section className={styles.section}>
+          <h3 className={styles.sectionHeading}>Color</h3>
+          <div className={styles.colorRow} ref={colorRowRef}>
+            {pendingColor === null ? (
+              <button
+                type="button"
+                className={styles.colorValue}
+                // The value is data, not a theme token, so it is set inline.
+                style={{ background: epic.frontmatter.color }}
+                title={epic.frontmatter.color}
+                aria-label="Change color"
+                onClick={() => setPendingColor(epic.frontmatter.color)}
+              />
+            ) : (
+              <>
+                <EpicColorSwatches
+                  className={styles.colorSwatches}
+                  value={pendingColor}
+                  onSelect={setPendingColor}
+                />
+                <button
+                  type="button"
+                  className={styles.colorActionButton}
+                  aria-label="Save color"
+                  onClick={() => {
+                    setPendingColor(null);
+                    if (pendingColor.toLowerCase() === epic.frontmatter.color.toLowerCase()) return;
+                    void updateEpic(epic.slug, { color: pendingColor });
+                  }}
+                >
+                  <Check size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className={styles.colorActionButton}
+                  aria-label="Cancel color"
+                  onClick={() => setPendingColor(null)}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </>
+            )}
+          </div>
+        </section>
         <section className={styles.section}>
           <h3 className={styles.sectionHeading}>Description</h3>
           <InlineEditText

@@ -179,16 +179,50 @@ describe('release / epic / move (deepening layer)', () => {
     ).rejects.toMatchObject({ code: 'ARCHIVED' });
   });
 
-  it('rejects an invalid epic color and editing a color', async () => {
+  it('rejects an invalid epic color on add and on edit', async () => {
     await expect(
       epicCommand(parseArgs(['epic', 'add', 'Bad', '--color', 'red']), ctx),
     ).rejects.toMatchObject({ code: 'USAGE' });
 
     const epic = (await epicCommand(parseArgs(['epic', 'add', 'Ok', '--color', '#00ff00']), ctx))
       .data as { slug: string };
+    for (const bad of ['red', '#00ff0', '#00ff000']) {
+      await expect(
+        epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color', bad]), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE' });
+    }
     await expect(
-      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color', '#000000']), ctx),
+      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color']), ctx),
     ).rejects.toMatchObject({ code: 'USAGE' });
+    // A bare --color must fail even when another flag would carry the patch.
+    await expect(
+      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--name', 'X', '--color']), ctx),
+    ).rejects.toMatchObject({ code: 'USAGE' });
+    const after = (await epicCommand(parseArgs(['epic', 'get', epic.slug]), ctx)).data as {
+      epic: { color: string };
+    };
+    expect(after.epic.color).toBe('#00ff00');
+  });
+
+  it('edits an epic color, alone and together with a name', async () => {
+    const epic = (await epicCommand(parseArgs(['epic', 'add', 'Palette', '--color', '#00ff00']), ctx))
+      .data as { slug: string };
+
+    await epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color', '#22c55e']), ctx);
+    let got = (await epicCommand(parseArgs(['epic', 'get', epic.slug]), ctx)).data as {
+      epic: { name: string; color: string };
+    };
+    expect(got.epic.color).toBe('#22c55e');
+    expect(got.epic.name).toBe('Palette');
+
+    await epicCommand(
+      parseArgs(['epic', 'edit', epic.slug, '--name', 'Colors', '--color', '#EAB308']),
+      ctx,
+    );
+    got = (await epicCommand(parseArgs(['epic', 'get', epic.slug]), ctx)).data as {
+      epic: { name: string; color: string };
+    };
+    expect(got.epic).toMatchObject({ name: 'Colors', color: '#EAB308' });
   });
 
   it('edit rejects --release together with --no-release', async () => {
