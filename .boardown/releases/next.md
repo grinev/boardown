@@ -43,13 +43,14 @@ order: 600
 
 Task statuses can be changed only in active release
 
-## Add task severity
+## Add task priority
 
 ---
 id: BD-67
 type: feature
-status: todo
-order: 500
+priority: critical
+status: done
+order: 462
 ---
 
 low, medium, high, critical

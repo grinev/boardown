@@ -2,11 +2,16 @@ import { z } from 'zod';
 
 export const TASK_STATUSES = ['todo', 'in-progress', 'done'] as const;
 export const TASK_TYPES = ['bug', 'feature', 'docs', 'tech'] as const;
+// Heaviest first: every list built by mapping over this reads top-down.
+export const TASK_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 export const RELEASE_STATUSES = ['future', 'current', 'finished'] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskType = (typeof TASK_TYPES)[number];
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
+
+export const DEFAULT_TASK_PRIORITY: TaskPriority = 'medium';
 
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 const HEX_COLOR_MESSAGE = 'color must be a 6-digit hex like #1f6feb';
@@ -51,6 +56,10 @@ export type TaskLink = z.infer<typeof TaskLinkSchema>;
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
   type: z.enum(TASK_TYPES),
+  // Optional rather than defaulted: a zod default would erase the difference
+  // between "absent" and "explicitly medium" at parse time, and the serializer
+  // would then write the key into every task it touches.
+  priority: z.enum(TASK_PRIORITIES).optional(),
   status: z.enum(TASK_STATUSES),
   epic: z.string().min(1).optional(),
   order: z.number().int(),
@@ -64,6 +73,11 @@ export const TaskFrontmatterSchema = z.object({
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema> & {
   custom?: Record<string, string>;
 };
+
+// An absent `priority` means the default. Every reader — cards, rows, filters,
+// CLI summaries — resolves it here, so the default lives in exactly one place.
+export const effectiveTaskPriority = (fm: TaskFrontmatter): TaskPriority =>
+  fm.priority ?? DEFAULT_TASK_PRIORITY;
 
 export const TaskSchema = z.object({
   title: z.string().min(1),
@@ -162,6 +176,7 @@ const CUSTOM_FIELD_KEY_MESSAGE =
 export const RESERVED_TASK_KEYS = [
   'id',
   'type',
+  'priority',
   'status',
   'epic',
   'order',

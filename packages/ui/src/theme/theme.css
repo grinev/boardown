@@ -41,6 +41,13 @@
   --type-tech: #8b5cf6;
   --type-epic: #eab308;
 
+  /* Critical is deeper than --type-bug so the two reds never read as the same
+     mark when a critical bug puts both glyphs in one footer. */
+  --priority-critical: #c81e1e;
+  --priority-high: #ea580c;
+  --priority-medium: #9a9a9a;
+  --priority-low: #0284c7;
+
   --create-task: #38bdf8;
   --create-release: #c2410c;
 
@@ -102,6 +109,11 @@
   --type-docs: #3b82f6;
   --type-tech: #8b5cf6;
   --type-epic: #eab308;
+
+  --priority-critical: #f87171;
+  --priority-high: #fb923c;
+  --priority-medium: #8a8a8a;
+  --priority-low: #38bdf8;
 
   --create-task: #38bdf8;
   --create-release: #c2410c;

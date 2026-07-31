@@ -267,6 +267,33 @@ describe('createTask', () => {
     expect(fs.files.has(CONFIG_FILENAME)).toBe(true);
   });
 
+  it('writes no priority key when the input carries none', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'New',
+      type: 'feature',
+    });
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.priority).toBeUndefined();
+    expect(fs.files.get('releases/1.0.md')?.content).not.toContain('priority:');
+  });
+
+  it('writes the priority the input carries', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'New',
+      type: 'feature',
+      priority: 'critical',
+    });
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.priority).toBe('critical');
+    expect(fs.files.get('releases/1.0.md')?.content).toContain('priority: critical');
+  });
+
   it('keeps the epic on the in-memory task but omits it from the epic file', async () => {
     const { fs } = setup(snap({ epics: [epic('parser')] }));
 
@@ -374,6 +401,17 @@ describe('updateTask', () => {
     expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toContain(
       'BD-1',
     );
+  });
+
+  // The relocation path enumerates the patch keys it still has to apply after
+  // the move; a field missing from that list is silently dropped.
+  it('applies a priority change that comes with a relocation', async () => {
+    setup(snap({ epics: [epic('parser')], backlog: backlog([task('BD-1')]) }));
+
+    await state().updateTask('BD-1', { epic: 'parser', priority: 'critical' });
+
+    const moved = current().epics[0]!.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
+    expect(moved.frontmatter.priority).toBe('critical');
   });
 
   it('lazily creates the backlog when clearing an epic on a board without one', async () => {

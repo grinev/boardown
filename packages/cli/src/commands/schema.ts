@@ -1,7 +1,9 @@
 import {
   customFieldLabel,
+  DEFAULT_TASK_PRIORITY,
   LINK_TYPES,
   RELEASE_STATUSES,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPES,
 } from '@boardown/core';
@@ -12,8 +14,10 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 5,
+  version: 6,
   taskTypes: TASK_TYPES,
+  taskPriorities: TASK_PRIORITIES,
+  defaultTaskPriority: DEFAULT_TASK_PRIORITY,
   taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
   taskFields: {
@@ -21,6 +25,8 @@ const DESCRIPTOR = {
     title: 'string',
     description: 'string',
     type: 'one of taskTypes',
+    priority:
+      'optional, one of taskPriorities; an absent key means defaultTaskPriority. Setting it — including setting it to the default — writes the key and keeps it.',
     status: 'one of taskStatuses',
     epic: 'optional epic slug',
     order: 'number, managed by boardown',
@@ -36,6 +42,7 @@ const DESCRIPTOR = {
     id: 'string',
     title: 'string',
     type: 'one of taskTypes',
+    priority: 'one of taskPriorities; always present, resolved to defaultTaskPriority when unset',
     status: 'one of taskStatuses',
     epic: 'epic slug; omitted when the task has none',
     checklist: '{ done, total }; omitted when the task has no checklist',
@@ -65,21 +72,21 @@ const DESCRIPTOR = {
     {
       name: 'task list',
       usage:
-        'boardown task list [--status STATUS] [--type TYPE] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR] [--full]',
+        'boardown task list [--status STATUS] [--type TYPE] [--priority PRIORITY] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR] [--full]',
       summary:
-        'List tasks across the whole board, filtered by any combination of status, type, epic, release, backlog-only, or a case-insensitive text match on title/description. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
+        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only, or a case-insensitive text match on title/description. --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
     },
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value]',
+        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value]',
       summary:
-        'Create a task in the backlog (default), an epic, or a release. --field is repeatable and sets a customFields value.',
+        'Create a task in the backlog (default), an epic, or a release. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value.',
     },
     {
       name: 'task edit',
       usage:
-        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release] [--field key=value]',
+        'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--priority PRIORITY] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release] [--field key=value]',
       summary:
         'Edit a task. --release/--no-release move it in/out of a release; --epic/--no-epic reassign the epic (relocates a backlog/epic task, retags a task in a release). --field is repeatable and sets a customFields value; an empty value clears it.',
     },

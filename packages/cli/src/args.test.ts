@@ -10,6 +10,12 @@ describe('parseArgs', () => {
     expect(parseArgs(['task', 'add', 'T', '--type', 'feature']).flags.type).toBe('feature');
   });
 
+  it('parses --priority as a value flag, not a boolean', () => {
+    const { positionals, flags } = parseArgs(['task', 'add', 'T', '--priority', 'critical']);
+    expect(flags.priority).toBe('critical');
+    expect(positionals).toEqual(['task', 'add', 'T']);
+  });
+
   it('parses `--flag=value`', () => {
     expect(parseArgs(['--data-dir=/x']).flags['data-dir']).toBe('/x');
   });

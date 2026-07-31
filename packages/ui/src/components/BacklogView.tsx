@@ -16,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Epic, Release, Task } from '@boardown/core';
 import {
   currentRelease,
+  effectiveTaskPriority,
   futureReleases,
   isWipLimitReached,
   sortTasksByOrder,
@@ -29,6 +30,7 @@ import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
   BacklogFilters,
   type EpicFilter,
+  type PriorityFilter,
   type StatusFilter,
   type TypeFilter,
 } from './BacklogFilters';
@@ -66,6 +68,7 @@ export function BacklogView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -174,7 +177,10 @@ export function BacklogView() {
   if (snapshot === null) return null;
 
   const filtersActive =
-    statusFilter !== 'all' || typeFilter !== 'all' || epicFilter !== 'all';
+    statusFilter !== 'all' ||
+    typeFilter !== 'all' ||
+    epicFilter !== 'all' ||
+    priorityFilter !== 'all';
 
   const matchesFilters = (task: Task): boolean => {
     if (statusFilter !== 'all' && task.frontmatter.status !== statusFilter) return false;
@@ -183,6 +189,10 @@ export function BacklogView() {
       if (task.frontmatter.epic !== undefined) return false;
     } else if (epicFilter !== 'all') {
       if (task.frontmatter.epic !== epicFilter) return false;
+    }
+    // Resolved, not raw: filtering by Medium must also catch tasks with no key.
+    if (priorityFilter !== 'all' && effectiveTaskPriority(task.frontmatter) !== priorityFilter) {
+      return false;
     }
     return true;
   };
@@ -194,9 +204,11 @@ export function BacklogView() {
         statusFilter={statusFilter}
         typeFilter={typeFilter}
         epicFilter={epicFilter}
+        priorityFilter={priorityFilter}
         onStatusChange={setStatusFilter}
         onTypeChange={setTypeFilter}
         onEpicChange={setEpicFilter}
+        onPriorityChange={setPriorityFilter}
       />
       <BacklogDndContext
         buckets={overlayBuckets}

@@ -186,7 +186,7 @@
 
 .row {
   display: grid;
-  grid-template-columns: 16px max-content 1fr auto 110px;
+  grid-template-columns: 16px max-content 1fr auto 110px 16px;
   gap: 12px;
   align-items: center;
   padding: 8px 12px;
@@ -243,6 +243,12 @@
 }
 
 .typeIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.priorityIcon {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;

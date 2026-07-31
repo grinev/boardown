@@ -16,6 +16,7 @@ import type {
   Task,
   TaskLinkResult,
   TaskPatch,
+  TaskPriority,
   TaskStatus,
   TaskType,
   Theme,
@@ -71,6 +72,7 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   type: TaskType;
+  priority?: TaskPriority;
   epic?: string;
 }
 
@@ -939,6 +941,7 @@ export const useBoardStore = create<BoardState>(
       const baseInput = {
         title: input.title,
         type: input.type,
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
         status: 'todo' as const,
         ...(input.description !== undefined ? { description: input.description } : {}),
       };
@@ -1206,6 +1209,7 @@ export const useBoardStore = create<BoardState>(
             remainderPatch.title !== undefined ||
             remainderPatch.description !== undefined ||
             remainderPatch.type !== undefined ||
+            remainderPatch.priority !== undefined ||
             remainderPatch.status !== undefined ||
             remainderPatch.custom !== undefined
               ? editTask(moved.dest, snapshot.config, taskId, remainderPatch)

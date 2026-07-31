@@ -19,8 +19,10 @@ const orderedTaskFrontmatter = (
   const out: Record<string, unknown> = {
     id: fm.id,
     type: fm.type,
-    status: fm.status,
   };
+  // Absent stays absent — the default is never synthesised into a file.
+  if (fm.priority !== undefined) out.priority = fm.priority;
+  out.status = fm.status;
   if (!options.omitEpic && fm.epic !== undefined) out.epic = fm.epic;
   out.order = fm.order;
   if (fm.checklist && fm.checklist.length > 0) {

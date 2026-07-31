@@ -1,5 +1,7 @@
 import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
+import { effectiveTaskPriority } from '@boardown/core';
+import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
@@ -23,6 +25,8 @@ export const BacklogRowView = forwardRef<HTMLLIElement, BacklogRowViewProps>(
     const { id, type, status } = task.frontmatter;
     const typeMeta = TASK_TYPE_META[type];
     const TypeIcon = typeMeta.icon;
+    const priorityMeta = TASK_PRIORITY_META[effectiveTaskPriority(task.frontmatter)];
+    const PriorityIcon = priorityMeta.icon;
 
     const epicStyle = epic
       ? ({
@@ -72,6 +76,11 @@ export const BacklogRowView = forwardRef<HTMLLIElement, BacklogRowViewProps>(
         <span className={`${styles.statusPill} ${STATUS_CLASS[status]}`}>
           {formatStatusLabel(status)}
         </span>
+        <PriorityIcon
+          className={styles.priorityIcon}
+          style={{ color: priorityMeta.colorVar }}
+          aria-label={priorityMeta.label}
+        />
       </li>
     );
   },

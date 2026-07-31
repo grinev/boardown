@@ -84,6 +84,53 @@ describe('cli commands (integration)', () => {
     expect(await ids(ctx)).not.toContain('TS-2');
   });
 
+  describe('task priority', () => {
+    it('writes no priority key without the flag', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Plain']), ctx);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.priority).toBeUndefined();
+    });
+
+    it('writes the priority passed to task add', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Urgent', '--priority', 'critical']), ctx);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.priority).toBe('critical');
+    });
+
+    it('sets the priority through task edit', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Plain']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'low']), ctx);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.priority).toBe('low');
+    });
+
+    // Setting the default is a set, not a clear.
+    it('keeps an explicitly set medium', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Plain']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'high']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'medium']), ctx);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.priority).toBe('medium');
+    });
+
+    it('rejects an invalid priority on add and writes nothing', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'Bad', '--priority', 'urgent']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE' });
+      expect(await ids(ctx)).toEqual([]);
+    });
+
+    it('rejects an invalid priority on edit', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS', '--project-name', 'Demo']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'Plain']), ctx);
+      await expect(
+        taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'urgent']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE' });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.priority).toBeUndefined();
+    });
+  });
+
   it('fails to add a task to a missing epic', async () => {
     await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
     await expect(
@@ -582,6 +629,42 @@ describe('cli commands (integration)', () => {
       ).toEqual(['TS-1', 'TS-4']);
     });
 
+    it('filters by priority', async () => {
+      await seed();
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'critical']), ctx);
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--priority', 'critical']), ctx)).data),
+      ).toEqual(['TS-1']);
+    });
+
+    // An absent key means the default, so it must match the default filter.
+    it('matches tasks with no priority key when filtering by medium', async () => {
+      await seed();
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'high']), ctx);
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--priority', 'medium']), ctx)).data),
+      ).toEqual(['TS-2', 'TS-3', 'TS-4']);
+    });
+
+    it('combines --priority with the other filters', async () => {
+      await seed();
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--priority', 'low']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-4', '--priority', 'low']), ctx);
+      expect(
+        listIds(
+          (await taskCommand(parseArgs(['task', 'list', '--priority', 'low', '--backlog']), ctx))
+            .data,
+        ),
+      ).toEqual(['TS-1']);
+    });
+
+    it('rejects an invalid --priority with a USAGE error', async () => {
+      await seed();
+      await expect(
+        taskCommand(parseArgs(['task', 'list', '--priority', 'urgent']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE' });
+    });
+
     it('filters by epic, catching both epic-file and release-tagged tasks', async () => {
       await seed();
       expect(
@@ -632,7 +715,7 @@ describe('cli commands (integration)', () => {
       await seed();
       const out = await taskCommand(parseArgs(['task', 'list', '--release', 'active']), ctx);
       expect(out.human).toContain('TS-4');
-      expect(out.human).toContain('[bug/todo]');
+      expect(out.human).toContain('[bug/medium/todo]');
       expect(out.human).toContain('epic:bug-audit');
       expect(out.human).toContain('(release: releases/active.md)');
       expect(out.human).toContain('Delta ship');

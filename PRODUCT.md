@@ -40,6 +40,7 @@ A single unit of work. Fields:
 | `title`       | string    | The H2 heading of the task section in the md file.              |
 | `description` | string    | Plain text body below the frontmatter.                          |
 | `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
+| `priority`    | string?   | One of `critical`, `high`, `medium`, `low`. **Optional**: an absent key means `medium`, so a task never has to carry one. Setting a priority — including setting it back to `medium` — writes the key and keeps it; nothing ever strips it. Existing boards are not backfilled. |
 | `status`      | string    | One of `todo`, `in-progress`, `done`.                           |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
@@ -48,8 +49,11 @@ A single unit of work. Fields:
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is currently always `relates` (symmetric); `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
-Task statuses and types are currently a fixed set baked into the app: each type
-has an icon and a color used for the badge on the card and as a filter dimension.
+Task statuses, types and priorities are currently a fixed set baked into the app:
+each type and each priority has an icon and a color used for the badge on the card
+and as a filter dimension. Priority is a **label, never a sort key** — the order of
+work stays `order` and the position of the block in the file, and nothing sorts,
+groups or gates on priority.
 
 ### Release
 A markdown file under `releases/`, e.g. `releases/1.10.md`. Holds tasks
@@ -345,7 +349,8 @@ customFields:
 
 `key` is 1–40 characters, starts with a letter and continues with letters,
 digits, `_` or `-`; keys must be unique and may not collide with a built-in task
-key (`id`, `type`, `status`, `epic`, `order`, `checklist`, `notes`, `links`),
+key (`id`, `type`, `priority`, `status`, `epic`, `order`, `checklist`, `notes`,
+`links`),
 since values are stored flat beside them. `type` must be `string` —
 dates and lookup lists are later work, and the key exists so they can be added
 without changing the format. Any violation makes the config **invalid**, which is
@@ -436,10 +441,12 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
    `epics/no_epic.md`, rendered as a flat list with epic badges (no nested
    grouping), ordered globally by `order` across all backlog containers.
 
-A compact filter bar sits at the very top of the screen with three
-single-select dropdowns, each labelled (`status`, `type`, `epic`) above the
-control so the controls themselves stay narrow. The default value of every
-filter is "All" — nothing is filtered out. There is no reset button:
+A compact filter bar sits at the very top of the screen with four
+single-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`)
+above the control so the controls themselves stay narrow. The default value of
+every filter is "All" — nothing is filtered out. Because an absent `priority` key
+means `medium`, filtering by `Medium` returns both the tasks that say so and the
+tasks that say nothing. There is no reset button:
 switching a filter back to "All" is the reset. When any filter is non-default,
 each section's count pill switches from `5` to `1 of 5` (matching of total).
 The filter applies **globally** to all three sections. The `epic` filter
@@ -515,10 +522,15 @@ commands.
 
 ### Task card
 
-Each card shows: type icon (with type color), task ID, title, epic badge
-(with the epic's color and name), and badges for a non-empty checklist
-(`done/total`) and notes (count). The status is **not** rendered on the card
-in Backlog/Archive — it is implicit from the column on Board.
+Each card shows: type icon (with type color), task ID, priority glyph (with the
+priority color, directly after the ID), title, epic badge (with the epic's color
+and name), and badges for a non-empty checklist (`done/total`) and notes (count).
+The status is **not** rendered on the card in Backlog/Archive — it is implicit
+from the column on Board.
+
+The Backlog and Archive rows carry the same two glyphs, but the priority one sits
+**last in the row**, after the status pill. The epic dialog's task table and the
+Linked-tasks table show no priority.
 
 ### Task editor
 
@@ -526,6 +538,8 @@ in Backlog/Archive — it is implicit from the column on Board.
 
 - **Title** — required.
 - **Type** — required, one of `bug`, `feature`, `docs`, `tech`.
+- **Priority** — one of `Critical`, `High`, `Medium`, `Low`, preselected
+  `Medium`. Left at `Medium` the task is created with no `priority` key at all.
 - **Epic** — optional. Dropdown over existing epics; blank = no epic.
 - **Description** — plain text.
 
@@ -541,8 +555,11 @@ hovering a field highlights it, clicking turns it into an input/textarea
 focused with the cursor; changes save on blur or Enter (Cmd/Ctrl+Enter for
 the multiline description) and revert on Escape. **Title** and
 **description** are inline-editable as text fields; **status**, **type**,
-**epic**, and **release** are inline-editable via a dropdown that opens
-on click and commits on selection (Escape / outside-click cancels). The
+**priority**, **epic**, and **release** are inline-editable via a dropdown that
+opens on click and commits on selection (Escape / outside-click cancels). The
+**Priority** row sits directly after **Type**; picking the level the file already
+carries writes nothing, but picking `Medium` on a task that has no `priority` key
+does write one, since that is an explicit set rather than a repeat. The
 epic badge stays clickable to navigate to the epic — the surrounding row
 opens the dropdown, and a "—" option clears the epic. Changing release
 moves the task between containers (release-to-release, release-to-epic
@@ -573,8 +590,8 @@ creation dialog — a new task starts with none and is filled in afterwards.
 **A task in a finished release opens read-only**, wherever the dialog is opened
 from. Every value is still shown — and every way to change one is gone rather
 than disabled-looking: title, description, checklist item text and note text
-render as plain text; status, type and release render as plain values instead of
-dropdowns; the epic renders as its badge, still clickable to navigate to the
+render as plain text; status, type, priority and release render as plain values
+instead of dropdowns; the epic renders as its badge, still clickable to navigate to the
 epic; custom field values render as text, with their links still clickable.
 Checklist checkboxes are disabled, the add-item row and the note composer
 are absent, and the per-item trash buttons do not appear. Linked tasks are
@@ -784,11 +801,18 @@ Its output follows the way the UI is read — **a view, then one task**. The thr
 UI tabs are three commands: `release current` is the Board, `backlog` is the
 Backlog tab (current release, future releases, then the unscheduled tasks) and
 `archive` is the Archive. Any task appearing in a list is rendered as a **task
-summary** — the fields the task card carries (id, title, type, status, epic,
-checklist `done/total`, notes count) — while `task get` returns the whole task.
+summary** — the fields the task card carries (id, title, type, priority, status,
+epic, checklist `done/total`, notes count) — while `task get` returns the whole
+task. `priority` in a summary is always populated: a task with no key on disk
+reports the default, so a caller never has to know about the unset case.
 A single `--full` flag takes any listing command one level deeper. Mutating
 commands do not echo the entity back: they acknowledge with the identifier of
-what changed. Task links are managed
+what changed. **Priority** rides on the commands that already exist: `task add`
+and `task edit` take `--priority`, `task list` filters by it (matching the
+resolved value, so `--priority medium` also returns tasks with no key), and
+`schema` reports the vocabulary and the default so an agent reads them instead of
+guessing. `task link ls` is a link listing rather than a task summary, and carries
+no priority. Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no
 longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the

@@ -160,13 +160,13 @@ customFields:
 
 `key` is 1–40 characters, starts with a letter and continues with letters,
 digits, `_` or `-`. Keys must be unique, and may not reuse a name task
-frontmatter already has (`id`, `type`, `status`, `epic`, `order`, `checklist`,
-`notes`, `links`). A bad declaration makes the config invalid — the app shows its
+frontmatter already has (`id`, `type`, `priority`, `status`, `epic`, `order`,
+`checklist`, `notes`, `links`). A bad declaration makes the config invalid — the app shows its
 config error screen and the CLI returns `BOARD_INVALID`, rather than ignoring the
 line.
 
 Every declared field becomes a row in the task dialog's **Details** panel, under
-Type / Epic / Release, edited in place like everything else there. Values land in
+Type / Priority / Epic / Release, edited in place like everything else there. Values land in
 the task's own frontmatter as ordinary keys:
 
 ```markdown

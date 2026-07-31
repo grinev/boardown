@@ -70,6 +70,31 @@ describe('serializeRelease', () => {
     expect(epicIdx).toBeLessThan(orderIdx);
   });
 
+  it('omits priority when the task has none', () => {
+    const release = parseRelease(RELEASE, 'releases/1.10.md', '1.10').value!;
+    const out = serializeRelease(release);
+    expect(out).not.toContain('priority:');
+  });
+
+  it('writes priority between type and status when set', () => {
+    const source = RELEASE.replace('id: BD-1\ntype: feature\n', 'id: BD-1\ntype: feature\npriority: critical\n');
+    const release = parseRelease(source, 'releases/1.10.md', '1.10').value!;
+    const out = serializeRelease(release);
+    const firstTask = out.slice(out.indexOf('## '));
+    const typeIdx = firstTask.indexOf('type: ');
+    const priorityIdx = firstTask.indexOf('priority: ');
+    const statusIdx = firstTask.indexOf('status: ');
+    expect(priorityIdx).toBeGreaterThan(typeIdx);
+    expect(priorityIdx).toBeLessThan(statusIdx);
+  });
+
+  // The neutral level is a value like any other once it is in the file.
+  it('keeps an explicit medium priority', () => {
+    const source = RELEASE.replace('id: BD-1\ntype: feature\n', 'id: BD-1\ntype: feature\npriority: medium\n');
+    const release = parseRelease(source, 'releases/1.10.md', '1.10').value!;
+    expect(serializeRelease(release)).toContain('priority: medium');
+  });
+
   it('orders release frontmatter keys canonically (status first, dates last)', () => {
     const release = parseRelease(RELEASE, 'releases/1.10.md', '1.10').value!;
     const out = serializeRelease(release);

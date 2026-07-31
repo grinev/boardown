@@ -12,6 +12,7 @@ import type {
   ReleaseStatus,
   Task,
   TaskLink,
+  TaskPriority,
   TaskStatus,
   TaskType,
 } from './schemas.js';
@@ -434,6 +435,7 @@ const lastOrderInContainer = (tasks: Task[]): number => {
 export interface NewTaskInput {
   title: string;
   type: TaskType;
+  priority?: TaskPriority;
   status: TaskStatus;
   description?: string;
   epic?: string;
@@ -484,6 +486,7 @@ export const createTask = <C extends Container>(
     frontmatter: {
       id,
       type: input.type,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
       status: input.status,
       ...(input.epic !== undefined ? { epic: input.epic } : {}),
       order,
@@ -502,6 +505,7 @@ export interface TaskPatch {
   description?: string;
   epic?: string | null;
   type?: TaskType;
+  priority?: TaskPriority;
   status?: TaskStatus;
   checklist?: ChecklistItem[];
   notes?: Note[];
@@ -549,6 +553,10 @@ export const editTask = <C extends Container>(
     }
     if (patch.type !== undefined) {
       nextFrontmatter.type = patch.type;
+    }
+    // No special case for the default: setting `medium` writes `medium`.
+    if (patch.priority !== undefined) {
+      nextFrontmatter.priority = patch.priority;
     }
     if (patch.checklist !== undefined) {
       if (patch.checklist.length === 0) {

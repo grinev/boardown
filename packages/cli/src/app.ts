@@ -31,11 +31,11 @@ Views — what you look at first:
 
 Tasks:
   task get <id>          Show one task in full — the drill-down.
-  task list              List/filter tasks (--status --type --epic --release --backlog --text).
-  task add <title>       Create a task (--type --status --epic --release --description).
+  task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
+  task add <title>       Create a task (--type --priority --status --epic --release --description).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
   task status <id> <s>   Change a task status (todo | in-progress | done).
-  task reorder <id>      Change priority (--before | --after <id> | --up | --down).
+  task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
   task rm <id>           Delete a task.
   task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
   task notes <op>        Note: add | edit | rm (on <id>).

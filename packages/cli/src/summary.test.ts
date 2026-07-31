@@ -20,8 +20,18 @@ describe('taskSummary', () => {
       id: 'BD-42',
       title: 'Drag & drop',
       type: 'feature',
+      priority: 'medium',
       status: 'todo',
     });
+  });
+
+  // A caller reads one shape whether or not the file carries the key.
+  it('reports the default priority when the task has none', () => {
+    expect(taskSummary(task({})).priority).toBe('medium');
+  });
+
+  it('reports an explicit priority', () => {
+    expect(taskSummary(task({ priority: 'critical' })).priority).toBe('critical');
   });
 
   it('counts a checklist as done/total', () => {

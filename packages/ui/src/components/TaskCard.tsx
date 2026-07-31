@@ -1,7 +1,9 @@
 import { ListChecks, MessageSquare } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Epic, Task } from '@boardown/core';
+import { effectiveTaskPriority } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import styles from './BoardView.module.css';
@@ -15,6 +17,8 @@ export function TaskCard({ task, epic }: TaskCardProps) {
   const { id, type } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
+  const priorityMeta = TASK_PRIORITY_META[effectiveTaskPriority(task.frontmatter)];
+  const PriorityIcon = priorityMeta.icon;
   const openTask = useBoardStore((s) => s.openTask);
   const openEpic = useBoardStore((s) => s.openEpic);
 
@@ -64,6 +68,11 @@ export function TaskCard({ task, epic }: TaskCardProps) {
           aria-label={typeMeta.label}
         />
         <span className={styles.idText}>{id}</span>
+        <PriorityIcon
+          className={styles.priorityIcon}
+          style={{ color: priorityMeta.colorVar }}
+          aria-label={priorityMeta.label}
+        />
         {checklist.length > 0 && (
           <span
             className={`${styles.checklistBadge} ${allDone ? styles.checklistBadgeDone : ''}`}

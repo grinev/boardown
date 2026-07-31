@@ -1,8 +1,9 @@
 import { X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import type { Epic, Release, TaskType } from '@boardown/core';
-import { TASK_TYPES } from '@boardown/core';
+import type { Epic, Release, TaskPriority, TaskType } from '@boardown/core';
+import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, TASK_TYPES } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { Modal } from './Modal';
@@ -34,6 +35,7 @@ export function CreateTaskDialog({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('feature');
+  const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
   const [epicSlug, setEpicSlug] = useState(epic?.slug ?? '');
   const [releaseFilename, setReleaseFilename] = useState(release?.filename ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -91,6 +93,20 @@ export function CreateTaskDialog({
     [],
   );
 
+  const priorityOptions = useMemo<IconSelectOption[]>(
+    () =>
+      TASK_PRIORITIES.map((p) => {
+        const meta = TASK_PRIORITY_META[p];
+        const Icon = meta.icon;
+        return {
+          value: p,
+          label: meta.label,
+          icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
+        };
+      }),
+    [],
+  );
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -102,6 +118,9 @@ export function CreateTaskDialog({
         releaseFilename,
         title: trimmedTitle,
         type,
+        // The default is not written: a new task only carries the key when the
+        // user picked something other than medium.
+        ...(priority !== DEFAULT_TASK_PRIORITY ? { priority } : {}),
         ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
         ...(epicSlug.length > 0 ? { epic: epicSlug } : {}),
       });
@@ -155,6 +174,15 @@ export function CreateTaskDialog({
             options={typeOptions}
             onChange={(v) => setType(v as TaskType)}
             ariaLabel="Type"
+          />
+        </div>
+        <div className={styles.field}>
+          <span className={styles.label}>Priority</span>
+          <IconSelect
+            value={priority}
+            options={priorityOptions}
+            onChange={(v) => setPriority(v as TaskPriority)}
+            ariaLabel="Priority"
           />
         </div>
         <div className={styles.field}>

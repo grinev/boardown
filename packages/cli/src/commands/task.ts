@@ -5,6 +5,7 @@ import {
   createTask,
   deleteTaskWithLinks,
   editTask,
+  effectiveTaskPriority,
   emptyBacklog,
   moveTaskBetweenContainers,
   nextChecklistItemId,
@@ -13,6 +14,7 @@ import {
   reorderTask,
   sortTasksByOrder,
   LINK_TYPE_META,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPES,
   type BoardConfig,
@@ -29,6 +31,7 @@ import {
   type Task,
   type TaskLink,
   type TaskPatch,
+  type TaskPriority,
   type TaskStatus,
   type TaskType,
 } from '@boardown/core';
@@ -95,9 +98,23 @@ const isTaskType = (value: string): value is TaskType =>
 const isTaskStatus = (value: string): value is TaskStatus =>
   (TASK_STATUSES as readonly string[]).includes(value);
 
+const isTaskPriority = (value: string): value is TaskPriority =>
+  (TASK_PRIORITIES as readonly string[]).includes(value);
+
 function parseTaskType(value: string): TaskType {
   if (!isTaskType(value)) {
     throw new CliError('USAGE', `Invalid --type "${value}" (one of ${TASK_TYPES.join(', ')}).`, 2);
+  }
+  return value;
+}
+
+function parseTaskPriority(value: string): TaskPriority {
+  if (!isTaskPriority(value)) {
+    throw new CliError(
+      'USAGE',
+      `Invalid --priority "${value}" (one of ${TASK_PRIORITIES.join(', ')}).`,
+      2,
+    );
   }
   return value;
 }
@@ -170,7 +187,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   if (title === undefined || title.length === 0) {
     throw new CliError(
       'USAGE',
-      'Usage: boardown task add <title> [--type ...] [--epic ...] [--release ...] [--field key=value].',
+      'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value].',
       2,
     );
   }
@@ -179,6 +196,8 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
 
   const type = requireType(flagString(args.flags, 'type'), 'feature');
+  const priorityFlag = flagString(args.flags, 'priority');
+  const priority = priorityFlag === undefined ? undefined : parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
   const status = statusFlag === undefined ? 'todo' : requireStatus(statusFlag);
   const description = flagString(args.flags, 'description');
@@ -217,6 +236,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   const input: NewTaskInput = {
     title,
     type,
+    ...(priority !== undefined ? { priority } : {}),
     status,
     ...(description !== undefined ? { description } : {}),
     ...(epicTag !== undefined ? { epic: epicTag } : {}),
@@ -316,7 +336,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (id === undefined) {
     throw new CliError(
       'USAGE',
-      'Usage: boardown task edit <id> [--title/--description/--type/--status/--epic/--no-epic] [--field key=value] [--release <ref> | --no-release].',
+      'Usage: boardown task edit <id> [--title/--description/--type/--priority/--status/--epic/--no-epic] [--field key=value] [--release <ref> | --no-release].',
       2,
     );
   }
@@ -353,6 +373,8 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (description !== undefined) fields.description = description;
   const typeFlag = flagString(args.flags, 'type');
   if (typeFlag !== undefined) fields.type = requireType(typeFlag, 'feature');
+  const priorityFlag = flagString(args.flags, 'priority');
+  if (priorityFlag !== undefined) fields.priority = parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
   if (statusFlag !== undefined) fields.status = requireStatus(statusFlag);
   const custom = parseCustomFields(args, snapshot.config);
@@ -477,7 +499,7 @@ const renderTask = (task: Task, kind: string, file: string): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
+  return `${fm.id}  [${fm.type}/${effectiveTaskPriority(fm)}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -536,7 +558,11 @@ const renderTaskList = (entries: readonly TaskListEntry[]): string => {
   if (entries.length === 0) return 'No matching tasks.';
   const lines = entries.map(({ task, in: loc }) => {
     const s = taskSummary(task);
-    const parts = [`${statusMark(task)} ${s.id}`, s.title, `[${s.type}/${s.status}]`];
+    const parts = [
+      `${statusMark(task)} ${s.id}`,
+      s.title,
+      `[${s.type}/${s.priority}/${s.status}]`,
+    ];
     if (s.epic !== undefined) parts.push(`epic:${s.epic}`);
     if (s.checklist !== undefined) parts.push(`☑${s.checklist.done}/${s.checklist.total}`);
     if (s.notes !== undefined) parts.push(`✎${s.notes}`);
@@ -550,6 +576,7 @@ const renderTaskList = (entries: readonly TaskListEntry[]): string => {
 async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const statusFlag = flagString(args.flags, 'status');
   const typeFlag = flagString(args.flags, 'type');
+  const priorityFlag = flagString(args.flags, 'priority');
   const epicFlag = flagString(args.flags, 'epic');
   const releaseFlag = flagString(args.flags, 'release');
   const backlogOnly = flagBool(args.flags, 'backlog');
@@ -557,6 +584,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   const status = statusFlag !== undefined ? requireStatus(statusFlag) : undefined;
   const type = typeFlag !== undefined ? parseTaskType(typeFlag) : undefined;
+  const priority = priorityFlag !== undefined ? parseTaskPriority(priorityFlag) : undefined;
   const text = textFlag?.toLowerCase();
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
@@ -581,6 +609,8 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     const fm = task.frontmatter;
     if (status !== undefined && fm.status !== status) return false;
     if (type !== undefined && fm.type !== type) return false;
+    // Resolved, not raw: --priority medium must also match tasks with no key.
+    if (priority !== undefined && effectiveTaskPriority(fm) !== priority) return false;
     if (epicMemberIds !== undefined && !epicMemberIds.has(fm.id)) return false;
     if (releaseFile !== undefined && !(loc.kind === 'release' && loc.file === releaseFile)) return false;
     if (backlogOnly && loc.kind !== 'backlog') return false;

@@ -2,8 +2,10 @@ import { X } from 'lucide-react';
 import { useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import {
   customFieldLabel,
+  effectiveTaskPriority,
   inProgressCount,
   isWipLimitReached,
+  TASK_PRIORITIES,
   TASK_STATUSES,
   TASK_TYPES,
   wipLimitFor,
@@ -11,10 +13,12 @@ import {
   type Epic,
   type Release,
   type Task,
+  type TaskPriority,
   type TaskStatus,
   type TaskType,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
@@ -76,6 +80,16 @@ const TYPE_OPTIONS: IconSelectOption[] = TASK_TYPES.map((t) => {
   };
 });
 
+const PRIORITY_OPTIONS: IconSelectOption[] = TASK_PRIORITIES.map((p) => {
+  const meta = TASK_PRIORITY_META[p];
+  const Icon = meta.icon;
+  return {
+    value: p,
+    label: meta.label,
+    icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
+  };
+});
+
 export function TaskDetailsDialog({
   task,
   epic,
@@ -87,6 +101,9 @@ export function TaskDetailsDialog({
   const { id, type, status } = task.frontmatter;
   const typeMeta = TASK_TYPE_META[type];
   const TypeIcon = typeMeta.icon;
+  const priority = effectiveTaskPriority(task.frontmatter);
+  const priorityMeta = TASK_PRIORITY_META[priority];
+  const PriorityIcon = priorityMeta.icon;
   const updateTask = useBoardStore((s) => s.updateTask);
   const moveTaskToRelease = useBoardStore((s) => s.moveTaskToRelease);
   const epics = useBoardStore((s) => s.snapshot?.epics ?? []);
@@ -287,6 +304,35 @@ export function TaskDetailsDialog({
                       triggerClassName={styles.inlineSelectTrigger}
                       onChange={(next) => {
                         void updateTask(id, { type: next as TaskType });
+                      }}
+                    />
+                  )}
+                </dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt className={styles.detailLabel}>Priority</dt>
+                <dd className={styles.detailValue}>
+                  {archived ? (
+                    <span className={styles.staticValue}>
+                      <PriorityIcon
+                        size={14}
+                        style={{ color: priorityMeta.colorVar }}
+                        aria-hidden="true"
+                      />
+                      {priorityMeta.label}
+                    </span>
+                  ) : (
+                    <IconSelect
+                      value={priority}
+                      options={PRIORITY_OPTIONS}
+                      ariaLabel="Priority"
+                      hideChevron
+                      triggerClassName={styles.inlineSelectTrigger}
+                      onChange={(next) => {
+                        // Compared against the raw value, not the resolved one:
+                        // picking Medium on a task that has no key must write it.
+                        if (next === task.frontmatter.priority) return;
+                        void updateTask(id, { priority: next as TaskPriority });
                       }}
                     />
                   )}

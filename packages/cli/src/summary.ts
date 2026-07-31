@@ -1,4 +1,5 @@
 import type { Task } from '@boardown/core';
+import { effectiveTaskPriority } from '@boardown/core';
 import { flagBool, type ParsedArgs } from './args';
 
 /**
@@ -10,6 +11,9 @@ export interface TaskSummary {
   id: string;
   title: string;
   type: string;
+  // Always populated: an absent key on disk reports as the default, so a caller
+  // never has to know about the unset case.
+  priority: string;
   status: string;
   epic?: string;
   checklist?: { done: number; total: number };
@@ -33,6 +37,7 @@ export function taskSummary(task: Task): TaskSummary {
     id,
     title: task.title,
     type,
+    priority: effectiveTaskPriority(task.frontmatter),
     status,
     ...(epic !== undefined && epic !== '' ? { epic } : {}),
     ...(checklist !== undefined && checklist.length > 0
@@ -56,7 +61,7 @@ export function summaryLine(task: Task, indent = '  '): string {
   const parts = [
     `${indent}${statusMark(task)} ${s.id}`,
     s.title,
-    `[${s.type}/${s.status}]`,
+    `[${s.type}/${s.priority}/${s.status}]`,
   ];
   if (s.epic !== undefined) parts.push(`epic:${s.epic}`);
   if (s.checklist !== undefined) parts.push(`☑${s.checklist.done}/${s.checklist.total}`);

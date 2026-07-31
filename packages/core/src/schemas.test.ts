@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   BoardConfigSchema,
   EpicFrontmatterSchema,
+  effectiveTaskPriority,
   ReleaseFrontmatterSchema,
   TaskFrontmatterSchema,
+  type TaskFrontmatter,
 } from './schemas.js';
 
 describe('TaskFrontmatterSchema', () => {
@@ -70,6 +72,41 @@ describe('TaskFrontmatterSchema', () => {
       order: 100,
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts every priority level', () => {
+    for (const priority of ['critical', 'high', 'medium', 'low']) {
+      const result = TaskFrontmatterSchema.safeParse({
+        id: 'BD-1',
+        type: 'feature',
+        priority,
+        status: 'todo',
+        order: 100,
+      });
+      expect(result.success, priority).toBe(true);
+    }
+  });
+
+  it('rejects an unknown priority', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      priority: 'urgent',
+      status: 'todo',
+      order: 100,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a missing priority', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.priority).toBeUndefined();
   });
 
   it('accepts an optional checklist of items', () => {
@@ -364,6 +401,18 @@ describe('BoardConfigSchema customFields', () => {
     expect(result.success).toBe(false);
   });
 
+  // A board that declared this before priority was built in stops loading; that
+  // is the intended breaking change, not a silent takeover of the key.
+  it('rejects a key named priority', () => {
+    const result = BoardConfigSchema.safeParse(
+      withFields([{ key: 'priority', type: 'string' }]),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('priority');
+    }
+  });
+
   it('rejects an unknown type', () => {
     const result = BoardConfigSchema.safeParse(
       withFields([{ key: 'due', type: 'date' }]),
@@ -374,5 +423,24 @@ describe('BoardConfigSchema customFields', () => {
   it('rejects a declaration with no type', () => {
     const result = BoardConfigSchema.safeParse(withFields([{ key: 'due' }]));
     expect(result.success).toBe(false);
+  });
+});
+
+describe('effectiveTaskPriority', () => {
+  const fm = (priority?: TaskFrontmatter['priority']): TaskFrontmatter => ({
+    id: 'BD-1',
+    type: 'feature',
+    ...(priority !== undefined ? { priority } : {}),
+    status: 'todo',
+    order: 100,
+  });
+
+  it('resolves an absent priority to medium', () => {
+    expect(effectiveTaskPriority(fm())).toBe('medium');
+  });
+
+  it('resolves an explicit priority to itself', () => {
+    expect(effectiveTaskPriority(fm('critical'))).toBe('critical');
+    expect(effectiveTaskPriority(fm('medium'))).toBe('medium');
   });
 });

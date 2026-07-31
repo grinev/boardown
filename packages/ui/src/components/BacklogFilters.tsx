@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import type { Epic, TaskStatus, TaskType } from '@boardown/core';
-import { TASK_STATUSES, TASK_TYPES } from '@boardown/core';
+import type { Epic, TaskPriority, TaskStatus, TaskType } from '@boardown/core';
+import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from '@boardown/core';
+import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
 import { IconSelect, type IconSelectOption } from './IconSelect';
@@ -9,6 +10,7 @@ import styles from './BacklogFilters.module.css';
 export type StatusFilter = TaskStatus | 'all';
 export type TypeFilter = TaskType | 'all';
 export type EpicFilter = 'all' | 'no-epic' | (string & {});
+export type PriorityFilter = TaskPriority | 'all';
 
 const ALL_OPTION: IconSelectOption = { value: 'all', label: 'All' };
 
@@ -23,9 +25,11 @@ interface BacklogFiltersProps {
   statusFilter: StatusFilter;
   typeFilter: TypeFilter;
   epicFilter: EpicFilter;
+  priorityFilter: PriorityFilter;
   onStatusChange: (value: StatusFilter) => void;
   onTypeChange: (value: TypeFilter) => void;
   onEpicChange: (value: EpicFilter) => void;
+  onPriorityChange: (value: PriorityFilter) => void;
 }
 
 export function BacklogFilters({
@@ -33,9 +37,11 @@ export function BacklogFilters({
   statusFilter,
   typeFilter,
   epicFilter,
+  priorityFilter,
   onStatusChange,
   onTypeChange,
   onEpicChange,
+  onPriorityChange,
 }: BacklogFiltersProps) {
   const statusOptions = useMemo<IconSelectOption[]>(
     () => [
@@ -62,6 +68,22 @@ export function BacklogFilters({
         const Icon = meta.icon;
         return {
           value: t,
+          label: meta.label,
+          icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
+        };
+      }),
+    ],
+    [],
+  );
+
+  const priorityOptions = useMemo<IconSelectOption[]>(
+    () => [
+      ALL_OPTION,
+      ...TASK_PRIORITIES.map((p) => {
+        const meta = TASK_PRIORITY_META[p];
+        const Icon = meta.icon;
+        return {
+          value: p,
           label: meta.label,
           icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
         };
@@ -120,6 +142,16 @@ export function BacklogFilters({
           options={epicOptions}
           onChange={(v) => onEpicChange(v)}
           ariaLabel="Filter by epic"
+          triggerClassName={styles.trigger}
+        />
+      </div>
+      <div className={styles.field}>
+        <span className={styles.label}>priority</span>
+        <IconSelect
+          value={priorityFilter}
+          options={priorityOptions}
+          onChange={(v) => onPriorityChange(v as PriorityFilter)}
+          ariaLabel="Filter by priority"
           triggerClassName={styles.trigger}
         />
       </div>

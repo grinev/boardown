@@ -85,6 +85,26 @@ describe('createTask', () => {
     expect(result.task.frontmatter.type).toBe('tech');
   });
 
+  it('writes no priority key when the input carries none', () => {
+    const result = createTask(release(), config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+    });
+    expect(result.task.frontmatter.priority).toBeUndefined();
+    expect('priority' in result.task.frontmatter).toBe(false);
+  });
+
+  it('writes the priority the input carries', () => {
+    const result = createTask(release(), config, {
+      title: 'New',
+      type: 'bug',
+      priority: 'critical',
+      status: 'todo',
+    });
+    expect(result.task.frontmatter.priority).toBe('critical');
+  });
+
   it('starts container from 100 when empty', () => {
     const r0 = release();
     const result = createTask(r0, config, {
@@ -117,6 +137,27 @@ describe('editTask', () => {
     const r0 = release(task('BD-1', 'todo', 100));
     const r1 = editTask(r0, config, 'BD-1', { type: 'bug' });
     expect(r1.tasks[0]!.frontmatter.type).toBe('bug');
+  });
+
+  it('updates priority', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, config, 'BD-1', { priority: 'high' });
+    expect(r1.tasks[0]!.frontmatter.priority).toBe('high');
+  });
+
+  // Setting the neutral level is a set, not a clear: the key stays in the file.
+  it('writes medium rather than clearing the key', () => {
+    const r0 = release(task('BD-1', 'todo', 100));
+    const r1 = editTask(r0, config, 'BD-1', { priority: 'high' });
+    const r2 = editTask(r1, config, 'BD-1', { priority: 'medium' });
+    expect(r2.tasks[0]!.frontmatter.priority).toBe('medium');
+  });
+
+  it('leaves priority alone when the patch does not mention it', () => {
+    const t = task('BD-1', 'todo', 100);
+    t.frontmatter.priority = 'low';
+    const r1 = editTask(release(t), config, 'BD-1', { title: 'Updated' });
+    expect(r1.tasks[0]!.frontmatter.priority).toBe('low');
   });
 
   it('changes status and places task at the end of the container', () => {
@@ -685,6 +726,20 @@ describe('moveTaskBetweenContainers', () => {
     const moved = result.dest.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.status).toBe('in-progress');
     expect(moved.frontmatter.order).toBe(200);
+  });
+
+  it('carries priority across the move', () => {
+    const t = task('BD-1', 'todo', 100);
+    t.frontmatter.priority = 'critical';
+    const a = release(t);
+    a.filename = 'releases/1.10.md';
+    const b = release();
+    b.filename = 'releases/1.11.md';
+    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
+      newStatus: 'todo',
+      beforeTaskId: null,
+    });
+    expect(result.dest.tasks[0]!.frontmatter.priority).toBe('critical');
   });
 
   it('preserves task.epic by default (release → release)', () => {

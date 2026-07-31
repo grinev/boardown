@@ -37,11 +37,11 @@ boardown backlog                Current + future releases and the unscheduled ba
 boardown archive                Finished releases.
 
 boardown task get <id>          Show one task in full — the drill-down.
-boardown task list              List/filter tasks (--status --type --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --status --epic --release --description --field).
+boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
+boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (todo | in-progress | done).
-boardown task reorder <id>      Change priority (--before | --after <id> | --up | --down).
+boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
 boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
@@ -66,10 +66,11 @@ boardown version                Print the CLI version (also --version / -v).
 
 ### Output depth
 
-A **task summary** is `id`, `title`, `type`, `status`, plus `epic`, `checklist`
-(`{ done, total }`) and `notes` (a count) when the task has them — the fields the
-app's task card shows. Descriptions, note bodies and checklist item texts come
-from `task get`.
+A **task summary** is `id`, `title`, `type`, `priority`, `status`, plus `epic`,
+`checklist` (`{ done, total }`) and `notes` (a count) when the task has them — the
+fields the app's task card shows. `priority` is always present: a task with no
+`priority` key on disk reports the default (`medium`). Descriptions, note bodies
+and checklist item texts come from `task get`.
 
 | Command | Default | `--full` |
 |---|---|---|
@@ -115,7 +116,24 @@ as plain top-level keys in the task's frontmatter, after the built-in ones.
 ```bash
 boardown task edit BD-1 --field reporter=alice --field env=staging
 boardown task edit BD-1 --field reporter=          # clear it
-boardown task add "Fix login" --type bug --field env=prod
+boardown task add "Fix login" --type bug --priority critical --field env=prod
+```
+
+### Priority
+
+`--priority` is one of `critical`, `high`, `medium`, `low`, on both `task add` and
+`task edit`. It is **optional**: without it no `priority` key is written and the
+task reads as `medium`. Setting it explicitly — including setting it to `medium` —
+writes the key and keeps it.
+
+`task list --priority <level>` filters on the **resolved** value, so
+`--priority medium` returns tasks that say `medium` *and* tasks that carry no
+`priority` key at all. `boardown schema` reports the vocabulary and the default.
+
+```bash
+boardown task add "Prod is down" --priority critical
+boardown task edit BD-1 --priority low
+boardown task list --priority critical --json
 ```
 
 `task get` returns the values under the task's `custom` key, and `boardown
