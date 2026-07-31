@@ -12,7 +12,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 4,
+  version: 5,
   taskTypes: TASK_TYPES,
   taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
@@ -179,22 +179,27 @@ const DESCRIPTOR = {
   },
 } as const;
 
-// The declarations are board-specific, so they ride along only when a board
-// actually declares some; otherwise the command prints the static contract
-// unchanged — a board without custom fields sees no new output.
+// The declarations and the WIP limit are board-specific, so they ride along only
+// when a board actually has them; otherwise the command prints the static
+// contract unchanged — a board without either sees no new output.
 export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const config = await loadConfigIfAny(ctx.cwd, ctx.dataDir);
   const declared = config?.customFields ?? [];
-  if (declared.length === 0) {
-    return { data: DESCRIPTOR, human: JSON.stringify(DESCRIPTOR, null, 2) };
-  }
+  const wipLimits = config?.wipLimits;
   const data = {
     ...DESCRIPTOR,
-    customFields: declared.map((field) => ({
-      key: field.key,
-      label: customFieldLabel(field),
-      type: field.type,
-    })),
+    ...(declared.length > 0
+      ? {
+          customFields: declared.map((field) => ({
+            key: field.key,
+            label: customFieldLabel(field),
+            type: field.type,
+          })),
+        }
+      : {}),
+    ...(wipLimits?.['in-progress'] !== undefined
+      ? { wipLimits: { 'in-progress': wipLimits['in-progress'] } }
+      : {}),
   };
   return { data, human: JSON.stringify(data, null, 2) };
 };

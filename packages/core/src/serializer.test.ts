@@ -621,7 +621,12 @@ order: 200
 
   it('changes only the edited task frontmatter lines on a status change', () => {
     const parsed = parseRelease(SHUFFLED, 'releases/v0.2.0.md', 'v0.2.0');
-    const edited = changeTaskStatus(parsed.value!, 'BD-1', 'done');
+    const edited = changeTaskStatus(
+      parsed.value!,
+      { idPrefix: 'BD', nextId: 1, projectName: 'Test' },
+      'BD-1',
+      'done',
+    );
     const before = SHUFFLED.split('\n');
     const after = serializeRelease(edited).split('\n');
 

@@ -26,6 +26,9 @@ export const applyDragOverBacklog = (
   active: Active,
   over: Over,
   buckets: SectionBuckets,
+  // Disabling a section's droppable is not enough: the rows inside it are drop
+  // nodes of their own, so hovering one would still resolve to that section.
+  blockedSection: string | null = null,
 ): SectionBuckets => {
   const activeId = String(active.id);
   const overId = String(over.id);
@@ -50,6 +53,8 @@ export const applyDragOverBacklog = (
   } else {
     return buckets;
   }
+
+  if (targetSection === blockedSection && targetSection !== activeSection) return buckets;
 
   if (targetSection === activeSection) {
     if (overTaskId === null) return buckets;

@@ -20,6 +20,10 @@ export interface IconSelectOption {
   value: string;
   label: string;
   icon?: ReactNode;
+  // A destination the board refuses today. Shown rather than omitted, so the
+  // user sees why it is unavailable; `title` carries the explanation.
+  disabled?: boolean | undefined;
+  title?: string | undefined;
 }
 
 interface IconSelectProps {
@@ -122,9 +126,28 @@ export function IconSelect({
 
   const selectAt = (index: number) => {
     const option = options[index];
-    if (!option) return;
+    if (!option || option.disabled) return;
     onChange(option.value);
     closeAndFocusTrigger();
+  };
+
+  // Keyboard navigation walks past a disabled option instead of resting on it;
+  // with every option disabled it simply stays put.
+  const nextEnabledIndex = (from: number, step: number): number => {
+    const len = options.length;
+    for (let i = 1; i <= len; i += 1) {
+      const idx = (((from + step * i) % len) + len) % len;
+      if (!options[idx]?.disabled) return idx;
+    }
+    return from;
+  };
+
+  const firstEnabledIndex = (from: number, step: number): number => {
+    for (let i = 0; i < options.length; i += 1) {
+      const idx = step > 0 ? i : options.length - 1 - i;
+      if (!options[idx]?.disabled) return idx;
+    }
+    return from;
   };
 
   const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -143,22 +166,22 @@ export function IconSelect({
     }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setHighlightedIndex((i) => (i + 1) % options.length);
+      setHighlightedIndex((i) => nextEnabledIndex(i, 1));
       return;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setHighlightedIndex((i) => (i - 1 + options.length) % options.length);
+      setHighlightedIndex((i) => nextEnabledIndex(i, -1));
       return;
     }
     if (event.key === 'Home') {
       event.preventDefault();
-      setHighlightedIndex(0);
+      setHighlightedIndex((i) => firstEnabledIndex(i, 1));
       return;
     }
     if (event.key === 'End') {
       event.preventDefault();
-      setHighlightedIndex(options.length - 1);
+      setHighlightedIndex((i) => firstEnabledIndex(i, -1));
       return;
     }
     if (event.key === 'Enter' || event.key === ' ') {
@@ -229,8 +252,16 @@ export function IconSelect({
                 id={`${optionIdPrefix}-${index}`}
                 role="option"
                 aria-selected={isSelected}
-                className={`${styles.option}${isHighlighted ? ` ${styles.optionHighlighted}` : ''}`}
-                onMouseEnter={() => setHighlightedIndex(index)}
+                aria-disabled={option.disabled ? true : undefined}
+                title={option.title}
+                className={
+                  `${styles.option}` +
+                  (isHighlighted ? ` ${styles.optionHighlighted}` : '') +
+                  (option.disabled ? ` ${styles.optionDisabled}` : '')
+                }
+                onMouseEnter={() => {
+                  if (!option.disabled) setHighlightedIndex(index);
+                }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   selectAt(index);

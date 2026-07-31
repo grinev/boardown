@@ -279,6 +279,7 @@ function resolveReleaseMove(
 // already in the destination, otherwise move it and write both files.
 async function moveAndReport(
   fs: FsAdapter,
+  config: BoardConfig,
   location: ContainerRef,
   edited: ContainerRef['container'],
   dest: MoveDest,
@@ -295,7 +296,7 @@ async function moveAndReport(
     throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
   }
   const result = applyOp(() =>
-    moveTaskBetweenContainers(edited, dest.container, taskId, {
+    moveTaskBetweenContainers(edited, dest.container, config, taskId, {
       newStatus: newStatus ?? movingTask.frontmatter.status,
       beforeTaskId: null,
       destEpic: dest.destEpic,
@@ -383,7 +384,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       await writeContainer(fs, { kind: location.kind, container: edited });
       return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
     }
-    return moveAndReport(fs, location, edited, dest, id, problems, movedStatus);
+    return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems, movedStatus);
   }
 
   // Epic change. A task in a release carries the epic as a tag (edit in place);
@@ -411,7 +412,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       }
       dest = { kind: 'epic', container: epic, destEpic: { kind: 'set', slug: nextEpic } };
     }
-    return moveAndReport(fs, location, edited, dest, id, problems);
+    return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems);
   }
 
   // Pure in-place edit (fields, plus epic tag when the task is in a release).
@@ -437,7 +438,7 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
-  const updated = applyOp(() => changeTaskStatus(location.container, id, status));
+  const updated = applyOp(() => changeTaskStatus(location.container, snapshot.config, id, status));
   await writeContainer(fs, { kind: location.kind, container: updated });
 
   return { data: { id }, human: `${id} → ${status}.`, ...problemsField(problems) };

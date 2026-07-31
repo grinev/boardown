@@ -9,7 +9,7 @@ name: Next
 id: BD-51
 type: feature
 status: todo
-order: 200
+order: 400
 ---
 
 [[decisions/new-feature]]
@@ -28,8 +28,8 @@ order: 550
 ---
 id: BD-73
 type: feature
-status: todo
-order: 300
+status: done
+order: 525
 ---
 
 ## Disable task status change in future release

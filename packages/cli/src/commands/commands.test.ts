@@ -441,6 +441,7 @@ describe('cli commands (integration)', () => {
     const release = board.snapshot.releases.find((r) => r.frontmatter.status === 'current')!;
     const result = completeRelease({
       release,
+      config: board.snapshot.config,
       epics: board.snapshot.epics,
       backlog: board.snapshot.backlog ?? emptyBacklog(),
       targetRelease: null,

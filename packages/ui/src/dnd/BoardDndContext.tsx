@@ -27,12 +27,14 @@ import { useBoardStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import boardStyles from '../components/BoardView.module.css';
 import { isTaskDragId, parseTaskDragId } from './ids';
-import { applyDragOver, findOverlayPlacement } from './applyDragOver';
+import { applyDragOver, findOverlayPlacement, findStatusOf } from './applyDragOver';
+import { BlockedTargetProvider } from './BlockedTargetContext';
 
 interface BoardDndContextProps {
   buckets: Map<TaskStatus, Task[]>;
   setBuckets: Dispatch<SetStateAction<Map<TaskStatus, Task[]>>>;
   epics: Epic[];
+  wipFull: boolean;
   children: ReactNode;
 }
 
@@ -40,10 +42,12 @@ export function BoardDndContext({
   buckets,
   setBuckets,
   epics,
+  wipFull,
   children,
 }: BoardDndContextProps) {
   const moveTask = useBoardStore((s) => s.moveTask);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [blockedStatus, setBlockedStatus] = useState<TaskStatus | null>(null);
   const originalBucketsRef = useRef<Map<TaskStatus, Task[]> | null>(null);
   const bucketsRef = useRef(buckets);
 
@@ -67,7 +71,12 @@ export function BoardDndContext({
   const onDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
     if (!isTaskDragId(id)) return;
-    setActiveTaskId(parseTaskDragId(id));
+    const taskId = parseTaskDragId(id);
+    setActiveTaskId(taskId);
+    // A card already in the column is only being reordered, so the column stays
+    // open to it however full it is.
+    const fromInProgress = findStatusOf(buckets, taskId) === 'in-progress';
+    setBlockedStatus(wipFull && !fromInProgress ? 'in-progress' : null);
     originalBucketsRef.current = cloneBuckets(buckets);
   };
 
@@ -75,7 +84,7 @@ export function BoardDndContext({
     const { active, over } = event;
     if (!over) return;
     setBuckets((prev) => {
-      const next = applyDragOver(active, over, prev);
+      const next = applyDragOver(active, over, prev, blockedStatus);
       bucketsRef.current = next;
       return next;
     });
@@ -83,6 +92,7 @@ export function BoardDndContext({
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
+    setBlockedStatus(null);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
 
@@ -92,7 +102,7 @@ export function BoardDndContext({
 
     let finalBuckets = bucketsRef.current;
     if (event.over) {
-      const next = applyDragOver(event.active, event.over, finalBuckets);
+      const next = applyDragOver(event.active, event.over, finalBuckets, blockedStatus);
       if (next !== finalBuckets) {
         finalBuckets = next;
         bucketsRef.current = next;
@@ -120,11 +130,14 @@ export function BoardDndContext({
       return;
     }
 
-    void moveTask(taskId, placement.status, placement.beforeTaskId);
+    // The UI keeps a refused target out of reach, so a rejection here is a race;
+    // the store has already reported it and left the board untouched.
+    void moveTask(taskId, placement.status, placement.beforeTaskId).catch(() => {});
   };
 
   const onDragCancel = () => {
     setActiveTaskId(null);
+    setBlockedStatus(null);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
     if (original) {
@@ -150,7 +163,7 @@ export function BoardDndContext({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      {children}
+      <BlockedTargetProvider value={blockedStatus}>{children}</BlockedTargetProvider>
       <DragOverlay>
         {activeTask ? (
           <div className={boardStyles.dragOverlay}>

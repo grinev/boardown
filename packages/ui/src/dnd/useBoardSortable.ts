@@ -6,5 +6,5 @@ import { columnDropId, taskDragId } from './ids';
 export const useSortableTask = (taskId: string) =>
   useSortable({ id: taskDragId(taskId) });
 
-export const useDroppableColumn = (status: TaskStatus) =>
-  useDroppable({ id: columnDropId(status) });
+export const useDroppableColumn = (status: TaskStatus, disabled = false) =>
+  useDroppable({ id: columnDropId(status), disabled });

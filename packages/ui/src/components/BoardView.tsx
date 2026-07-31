@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { isWipLimitReached, wipLimitFor } from '@boardown/core';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { formatStatusLabel } from '../utils/format-status';
+import { wipLimitHint } from '../utils/wip-limit';
 import { BoardDndContext } from '../dnd/BoardDndContext';
+import { useBlockedTarget } from '../dnd/BlockedTargetContext';
 import { useDroppableColumn } from '../dnd/useBoardSortable';
 import { taskDragId } from '../dnd/ids';
 import { SortableTaskCard } from './SortableTaskCard';
@@ -33,6 +36,9 @@ const groupTasksByStatus = (
 };
 
 export function BoardView({ release, epics, statuses }: BoardViewProps) {
+  const config = useBoardStore((s) => s.snapshot?.config);
+  const wipLimit = config === undefined ? null : wipLimitFor(release, config);
+  const wipFull = config !== undefined && isWipLimitReached(release, config);
   const sourceBuckets = useMemo(
     () => groupTasksByStatus(release.tasks, statuses),
     [release.tasks, statuses],
@@ -55,6 +61,7 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
       buckets={overlayBuckets}
       setBuckets={setOverlayBuckets}
       epics={epics}
+      wipFull={wipFull}
     >
       <div className={styles.board}>
         {statuses.map((status, index) => {
@@ -67,6 +74,7 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
               tasks={tasks}
               epicsBySlug={epicsBySlug}
               showCreateButton={isFirstColumn}
+              limit={status === 'in-progress' ? wipLimit : null}
               onCreate={() => openCreateTask(release.filename)}
             />
           );
@@ -81,6 +89,8 @@ interface BoardColumnProps {
   tasks: Task[];
   epicsBySlug: Map<string, Epic>;
   showCreateButton: boolean;
+  // The column's WIP limit, or null when it has none.
+  limit: number | null;
   onCreate: () => void;
 }
 
@@ -89,16 +99,27 @@ function BoardColumn({
   tasks,
   epicsBySlug,
   showCreateButton,
+  limit,
   onCreate,
 }: BoardColumnProps) {
-  const { setNodeRef } = useDroppableColumn(status);
+  const blocked = useBlockedTarget() === status;
+  const { setNodeRef } = useDroppableColumn(status, blocked);
   const items = tasks.map((t) => taskDragId(t.frontmatter.id));
+  const atLimit = limit !== null && tasks.length >= limit;
 
   return (
-    <div className={styles.column} data-testid={`column-${status}`}>
+    <div
+      className={`${styles.column}${blocked ? ` ${styles.columnBlocked}` : ''}`}
+      data-testid={`column-${status}`}
+      title={blocked && limit !== null ? wipLimitHint(tasks.length, limit) : undefined}
+    >
       <div className={styles.columnHeader}>
         <span>{formatStatusLabel(status)}</span>
-        <span className={styles.columnCount}>{tasks.length}</span>
+        <span
+          className={`${styles.columnCount}${atLimit ? ` ${styles.columnCountAtLimit}` : ''}`}
+        >
+          {limit === null ? tasks.length : `${tasks.length} / ${limit}`}
+        </span>
       </div>
       <div ref={setNodeRef} className={styles.cards}>
         <SortableContext items={items} strategy={verticalListSortingStrategy}>

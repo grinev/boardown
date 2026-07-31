@@ -189,12 +189,23 @@ const CustomFieldsSchema = z
     message: 'customFields keys must be unique',
   });
 
+// The map is keyed by status so limits on other columns need no format change,
+// but only the status the product actually enforces is accepted — a `todo` entry
+// that did nothing would be a value in the file that lies.
+export const WipLimitsSchema = z
+  .object({
+    'in-progress': z.number().int().positive().optional(),
+  })
+  .strict();
+export type WipLimits = z.infer<typeof WipLimitsSchema>;
+
 export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
     nextId: z.number().int().nonnegative(),
     projectName: z.string().min(1),
     theme: ThemeSchema.optional(),
+    wipLimits: WipLimitsSchema.optional(),
     customFields: CustomFieldsSchema.optional(),
   })
   .strict();

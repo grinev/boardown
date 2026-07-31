@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Menu, Settings } from 'lucide-react';
+import { WipLimitField } from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
 import styles from './Sidebar.module.css';
 
@@ -14,6 +15,7 @@ interface SidebarProps {
   onThemeChoice: (choice: ThemeChoice) => void;
   autoRefresh: boolean;
   onAutoRefresh: (enabled: boolean) => void;
+  boardOpen: boolean;
   showMenuButton: boolean;
   onMenuButton: () => void;
 }
@@ -35,6 +37,7 @@ export function Sidebar({
   onThemeChoice,
   autoRefresh,
   onAutoRefresh,
+  boardOpen,
   showMenuButton,
   onMenuButton,
 }: SidebarProps) {
@@ -139,6 +142,9 @@ export function Sidebar({
               />
               Auto-refresh on file changes
             </label>
+            {/* Unlike its neighbours this one is stored in the board's
+                config.yaml, so it only exists while a board is open. */}
+            {boardOpen && <WipLimitField className={styles.wipLimitRow} />}
           </div>
         )}
         <button

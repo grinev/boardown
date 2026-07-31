@@ -22,6 +22,15 @@
   margin: 0 16px;
 }
 
+/* The destination the board would refuse this drag: unavailable, not merely styled. */
+.sectionBlocked {
+  opacity: 0.45;
+}
+
+.sectionBlocked .rows {
+  pointer-events: none;
+}
+
 .section + .section {
   margin-top: 16px;
 }

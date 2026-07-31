@@ -680,6 +680,30 @@ describe('setTheme', () => {
   });
 });
 
+describe('setWipLimit', () => {
+  it('writes the limit into config and clears it again', async () => {
+    const { fs } = setup(snap());
+
+    await state().setWipLimit(3);
+    expect(current().config.wipLimits).toEqual({ 'in-progress': 3 });
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('wipLimits');
+
+    await state().setWipLimit(null);
+    expect(current().config.wipLimits).toBeUndefined();
+    expect(fs.files.get(CONFIG_FILENAME)?.content).not.toContain('wipLimits');
+  });
+
+  it('rolls the snapshot back when the config write fails', async () => {
+    const { fs } = setup(snap());
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await state().setWipLimit(3);
+
+    expect(current().config.wipLimits).toBeUndefined();
+    expect(state().errorMessage).toMatch(/failed to save wip limit/i);
+  });
+});
+
 describe('completeOnboarding', () => {
   it('seeds the new config theme from the host default theme', async () => {
     const fs = new MemFs();

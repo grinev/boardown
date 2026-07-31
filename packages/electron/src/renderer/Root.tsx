@@ -150,6 +150,7 @@ export function Root() {
         onThemeChoice={chooseTheme}
         autoRefresh={autoRefresh}
         onAutoRefresh={chooseAutoRefresh}
+        boardOpen={activeFolder !== null}
         showMenuButton={bridge.showMenuButton}
         onMenuButton={() => bridge.popupMenu()}
       />

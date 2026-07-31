@@ -46,6 +46,41 @@ describe('applyDragOver', () => {
     expect(ids(next.get('in-progress'))).toEqual(['BD-1', 'BD-3']);
   });
 
+  it('refuses a blocked column, whether hovered on its container or on a card in it', () => {
+    const start = buckets();
+    for (const over of [columnDropId('in-progress'), taskDragId('BD-3')]) {
+      expect(
+        applyDragOver(dndId(taskDragId('BD-1')), dndId(over), start, 'in-progress'),
+      ).toBe(start);
+    }
+  });
+
+  it('still reorders inside the blocked column, since nothing enters it', () => {
+    const start = new Map<TaskStatus, Task[]>([
+      ['todo', []],
+      ['in-progress', [task('BD-3'), task('BD-4')]],
+      ['done', []],
+    ]);
+    const next = applyDragOver(
+      dndId(taskDragId('BD-4')),
+      dndId(taskDragId('BD-3')),
+      start,
+      'in-progress',
+    );
+    expect(ids(next.get('in-progress'))).toEqual(['BD-4', 'BD-3']);
+  });
+
+  it('still lets a task leave the blocked column', () => {
+    const next = applyDragOver(
+      dndId(taskDragId('BD-3')),
+      dndId(columnDropId('done')),
+      buckets(),
+      'in-progress',
+    );
+    expect(ids(next.get('in-progress'))).toEqual([]);
+    expect(ids(next.get('done'))).toEqual(['BD-3']);
+  });
+
   it('appends to an empty column when dropped on the column container', () => {
     const next = applyDragOver(
       dndId(taskDragId('BD-1')),

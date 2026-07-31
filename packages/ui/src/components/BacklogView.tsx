@@ -17,11 +17,13 @@ import type { Epic, Release, Task } from '@boardown/core';
 import {
   currentRelease,
   futureReleases,
+  isWipLimitReached,
   sortTasksByOrder,
   unscheduledTasks,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogDndContext } from '../dnd/BacklogDndContext';
+import { useBlockedTarget } from '../dnd/BlockedTargetContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
 import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
@@ -136,6 +138,15 @@ export function BacklogView() {
     return { sectionMetas: metas, sourceBuckets: buckets };
   }, [snapshot, epics]);
 
+  // Dragging an `in-progress` task into the current release enters its In Progress
+  // column, so that one section closes while the column is full.
+  const wipFullSectionKey = useMemo(() => {
+    if (!snapshot) return null;
+    const current = currentRelease(snapshot);
+    if (!current) return null;
+    return isWipLimitReached(current, snapshot.config) ? releaseSectionKey(current) : null;
+  }, [snapshot]);
+
   const [overlayBuckets, setOverlayBuckets] =
     useState<SectionBuckets>(sourceBuckets);
 
@@ -191,6 +202,7 @@ export function BacklogView() {
         buckets={overlayBuckets}
         setBuckets={setOverlayBuckets}
         epics={epics}
+        wipFullSectionKey={wipFullSectionKey}
       >
         <div className={styles.scrollArea}>
           {sectionMetas.map((meta) => {
@@ -284,7 +296,11 @@ function BacklogSection({
   onCompleteRelease,
   onStartRelease,
 }: BacklogSectionProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: sectionDropId(sectionKey) });
+  const blocked = useBlockedTarget() === sectionKey;
+  const { setNodeRef, isOver } = useDroppable({
+    id: sectionDropId(sectionKey),
+    disabled: blocked,
+  });
 
   useEffect(() => {
     if (!collapsed || !isOver) return;
@@ -300,7 +316,11 @@ function BacklogSection({
   const itemIds = tasks.map((t) => taskDragId(t.frontmatter.id));
 
   return (
-    <section ref={setNodeRef} className={styles.section} data-testid={`section-${sectionKey}`}>
+    <section
+      ref={setNodeRef}
+      className={`${styles.section}${blocked ? ` ${styles.sectionBlocked}` : ''}`}
+      data-testid={`section-${sectionKey}`}
+    >
       <header className={styles.sectionHeader}>
         <button
           type="button"

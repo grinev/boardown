@@ -39,6 +39,10 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.theme !== undefined) {
     ordered.theme = config.theme;
   }
+  const wipLimits = config.wipLimits;
+  if (wipLimits !== undefined && wipLimits['in-progress'] !== undefined) {
+    ordered.wipLimits = { 'in-progress': wipLimits['in-progress'] };
+  }
   if (config.customFields !== undefined) {
     ordered.customFields = config.customFields.map((field) => {
       const entry: Record<string, unknown> = { key: field.key };

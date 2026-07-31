@@ -270,6 +270,8 @@ idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
 projectName: My Board # required, human-readable name shown in the app header
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
+wipLimits:            # optional; absent means no limit anywhere
+  in-progress: 3      # at most 3 tasks in the current release's In Progress column
 ```
 
 `projectName` is required (set during onboarding) and read-only from the app's
@@ -281,6 +283,40 @@ default (e.g. the dev web shell) leave it absent, in which case it defaults to
 `"light"`. After onboarding it is owned by the in-app theme switcher — the host
 theme no longer influences it. Epic colors are user-defined per epic (see Epic
 frontmatter above).
+
+### WIP limit
+
+`wipLimits` caps how many tasks may sit in the **current release's**
+`in-progress` column. It is a map keyed by status so other columns can be capped
+later without a format change, but `in-progress` is the only key the schema
+accepts today — a `todo:` or `done:` entry makes the config invalid rather than
+being silently ignored, exactly as an unsupported `customFields` type does. The
+value is a positive integer; the key is absent by default, and absent means no
+limit anywhere.
+
+The limit is a ceiling on **entering** the column, never a rule applied
+retroactively. A board that is already over its limit — the number was lowered,
+a release holding `in-progress` tasks was started, or a file was hand-edited —
+is valid: nothing is moved, nothing is rewritten, and the column header simply
+reads `4 / 3`. What is refused is every operation that would put one more task
+into the column: a status change to `in-progress`, and a relocation that carries
+an already-`in-progress` task into the current release. Leaving the column,
+reordering inside it, and setting a task's status to the value it already has are
+always allowed.
+
+The rule lives in `@boardown/core` beside the `ARCHIVED` and `STATUS_LOCKED`
+refusals, so every shell inherits it. Both of those take precedence: a task in a
+finished release reports `ARCHIVED`, and one outside the current release reports
+`STATUS_LOCKED`, before the limit is ever consulted.
+
+On screen the rule is expressed by **prevention, not by complaint** — no toast,
+no banner. The Board's In Progress column header shows `count / limit` and takes a
+warning tone at or over it; while a drag that would breach the limit is running,
+the column (on the Board) and the current release's section (on the Backlog) are
+dimmed and refuse the drop. In the task dialog the `In Progress` status option and
+the current release's option in the Release dropdown are shown **disabled**,
+carrying the count and a tooltip naming the rule. The limit is edited in the
+Settings dialog, and in the Electron shell in its own settings popover.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
@@ -420,7 +456,10 @@ Drag and drop:
 
 A kanban with the three status columns (`todo`, `in-progress`, `done`), showing
 **only the current release's tasks**. Drag & drop between columns updates the
-task's status; reordering within a column updates `order`.
+task's status; reordering within a column updates `order`. Each column header
+carries a count; when the board declares a WIP limit the In Progress header shows
+`count / limit` instead and the column stops accepting drops once it is full (see
+"WIP limit" under Configuration).
 
 The heading above the columns is the release's name, clickable to open the
 release editor. When the release has a description, it follows the name on the
@@ -687,11 +726,15 @@ are not part of the stack — they close back to their parent on their own.
 ### Settings
 
 A dialog opened from the gear button in the top navigation. It holds the board's
-**Theme** selector and, below it, a read-only **Version** row showing the version of the
-build the user is running — the shell supplies it, so it is the installed
-extension's version in VS Code and the checkout's version in the `web` dev shell.
-The Electron shell hides this dialog (it owns the theme app-wide) and surfaces
-the version through the OS-native About window instead.
+**Theme** selector; below it a **WIP limit (In Progress)** number field, empty
+meaning no limit (see "WIP limit" under Configuration); and below that a read-only
+**Version** row showing the version of the build the user is running — the shell
+supplies it, so it is the installed extension's version in VS Code and the
+checkout's version in the `web` dev shell. The Electron shell hides this dialog
+(it owns the theme app-wide) and surfaces the version through the OS-native About
+window instead; the WIP limit field appears in its own settings popover, in the
+**Board** section below the auto-refresh checkbox, since it belongs to the board's
+`config.yaml` rather than to the installation.
 
 ### Empty states
 
@@ -755,7 +798,11 @@ release dialog: a new name moves the file to the slug it derives (the payload's
 `--color`; unlike the UI's palette-only picker it accepts any 6-digit hex, and an
 invalid one is a `USAGE` error. Setting a status outside the current release fails with
 `STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
-sets it is judged by its destination. `task rm <id>` deletes a task with the same rules
+sets it is judged by its destination. Putting one more task into a full In Progress
+column fails with `WIP_LIMIT` — whether by `task status`, `task edit --status`,
+`task add --status`, or a `task edit --release` that pulls an already-`in-progress`
+task into the current release — and `schema` reports the board's `wipLimits` so an
+agent reads the ceiling instead of discovering it by failing. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at

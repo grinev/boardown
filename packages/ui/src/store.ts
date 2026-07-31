@@ -143,6 +143,8 @@ interface BoardState {
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
+  // `null` clears the limit; the key is removed from config.yaml entirely.
+  setWipLimit: (limit: number | null) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -671,6 +673,26 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
+    setWipLimit: async (limit) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.wipLimits?.['in-progress'] ?? null) === limit) return;
+      const nextConfig = { ...snapshot.config };
+      if (limit === null) {
+        delete nextConfig.wipLimits;
+      } else {
+        nextConfig.wipLimits = { 'in-progress': limit };
+      }
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save WIP limit: ${message}` });
+      }
+    },
+
     openTask: (id) =>
       set((state) => ({
         ...NO_DIALOG,
@@ -1069,6 +1091,7 @@ export const useBoardStore = create<BoardState>(
 
       const result = completeReleaseInBoard({
         release: snapshot.releases[releaseIndex]!,
+        config: snapshot.config,
         epics: snapshot.epics,
         // Leftover epic-less tasks fall back to the backlog; create it lazily so
         // completing a release works on a board without no_epic.md yet.
@@ -1163,22 +1186,35 @@ export const useBoardStore = create<BoardState>(
           destLoc = { kind: 'epic', index, container: snapshot.epics[index]! };
         }
 
-        const moved = moveTaskBetweenContainers(sourceLoc.container, destLoc.container, taskId, {
-          newStatus: task.frontmatter.status,
-          beforeTaskId: null,
-          destEpic: destEpicForLocation(destLoc),
-        });
-
         const remainderPatch: TaskPatch = { ...patch };
         delete remainderPatch.epic;
-        const destWithRemainder =
-          remainderPatch.title !== undefined ||
-          remainderPatch.description !== undefined ||
-          remainderPatch.type !== undefined ||
-          remainderPatch.status !== undefined ||
-          remainderPatch.custom !== undefined
-            ? editTask(moved.dest, snapshot.config, taskId, remainderPatch)
-            : moved.dest;
+        let moved: { source: Container; dest: Container };
+        let destWithRemainder: Container;
+        try {
+          moved = moveTaskBetweenContainers(
+            sourceLoc.container,
+            destLoc.container,
+            snapshot.config,
+            taskId,
+            {
+              newStatus: task.frontmatter.status,
+              beforeTaskId: null,
+              destEpic: destEpicForLocation(destLoc),
+            },
+          );
+          destWithRemainder =
+            remainderPatch.title !== undefined ||
+            remainderPatch.description !== undefined ||
+            remainderPatch.type !== undefined ||
+            remainderPatch.status !== undefined ||
+            remainderPatch.custom !== undefined
+              ? editTask(moved.dest, snapshot.config, taskId, remainderPatch)
+              : moved.dest;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: message });
+          throw err;
+        }
 
         const nextReleases = [...snapshot.releases];
         const nextEpics = [...snapshot.epics];
@@ -1226,7 +1262,14 @@ export const useBoardStore = create<BoardState>(
         return;
       }
 
-      const nextContainer = editTask(sourceLoc.container, snapshot.config, taskId, patch);
+      let nextContainer: Container;
+      try {
+        nextContainer = editTask(sourceLoc.container, snapshot.config, taskId, patch);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: message });
+        throw err;
+      }
       const nextReleases = [...snapshot.releases];
       const nextEpics = [...snapshot.epics];
       let nextBacklog = snapshot.backlog;
@@ -1272,10 +1315,17 @@ export const useBoardStore = create<BoardState>(
       );
       if (releaseIndex !== -1) {
         const release = snapshot.releases[releaseIndex]!;
-        const nextRelease = moveTaskInContainer(release, taskId, {
-          status,
-          beforeTaskId,
-        });
+        let nextRelease: Release;
+        try {
+          nextRelease = moveTaskInContainer(release, snapshot.config, taskId, {
+            status,
+            beforeTaskId,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: message });
+          throw err;
+        }
         const nextReleases = [...snapshot.releases];
         nextReleases[releaseIndex] = nextRelease;
         const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
@@ -1295,10 +1345,17 @@ export const useBoardStore = create<BoardState>(
       );
       if (epicIndex !== -1) {
         const epic = snapshot.epics[epicIndex]!;
-        const nextEpic = moveTaskInContainer(epic, taskId, {
-          status,
-          beforeTaskId,
-        });
+        let nextEpic: Epic;
+        try {
+          nextEpic = moveTaskInContainer(epic, snapshot.config, taskId, {
+            status,
+            beforeTaskId,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: message });
+          throw err;
+        }
         const nextEpics = [...snapshot.epics];
         nextEpics[epicIndex] = nextEpic;
         const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
@@ -1356,11 +1413,24 @@ export const useBoardStore = create<BoardState>(
 
       if (sourceLoc.container.filename === destLoc.container.filename) return;
 
-      const moved = moveTaskBetweenContainers(sourceLoc.container, destLoc.container, taskId, {
-        newStatus: task.frontmatter.status,
-        beforeTaskId: null,
-        destEpic: destEpicForLocation(destLoc),
-      });
+      let moved: { source: Container; dest: Container };
+      try {
+        moved = moveTaskBetweenContainers(
+          sourceLoc.container,
+          destLoc.container,
+          snapshot.config,
+          taskId,
+          {
+            newStatus: task.frontmatter.status,
+            beforeTaskId: null,
+            destEpic: destEpicForLocation(destLoc),
+          },
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: message });
+        throw err;
+      }
 
       const nextReleases = [...snapshot.releases];
       const nextEpics = [...snapshot.epics];
@@ -1435,21 +1505,33 @@ export const useBoardStore = create<BoardState>(
         let nextSource: Release | Epic | Backlog;
         let nextDest: Release | Epic | Backlog;
 
-        if (sameContainer) {
-          const updated = moveTaskInContainer(sourceLoc.container, taskId, {
-            status: task.frontmatter.status,
-            beforeTaskId,
-          });
-          nextSource = updated;
-          nextDest = updated;
-        } else {
-          const moved = moveTaskBetweenContainers(sourceLoc.container, destLoc.container, taskId, {
-            newStatus: task.frontmatter.status,
-            beforeTaskId,
-            destEpic: destEpicForLocation(destLoc),
-          });
-          nextSource = moved.source;
-          nextDest = moved.dest;
+        try {
+          if (sameContainer) {
+            const updated = moveTaskInContainer(sourceLoc.container, snapshot.config, taskId, {
+              status: task.frontmatter.status,
+              beforeTaskId,
+            });
+            nextSource = updated;
+            nextDest = updated;
+          } else {
+            const moved = moveTaskBetweenContainers(
+              sourceLoc.container,
+              destLoc.container,
+              snapshot.config,
+              taskId,
+              {
+                newStatus: task.frontmatter.status,
+                beforeTaskId,
+                destEpic: destEpicForLocation(destLoc),
+              },
+            );
+            nextSource = moved.source;
+            nextDest = moved.dest;
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: message });
+          throw err;
         }
 
         const nextReleases = [...snapshot.releases];
@@ -1521,11 +1603,17 @@ export const useBoardStore = create<BoardState>(
             return;
           }
           const destEpic = snapshot.epics[epicIdx]!;
-          const moved = moveTaskBetweenContainers(sourceLoc.container, destEpic, taskId, {
-            newStatus: task.frontmatter.status,
-            beforeTaskId: null,
-            destEpic: { kind: 'set', slug: destEpic.slug },
-          });
+          const moved = moveTaskBetweenContainers(
+            sourceLoc.container,
+            destEpic,
+            snapshot.config,
+            taskId,
+            {
+              newStatus: task.frontmatter.status,
+              beforeTaskId: null,
+              destEpic: { kind: 'set', slug: destEpic.slug },
+            },
+          );
           movedSource = moved.source;
           movedIntoFilename = moved.dest.filename;
           nextEpics = [...snapshot.epics];
@@ -1534,11 +1622,17 @@ export const useBoardStore = create<BoardState>(
           // An epic-less task falls back to the backlog (no_epic.md, created
           // lazily).
           const destBacklog = snapshot.backlog ?? emptyBacklog();
-          const moved = moveTaskBetweenContainers(sourceLoc.container, destBacklog, taskId, {
-            newStatus: task.frontmatter.status,
-            beforeTaskId: null,
-            destEpic: { kind: 'clear' },
-          });
+          const moved = moveTaskBetweenContainers(
+            sourceLoc.container,
+            destBacklog,
+            snapshot.config,
+            taskId,
+            {
+              newStatus: task.frontmatter.status,
+              beforeTaskId: null,
+              destEpic: { kind: 'clear' },
+            },
+          );
           movedSource = moved.source;
           movedIntoFilename = moved.dest.filename;
           nextBacklog = moved.dest;

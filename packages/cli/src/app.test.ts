@@ -84,7 +84,7 @@ describe('run() — routing, envelopes, exit codes', () => {
     expect(code).toBe(0);
     const env = parse(stdout);
     expect(env).toMatchObject({ ok: true });
-    expect((env.data as { version: number }).version).toBe(4);
+    expect((env.data as { version: number }).version).toBe(5);
   });
 
   it('unknown command: JSON error envelope on stdout, exit 2', async () => {

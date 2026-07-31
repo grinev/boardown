@@ -2,8 +2,11 @@ import { X } from 'lucide-react';
 import { useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import {
   customFieldLabel,
+  inProgressCount,
+  isWipLimitReached,
   TASK_STATUSES,
   TASK_TYPES,
+  wipLimitFor,
   type CustomField,
   type Epic,
   type Release,
@@ -15,6 +18,7 @@ import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import { formatStatusLabel } from '../utils/format-status';
+import { wipLimitHint } from '../utils/wip-limit';
 import { Checklist } from './Checklist';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { DialogBackButton } from './DialogBackButton';
@@ -94,20 +98,61 @@ export function TaskDetailsDialog({
   const statusLocked = release?.frontmatter.status !== 'current';
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const config = useBoardStore((s) => s.snapshot?.config);
+  const current = useMemo(
+    () => releases.find((r) => r.frontmatter.status === 'current'),
+    [releases],
+  );
+  // The board refuses a task entering a full In Progress column, so the controls
+  // that would do it are shown unavailable rather than failing after the fact.
+  const wipFull =
+    current !== undefined && config !== undefined && isWipLimitReached(current, config);
+  const wipLimit =
+    current !== undefined && config !== undefined ? wipLimitFor(current, config) : null;
+  const wipCount = current === undefined ? 0 : inProgressCount(current);
+  const wipHint = wipLimit === null ? undefined : wipLimitHint(wipCount, wipLimit);
+
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
     // A finished release is archived: core refuses a task moved into one, so it is
     // never offered as a destination (same rule as the create-task dialog).
     const sorted = releases
       .filter((r) => r.frontmatter.status !== 'finished')
       .sort((a, b) => a.slug.localeCompare(b.slug));
-    const items: IconSelectOption[] = sorted.map((r) => ({
-      value: r.filename,
-      label: r.frontmatter.name ?? r.slug,
-    }));
+    const items: IconSelectOption[] = sorted.map((r) => {
+      // Relocating an `in-progress` task into a full current release enters the
+      // column, so that one destination is unavailable — unless the task is
+      // already there, where picking it changes nothing.
+      const blocked =
+        wipFull &&
+        status === 'in-progress' &&
+        r.frontmatter.status === 'current' &&
+        r.filename !== release?.filename;
+      return {
+        value: r.filename,
+        label: blocked ? `${r.frontmatter.name ?? r.slug} (${wipCount} / ${wipLimit})` : (r.frontmatter.name ?? r.slug),
+        ...(blocked ? { disabled: true, title: wipHint } : {}),
+      };
+    });
     // "—" removes the release: a task with an epic falls back to its epic file,
     // an epic-less task to the backlog (no_epic.md).
     return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
-  }, [releases]);
+  }, [releases, wipFull, status, release?.filename, wipCount, wipLimit, wipHint]);
+
+  const statusOptions = useMemo<IconSelectOption[]>(
+    () =>
+      STATUS_OPTIONS.map((option) => {
+        const blocked =
+          option.value === 'in-progress' && wipFull && status !== 'in-progress';
+        if (!blocked) return option;
+        return {
+          ...option,
+          label: `${option.label} (${wipCount} / ${wipLimit})`,
+          disabled: true,
+          title: wipHint,
+        };
+      }),
+    [wipFull, status, wipCount, wipLimit, wipHint],
+  );
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
     const sorted = [...epics].sort((a, b) =>
@@ -206,13 +251,15 @@ export function TaskDetailsDialog({
           ) : (
             <IconSelect
               value={status}
-              options={STATUS_OPTIONS}
+              options={statusOptions}
               ariaLabel="Status"
               hideChevron
               hideTriggerIcon
               triggerClassName={`${styles.statusPill} ${styles.statusPillTrigger} ${STATUS_PILL_CLASS[status] ?? ''}`}
               onChange={(next) => {
-                void updateTask(id, { status: next as TaskStatus });
+                // A refused option is disabled, so a rejection here is a race on a
+                // stale snapshot; the store has already reported it.
+                void updateTask(id, { status: next as TaskStatus }).catch(() => {});
               }}
             />
           )}
@@ -274,10 +321,12 @@ export function TaskDetailsDialog({
                       hideChevron
                       triggerClassName={styles.inlineSelectTrigger}
                       onChange={(next) => {
+                        // Same as the status control: a refused destination is
+                        // disabled, so a rejection here is a race.
                         void moveTaskToRelease(
                           id,
                           next === NO_RELEASE_VALUE ? null : next,
-                        );
+                        ).catch(() => {});
                       }}
                     />
                   )}

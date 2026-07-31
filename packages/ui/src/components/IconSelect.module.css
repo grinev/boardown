@@ -91,3 +91,9 @@
   background: var(--accent-bg);
   color: var(--accent);
 }
+
+.optionDisabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: none;
+}

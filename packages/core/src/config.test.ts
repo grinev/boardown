@@ -179,6 +179,53 @@ describe('serializeConfig', () => {
   });
 });
 
+describe('wipLimits', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips a limit and keeps it between theme and customFields', () => {
+    const cfg: BoardConfig = {
+      ...base,
+      theme: 'dark',
+      wipLimits: { 'in-progress': 3 },
+      customFields: [{ key: 'env', type: 'string' }],
+    };
+    const out = serializeConfig(cfg);
+    expect(out.indexOf('theme:')).toBeLessThan(out.indexOf('wipLimits:'));
+    expect(out.indexOf('wipLimits:')).toBeLessThan(out.indexOf('customFields:'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+
+  it('writes no key when there is no limit, and drops an empty map', () => {
+    expect(serializeConfig(base)).not.toContain('wipLimits');
+    expect(serializeConfig({ ...base, wipLimits: {} })).not.toContain('wipLimits');
+  });
+
+  it('accepts an empty map on disk as "no limit"', () => {
+    const parsed = parseConfig('idPrefix: BD\nnextId: 0\nprojectName: P\nwipLimits: {}\n');
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.value?.wipLimits).toEqual({});
+  });
+
+  it('rejects a non-positive, non-integer or non-numeric limit', () => {
+    for (const raw of ['0', '-1', '2.5', '"three"']) {
+      const parsed = parseConfig(
+        `idPrefix: BD\nnextId: 0\nprojectName: P\nwipLimits:\n  in-progress: ${raw}\n`,
+      );
+      expect(parsed.value).toBeNull();
+      expect(parsed.problems).toHaveLength(1);
+    }
+  });
+
+  it('rejects a limit on a status the product does not enforce', () => {
+    const parsed = parseConfig(
+      'idPrefix: BD\nnextId: 0\nprojectName: P\nwipLimits:\n  todo: 5\n',
+    );
+    expect(parsed.value).toBeNull();
+  });
+});
+
 describe('serializeConfig customFields', () => {
   it('round-trips declarations, so the nextId rewrite cannot erase them', () => {
     const cfg: BoardConfig = {

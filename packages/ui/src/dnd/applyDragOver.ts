@@ -12,6 +12,9 @@ export const applyDragOver = (
   active: Active,
   over: Over,
   buckets: Map<TaskStatus, Task[]>,
+  // Disabling a column's droppable is not enough: the cards inside it are drop
+  // nodes of their own, so hovering one would still resolve to that column.
+  blockedStatus: TaskStatus | null = null,
 ): Map<TaskStatus, Task[]> => {
   const activeId = String(active.id);
   const overId = String(over.id);
@@ -36,6 +39,8 @@ export const applyDragOver = (
   } else {
     return buckets;
   }
+
+  if (targetStatus === blockedStatus && targetStatus !== activeStatus) return buckets;
 
   if (targetStatus === activeStatus) {
     if (overTaskId === null) return buckets;

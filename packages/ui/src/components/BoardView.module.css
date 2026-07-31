@@ -42,6 +42,21 @@
   text-transform: none;
 }
 
+.columnCountAtLimit {
+  color: var(--banner-warn-fg);
+  background: var(--banner-warn-bg);
+  border-color: var(--banner-warn-border);
+}
+
+/* The column the board would refuse this drag: unavailable, not merely styled. */
+.columnBlocked {
+  opacity: 0.45;
+}
+
+.columnBlocked .cards {
+  pointer-events: none;
+}
+
 .cards {
   display: flex;
   flex-direction: column;

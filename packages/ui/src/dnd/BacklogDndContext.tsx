@@ -27,6 +27,7 @@ import { useBoardStore } from '../store';
 import { BacklogRowView } from '../components/BacklogRowView';
 import backlogStyles from '../components/BacklogView.module.css';
 import { isTaskDragId, parseTaskDragId } from './ids';
+import { BlockedTargetProvider } from './BlockedTargetContext';
 import {
   BACKLOG_SECTION_KEY,
   applyDragOverBacklog,
@@ -40,6 +41,8 @@ interface BacklogDndContextProps {
   buckets: SectionBuckets;
   setBuckets: Dispatch<SetStateAction<SectionBuckets>>;
   epics: Epic[];
+  // The current release's section key, when its In Progress column is full.
+  wipFullSectionKey: string | null;
   children: ReactNode;
 }
 
@@ -47,10 +50,12 @@ export function BacklogDndContext({
   buckets,
   setBuckets,
   epics,
+  wipFullSectionKey,
   children,
 }: BacklogDndContextProps) {
   const moveTaskOnBacklog = useBoardStore((s) => s.moveTaskOnBacklog);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [blockedSection, setBlockedSection] = useState<string | null>(null);
   const originalBucketsRef = useRef<SectionBuckets | null>(null);
   const bucketsRef = useRef(buckets);
 
@@ -74,7 +79,19 @@ export function BacklogDndContext({
   const onDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
     if (!isTaskDragId(id)) return;
-    setActiveTaskId(parseTaskDragId(id));
+    const taskId = parseTaskDragId(id);
+    setActiveTaskId(taskId);
+    // Only an `in-progress` task entering the full release breaches the limit;
+    // a task already in that section is merely being reordered.
+    const task = findTaskInBuckets(buckets, taskId);
+    const alreadyThere = findSectionOfTask(buckets, taskId) === wipFullSectionKey;
+    setBlockedSection(
+      wipFullSectionKey !== null &&
+        !alreadyThere &&
+        task?.frontmatter.status === 'in-progress'
+        ? wipFullSectionKey
+        : null,
+    );
     originalBucketsRef.current = cloneBuckets(buckets);
   };
 
@@ -82,7 +99,7 @@ export function BacklogDndContext({
     const { active, over } = event;
     if (!over) return;
     setBuckets((prev) => {
-      const next = applyDragOverBacklog(active, over, prev);
+      const next = applyDragOverBacklog(active, over, prev, blockedSection);
       bucketsRef.current = next;
       return next;
     });
@@ -90,6 +107,7 @@ export function BacklogDndContext({
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
+    setBlockedSection(null);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
 
@@ -127,11 +145,14 @@ export function BacklogDndContext({
       return;
     }
 
-    void moveTaskOnBacklog(taskId, target, placement.beforeTaskId);
+    // The UI keeps a refused destination out of reach, so a rejection here is a
+    // race; the store has already reported it and left the board untouched.
+    void moveTaskOnBacklog(taskId, target, placement.beforeTaskId).catch(() => {});
   };
 
   const onDragCancel = () => {
     setActiveTaskId(null);
+    setBlockedSection(null);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
     if (original) {
@@ -157,7 +178,7 @@ export function BacklogDndContext({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      {children}
+      <BlockedTargetProvider value={blockedSection}>{children}</BlockedTargetProvider>
       <DragOverlay>
         {activeTask ? (
           <ul className={backlogStyles.dragOverlayList}>
@@ -176,6 +197,13 @@ const findTaskInBuckets = (
   for (const tasks of buckets.values()) {
     const found = tasks.find((t) => t.frontmatter.id === taskId);
     if (found) return found;
+  }
+  return null;
+};
+
+const findSectionOfTask = (buckets: SectionBuckets, taskId: string): string | null => {
+  for (const [key, tasks] of buckets) {
+    if (tasks.some((t) => t.frontmatter.id === taskId)) return key;
   }
   return null;
 };

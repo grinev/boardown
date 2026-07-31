@@ -269,6 +269,7 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   try {
     result = completeRelease({
       release,
+      config: board.snapshot.config,
       epics: board.snapshot.epics,
       backlog: board.snapshot.backlog ?? emptyBacklog(),
       targetRelease,

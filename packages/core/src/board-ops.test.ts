@@ -16,6 +16,9 @@ import {
   editRelease,
   editTask,
   emptyBacklog,
+  inProgressCount,
+  isWipLimitReached,
+  wipLimitFor,
   moveTaskBetweenContainers,
   reorderTask,
   reorderTaskInBacklog,
@@ -456,7 +459,7 @@ describe('changeTaskStatus', () => {
       task('BD-2', 'in-progress', 100),
       task('BD-3', 'in-progress', 200),
     );
-    const r1 = changeTaskStatus(r0, 'BD-1', 'in-progress');
+    const r1 = changeTaskStatus(r0, config, 'BD-1', 'in-progress');
     const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.status).toBe('in-progress');
     expect(moved.frontmatter.order).toBe(300);
@@ -673,7 +676,7 @@ describe('moveTaskBetweenContainers', () => {
     a.filename = 'releases/1.10.md';
     const b = release(task('BD-2', 'in-progress', 100));
     b.filename = 'releases/1.11.md';
-    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
       newStatus: 'in-progress',
       beforeTaskId: null,
     });
@@ -693,7 +696,7 @@ describe('moveTaskBetweenContainers', () => {
     a.filename = 'releases/1.10.md';
     const b = release();
     b.filename = 'releases/1.11.md';
-    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
       newStatus: 'todo',
       beforeTaskId: null,
     });
@@ -710,7 +713,7 @@ describe('moveTaskBetweenContainers', () => {
       preamble: '',
       tasks: [],
     };
-    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
       newStatus: 'todo',
       beforeTaskId: null,
       destEpic: { kind: 'set', slug: 'dnd' },
@@ -738,7 +741,7 @@ describe('moveTaskBetweenContainers', () => {
       preamble: '',
       tasks: [],
     };
-    const result = moveTaskBetweenContainers(a, b, 'BD-1', {
+    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
       newStatus: 'todo',
       beforeTaskId: null,
       destEpic: { kind: 'clear' },
@@ -874,6 +877,7 @@ describe('completeRelease', () => {
     };
 
     const result = completeRelease({
+      config,
       release: source,
       epics: [],
       backlog: null,
@@ -906,6 +910,7 @@ describe('completeRelease', () => {
     const bl = backlog();
 
     const result = completeRelease({
+      config,
       release: source,
       epics: [a],
       backlog: bl,
@@ -929,6 +934,7 @@ describe('completeRelease', () => {
     const source = release(task('BD-1', 'done', 100), task('BD-2', 'done', 200));
 
     const result = completeRelease({
+      config,
       release: source,
       epics: [],
       backlog: null,
@@ -944,6 +950,7 @@ describe('completeRelease', () => {
     const source = release(task('BD-1', 'todo', 100));
     expect(() =>
       completeRelease({
+        config,
         release: source,
         epics: [],
         backlog: null,
@@ -992,6 +999,7 @@ describe('process invariants — finished release is archived', () => {
   it('completeRelease rejects a non-current release', () => {
     expect(() =>
       completeRelease({
+        config,
         release: futureRelease('next'),
         epics: [],
         backlog: null,
@@ -1009,20 +1017,20 @@ describe('process invariants — finished release is archived', () => {
   it('task mutations reject a finished release', () => {
     const r = finished(task('BD-1', 'todo', 100));
     expect(() => editTask(r, config, 'BD-1', { title: 'y' })).toThrow(/finished/);
-    expect(() => changeTaskStatus(r, 'BD-1', 'done')).toThrow(/finished/);
+    expect(() => changeTaskStatus(r, config, 'BD-1', 'done')).toThrow(/finished/);
     expect(() => deleteTask(r, 'BD-1')).toThrow(/finished/);
     expect(() => reorderTask(r, 'BD-1', null)).toThrow(/finished/);
   });
 
   it('moveTaskBetweenContainers rejects a finished source or destination', () => {
     expect(() =>
-      moveTaskBetweenContainers(finished(task('BD-1', 'todo', 100)), release(), 'BD-1', {
+      moveTaskBetweenContainers(finished(task('BD-1', 'todo', 100)), release(), config, 'BD-1', {
         newStatus: 'todo',
         beforeTaskId: null,
       }),
     ).toThrow(/out of a finished/);
     expect(() =>
-      moveTaskBetweenContainers(release(task('BD-2', 'todo', 100)), finished(), 'BD-2', {
+      moveTaskBetweenContainers(release(task('BD-2', 'todo', 100)), finished(), config, 'BD-2', {
         newStatus: 'todo',
         beforeTaskId: null,
       }),
@@ -1054,14 +1062,14 @@ describe('process invariants — a status only changes in the current release', 
     );
 
   it('changeTaskStatus succeeds in the current release', () => {
-    const r = changeTaskStatus(release(task('BD-1', 'todo', 100)), 'BD-1', 'done');
+    const r = changeTaskStatus(release(task('BD-1', 'todo', 100)), config, 'BD-1', 'done');
     expect(r.tasks[0]!.frontmatter.status).toBe('done');
   });
 
   it('changeTaskStatus is refused in a future release, an epic and the backlog', () => {
     const t = task('BD-1', 'todo', 100);
     for (const container of [withTasks(futureRelease('next'), t), epic(t), backlog(t)]) {
-      expect(() => changeTaskStatus(container, 'BD-1', 'done')).toThrow(
+      expect(() => changeTaskStatus(container, config, 'BD-1', 'done')).toThrow(
         /can only be changed in the current release/,
       );
     }
@@ -1069,7 +1077,7 @@ describe('process invariants — a status only changes in the current release', 
 
   it('carries the STATUS_LOCKED code and names the container', () => {
     try {
-      changeTaskStatus(withTasks(futureRelease('next'), task('BD-1', 'todo', 100)), 'BD-1', 'done');
+      changeTaskStatus(withTasks(futureRelease('next'), task('BD-1', 'todo', 100)), config, 'BD-1', 'done');
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(BoardOpError);
@@ -1081,20 +1089,20 @@ describe('process invariants — a status only changes in the current release', 
 
   it('names an epic and the backlog in the refusal', () => {
     const t = task('BD-1', 'todo', 100);
-    expect(() => changeTaskStatus(epic(t), 'BD-1', 'done')).toThrow(/the epic "DnD"/);
-    expect(() => changeTaskStatus(backlog(t), 'BD-1', 'done')).toThrow(/the backlog/);
+    expect(() => changeTaskStatus(epic(t), config, 'BD-1', 'done')).toThrow(/the epic "DnD"/);
+    expect(() => changeTaskStatus(backlog(t), config, 'BD-1', 'done')).toThrow(/the backlog/);
   });
 
   it('refuses a status write that changes nothing, so the rule stays predictable', () => {
     const r = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
-    expect(() => changeTaskStatus(r, 'BD-1', 'todo')).toThrow(/STATUS_LOCKED|current release/);
+    expect(() => changeTaskStatus(r, config, 'BD-1', 'todo')).toThrow(/STATUS_LOCKED|current release/);
     expect(() => editTask(r, config, 'BD-1', { status: 'todo' })).toThrow(/current release/);
   });
 
   it('keeps the archive rule ahead of the lock in a finished release', () => {
     const r = finished(task('BD-1', 'todo', 100));
     try {
-      changeTaskStatus(r, 'BD-1', 'done');
+      changeTaskStatus(r, config, 'BD-1', 'done');
       expect.unreachable();
     } catch (err) {
       expect((err as BoardOpError).code).toBe('ARCHIVED');
@@ -1125,7 +1133,7 @@ describe('process invariants — a status only changes in the current release', 
 
   it('moveTaskBetweenContainers preserves a status into a locked destination', () => {
     const source = release(task('BD-1', 'in-progress', 100));
-    const result = moveTaskBetweenContainers(source, futureRelease('next'), 'BD-1', {
+    const result = moveTaskBetweenContainers(source, futureRelease('next'), config, 'BD-1', {
       newStatus: 'in-progress',
       beforeTaskId: null,
     });
@@ -1135,7 +1143,7 @@ describe('process invariants — a status only changes in the current release', 
   it('moveTaskBetweenContainers refuses a status change into a locked destination', () => {
     const source = release(task('BD-1', 'in-progress', 100));
     expect(() =>
-      moveTaskBetweenContainers(source, futureRelease('next'), 'BD-1', {
+      moveTaskBetweenContainers(source, futureRelease('next'), config, 'BD-1', {
         newStatus: 'done',
         beforeTaskId: null,
       }),
@@ -1144,7 +1152,7 @@ describe('process invariants — a status only changes in the current release', 
 
   it('moveTaskBetweenContainers allows a status change into the current release', () => {
     const source = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
-    const result = moveTaskBetweenContainers(source, release(), 'BD-1', {
+    const result = moveTaskBetweenContainers(source, release(), config, 'BD-1', {
       newStatus: 'in-progress',
       beforeTaskId: null,
     });
@@ -1157,13 +1165,150 @@ describe('process invariants — a status only changes in the current release', 
       task('BD-1', 'todo', 100),
       task('BD-2', 'todo', 200),
     );
-    const moved = moveTaskInContainer(r, 'BD-2', { status: 'todo', beforeTaskId: 'BD-1' });
+    const moved = moveTaskInContainer(r, config, 'BD-2', { status: 'todo', beforeTaskId: 'BD-1' });
     const orderOf = (id: string): number =>
       moved.tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
     expect(orderOf('BD-2')).toBeLessThan(orderOf('BD-1'));
     expect(() =>
-      moveTaskInContainer(r, 'BD-1', { status: 'done', beforeTaskId: null }),
+      moveTaskInContainer(r, config, 'BD-1', { status: 'done', beforeTaskId: null }),
     ).toThrow(/can only be changed in the current release/);
+  });
+
+  describe('WIP limit on the current release In Progress column', () => {
+    const limited = (limit: number): BoardConfig => ({
+      ...config,
+      wipLimits: { 'in-progress': limit },
+    });
+    const full = (): Release =>
+      release(
+        task('BD-1', 'in-progress', 100),
+        task('BD-2', 'in-progress', 200),
+        task('BD-3', 'todo', 300),
+        task('BD-4', 'done', 400),
+      );
+
+    it('reports the count and the limit only for a current release', () => {
+      expect(inProgressCount(full())).toBe(2);
+      expect(wipLimitFor(full(), limited(2))).toBe(2);
+      expect(wipLimitFor(full(), config)).toBeNull();
+      expect(wipLimitFor(withTasks(futureRelease('next'), task('BD-1', 'in-progress', 100)), limited(1))).toBeNull();
+      expect(isWipLimitReached(full(), limited(2))).toBe(true);
+      expect(isWipLimitReached(full(), limited(3))).toBe(false);
+    });
+
+    it('refuses a status change into a full column, with the WIP_LIMIT code', () => {
+      try {
+        changeTaskStatus(full(), limited(2), 'BD-3', 'in-progress');
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(BoardOpError);
+        expect((err as BoardOpError).code).toBe('WIP_LIMIT');
+        expect((err as BoardOpError).message).toContain('2 tasks in progress');
+        expect((err as BoardOpError).message).toContain('WIP limit is 2');
+      }
+    });
+
+    it('allows the same change with no limit configured or with room left', () => {
+      expect(() => changeTaskStatus(full(), config, 'BD-3', 'in-progress')).not.toThrow();
+      expect(() => changeTaskStatus(full(), limited(3), 'BD-3', 'in-progress')).not.toThrow();
+    });
+
+    it('never blocks leaving the column, nor a no-op on a task already there', () => {
+      expect(() => changeTaskStatus(full(), limited(2), 'BD-1', 'done')).not.toThrow();
+      expect(() => changeTaskStatus(full(), limited(2), 'BD-1', 'in-progress')).not.toThrow();
+    });
+
+    it('allows a reorder inside the full column but refuses a move into it', () => {
+      expect(() =>
+        moveTaskInContainer(full(), limited(2), 'BD-2', {
+          status: 'in-progress',
+          beforeTaskId: 'BD-1',
+        }),
+      ).not.toThrow();
+      expect(() =>
+        moveTaskInContainer(full(), limited(2), 'BD-3', {
+          status: 'in-progress',
+          beforeTaskId: null,
+        }),
+      ).toThrow(/WIP limit/);
+    });
+
+    it('tolerates a board already over its limit and still blocks new entries', () => {
+      const over = release(
+        task('BD-1', 'in-progress', 100),
+        task('BD-2', 'in-progress', 200),
+        task('BD-3', 'in-progress', 300),
+        task('BD-4', 'todo', 400),
+      );
+      expect(() => changeTaskStatus(over, limited(2), 'BD-1', 'done')).not.toThrow();
+      expect(() => changeTaskStatus(over, limited(2), 'BD-4', 'in-progress')).toThrow(/WIP limit/);
+    });
+
+    it('refuses an in-progress task relocated into a full current release', () => {
+      const source = withTasks(futureRelease('next'), task('BD-9', 'in-progress', 100));
+      expect(() =>
+        moveTaskBetweenContainers(source, full(), limited(2), 'BD-9', {
+          newStatus: 'in-progress',
+          beforeTaskId: null,
+        }),
+      ).toThrow(/WIP limit/);
+      // A `todo` task is unaffected, and so is a move *out* of the full release.
+      const todoSource = withTasks(futureRelease('next'), task('BD-8', 'todo', 100));
+      expect(() =>
+        moveTaskBetweenContainers(todoSource, full(), limited(2), 'BD-8', {
+          newStatus: 'todo',
+          beforeTaskId: null,
+        }),
+      ).not.toThrow();
+      expect(() =>
+        moveTaskBetweenContainers(full(), futureRelease('next'), limited(2), 'BD-1', {
+          newStatus: 'in-progress',
+          beforeTaskId: null,
+        }),
+      ).not.toThrow();
+    });
+
+    it('refuses editTask and createTask that land on in-progress in a full column', () => {
+      expect(() => editTask(full(), limited(2), 'BD-3', { status: 'in-progress' })).toThrow(
+        /WIP limit/,
+      );
+      expect(() => editTask(full(), limited(2), 'BD-3', { title: 'X' })).not.toThrow();
+      expect(() =>
+        createTask(full(), limited(2), { title: 'N', type: 'feature', status: 'in-progress' }),
+      ).toThrow(/WIP limit/);
+      expect(() =>
+        createTask(full(), limited(2), { title: 'N', type: 'feature', status: 'todo' }),
+      ).not.toThrow();
+    });
+
+    it('keeps ARCHIVED and STATUS_LOCKED ahead of the WIP limit', () => {
+      const archived = finished(task('BD-1', 'todo', 100));
+      try {
+        changeTaskStatus(archived, limited(1), 'BD-1', 'in-progress');
+        expect.unreachable();
+      } catch (err) {
+        expect((err as BoardOpError).code).toBe('ARCHIVED');
+      }
+      const future = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
+      try {
+        changeTaskStatus(future, limited(1), 'BD-1', 'in-progress');
+        expect.unreachable();
+      } catch (err) {
+        expect((err as BoardOpError).code).toBe('STATUS_LOCKED');
+      }
+    });
+
+    it('completing a release is unaffected — it only moves tasks out', () => {
+      expect(() =>
+        completeRelease({
+          release: full(),
+          config: limited(1),
+          epics: [],
+          backlog: backlog(),
+          targetRelease: null,
+        }),
+      ).not.toThrow();
+    });
   });
 
   it('reorderTask and reorderTaskInBacklog stay allowed in a locked container', () => {
@@ -1182,6 +1327,7 @@ describe('process invariants — a status only changes in the current release', 
   it('completeRelease still carries an unfinished leftover with its status', () => {
     const current = release(task('BD-1', 'in-progress', 100), task('BD-2', 'done', 200));
     const result = completeRelease({
+      config,
       release: current,
       epics: [],
       backlog: null,
@@ -1317,7 +1463,7 @@ describe('block order in the file', () => {
     );
 
   it('survives a status change', () => {
-    const result = changeTaskStatus(shuffled(), 'BD-1', 'done');
+    const result = changeTaskStatus(shuffled(), config, 'BD-1', 'done');
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
     expect(orderOf(result.tasks, 'BD-1')).toBe(400);
     expect(orderOf(result.tasks, 'BD-2')).toBe(200);
@@ -1354,7 +1500,7 @@ describe('block order in the file', () => {
   it('appends a task moved in from another container', () => {
     const dest = shuffled();
     const source = epic('ui', task('BD-9', 'todo', 100));
-    const result = moveTaskBetweenContainers(source, dest, 'BD-9', {
+    const result = moveTaskBetweenContainers(source, dest, config, 'BD-9', {
       newStatus: 'todo',
       beforeTaskId: null,
     });

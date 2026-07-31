@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { Theme } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { Modal } from './Modal';
+import { WipLimitField } from './WipLimitField';
 import styles from './SettingsDialog.module.css';
 
 interface SettingsDialogProps {
@@ -40,6 +41,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
             <option value="dark">Dark</option>
           </select>
         </label>
+        <WipLimitField className={styles.field} />
         {version && (
           <div className={styles.field}>
             <span className={styles.label}>Version</span>

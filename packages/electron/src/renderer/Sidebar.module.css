@@ -260,6 +260,13 @@
   cursor: pointer;
 }
 
+.wipLimitRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
 .themeOption {
   flex: 1;
   padding: 6px 4px;

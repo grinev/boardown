@@ -46,6 +46,33 @@ describe('applyDragOverBacklog', () => {
     expect(ids(next.get('releases/1.0.md'))).toEqual(['BD-3', 'BD-1', 'BD-2']);
   });
 
+  it('refuses a blocked section, whether hovered on it or on a row inside it', () => {
+    const start = buckets();
+    for (const over of [sectionDropId('releases/1.0.md'), taskDragId('BD-1')]) {
+      expect(
+        applyDragOverBacklog(dndId(taskDragId('BD-3')), dndId(over), start, 'releases/1.0.md'),
+      ).toBe(start);
+    }
+  });
+
+  it('still reorders inside the blocked section and still lets a task leave it', () => {
+    const reordered = applyDragOverBacklog(
+      dndId(taskDragId('BD-2')),
+      dndId(taskDragId('BD-1')),
+      buckets(),
+      'releases/1.0.md',
+    );
+    expect(ids(reordered.get('releases/1.0.md'))).toEqual(['BD-2', 'BD-1']);
+
+    const left = applyDragOverBacklog(
+      dndId(taskDragId('BD-1')),
+      dndId(sectionDropId(BACKLOG_SECTION_KEY)),
+      buckets(),
+      'releases/1.0.md',
+    );
+    expect(ids(left.get(BACKLOG_SECTION_KEY))).toEqual(['BD-3', 'BD-1']);
+  });
+
   it('appends to a section when dropped on its container', () => {
     const next = applyDragOverBacklog(
       dndId(taskDragId('BD-1')),
