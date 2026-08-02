@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0
+
+- **Task search**: a search field in the top bar finds any task on the board by
+  id, title or description — type three characters and pick a match from the
+  dropdown to open it, tasks in finished releases included.
+- **Task priority**: every task carries one of four priorities (Critical, High,
+  Medium, Low), shown as a coloured glyph on board cards and backlog rows,
+  editable in the task and create dialogs, and available as a fourth filter in
+  the backlog.
+- **WIP limits**: cap how many tasks the current release may have in progress
+  from the Settings dialog (empty means no limit). The In Progress column header
+  then counts against the limit (`2 / 3`), and once it is reached the column
+  stops accepting drops and the status dropdown's In Progress option is
+  disabled.
+- **Statuses change only in the current release**: a task in a future release or
+  in the backlog shows its status as a static pill with a tooltip instead of a
+  dropdown. Moving a task between containers keeps whatever status it had.
+- **Edit an epic's colour**: the epic dialog gained a Color row — click the
+  swatch to open the palette inline and confirm the pick with Save.
+- A board whose `config.yaml` declares a custom field named `priority` no longer
+  loads: the name is now reserved by the built-in field. Rename your field to
+  open the board again.
+
 ## 0.5.3
 
 - **Custom fields (beta)**: declare extra per-task fields in

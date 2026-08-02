@@ -1,39 +1,24 @@
-# boardown
+# Boardown
 
 A lightweight, local-first task board that stores its data as plain markdown
 files inside your project's git repo. Releases, epics and tasks live in a
 `.boardown/` folder next to your code, so they version, branch and diff with
-the rest of the project — no cloud, no server, no account.
+the rest of the project — no cloud, no server, no account. And because the
+board is just markdown in your repo, your **AI coding agent** can read and
+drive it too — see [Built for you and your AI
+agent](#built-for-you-and-your-ai-agent).
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/grinev/boardown/main/assets/Board-dark.png" alt="boardown board view in VS Code" width="90%" />
+  <img src="https://raw.githubusercontent.com/grinev/boardown/main/assets/Board-dark.png" alt="Boardown board view in VS Code" width="90%" />
 </p>
 
-## Built for you and your AI agent
+## Getting started
 
-Because the whole board is plain markdown in your repo, an **AI coding agent**
-(Claude Code, Cursor, …) already sees it right next to your code — no
-integration, no plugin. The companion CLI,
-[`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli),
-turns that into a first-class control surface: every command speaks **JSON**, so
-an agent can read the backlog, pick up the current release, and add or move
-tasks from the command line. You plan in this extension; your agent drives the
-same board headlessly — and thanks to auto-refresh, its changes show up live in
-the editor.
-
-```sh
-npx @grinev/boardown-cli release current   # what the agent is working on now
-```
-
-## Usage
-
-1. Open the folder that contains (or should contain) your board in VS Code.
-2. Click the board icon in the top-right corner of the editor, or run
-   **Boardown: Open Board** from the Command Palette.
-
-The board reads `.boardown/` from the open workspace folder. On a fresh
-project, the onboarding modal writes `config.yaml` and the board is created on
-first save. Data is saved straight back to the markdown files on every change.
+Click the board icon in the top-right corner of the editor, or run
+**Boardown: Open Board** from the Command Palette. There is nothing to point it
+at: Boardown picks up the `.boardown/` folder of the project you have open, and
+on a project that has none it offers to create the board on the spot. From
+there on, every change is saved straight back to the markdown files.
 
 By default the board **auto-refreshes** when its `.boardown/` files change on
 disk — so edits made via git, the CLI, or another editor show up without a
@@ -53,7 +38,13 @@ instead of overwriting.
   and any doc page can be referenced from a task or epic and opened in a popup
   without leaving the board.
 - **Epics** that group tasks across releases and double as the backlog's
-  storage, usable as a filter dimension.
+  storage, usable as a filter dimension, with an editable colour.
+- **Task search**: a search field in the top bar finds any task by id, title or
+  description — finished releases included — and opens it in one click.
+- **Task priority**: four levels (Critical / High / Medium / Low) shown as a
+  glyph on task cards and backlog rows, and usable as a backlog filter.
+- **WIP limits**: cap how many tasks the current release may have in progress;
+  once the In Progress column is full, nothing else gets in.
 - **Task checklists and notes**: each task can carry a lightweight todo
   checklist (shown as a `done/total` badge) and timestamped notes (shown as a
   count badge), edited in the task dialog.
@@ -73,6 +64,23 @@ instead of overwriting.
   merges back as a two-line diff.
 - **Agent-drivable** from the companion CLI (`@grinev/boardown-cli`): the same
   board, scriptable with machine-readable JSON output for AI agents and CI.
+
+## Built for you and your AI agent
+
+Because the whole board is plain markdown in your repo, an **AI coding agent**
+— Claude Code, Codex, OpenCode, Cursor, … — already sees it right next to your
+code: no integration, no plugin. The companion CLI,
+[`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli),
+turns that into a first-class control surface: every command speaks **JSON**, so
+an agent can read the backlog, pick up the current release, and add or move
+tasks from the command line. You plan in this extension; your agent drives the
+same board headlessly — and thanks to auto-refresh, its changes show up live in
+the editor.
+
+```sh
+npm i -g @grinev/boardown-cli   # installs the `boardown` command
+boardown release current        # what the agent is working on now
+```
 
 See [PRODUCT.md](https://github.com/grinev/boardown/blob/main/PRODUCT.md) for
 the full spec.
