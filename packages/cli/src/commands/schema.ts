@@ -74,7 +74,7 @@ const DESCRIPTOR = {
       usage:
         'boardown task list [--status STATUS] [--type TYPE] [--priority PRIORITY] [--epic SLUG] [--release REF] [--backlog] [--text SUBSTR] [--full]',
       summary:
-        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only, or a case-insensitive text match on title/description. --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
+        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only, or a case-insensitive text match on title/description (not the id — use task get for that). --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
     },
     {
       name: 'task add',

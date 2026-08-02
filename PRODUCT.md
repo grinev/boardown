@@ -428,6 +428,42 @@ epic nor a release.
 The app is divided into four top-level views, presented as tabs in the top
 navigation: **Backlog**, **Board**, **Archive**, **Docs**.
 
+### Task search
+
+A search field sits in the top navigation immediately after the **Docs** tab, so
+it is on screen whichever tab is open. Like the whole top bar — the tabs and the
+Create / Reload / Settings controls opposite it — it appears once the board is
+loaded: the onboarding, loading and invalid-config screens carry no bar and so no
+search field.
+
+From **three characters** (after trimming) a dropdown lists the matching tasks
+under the field. A query is matched case-insensitively as a plain substring
+against a task's **id, title and description** — notes, checklist items and custom
+field values are not searched — over **every** task on the board, the archive
+included. Results are ordered in three tiers: a task whose id *is* the query,
+then the tasks matched on id or title, then the tasks matched on the description
+alone; inside a tier the board's reading order applies (current release, future
+releases, the unscheduled backlog, then finished releases). At most **ten** rows
+are shown and nothing says when more matched — the user narrows the query
+instead. A row carries the type icon, the id and the title, and no more; an
+archived task is not marked out. The dropdown starts at the field's left edge and
+at its width, but grows with the longest row well past it, up to a cap; a title
+longer still is clipped with an ellipsis. While the field holds anything, a
+clear button sits at its right end.
+
+Clicking a row — or highlighting it with ↑/↓ and pressing Enter — opens the task
+details dialog over the current tab, read-only when the task sits in a finished
+release. Search is a direct entry point, so the dialog starts an empty back stack
+and shows no back button (see "Dialog back stack"). Escape closes the dropdown
+and an outside click closes it; either way the query stays in the field, so
+closing the dialog leaves the same result set one focus away — the clear button
+is how it goes. Nothing about the query is persisted, and searching writes
+nothing.
+
+The CLI's nearest equivalent is `task list --text`, which shares the same
+matching rule but deliberately differs in three ways: it does not search the id,
+and it has neither the minimum length nor the result cap (see "CLI").
+
 ### Backlog
 
 A vertical, Jira-style stack of collapsible sections (top to bottom):
@@ -811,7 +847,15 @@ what changed. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
 resolved value, so `--priority medium` also returns tasks with no key), and
 `schema` reports the vocabulary and the default so an agent reads them instead of
-guessing. `task link ls` is a link listing rather than a task summary, and carries
+guessing. `task list --text <substr>` is the CLI's **search**: the same
+case-insensitive substring the app's search field uses, shared from
+`@boardown/core` so the two cannot drift. It differs from the field on purpose,
+though. It matches a task's **title and description only** — never the id, since
+every id carries the board's prefix and `--text bd` would return the whole board,
+and `task get <id>` is the id lookup. And being a filter rather than a picker it
+carries neither the field's three-character minimum nor its ten-result cap: it
+returns every task it matches, in the usual listing order. An empty `--text` is
+no filter at all. `task link ls` is a link listing rather than a task summary, and carries
 no priority. Task links are managed
 with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
 records, and `ls` lists the linked tasks, flagging a link whose target is no

@@ -12,7 +12,9 @@ import {
   nextNoteId,
   removeTaskLink,
   reorderTask,
+  normalizeSearchQuery,
   sortTasksByOrder,
+  taskMatchRank,
   LINK_TYPE_META,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -585,7 +587,10 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const status = statusFlag !== undefined ? requireStatus(statusFlag) : undefined;
   const type = typeFlag !== undefined ? parseTaskType(typeFlag) : undefined;
   const priority = priorityFlag !== undefined ? parseTaskPriority(priorityFlag) : undefined;
-  const text = textFlag?.toLowerCase();
+  // An empty --text has always meant "no filter", while the shared rule reads an
+  // empty query as matching nothing; screen it out here rather than there.
+  const text =
+    textFlag !== undefined && normalizeSearchQuery(textFlag) !== '' ? textFlag : undefined;
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { snapshot, problems } = await loadBoardOrThrow(root);
@@ -614,13 +619,9 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     if (epicMemberIds !== undefined && !epicMemberIds.has(fm.id)) return false;
     if (releaseFile !== undefined && !(loc.kind === 'release' && loc.file === releaseFile)) return false;
     if (backlogOnly && loc.kind !== 'backlog') return false;
-    if (
-      text !== undefined &&
-      !task.title.toLowerCase().includes(text) &&
-      !task.description.toLowerCase().includes(text)
-    ) {
-      return false;
-    }
+    // The same rule the UI's search field applies, minus the id: `--text` is a
+    // content filter, and every id carries the board's prefix.
+    if (text !== undefined && taskMatchRank(task, text) === undefined) return false;
     return true;
   });
 

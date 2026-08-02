@@ -705,6 +705,36 @@ describe('cli commands (integration)', () => {
       ).toEqual(['TS-1']);
     });
 
+    // The app's search field matches ids; --text deliberately does not, since
+    // every id carries the board's prefix.
+    it('does not match --text against the id', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--text', 'ts-3']), ctx)).data),
+      ).toEqual([]);
+    });
+
+    it('treats an empty --text as no filter', async () => {
+      await seed();
+      expect(
+        listIds((await taskCommand(parseArgs(['task', 'list', '--text', '']), ctx)).data),
+      ).toEqual(['TS-1', 'TS-2', 'TS-3', 'TS-4']);
+    });
+
+    it('combines --text with another filter', async () => {
+      await seed();
+      expect(
+        listIds(
+          (
+            await taskCommand(
+              parseArgs(['task', 'list', '--text', 'a', '--status', 'todo']),
+              ctx,
+            )
+          ).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+    });
+
     it('accepts the ls alias', async () => {
       await seed();
       const viaLs = listIds((await taskCommand(parseArgs(['task', 'ls']), ctx)).data);

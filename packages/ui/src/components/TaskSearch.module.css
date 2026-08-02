@@ -1,0 +1,129 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  margin-left: 8px;
+  padding: 0 6px 0 8px;
+  height: 32px;
+  /* Fixed, so the field does not jump when the clear button appears. */
+  width: 260px;
+  max-width: 32vw;
+  box-sizing: border-box;
+  border: 1px solid var(--tab-border);
+  border-radius: 6px;
+  background: var(--tab-bg);
+}
+
+.root:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.rootDisabled {
+  opacity: 0.5;
+}
+
+.icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+.clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.clear:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.list {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  /* Sized to the longest row, between the field's width and the cap the
+     component measures against the viewport. */
+  width: max-content;
+  max-height: 320px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.optionHighlighted {
+  background: var(--accent-bg);
+}
+
+.typeIcon {
+  flex: 0 0 auto;
+}
+
+.id {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 8px 6px;
+  font-size: 14px;
+  color: var(--text-muted);
+}

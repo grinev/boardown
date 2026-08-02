@@ -90,7 +90,10 @@ epic), plus the id of a checklist item or note they created.
 `--epic <slug>` matches both tasks stored in the epic file and tasks living in a
 release that carry that epic tag. `--release <ref>` takes a slug or filename,
 `--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
-match on title and description.
+substring match on a task's title and description. It searches nothing else —
+not notes, checklist items or custom field values, and not the **id**, since
+every id carries the board's prefix and `--text bd` would return the whole
+board; `task get <id>` is how you reach a task by id.
 
 ### Custom fields (beta)
 

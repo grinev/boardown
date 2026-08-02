@@ -3,6 +3,7 @@ import type { ActiveTab } from '../store';
 import { CreateMenu } from './CreateMenu';
 import { ReloadButton } from './ReloadButton';
 import { SettingsButton } from './SettingsButton';
+import { TaskSearch } from './TaskSearch';
 import styles from './TabBar.module.css';
 
 interface TabBarProps {
@@ -39,6 +40,7 @@ export function TabBar({ activeTab, onSelect, hideSettings }: TabBarProps) {
             {label}
           </button>
         ))}
+        <TaskSearch />
       </div>
       <div className={styles.actions}>
         <CreateMenu />

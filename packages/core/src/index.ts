@@ -8,6 +8,7 @@ export * from './board-ops.js';
 export * from './config.js';
 export * from './loader.js';
 export * from './ordering.js';
+export * from './task-match.js';
 export * from './conflicts.js';
 export * from './docs.js';
 export * from './logger.js';
