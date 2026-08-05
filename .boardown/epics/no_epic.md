@@ -8,7 +8,7 @@
 id: BD-52
 type: feature
 status: todo
-order: 850
+order: 800
 ---
 
 ## Add assignee field to task
@@ -17,7 +17,7 @@ order: 850
 id: BD-50
 type: feature
 status: todo
-order: 1200
+order: 1000
 ---
 
 ## Add release dates
@@ -26,7 +26,7 @@ order: 1200
 id: BD-20
 type: feature
 status: todo
-order: 1400
+order: 1100
 ---
 
 ## Add labels to tasks and label filters
@@ -35,28 +35,8 @@ order: 1400
 id: BD-29
 type: feature
 status: todo
-order: 1800
+order: 1200
 ---
-
-## Show last updated date on tasks
-
----
-id: BD-32
-type: feature
-status: todo
-order: 1900
----
-
-## Task activity/history
-
----
-id: BD-60
-type: feature
-status: todo
-order: 2100
----
-
-Show task history from git
 
 ## Add task links types
 
@@ -64,7 +44,7 @@ Show task history from git
 id: BD-57
 type: feature
 status: todo
-order: 450
+order: 200
 ---
 
 ## Make task IDs survive parallel branches
@@ -73,7 +53,7 @@ order: 450
 id: BD-63
 type: tech
 status: todo
-order: 2200
+order: 1600
 ---
 
 `nextId` in `config.yaml` is a single global counter, so every task created on a
@@ -100,7 +80,7 @@ but cost the thing people actually use IDs for.
 id: BD-70
 type: bug
 status: todo
-order: 2300
+order: 1700
 ---
 
 In the status === 'onboarding' branch App.tsx early-returns and renders only OnboardingDialog, so ConflictDialog never mounts. Onboarding writes config.yaml through the pre-load guard, which carries an empty version map: if the file appeared on disk between the missing-config check and the submit, check() sees known === undefined, calls onConflict and throws ConflictError. The user gets nothing but the inline error in the onboarding form — no Reload button, no way forward — a dead end they can only leave by reopening the folder. Found while working on BD-69; a separate defect from the modal stacking.
@@ -111,7 +91,45 @@ In the status === 'onboarding' branch App.tsx early-returns and renders only Onb
 id: BD-75
 type: tech
 status: todo
-order: 2500
+order: 1800
 ---
 
 The store calls core board-ops outside the try/catch that only wraps the fs write, so a process-invariant throw (a finished release is read-only, a status only changes in the current release) becomes an unhandled promise rejection instead of reaching errorMessage. No path into it is reachable today — the UI hides the controls that would make those calls — so it is latent rather than broken. Wrap the core calls the way deleteTask already does and let the refusal's message land in the error banner.
+
+## Add skill for boardown cli
+
+---
+id: BD-77
+type: docs
+status: todo
+order: 600
+---
+
+## Indexes for epics
+
+---
+id: BD-78
+type: tech
+status: todo
+order: 1900
+---
+
+Indexes for closed releases with tasks in epic
+
+## Operation notofications
+
+---
+id: BD-79
+type: feature
+status: todo
+order: 100
+---
+
+## Customizable docs root
+
+---
+id: BD-80
+type: feature
+status: todo
+order: 2000
+---

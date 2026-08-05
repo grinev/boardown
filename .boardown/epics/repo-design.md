@@ -9,7 +9,7 @@ color: "#a855f7"
 id: BD-27
 type: tech
 status: todo
-order: 1000
+order: 900
 ---
 
 Commits should have scope: feat(core), fix(vscode), fix(desktop)
@@ -20,5 +20,5 @@ Commits should have scope: feat(core), fix(vscode), fix(desktop)
 id: BD-39
 type: docs
 status: todo
-order: 600
+order: 300
 ---
