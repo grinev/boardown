@@ -679,10 +679,17 @@ task card and in the backlog row, where nothing is linkified.
 
 **Inserting a doc link.** In any of those fields, typing `[[` opens a suggestion
 list of doc pages, filtered by title and path as the user keeps typing. ↑/↓ move,
-Enter or a click inserts the page's token and closes the brackets, Escape
+Enter, Tab or a click inserts the page's token and closes the brackets — while the
+list is open Tab accepts rather than moving focus — and Escape
 dismisses the list without leaving edit mode. There is no autocomplete for task
 IDs — those are short enough to type — and none in the single-line fields that
 render no links.
+
+The **Description** field of the three creation dialogs — task, epic and release —
+offers the same list, even though a creation dialog renders nothing: the text it
+writes is the text that renders links once saved. There is no edit mode to leave
+there, so Escape with the list open dismisses the list and leaves the dialog open
+with the form intact; a second Escape closes the dialog as usual.
 
 **Linked tasks.** Above the notes, the task dialog has a **Linked tasks** section:
 a table of the tasks this one is related to (type icon, id, title, status — the

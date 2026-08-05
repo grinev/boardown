@@ -5,6 +5,7 @@ import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, TASK_TYPES } from '@boardown/co
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
+import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { Modal } from './Modal';
 import styles from './CreateTaskDialog.module.css';
@@ -160,10 +161,10 @@ export function CreateTaskDialog({
         </label>
         <label className={styles.field}>
           <span className={styles.label}>Description</span>
-          <textarea
+          <DocRefTextarea
             className={styles.textarea}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             rows={4}
           />
         </label>

@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { releaseFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { DocRefTextarea } from './DocRefTextarea';
 import { Modal } from './Modal';
 import styles from './CreateReleaseDialog.module.css';
 
@@ -107,10 +108,10 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
         </label>
         <label className={styles.field}>
           <span className={styles.label}>Description</span>
-          <textarea
+          <DocRefTextarea
             className={styles.textarea}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             rows={4}
           />
         </label>

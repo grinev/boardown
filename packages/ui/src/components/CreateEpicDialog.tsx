@@ -3,6 +3,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { epicFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { pickDefaultEpicColor } from '../epic-colors';
+import { DocRefTextarea } from './DocRefTextarea';
 import { EpicColorSwatches } from './EpicColorSwatches';
 import { Modal } from './Modal';
 import styles from './CreateEpicDialog.module.css';
@@ -111,10 +112,10 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
         </label>
         <label className={styles.field}>
           <span className={styles.label}>Description</span>
-          <textarea
+          <DocRefTextarea
             className={styles.textarea}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             rows={4}
           />
         </label>
