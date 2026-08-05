@@ -38,10 +38,12 @@
   background: var(--surface-muted);
 }
 
+/* Deliberately no font-weight change: a bold label is wider than the same label
+   at normal weight, and nothing reserves that width, so the tabs to the right
+   and the search field shift a pixel every time the selection moves. */
 .tabActive {
   background: var(--tab-bg-active);
   color: var(--accent);
-  font-weight: 600;
   border-color: transparent;
   box-shadow: var(--tab-active-shadow);
   /* Clip the shadow at the bottom edge so it only shows on top and sides;
