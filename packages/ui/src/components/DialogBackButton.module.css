@@ -8,6 +8,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* It shares the header's left group with the title, which is the one that
+     ellipsises when the room runs out. */
+  flex: 0 0 auto;
 }
 
 .backButton:hover {

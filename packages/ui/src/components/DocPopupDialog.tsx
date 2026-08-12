@@ -24,9 +24,9 @@ export function DocPopupDialog() {
         <div className={styles.headerName}>
           <FileText className={styles.headerIcon} aria-hidden="true" />
           <span className={styles.titleText}>{title}</span>
+          <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
-          <DialogBackButton />
           <button
             type="button"
             className={styles.viewButton}

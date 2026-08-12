@@ -199,9 +199,9 @@ export function TaskDetailsDialog({
             aria-label={typeMeta.label}
           />
           <span className={styles.idText}>{id}</span>
+          <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
-          <DialogBackButton />
           <TaskActionsMenu
             deleteDisabled={archived}
             onDelete={() => setDeleteOpen(true)}

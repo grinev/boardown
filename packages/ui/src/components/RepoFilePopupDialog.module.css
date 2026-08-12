@@ -28,6 +28,15 @@
   min-width: 0;
 }
 
+/* The back button belongs beside the file name, not beside the two-line block —
+   the path below is usually the wider of the two. */
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .titleText {
   font-size: 18px;
   font-weight: 600;

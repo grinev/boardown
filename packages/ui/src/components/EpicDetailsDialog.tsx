@@ -64,9 +64,9 @@ export function EpicDetailsDialog({
             className={styles.nameText}
             onSave={(next) => updateEpic(epic.slug, { name: next })}
           />
+          <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
-          <DialogBackButton />
           <button
             type="button"
             className={styles.closeButton}

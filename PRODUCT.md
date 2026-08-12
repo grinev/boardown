@@ -802,8 +802,11 @@ Exactly one dialog is ever on screen, but navigating between them keeps a
 **history stack**: the dialog you left is remembered rather than discarded.
 
 A dialog reached from another one carries a **back** button — an icon-only
-control with a revert-style arrow — as the first item of its header's top-right
-action group, before the dialog's own actions and the close button. Pressing it
+control with a revert-style arrow — on the **left of its header**, directly after
+the dialog's icon and title; the top-right group holds the dialog's own actions
+and the close button, as it does on a dialog with nothing to go back to. In the
+repo file popup, whose header stacks the file name over its path, the button sits
+beside the **name**. Pressing it
 shows the previous dialog, re-read from the board's current state so any edit
 made in between is visible; pressing it repeatedly walks the whole chain back. A
 dialog opened directly from a board card, a backlog row, a release name or the

@@ -2,8 +2,9 @@ import { Undo2 } from 'lucide-react';
 import { useBoardStore } from '../store';
 import styles from './DialogBackButton.module.css';
 
-// Chrome shared by the four detail dialogs. It renders nothing when there is
+// Chrome shared by the five detail dialogs. It renders nothing when there is
 // nowhere to go back to, so every dialog can drop it into its header unconditionally.
+// Where it sits is the header's business, not this component's.
 export function DialogBackButton() {
   const hasHistory = useBoardStore((s) => s.dialogStack.length > 0);
   const goBack = useBoardStore((s) => s.goBack);

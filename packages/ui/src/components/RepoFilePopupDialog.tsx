@@ -55,12 +55,14 @@ export function RepoFilePopupDialog() {
         <div className={styles.headerName}>
           <FileCode2 className={styles.headerIcon} aria-hidden="true" />
           <div className={styles.headerText}>
-            <div className={styles.titleText}>{name}</div>
+            <div className={styles.titleRow}>
+              <div className={styles.titleText}>{name}</div>
+              <DialogBackButton />
+            </div>
             <div className={styles.pathText}>{path}</div>
           </div>
         </div>
         <div className={styles.headerActions}>
-          <DialogBackButton />
           <button
             type="button"
             className={styles.closeButton}

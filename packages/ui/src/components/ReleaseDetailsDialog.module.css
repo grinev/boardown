@@ -9,6 +9,15 @@
   flex: 0 0 auto;
 }
 
+/* The other four dialogs already group their icon and title; this one had only a
+   name, and now shares the row with the back button. */
+.headerName {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .nameText {
   margin: 0;
   min-width: 0;
