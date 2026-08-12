@@ -1,0 +1,10 @@
+# Line endings are LF in the repository and in the working tree, on every
+# platform. Matches .editorconfig (end_of_line = lf) and makes the result
+# independent of a machine's core.autocrlf.
+* text=auto eol=lf
+
+# Binary assets: never touch the bytes.
+*.png binary
+*.ico binary
+*.icns binary
+*.svg text eol=lf
