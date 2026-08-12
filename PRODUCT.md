@@ -652,7 +652,14 @@ disabled.
 digits) that resolves to a task on the board renders, in view mode, as a link
 showing `ID title`; clicking it opens that task's dialog. Resolution is against
 the task IDs actually present on the board, not against the current `idPrefix`, so
-tasks created under an older prefix stay linkable.
+tasks created under an older prefix stay linkable. A reference whose target is
+`done` renders **struck through** — accent colour and underline unchanged, still
+clickable — so a page of references shows at a glance what is already finished.
+This is purely a rendering rule and applies wherever such a reference is expanded:
+the plain-text fields (task description, custom-field values, notes, epic and
+release descriptions) and the markdown bodies (a Docs page, the doc popup). The
+task dialog's "Linked tasks" table is not affected — its rows carry a status pill
+already.
 
 **Doc links.** A `[[…]]` token holding a doc page's path relative to `docs/`
 without the `.md` extension (e.g. `[[guides/release-process]]`) renders as a link

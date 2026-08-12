@@ -76,6 +76,12 @@
   text-underline-offset: 2px;
 }
 
+/* A reference to a finished task: struck through, but still a link — hence both
+   decoration lines rather than replacing the underline. */
+.refLinkDone {
+  text-decoration-line: underline line-through;
+}
+
 .refLink:hover {
   text-decoration-thickness: 2px;
 }

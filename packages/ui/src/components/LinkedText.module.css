@@ -12,6 +12,12 @@
   text-underline-offset: 2px;
 }
 
+/* A reference to a finished task: struck through, but still a link — hence both
+   decoration lines rather than replacing the underline. */
+.linkDone {
+  text-decoration-line: underline line-through;
+}
+
 /* Inline with the text baseline, so a doc link sits in a sentence like a word. */
 .docIcon {
   display: inline;

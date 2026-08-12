@@ -95,8 +95,14 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         }
         if (href !== undefined && href.startsWith(TASK_HREF)) {
           const id = href.slice(TASK_HREF.length);
+          const done =
+            snapshot !== null && findTaskById(snapshot, id)?.frontmatter.status === 'done';
           return (
-            <button type="button" className={styles.refLink} onClick={() => openTask(id)}>
+            <button
+              type="button"
+              className={done ? `${styles.refLink} ${styles.refLinkDone}` : styles.refLink}
+              onClick={() => openTask(id)}
+            >
               {children}
             </button>
           );
@@ -104,7 +110,7 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         return <a href={href}>{children}</a>;
       },
     }),
-    [onDocRefClick, openTask, openRepoFilePopup],
+    [onDocRefClick, openTask, openRepoFilePopup, snapshot],
   );
 
   return (

@@ -133,3 +133,12 @@ type: feature
 status: todo
 order: 2000
 ---
+
+## Topic name length restriction
+
+---
+id: BD-87
+type: feature
+status: todo
+order: 250
+---

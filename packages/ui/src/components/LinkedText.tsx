@@ -79,11 +79,12 @@ export function LinkedText({ text }: LinkedTextProps) {
         if (!target) {
           return <Fragment key={i}>{segment.id}</Fragment>;
         }
+        const done = target.frontmatter.status === 'done';
         return (
           <button
             key={i}
             type="button"
-            className={styles.link}
+            className={done ? `${styles.link} ${styles.linkDone}` : styles.link}
             onClick={(e) => {
               e.stopPropagation();
               openTask(segment.id);
