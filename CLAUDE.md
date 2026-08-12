@@ -118,8 +118,15 @@ CLI inherits them rather than re-implementing them.
 - Shells (`web`, future `vscode`, `electron`) own platform integrations:
   `FsAdapter` implementation, folder picker / workspace acquisition, refresh
   triggers, OS dialogs.
-- All file system access goes through the `FsAdapter` interface defined in
-  `packages/core`. Never call `fetch`, `fs`, or browser APIs from `core` or
+- All access to the **board** goes through the `FsAdapter` interface defined in
+  `packages/core`, rooted at `.boardown/` by every shell. The one thing outside
+  it is `ProjectFileReader` (also declared in `core`): a second, **read-only**
+  capability scoped to the project folder, which repo file links use to preview a
+  file from the repo. It is deliberately a separate interface rather than a method
+  on `FsAdapter` — the adapter is what the conflict guard wraps and what every
+  write goes through, and no write path may reach outside `.boardown/`. A new
+  file-touching feature belongs on `FsAdapter` unless it is read-only *and* needs
+  the project folder. Never call `fetch`, `fs`, or browser APIs from `core` or
   `ui`.
 - Validate every parsed `frontmatter` and `config.yaml` through a Zod schema.
   Surface validation errors as structured problems (see "Lenient parsing"

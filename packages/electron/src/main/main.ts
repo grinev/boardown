@@ -11,10 +11,11 @@ import {
   session,
   type IpcMainInvokeEvent,
 } from 'electron';
-import type { Theme } from '@boardown/core';
+import type { ProjectFileRead, Theme } from '@boardown/core';
 import { DOCS_DIR, configureLogging, createLogger, formatLogRecord } from '@boardown/core';
 import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
+import { readProjectFile } from './project-file';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
 import {
@@ -390,6 +391,13 @@ function registerIpc(): void {
     return handleFsRequest(ctx.boardRoot, req, (abs) => {
       boardWatchers.get(id)?.recentWrites.set(abs, Date.now());
     });
+  });
+
+  ipcMain.handle(IPC.projectFile, async (event: IpcMainInvokeEvent, filePath: string) => {
+    const ctx = boards.get(event.sender.id);
+    // Scoped to the project folder, not the board root — and read-only.
+    if (!ctx) return { kind: 'unreadable' } satisfies ProjectFileRead;
+    return readProjectFile(ctx.folder, filePath);
   });
 
   ipcMain.handle(IPC.pickFolder, async (event: IpcMainInvokeEvent) => {

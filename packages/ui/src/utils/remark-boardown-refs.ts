@@ -1,4 +1,9 @@
-import { splitRefs, type DocRefSegment, type TaskRefSegment } from './refs';
+import {
+  splitRefs,
+  type DocRefSegment,
+  type RepoRefSegment,
+  type TaskRefSegment,
+} from './refs';
 
 // A structural view of the mdast nodes the walk touches. `@types/mdast` is not a
 // dependency of this package, and one traversal does not justify adding one.
@@ -16,11 +21,12 @@ export interface RefLink {
 }
 
 export type ToRefLink = (
-  segment: DocRefSegment | TaskRefSegment,
+  segment: DocRefSegment | TaskRefSegment | RepoRefSegment,
 ) => RefLink | null;
 
 export const DOC_HREF = 'boardown:doc/';
 export const TASK_HREF = 'boardown:task/';
+export const REPO_HREF = 'boardown:repo/';
 
 export const linkifyText = (value: string, toLink: ToRefLink): MdNode[] => {
   const segments = splitRefs(value);
@@ -44,7 +50,7 @@ export const linkifyText = (value: string, toLink: ToRefLink): MdNode[] => {
     }
     const link = toLink(segment);
     if (link === null) {
-      pushText(segment.kind === 'doc-ref' ? segment.raw : segment.id);
+      pushText(segment.kind === 'task-ref' ? segment.id : segment.raw);
       continue;
     }
     out.push({

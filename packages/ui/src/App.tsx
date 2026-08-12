@@ -1,4 +1,4 @@
-import type { FsAdapter, Theme } from '@boardown/core';
+import type { FsAdapter, ProjectFileReader, Theme } from '@boardown/core';
 import { TASK_STATUSES } from '@boardown/core';
 import { useEffect, useLayoutEffect } from 'react';
 import './theme/theme.css';
@@ -11,6 +11,7 @@ import { CreateTaskDialog } from './components/CreateTaskDialog';
 import { DocPopupDialog } from './components/DocPopupDialog';
 import { EpicDetailsDialog } from './components/EpicDetailsDialog';
 import { ReleaseDetailsDialog } from './components/ReleaseDetailsDialog';
+import { RepoFilePopupDialog } from './components/RepoFilePopupDialog';
 import { OnboardingDialog } from './components/OnboardingDialog';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StartReleaseDialog } from './components/StartReleaseDialog';
@@ -24,6 +25,9 @@ import { findTasksByEpic } from './utils/find-tasks-by-epic';
 
 interface AppProps {
   fs: FsAdapter;
+  // Read-only access to the project folder, for repo file links. Deliberately
+  // not part of `fs`: that one is board-scoped and carries every write.
+  projectFiles: ProjectFileReader;
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
@@ -46,6 +50,7 @@ interface AppProps {
 
 export function App({
   fs,
+  projectFiles,
   defaultTheme,
   defaultProjectName,
   defaultIdPrefix,
@@ -78,6 +83,8 @@ export function App({
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
   const closeStartRelease = useBoardStore((s) => s.closeStartRelease);
   const load = useBoardStore((s) => s.load);
+  const setProjectFiles = useBoardStore((s) => s.setProjectFiles);
+  const repoFilePopupPath = useBoardStore((s) => s.repoFilePopupPath);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
   const closeEpic = useBoardStore((s) => s.closeEpic);
@@ -92,6 +99,10 @@ export function App({
   useEffect(() => {
     void load(fs, defaultTheme);
   }, [fs, load, defaultTheme]);
+
+  useEffect(() => {
+    setProjectFiles(projectFiles);
+  }, [projectFiles, setProjectFiles]);
 
   // useLayoutEffect so the attribute is set before the browser paints the first
   // frame — a plain effect runs after paint and flashes the light-theme default.
@@ -222,6 +233,7 @@ export function App({
         <ReleaseDetailsDialog release={selectedRelease} onClose={closeRelease} />
       )}
       {docPopupPath && <DocPopupDialog />}
+      {repoFilePopupPath && <RepoFilePopupDialog />}
       {createTaskRelease && (
         <CreateTaskDialog
           release={createTaskRelease}

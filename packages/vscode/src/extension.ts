@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { FsRequestMessage } from './messages';
+import { PROJECT_FILE_MAX_BYTES, classifyProjectFile, type ProjectFileRead } from '@boardown/core';
+import type { FsRequestMessage, ProjectFileRequestMessage } from './messages';
 
 let panel: vscode.WebviewPanel | undefined;
 
@@ -60,6 +61,14 @@ export function activate(context: vscode.ExtensionContext): void {
             boardRootUri,
             message as FsRequestMessage,
             recentWrites,
+          );
+          return;
+        }
+        if (message.type === 'project-file-request') {
+          void handleProjectFileRequest(
+            created.webview,
+            folder.uri,
+            message as ProjectFileRequestMessage,
           );
         }
       });
@@ -170,6 +179,40 @@ async function handleFsRequest(
 
 function isFileNotFound(err: unknown): boolean {
   return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
+}
+
+// Repo file links, the webview's only read outside .boardown/. Read-only by
+// construction — there is no write counterpart — and scoped to the workspace
+// folder with the same guard shape the board root uses.
+async function handleProjectFileRequest(
+  webview: vscode.Webview,
+  projectRootUri: vscode.Uri,
+  message: ProjectFileRequestMessage,
+): Promise<void> {
+  const respond = (result: ProjectFileRead): void => {
+    void webview.postMessage({ type: 'project-file-response', id: message.id, result });
+  };
+
+  const target = resolveTarget(projectRootUri, message.path);
+  if (!target) {
+    respond({ kind: 'unreadable' });
+    return;
+  }
+
+  try {
+    const stat = await vscode.workspace.fs.stat(target);
+    if (stat.type !== vscode.FileType.File) {
+      respond({ kind: 'unreadable' });
+      return;
+    }
+    if (stat.size > PROJECT_FILE_MAX_BYTES) {
+      respond({ kind: 'too-large' });
+      return;
+    }
+    respond(classifyProjectFile(await vscode.workspace.fs.readFile(target)));
+  } catch (err) {
+    respond(isFileNotFound(err) ? { kind: 'not-found' } : { kind: 'unreadable' });
+  }
 }
 
 // Watches the board's .boardown/ directory and tells the webview to refresh when

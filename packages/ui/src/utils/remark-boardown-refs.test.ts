@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DOC_HREF,
+  REPO_HREF,
   TASK_HREF,
   linkifyText,
   linkifyTree,
@@ -14,6 +15,9 @@ const toLink: ToRefLink = (segment) => {
     return segment.token === 'missing'
       ? null
       : { href: `${DOC_HREF}docs/${segment.token}.md`, label: `Page ${segment.token}` };
+  }
+  if (segment.kind === 'repo-ref') {
+    return { href: `${REPO_HREF}${segment.path}`, label: segment.name };
   }
   return segment.id === 'BD-999'
     ? null
@@ -138,5 +142,36 @@ describe('linkifyTree', () => {
     linkifyTree(tree, toLink);
     const paragraph = tree.children![0]!.children![0]!.children![0]!;
     expect(paragraph.children!.map((n) => n.type)).toEqual(['link']);
+  });
+});
+
+describe('linkifyText — repo file refs', () => {
+  it('turns a repo token into a link labelled with the file name', () => {
+    expect(linkifyText('open [[repo:packages/cli/src/app.ts]] now', toLink)).toEqual([
+      text('open '),
+      {
+        type: 'link',
+        url: `${REPO_HREF}packages/cli/src/app.ts`,
+        title: null,
+        children: [text('app.ts')],
+      },
+      text(' now'),
+    ]);
+  });
+
+  it('leaves a repo token inside a code span literal', () => {
+    const tree: MdNode = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [{ type: 'inlineCode', value: '[[repo:src/app.ts]]' }],
+        },
+      ],
+    };
+    linkifyTree(tree, toLink);
+    expect(tree.children![0]!.children).toEqual([
+      { type: 'inlineCode', value: '[[repo:src/app.ts]]' },
+    ]);
   });
 });

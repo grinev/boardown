@@ -7,11 +7,14 @@ const taskRefs = (segments: RefSegment[]): string[] =>
 const docRefs = (segments: RefSegment[]): string[] =>
   segments.filter((s) => s.kind === 'doc-ref').map((s) => s.token);
 
+const repoRefs = (segments: RefSegment[]): string[] =>
+  segments.filter((s) => s.kind === 'repo-ref').map((s) => s.path);
+
 const rejoin = (segments: RefSegment[]): string =>
   segments
     .map((s) => {
       if (s.kind === 'task-ref') return s.id;
-      if (s.kind === 'doc-ref') return s.raw;
+      if (s.kind === 'doc-ref' || s.kind === 'repo-ref') return s.raw;
       return s.text;
     })
     .join('');
@@ -144,6 +147,60 @@ describe('splitRefs — doc references', () => {
 
   it('preserves the original text across segments', () => {
     const text = 'See [[a/b]] and BD-1, but not [[]] nor [[x';
+    expect(rejoin(splitRefs(text))).toBe(text);
+  });
+});
+
+describe('splitRefs — repo file refs', () => {
+  it('splits a repo token out of the surrounding text', () => {
+    expect(splitRefs('see [[repo:packages/cli/src/node-fs.ts]] first')).toEqual([
+      { kind: 'text', text: 'see ' },
+      {
+        kind: 'repo-ref',
+        path: 'packages/cli/src/node-fs.ts',
+        name: 'node-fs.ts',
+        raw: '[[repo:packages/cli/src/node-fs.ts]]',
+      },
+      { kind: 'text', text: ' first' },
+    ]);
+  });
+
+  it('normalizes a leading slash, backslashes and dot segments', () => {
+    expect(repoRefs(splitRefs('[[repo:/src/app.ts]]'))).toEqual(['src/app.ts']);
+    expect(repoRefs(splitRefs('[[repo:src\\app.ts]]'))).toEqual(['src/app.ts']);
+    expect(repoRefs(splitRefs('[[repo:./src/app.ts]]'))).toEqual(['src/app.ts']);
+  });
+
+  it('still links a token that escapes the project folder, for the host to refuse', () => {
+    expect(splitRefs('[[repo:../secrets]]')).toEqual([
+      {
+        kind: 'repo-ref',
+        path: '../secrets',
+        name: 'secrets',
+        raw: '[[repo:../secrets]]',
+      },
+    ]);
+  });
+
+  it('leaves a token with no path at all as plain text', () => {
+    expect(splitRefs('[[repo:]]')).toEqual([{ kind: 'text', text: '[[repo:]]' }]);
+    expect(splitRefs('[[repo:  ]]')).toEqual([{ kind: 'text', text: '[[repo:  ]]' }]);
+  });
+
+  it('keeps a doc token that merely starts with repo a doc token', () => {
+    expect(docRefs(splitRefs('[[repository-notes]]'))).toEqual(['repository-notes']);
+    expect(repoRefs(splitRefs('[[repository-notes]]'))).toEqual([]);
+  });
+
+  it('finds a doc ref, a task ref and a repo ref in one string', () => {
+    const segments = splitRefs('BD-1, [[architecture]] and [[repo:README.md]]');
+    expect(taskRefs(segments)).toEqual(['BD-1']);
+    expect(docRefs(segments)).toEqual(['architecture']);
+    expect(repoRefs(segments)).toEqual(['README.md']);
+  });
+
+  it('preserves the original text across segments', () => {
+    const text = 'See [[repo:a/b.ts]] and [[repo:../up]] and [[repo:]]';
     expect(rejoin(splitRefs(text))).toBe(text);
   });
 });

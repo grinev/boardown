@@ -1,4 +1,4 @@
-import type { FsAdapter, Theme } from '@boardown/core';
+import type { FsAdapter, ProjectFileReader, Theme } from '@boardown/core';
 
 export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
 
@@ -51,6 +51,10 @@ export interface BoardownBridge {
   // See BootstrapState.showMenuButton.
   readonly showMenuButton: boolean;
   readonly fs: FsAdapter;
+  // Read-only access to the open project folder (the parent of .boardown/), for
+  // repo file links. Deliberately not part of `fs`: no write path may reach
+  // outside the board.
+  readonly projectFiles: ProjectFileReader;
   readonly pickFolder: () => Promise<void>;
   // Pop up the native application menu at the cursor (the ☰ button). Win/Linux
   // only — macOS reaches the same menu through its system menu bar.
@@ -81,6 +85,7 @@ export interface BoardownBridge {
 export const IPC = {
   bootstrap: 'boardown:bootstrap',
   fs: 'boardown:fs',
+  projectFile: 'boardown:project-file',
   pickFolder: 'boardown:pick-folder',
   popupMenu: 'boardown:popup-menu',
   openRecent: 'boardown:open-recent',

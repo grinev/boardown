@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react';
+import { FileCode2, FileText } from 'lucide-react';
 import { Fragment, type KeyboardEvent } from 'react';
 import { docPageTitle, resolveDocRef } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -14,6 +14,7 @@ export function LinkedText({ text }: LinkedTextProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
   const openDocPopup = useBoardStore((s) => s.openDocPopup);
+  const openRepoFilePopup = useBoardStore((s) => s.openRepoFilePopup);
 
   const segments = splitRefs(text);
 
@@ -49,6 +50,27 @@ export function LinkedText({ text }: LinkedTextProps) {
             >
               <FileText size={14} className={styles.docIcon} aria-hidden="true" />
               {docPageTitle(page)}
+            </button>
+          );
+        }
+
+        if (segment.kind === 'repo-ref') {
+          // No resolution step: the project folder is not indexed, so the link
+          // renders on sight and the popup is where a missing file is reported.
+          return (
+            <button
+              key={i}
+              type="button"
+              className={styles.link}
+              title={segment.path}
+              onClick={(e) => {
+                e.stopPropagation();
+                openRepoFilePopup(segment.path);
+              }}
+              onKeyDown={stopEditTrigger}
+            >
+              <FileCode2 size={14} className={styles.docIcon} aria-hidden="true" />
+              {segment.name}
             </button>
           );
         }

@@ -547,10 +547,12 @@ There is no Save or Cancel button, matching the rest of the app; an emptied titl
 reverts. A draft lives only in the view, so switching tabs mid-edit writes nothing.
 
 A page's body renders the same in-app references the task dialogs do (see "Task
-links" below): a `[[page]]` token links to another doc page, and a task ID opens
-that task's dialog over the Docs tab. Tokens inside inline code or a fenced block
-stay literal, so a page can document the syntax itself. The editor's textarea
-offers the same `[[` autocomplete.
+links" below): a `[[page]]` token links to another doc page, a task ID opens that
+task's dialog over the Docs tab, and a `[[repo:…]]` token opens a project file in
+the read-only popup over the Docs tab — a direct entry point, so that popup starts
+an empty back stack and shows no back button. Tokens inside inline code or a
+fenced block stay literal, so a page can document the syntax itself. The editor's
+textarea offers the same `[[` autocomplete, for doc pages only.
 
 Beyond those text references, docs are not connected to tasks, epics or releases —
 nothing is stored on either side, there are no backlinks, and the CLI has no docs
@@ -616,9 +618,10 @@ an inline-editable single-line text field, left **blank** when unset — the row
 still there and still clickable, it just shows nothing. A value too long to sit
 beside its label moves to the line below and takes the card's full width,
 wrapping from there. The label stays level with the value's first line, including
-while the editor is open. A value's task-ID and `[[…]]` tokens render as links in
-view mode, exactly as they do in the description (see "Task links" and "Doc
-links"), and typing `[[` while editing offers the same doc-page suggestions.
+while the editor is open. A value's task-ID, `[[…]]` and `[[repo:…]]` tokens render
+as links in view mode, exactly as they do in the description (see "Task links",
+"Doc links" and "Repo file links"), and typing `[[` while editing offers the same
+doc-page suggestions.
 Custom fields appear in the task dialog only: not on
 the task card, not in the backlog row, not in the filter bar, and not in the
 creation dialog — a new task starts with none and is filled in afterwards.
@@ -668,7 +671,37 @@ look like; matching is otherwise case-sensitive. Nothing is stored: the text on
 disk stays exactly what the user typed, and the link is a rendering affordance,
 not a data format.
 
-Both kinds render in the task's **description** and **notes** (task dialog), the
+**Repo file links.** A `[[repo:…]]` token holding a path relative to the **project
+folder** — the directory that contains `.boardown/` — renders as a link showing the
+**file name only** (`[[repo:packages/cli/src/node-fs.ts]]` → `node-fs.ts`) with a
+file icon. The `repo:` prefix is what tells the two kinds apart; a colon cannot
+occur in a filename, so a doc page can never be mistaken for a file. A leading `/`
+or `./` is stripped and a backslash is read as a separator, since an agent writes
+both; a path with a `..` segment, a drive letter or a UNC prefix is not a
+reference at all and stays plain text.
+
+Unlike a doc token, a repo token is **never resolved before it renders** — the
+project is not indexed — so it is always a link, and the target is inspected on
+click. Clicking one opens a read-only **popup** showing the file: rendered
+markdown for a `.md` file, plain monospaced text with the original line breaks for
+any other text file, and one of `Unsupported file format` (not a text file),
+`File not found`, `File is too large to preview` (about 1 MB) or `Could not read
+file` (a directory, a permission error, a path outside the project folder)
+instead of content. The popup's heading is the file name with the
+project-relative path beneath it; there is no **View in docs** button, since a
+repo file has no page in the Docs tab. **References inside a previewed file are
+not linkified** — a task id in a code comment or a `[[…]]` in a CHANGELOG stays
+literal, because the file belongs to the repo, not to the board. Nothing is
+stored, nothing is cached, and nothing is ever written: reopening the link re-reads
+the file. There is **no autocomplete** for repo file tokens — `[[` suggests doc
+pages only.
+
+Reading a project file is the shells' one capability that reaches outside
+`.boardown/`. It is read-only, scoped to the project folder, and separate from the
+`FsAdapter` every board write goes through; the CLI has no part in it, printing
+raw text as it does for doc links.
+
+All three kinds render in the task's **description** and **notes** (task dialog), the
 **epic's description** (epic dialog), the **release's description** (release
 dialog), a **doc page's body** (Docs tab) and a **custom field's value** (task
 dialog) — the one single-line field that renders links, since it is the natural
@@ -760,11 +793,12 @@ never rewritten. Dates (`startDate` / `endDate`) are not shown or edited yet.
 
 ### Dialog back stack
 
-The four detail dialogs — **task**, **epic**, **release** and the read-only
-**document popup** — are densely cross-linked: a task leads to its epic, to a
-linked task, to a task-ID or `[[…]]` reference in its description or notes; an
-epic leads to any of its tasks; a document popup leads to another page or to a
-task. Exactly one dialog is ever on screen, but navigating between them keeps a
+The five detail dialogs — **task**, **epic**, **release**, the read-only
+**document popup** and the read-only **repo file popup** — are densely
+cross-linked: a task leads to its epic, to a linked task, to a task-ID, `[[…]]` or
+`[[repo:…]]` reference in its description or notes; an epic leads to any of its
+tasks; a document popup leads to another page, to a task or to a project file.
+Exactly one dialog is ever on screen, but navigating between them keeps a
 **history stack**: the dialog you left is remembered rather than discarded.
 
 A dialog reached from another one carries a **back** button — an icon-only
@@ -780,8 +814,11 @@ Closing a dialog outright — the close button, Escape or a click on the backdro
 discards the whole stack, as does following **View in docs** out to the Docs tab
 and deleting the open task. An entry whose entity has since disappeared is
 silently skipped on the way back; if none of them resolves, the dialog simply
-closes. The nested modals (creating a task from an epic, the delete confirmation)
-are not part of the stack — they close back to their parent on their own.
+closes. A repo file entry is never skipped — a project file lives outside the
+board, so there is nothing to check it against without touching disk, and a file
+that has since gone says so in the popup. The nested modals (creating a task from
+an epic, the delete confirmation) are not part of the stack — they close back to
+their parent on their own.
 
 ### Settings
 

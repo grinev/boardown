@@ -182,6 +182,7 @@ export function Root() {
           <App
             key={activeFolder}
             fs={bridge.fs}
+            projectFiles={bridge.projectFiles}
             forcedTheme={theme}
             defaultTheme={openThemeRef.current}
             defaultProjectName={folderName(activeFolder)}

@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react';
+import { FileCode2, FileText } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,6 +7,7 @@ import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
 import {
   DOC_HREF,
+  REPO_HREF,
   TASK_HREF,
   remarkBoardownRefs,
   type ToRefLink,
@@ -17,7 +18,9 @@ interface MarkdownContentProps {
   source: string;
   // What a doc-ref link does when clicked: navigate the Docs tab in place
   // (openDocPage) or swap the popup that is showing this body (openDocPopup).
-  onDocRefClick: (path: string) => void;
+  // Omitted for a body that is not board text — a file previewed from the repo —
+  // where no reference token is turned into a link at all.
+  onDocRefClick?: (path: string) => void;
 }
 
 // react-markdown drops URLs with an unknown protocol, which would strip the
@@ -30,6 +33,7 @@ const urlTransform = (url: string): string =>
 export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
   const openTask = useBoardStore((s) => s.openTask);
+  const openRepoFilePopup = useBoardStore((s) => s.openRepoFilePopup);
 
   const toLink = useCallback<ToRefLink>(
     (segment) => {
@@ -40,6 +44,9 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
           ? null
           : { href: `${DOC_HREF}${page.path}`, label: docPageTitle(page) };
       }
+      if (segment.kind === 'repo-ref') {
+        return { href: `${REPO_HREF}${segment.path}`, label: segment.name };
+      }
       const task = findTaskById(snapshot, segment.id);
       return task === null
         ? null
@@ -49,14 +56,17 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
   );
 
   const remarkPlugins = useMemo(
-    () => [remarkGfm, remarkBoardownRefs(toLink)],
-    [toLink],
+    () =>
+      onDocRefClick === undefined
+        ? [remarkGfm]
+        : [remarkGfm, remarkBoardownRefs(toLink)],
+    [toLink, onDocRefClick],
   );
 
   const components = useMemo<Components>(
     () => ({
       a({ href, children }) {
-        if (href !== undefined && href.startsWith(DOC_HREF)) {
+        if (href !== undefined && href.startsWith(DOC_HREF) && onDocRefClick) {
           const path = href.slice(DOC_HREF.length);
           return (
             <button
@@ -65,6 +75,20 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
               onClick={() => onDocRefClick(path)}
             >
               <FileText size={14} className={styles.refIcon} aria-hidden="true" />
+              {children}
+            </button>
+          );
+        }
+        if (href !== undefined && href.startsWith(REPO_HREF)) {
+          const path = href.slice(REPO_HREF.length);
+          return (
+            <button
+              type="button"
+              className={styles.refLink}
+              title={path}
+              onClick={() => openRepoFilePopup(path)}
+            >
+              <FileCode2 size={14} className={styles.refIcon} aria-hidden="true" />
               {children}
             </button>
           );
@@ -80,7 +104,7 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         return <a href={href}>{children}</a>;
       },
     }),
-    [onDocRefClick, openTask],
+    [onDocRefClick, openTask, openRepoFilePopup],
   );
 
   return (

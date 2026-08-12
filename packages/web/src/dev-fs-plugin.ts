@@ -1,8 +1,14 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { configureLogging, createLogger, isLogLevel, type LogRecord } from '../../core/src/logger';
+import {
+  PROJECT_FILE_MAX_BYTES,
+  classifyProjectFile,
+  type ProjectFileRead,
+} from '../../core/src/project-file';
 import type { Connect, Plugin } from 'vite';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
+import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint.js';
 import { createLogFileSink } from './log-file-sink.js';
 import { resolveDevLogLevel } from './log-level.js';
 
@@ -95,8 +101,35 @@ const asLogRecord = (value: unknown): LogRecord | null => {
   };
 };
 
+// The project folder is the board root's parent, so `--data-dir` keeps deciding
+// both. Repo file links resolve against it; nothing writes there.
+const readProjectFile = async (
+  projectRoot: string,
+  userPath: string,
+): Promise<ProjectFileRead> => {
+  const normalized = userPath.replace(/\\/g, '/');
+  if (normalized === '' || normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) {
+    return { kind: 'unreadable' };
+  }
+  const abs = path.resolve(projectRoot, normalized);
+  const rel = path.relative(projectRoot, abs);
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+    return { kind: 'unreadable' };
+  }
+  try {
+    const stat = await fs.stat(abs);
+    if (!stat.isFile()) return { kind: 'unreadable' };
+    if (stat.size > PROJECT_FILE_MAX_BYTES) return { kind: 'too-large' };
+    return classifyProjectFile(await fs.readFile(abs));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return { kind: code === 'ENOENT' || code === 'ENOTDIR' ? 'not-found' : 'unreadable' };
+  }
+};
+
 export function devFsPlugin(options: DevFsPluginOptions): Plugin {
   const boardRoot = path.resolve(options.boardRoot);
+  const projectRoot = path.dirname(boardRoot);
   const logsDir = path.resolve(options.logsDir);
 
   const resolveTarget = (userPath: string | null): Resolved => {
@@ -151,7 +184,26 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
           return;
         }
 
-        if (!req.url || !req.url.startsWith('/api/fs/')) {
+        if (!req.url) {
+          next();
+          return;
+        }
+
+        // Repo file links: read-only, resolved against the project folder rather
+        // than the board root, and answered as JSON in every case — the failure
+        // kinds are part of the payload, not HTTP statuses.
+        if (req.method === 'GET' && req.url.startsWith(PROJECT_FILE_ENDPOINT)) {
+          const url = new URL(req.url, 'http://localhost');
+          const result = await readProjectFile(
+            projectRoot,
+            url.searchParams.get('path') ?? '',
+          );
+          log.debug(`project-file ${url.searchParams.get('path') ?? ''}: ${result.kind}`);
+          sendJson(res, 200, result);
+          return;
+        }
+
+        if (!req.url.startsWith('/api/fs/')) {
           next();
           return;
         }

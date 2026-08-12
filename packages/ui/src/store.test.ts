@@ -160,6 +160,7 @@ const setup = (snapshot: BoardSnapshot): { fs: MemFs } => {
     selectedEpicSlug: null,
     selectedReleaseFilename: null,
     docPopupPath: null,
+    repoFilePopupPath: null,
     selectedDocPath: null,
     dialogStack: [],
   });
@@ -1255,24 +1256,24 @@ describe('doc popup', () => {
   });
 });
 
-describe('dialog back stack', () => {
-  const docs = () => ({
-    path: 'docs',
-    name: 'docs',
-    folders: [],
-    pages: [
-      { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
-    ],
-    otherEntries: [],
+const docs = () => ({
+  path: 'docs',
+  name: 'docs',
+  folders: [],
+  pages: [
+    { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
+  ],
+  otherEntries: [],
+});
+
+const board = () =>
+  snap({
+    releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])],
+    epics: [epic('ui')],
+    docs: docs(),
   });
 
-  const board = () =>
-    snap({
-      releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])],
-      epics: [epic('ui')],
-      docs: docs(),
-    });
-
+describe('dialog back stack', () => {
   it('pushes nothing when a dialog is opened with none already open', () => {
     setup(board());
 
@@ -1398,5 +1399,78 @@ describe('dialog back stack', () => {
 
     expect(state().selectedTaskId).toBeNull();
     expect(state().dialogStack).toEqual([]);
+  });
+});
+
+describe('repo file popup', () => {
+  it('takes over from the dialog it was opened from and remembers it', () => {
+    setup(board());
+    state().openTask('BD-1');
+
+    state().openRepoFilePopup('packages/cli/src/app.ts');
+
+    expect(state().repoFilePopupPath).toBe('packages/cli/src/app.ts');
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([{ kind: 'task', id: 'BD-1' }]);
+  });
+
+  it('starts an empty stack when opened with no dialog on screen', () => {
+    setup(board());
+
+    state().openRepoFilePopup('README.md');
+
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('is restored from the stack on the way back', () => {
+    setup(board());
+    state().openRepoFilePopup('README.md');
+    state().openTask('BD-1');
+
+    state().goBack();
+
+    expect(state().repoFilePopupPath).toBe('README.md');
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('is never skipped on the way back, since nothing resolves it', () => {
+    setup(board());
+    state().openRepoFilePopup('gone/from/disk.ts');
+    state().openTask('BD-1');
+    // The board reloads without the epic; a repo file is outside the snapshot
+    // either way, so the entry still stands.
+    useBoardStore.setState({
+      snapshot: snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        epics: [],
+        docs: docs(),
+      }),
+    });
+
+    state().goBack();
+
+    expect(state().repoFilePopupPath).toBe('gone/from/disk.ts');
+  });
+
+  it('closes on its own and drops the stack', () => {
+    setup(board());
+    state().openTask('BD-1');
+    state().openRepoFilePopup('README.md');
+
+    state().closeRepoFilePopup();
+
+    expect(state().repoFilePopupPath).toBeNull();
+    expect(state().dialogStack).toEqual([]);
+  });
+
+  it('is closed by the conflict modal like every other dialog', () => {
+    setup(board());
+    state().openRepoFilePopup('README.md');
+
+    state().openConflict();
+
+    expect(state().repoFilePopupPath).toBeNull();
+    expect(state().conflictOpen).toBe(true);
   });
 });

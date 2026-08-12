@@ -16,6 +16,23 @@ export interface FsResponseMessage {
   error?: string;
 }
 
+// Reading a file from the workspace folder for a repo file link. A separate
+// message rather than an FsMethod: it is read-only and resolved against the
+// workspace folder, while every fs-request stays inside .boardown/.
+export interface ProjectFileRequestMessage {
+  type: 'project-file-request';
+  id: number;
+  path: string;
+}
+
+export interface ProjectFileResponseMessage {
+  type: 'project-file-response';
+  id: number;
+  // A ProjectFileRead from @boardown/core: the host classified the bytes, since
+  // this channel carries JSON and cannot carry them itself.
+  result: unknown;
+}
+
 export interface ReadyMessage {
   type: 'ready';
 }
@@ -27,5 +44,8 @@ export interface BoardChangedMessage {
   type: 'board-changed';
 }
 
-export type WebviewToHost = FsRequestMessage | ReadyMessage;
-export type HostToWebview = FsResponseMessage | BoardChangedMessage;
+export type WebviewToHost = FsRequestMessage | ProjectFileRequestMessage | ReadyMessage;
+export type HostToWebview =
+  | FsResponseMessage
+  | ProjectFileResponseMessage
+  | BoardChangedMessage;

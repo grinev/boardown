@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { Theme } from '@boardown/core';
 import { App, useBoardStore } from '@boardown/ui';
 import { VsCodeFsAdapter } from './VsCodeFsAdapter';
+import { VsCodeProjectFileReader } from './VsCodeProjectFileReader';
 import './webview.css';
 
 // VS Code tags the webview <body> with its active color theme. Light variants
@@ -43,6 +44,7 @@ createRoot(container).render(
   <StrictMode>
     <App
       fs={new VsCodeFsAdapter(vscode)}
+      projectFiles={new VsCodeProjectFileReader(vscode)}
       defaultTheme={detectTheme()}
       version={detectVersion()}
     />

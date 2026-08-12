@@ -4,6 +4,7 @@ import { configureLogging } from '@boardown/core';
 import { App } from '@boardown/ui';
 import { createBrowserLogSink } from './browser-log-sink';
 import { DevHttpFsAdapter } from './dev-http-fs-adapter';
+import { DevHttpProjectFileReader } from './dev-project-file-reader';
 import { resolveDevLogLevel } from './log-level';
 
 // Installed before anything renders, so a failure during the first load is
@@ -20,9 +21,10 @@ if (!container) {
 }
 
 const fs = new DevHttpFsAdapter();
+const projectFiles = new DevHttpProjectFileReader();
 
 createRoot(container).render(
   <StrictMode>
-    <App fs={fs} version={__BOARDOWN_VERSION__} />
+    <App fs={fs} projectFiles={projectFiles} version={__BOARDOWN_VERSION__} />
   </StrictMode>,
 );

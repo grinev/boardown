@@ -11,6 +11,7 @@ import type {
   GuardedFile,
   GuardedFs,
   ParseProblem,
+  ProjectFileReader,
   Release,
   ReleasePatch,
   Task,
@@ -99,7 +100,8 @@ export type DialogRef =
   | { kind: 'task'; id: string }
   | { kind: 'epic'; slug: string }
   | { kind: 'release'; filename: string }
-  | { kind: 'doc'; path: string };
+  | { kind: 'doc'; path: string }
+  | { kind: 'repo-file'; path: string };
 
 interface BoardState {
   status: BoardStatus;
@@ -113,6 +115,10 @@ interface BoardState {
   defaultTheme: Theme | null;
   fs: GuardedFs | null;
   rawFs: FsAdapter | null;
+  // The shell's read-only window onto the project folder, for repo file links.
+  // Separate from `fs` on purpose: it reaches outside `.boardown/`, so no write
+  // path may ever hold it.
+  projectFiles: ProjectFileReader | null;
   conflictOpen: boolean;
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
@@ -120,6 +126,10 @@ interface BoardState {
   // The doc page shown in the read-only popup; a peer of the entity selections
   // above in the single-dialog invariant (only one dialog is open at a time).
   docPopupPath: string | null;
+  // The project file shown in the read-only popup — another peer. Its path is
+  // project-folder-relative and already normalized; unlike the others it names
+  // nothing in the snapshot, so the popup reads it on demand.
+  repoFilePopupPath: string | null;
   // Dialogs navigated away from, oldest first. Still one dialog on screen — this
   // is history, not a pile of windows. Back only; there is no forward.
   dialogStack: DialogRef[];
@@ -139,6 +149,7 @@ interface BoardState {
   createDocFolderOpen: boolean;
   deleteDocPath: string | null;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
+  setProjectFiles: (reader: ProjectFileReader) => void;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
@@ -175,6 +186,8 @@ interface BoardState {
   openDocPage: (path: string) => void;
   openDocPopup: (path: string) => void;
   closeDocPopup: () => void;
+  openRepoFilePopup: (path: string) => void;
+  closeRepoFilePopup: () => void;
   openCreateDocPage: () => void;
   closeCreateDocPage: () => void;
   openCreateDocFolder: () => void;
@@ -453,6 +466,9 @@ const currentDialog = (state: BoardState): DialogRef | null => {
     return { kind: 'release', filename: state.selectedReleaseFilename };
   }
   if (state.docPopupPath !== null) return { kind: 'doc', path: state.docPopupPath };
+  if (state.repoFilePopupPath !== null) {
+    return { kind: 'repo-file', path: state.repoFilePopupPath };
+  }
   return null;
 };
 
@@ -466,6 +482,7 @@ const NO_DIALOG = {
   selectedEpicSlug: null,
   selectedReleaseFilename: null,
   docPopupPath: null,
+  repoFilePopupPath: null,
 };
 
 const selectionFor = (ref: DialogRef) => {
@@ -478,6 +495,8 @@ const selectionFor = (ref: DialogRef) => {
       return { ...NO_DIALOG, selectedReleaseFilename: ref.filename };
     case 'doc':
       return { ...NO_DIALOG, docPopupPath: ref.path };
+    case 'repo-file':
+      return { ...NO_DIALOG, repoFilePopupPath: ref.path };
   }
 };
 
@@ -511,6 +530,11 @@ const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
       return snapshot.releases.some((r) => r.filename === ref.filename);
     case 'doc':
       return findDocPage(snapshot.docs, ref.path) !== null;
+    case 'repo-file':
+      // Nothing to check: a project file is outside the snapshot, and a
+      // filesystem round trip inside a state transition is not worth the
+      // certainty. A file that has since gone reports it in the popup.
+      return true;
   }
 };
 
@@ -525,9 +549,12 @@ export const useBoardStore = create<BoardState>(
     defaultTheme: null,
     fs: null,
     rawFs: null,
+    projectFiles: null,
     conflictOpen: false,
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
+
+    setProjectFiles: (reader) => set({ projectFiles: reader }),
 
     load: async (fs, defaultTheme) => {
       set({
@@ -798,6 +825,18 @@ export const useBoardStore = create<BoardState>(
       })),
 
     closeDocPopup: () => set({ docPopupPath: null, dialogStack: [] }),
+
+    // The same peer treatment for a repo file link. Clicked from a doc body in
+    // the Docs tab there is no dialog to push, so the stack stays empty and the
+    // popup shows no back button — the rule every directly-opened dialog follows.
+    openRepoFilePopup: (path) =>
+      set((state) => ({
+        ...NO_DIALOG,
+        repoFilePopupPath: path,
+        dialogStack: pushCurrent(state),
+      })),
+
+    closeRepoFilePopup: () => set({ repoFilePopupPath: null, dialogStack: [] }),
 
     openCreateDocPage: () => set({ createDocPageOpen: true }),
     closeCreateDocPage: () => set({ createDocPageOpen: false }),

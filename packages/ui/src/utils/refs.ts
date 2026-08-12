@@ -1,3 +1,9 @@
+import {
+  REPO_REF_PREFIX,
+  projectFileName,
+  projectFilePathFromRefToken,
+} from '@boardown/core';
+
 export interface TextSegment {
   kind: 'text';
   text: string;
@@ -16,7 +22,17 @@ export interface DocRefSegment {
   raw: string;
 }
 
-export type RefSegment = TextSegment | TaskRefSegment | DocRefSegment;
+// A file anywhere in the project folder. Carries the normalized path and the file
+// name because nothing resolves it later: the project is not indexed, so this is
+// all the renderer ever knows about the target.
+export interface RepoRefSegment {
+  kind: 'repo-ref';
+  path: string;
+  name: string;
+  raw: string;
+}
+
+export type RefSegment = TextSegment | TaskRefSegment | DocRefSegment | RepoRefSegment;
 
 // One pass over both reference shapes, so `[[BD-7]]` cannot be claimed by two
 // scanners at once: the wiki token starts first at that position and wins.
@@ -44,12 +60,22 @@ export const splitRefs = (text: string): RefSegment[] => {
     const wiki = match[1];
     if (wiki === undefined) {
       segments.push({ kind: 'task-ref', id: match[0] });
-    } else if (wiki.trim() === '') {
+      continue;
+    }
+    const token = wiki.trim();
+    if (token === '') {
       // `[[]]` / `[[   ]]` point at nothing — plain text, like any other token
       // that resolves to nothing.
       pushText(match[0]);
+    } else if (token.startsWith(REPO_REF_PREFIX)) {
+      const path = projectFilePathFromRefToken(token);
+      // Only `[[repo:]]` with no path is not a reference. Everything else is a
+      // link on sight — a path that escapes the project folder included, since
+      // the shell is what refuses it, and saying so on click beats dead text.
+      if (path === null) pushText(match[0]);
+      else segments.push({ kind: 'repo-ref', path, name: projectFileName(path), raw: match[0] });
     } else {
-      segments.push({ kind: 'doc-ref', token: wiki.trim(), raw: match[0] });
+      segments.push({ kind: 'doc-ref', token, raw: match[0] });
     }
   }
 
