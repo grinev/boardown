@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0
+
+- **Repo file links**: write `[[repo:packages/cli/src/node-fs.ts]]` anywhere doc
+  links already render — a description, notes, an epic or release description, a
+  custom field, a doc page — and it becomes a link labelled with the file's name
+  that opens the file's content in a read-only popup. Any text file works; a
+  binary or missing file shows an error instead.
+- **Done task links are struck through**: an inline `BD-xx` reference to a task
+  that is already done now renders with a line through it, so you can see what is
+  finished without clicking through.
+- **Doc-link autocomplete in the creation dialogs**: the Description field of
+  Create task, Create epic and Create release now offers the same `[[` doc-page
+  suggestion popup the detail dialogs have.
+- **Back button on the left**: in a dialog reached from another dialog, the back
+  arrow moved out of the top-right corner next to the close `✕` and now sits
+  right after the dialog's icon and title.
+- **CLI row in Settings**: the Settings dialog gained a CLI row between the WIP
+  limit field and the Version row, showing the install command as selectable text
+  plus a Learn more link to the CLI documentation.
+- Fix: switching tabs no longer nudges the neighbouring tabs and the search field
+  sideways by a pixel.
+
 ## 0.6.0
 
 - **Task search**: a search field in the top bar finds any task on the board by

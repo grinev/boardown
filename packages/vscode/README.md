@@ -37,6 +37,9 @@ instead of overwriting.
 - **Docs**: a **Docs** tab turns `.boardown/docs/` into a small project wiki,
   and any doc page can be referenced from a task or epic and opened in a popup
   without leaving the board.
+- **Repo file links**: write `[[repo:src/server.ts]]` in a description, a note
+  or a custom field to link any text file in the project — it renders as the
+  file's name and opens the file's content in a read-only popup.
 - **Epics** that group tasks across releases and double as the backlog's
   storage, usable as a filter dimension, with an editable colour.
 - **Task search**: a search field in the top bar finds any task by id, title or

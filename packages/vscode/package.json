@@ -1,10 +1,10 @@
 {
   "name": "boardown",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "publisher": "grinev",
-  "displayName": "boardown",
-  "description": "A lightweight, local-first task board stored as markdown inside your repo.",
+  "displayName": "Boardown",
+  "description": "A lightweight, local-first task board stored as markdown inside your repo. No cloud, no account — and your AI coding agent already sees the board, with a companion CLI to drive it.",
   "license": "MIT",
   "icon": "icon.png",
   "repository": {
