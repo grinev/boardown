@@ -38,15 +38,6 @@ status: todo
 order: 1200
 ---
 
-## Add task links types
-
----
-id: BD-57
-type: feature
-status: todo
-order: 200
----
-
 ## Make task IDs survive parallel branches
 
 ---
@@ -116,7 +107,7 @@ order: 1900
 
 Indexes for closed releases with tasks in epic
 
-## Operation notofications
+## Operation notifications
 
 ---
 id: BD-79
@@ -132,13 +123,4 @@ id: BD-80
 type: feature
 status: todo
 order: 2000
----
-
-## Topic name length restriction
-
----
-id: BD-87
-type: feature
-status: todo
-order: 250
 ---
