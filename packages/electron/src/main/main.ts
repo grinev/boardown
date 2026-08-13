@@ -1,5 +1,6 @@
 import { statSync, readdirSync, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   app,
   BrowserWindow,
@@ -9,6 +10,7 @@ import {
   nativeTheme,
   screen,
   session,
+  shell,
   type IpcMainInvokeEvent,
 } from 'electron';
 import type { ProjectFileRead, Theme } from '@boardown/core';
@@ -16,6 +18,7 @@ import { DOCS_DIR, configureLogging, createLogger, formatLogRecord } from '@boar
 import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { readProjectFile } from './project-file';
+import { classifyNavigation } from './external-links';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
 import {
@@ -340,10 +343,27 @@ function createWindow(initialFolder: string | null): void {
 
   if (settings.windowMaximized) window.maximize();
 
+  const rendererIndex = path.join(__dirname, 'renderer', 'index.html');
+  const appDocument = DEV_SERVER_URL ?? pathToFileURL(rendererIndex).href;
+
+  // Without these the app has no navigation policy at all: a link in a doc page
+  // replaces the board with a remote site, and there is no address bar to get
+  // back from. Both paths a click can take are routed through one allowlist.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (classifyNavigation(url, appDocument) === 'external') void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event, url) => {
+    const verdict = classifyNavigation(url, appDocument);
+    if (verdict === 'in-app') return;
+    event.preventDefault();
+    if (verdict === 'external') void shell.openExternal(url);
+  });
+
   if (DEV_SERVER_URL !== undefined) {
     void window.loadURL(DEV_SERVER_URL);
   } else {
-    void window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    void window.loadFile(rendererIndex);
   }
 }
 

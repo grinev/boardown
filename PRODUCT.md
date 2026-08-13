@@ -834,14 +834,29 @@ their parent on their own.
 
 A dialog opened from the gear button in the top navigation. It holds the board's
 **Theme** selector; below it a **WIP limit (In Progress)** number field, empty
-meaning no limit (see "WIP limit" under Configuration); and below that a read-only
-**Version** row showing the version of the build the user is running — the shell
-supplies it, so it is the installed extension's version in VS Code and the
-checkout's version in the `web` dev shell. The Electron shell hides this dialog
-(it owns the theme app-wide) and surfaces the version through the OS-native About
-window instead; the WIP limit field appears in its own settings popover, in the
-**Board** section below the auto-refresh checkbox, since it belongs to the board's
-`config.yaml` rather than to the installation.
+meaning no limit (see "WIP limit" under Configuration); below that a read-only
+**CLI** row; and last a read-only **Version** row showing the version of the build
+the user is running — the shell supplies it, so it is the installed extension's
+version in VS Code and the checkout's version in the `web` dev shell.
+
+The **CLI** row exists because the command-line shell is otherwise undiscoverable
+from inside the app: a user who installed the extension has no way to learn it
+exists. It states what the CLI is for — letting AI agents work with the board —
+followed by a **Learn more** link to its documentation, which opens outside the
+app; below that sits the install command (`npm i -g @grinev/boardown-cli`) as
+selectable text with a copy button at its right edge, which confirms the copy by
+swapping to a checkmark. It is deliberately static — it does **not** detect whether the
+CLI is installed. Running `boardown --version` from a shell host is unreliable in
+ways the product cannot fix (a GUI launch on macOS truncates `PATH`, npm's Windows
+shim needs a shell to resolve, Snap/Flatpak and remote hosts see a different
+filesystem), and a false "not installed" reads as a bug.
+
+The Electron shell hides this dialog (it owns the theme app-wide) and surfaces the
+version through the OS-native About window instead. Its own settings popover
+carries the WIP limit field in the **Board** section below the auto-refresh
+checkbox, since it belongs to the board's `config.yaml` rather than to the
+installation, and ends with a **CLI** section holding the same command and link —
+which, unlike the WIP limit, shows with no board open.
 
 ### Empty states
 
@@ -875,7 +890,12 @@ using the OS native dialog, and an optional CLI argument for opening a specific
 folder. It auto-refreshes on external changes like the VS Code shell. The app
 menu carries **About boardown** (under Help on Windows/Linux, in the system
 application menu on macOS), which opens the OS-native About window with the app's
-version. Installers
+version. Links behave the way a desktop app's do: clicking an `http(s)` link in
+rendered markdown — a doc page, a doc popup, a previewed repo file — opens the
+OS default browser, and the application window itself never navigates away from
+the board. Any other scheme is inert; the window is governed by an allowlist, so
+markdown the board did not author (a previewed repo file) cannot talk it into
+loading something else. Installers
 are attached to each GitHub Release. Builds are currently unsigned —
 code-signing / notarization are a separate round.
 

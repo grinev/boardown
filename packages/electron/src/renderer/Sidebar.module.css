@@ -267,6 +267,11 @@
   margin-top: 8px;
 }
 
+.cliHint {
+  /* The component lays itself out; the panel only owns the gap above it. */
+  margin-top: 2px;
+}
+
 .themeOption {
   flex: 1;
   padding: 6px 4px;
