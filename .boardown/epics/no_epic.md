@@ -124,3 +124,38 @@ type: feature
 status: todo
 order: 2000
 ---
+
+## Allow linking tasks to tasks in finished releases
+
+---
+id: BD-89
+type: feature
+status: todo
+order: 2100
+---
+
+Adding a link to a task that sits in a finished release fails:
+
+```
+$ boardown task link add OTB-54 OTB-28
+{"ok":false,"error":{"code":"ARCHIVED","message":"Cannot change the links of a task in a finished release"}}
+```
+
+The reverse direction fails too — links are symmetric, so the write always lands on the archived card as well.
+
+## Why it hurts
+
+A new task very often *is* the consequence of a finished one, and that is exactly when the relation is worth recording. Two real cases from opencode-telegram-bot on 2026-08-15:
+
+- a bug about settings recovery is a direct follow-up of the atomic-write task shipped in v0.23.0;
+- a stale README line is a follow-up of the feature shipped in v0.23.1.
+
+Both relations had to be written as plain text inside the description — which is what links exist to avoid. The archive stays clean at the cost of losing the history that makes it useful.
+
+## Directions to pick from before implementing
+
+- treat links as metadata rather than content: allow adding and removing them on archived tasks while title, description and status stay frozen;
+- or keep the link one-sided on the live task, and render the archived counterpart as read-only backlink;
+- or allow the write and accept that a finished release file changes.
+
+Whichever is chosen, `task link rm` and any archive-integrity checks must follow the same rule, and the UI needs to show backlinks on archived tasks.

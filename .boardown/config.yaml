@@ -1,4 +1,23 @@
 idPrefix: BD
-nextId: 89
+nextId: 90
 projectName: Boardown
 theme: dark
+customFields:
+  - key: groom
+    label: Groom
+    type: string
+  - key: spec
+    label: Spec
+    type: string
+  - key: plan
+    label: Plan
+    type: string
+  - key: log
+    label: Worker log
+    type: string
+  - key: session
+    label: Session
+    type: string
+  - key: outcome
+    label: Outcome
+    type: string

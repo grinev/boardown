@@ -284,7 +284,10 @@ code that fails any of these gates.
 - **Never commit without explicit permission.** Do not run `git commit` (or
   `git push`) on your own initiative, even when a change is finished and the
   gates pass. Stage and prepare changes if asked, but wait for the user to
-  explicitly tell you to commit.
+  explicitly tell you to commit. **Unless the command you are running states its
+  own commit rule:** a non-interactive flow has nobody to ask, so it carries the
+  conditions instead, and under such a command you follow those. `git push` is
+  never covered by that exception.
 
 ## Planning
 

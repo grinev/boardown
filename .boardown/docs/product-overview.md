@@ -24,15 +24,12 @@ coming for free from git.
 | **Backlog** | `epics/no_epic.md` + every `epics/*.md` | the conceptual set of tasks with no release |
 | **Doc page** | `docs/**/*.md` | this wiki; not connected to tasks |
 
-## Principles that keep coming up
+## Principles
 
-- **Markdown is the product.** Every change is a plain-text git diff, reviewable and revertible.
-  A feature that would need a database is the wrong feature.
-- **Lenient parsing.** A broken file never blocks the others, problems surface in a banner, and
-  the app *never* rewrites a file it could not fully understand.
-- **No automated backups.** Git is the safety net. That is why deletion is permanent and there is
-  no trash bin anywhere in the UI.
-- **The product is intentionally small.** Feature creep gets pushed back on.
+How boardown settles a fork — what the app may rewrite, where a rule is allowed to live, how a
+refusal is expressed, what always goes to a human — is one page: [[principles]]. Each entry there
+names what it forbids and the decisions it was read out of, so it can be applied to a question
+nobody has asked yet.
 
 ## Shells
 
