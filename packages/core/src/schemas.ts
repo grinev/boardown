@@ -242,7 +242,13 @@ export const BoardConfigSchema = z
     nextId: z.number().int().nonnegative(),
     projectName: z.string().min(1),
     theme: ThemeSchema.optional(),
+    // The slug of the active release the Board shows. Not checked against the
+    // releases on disk: a slug that stopped being active resolves away at read
+    // time, and failing the whole board over a stale view preference would be
+    // out of proportion to what it means.
+    boardRelease: z.string().min(1).optional(),
     wipLimits: WipLimitsSchema.optional(),
+    multipleActiveReleases: z.boolean().optional(),
     customFields: CustomFieldsSchema.optional(),
   })
   .strict();

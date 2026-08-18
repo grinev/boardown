@@ -1,5 +1,5 @@
 import {
-  currentRelease,
+  activeReleases,
   finishedReleases,
   futureReleases,
   normalizeSearchQuery,
@@ -18,12 +18,11 @@ export const SEARCH_MAX_RESULTS = 10;
 export const isSearchable = (query: string): boolean =>
   normalizeSearchQuery(query).length >= SEARCH_MIN_QUERY;
 
-/** Every task on the board in reading order: the current release, future
+/** Every task on the board in reading order: the active releases, future
  *  releases, the unscheduled backlog, then the archive. */
 const boardTasks = (snapshot: BoardSnapshot): Task[] => {
-  const current = currentRelease(snapshot);
   return [
-    ...(current ? sortTasksByOrder(current.tasks) : []),
+    ...activeReleases(snapshot).flatMap((r) => sortTasksByOrder(r.tasks)),
     ...futureReleases(snapshot).flatMap((r) => sortTasksByOrder(r.tasks)),
     ...unscheduledTasks(snapshot),
     ...finishedReleases(snapshot).flatMap((r) => sortTasksByOrder(r.tasks)),

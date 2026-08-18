@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import type { Backlog, Epic, Release, Task } from './schemas.js';
+import type { BoardConfig } from './schemas.js';
 import {
+  activeReleases,
+  boardRelease,
   finishedReleases,
   futureReleases,
-  currentRelease,
   sortTasksByOrder,
   unscheduledTasks,
 } from './ordering.js';
+
+const config = (extra: Partial<BoardConfig> = {}): BoardConfig => ({
+  idPrefix: 'TS',
+  nextId: 1,
+  projectName: 'Test',
+  ...extra,
+});
 
 const task = (id: string, order: number): Task => ({
   title: id,
@@ -67,8 +76,15 @@ describe('release ordering', () => {
     ],
   };
 
-  it('finds the one current release', () => {
-    expect(currentRelease(snapshot)?.slug).toBe('1.10');
+  it('lists the active releases oldest first', () => {
+    const twoActive = {
+      releases: [release('1.12', 'current'), release('1.10', 'current'), release('1.11', 'future')],
+    };
+    expect(activeReleases(twoActive).map((r) => r.slug)).toEqual(['1.10', '1.12']);
+  });
+
+  it('has no active release when none is current', () => {
+    expect(activeReleases({ releases: [release('x', 'future')] })).toEqual([]);
   });
 
   it('orders future releases oldest first', () => {
@@ -79,8 +95,36 @@ describe('release ordering', () => {
     expect(finishedReleases(snapshot).map((r) => r.slug)).toEqual(['1.09', '1.08']);
   });
 
-  it('has no current release when none is current', () => {
-    expect(currentRelease({ releases: [release('x', 'future')] })).toBeUndefined();
+});
+
+describe('boardRelease', () => {
+  const twoActive = [release('1.10', 'current'), release('1.12', 'current')];
+
+  it('shows the stored release while it is still active', () => {
+    const snap = { releases: twoActive, config: config({ boardRelease: '1.12' }) };
+    expect(boardRelease(snap)?.slug).toBe('1.12');
+  });
+
+  it('falls back to the first active release with no key', () => {
+    expect(boardRelease({ releases: twoActive, config: config() })?.slug).toBe('1.10');
+  });
+
+  it('falls back when the stored release stopped being active', () => {
+    const snap = {
+      releases: [...twoActive, release('1.09', 'finished')],
+      config: config({ boardRelease: '1.09' }),
+    };
+    expect(boardRelease(snap)?.slug).toBe('1.10');
+  });
+
+  it('falls back when the stored release is not on the board at all', () => {
+    const snap = { releases: twoActive, config: config({ boardRelease: 'gone' }) };
+    expect(boardRelease(snap)?.slug).toBe('1.10');
+  });
+
+  it('is undefined when nothing is active', () => {
+    const snap = { releases: [release('x', 'future')], config: config({ boardRelease: 'x' }) };
+    expect(boardRelease(snap)).toBeUndefined();
   });
 });
 

@@ -87,14 +87,18 @@ Release lifecycle:
 
 - **`future`** — planned ahead, not yet started. Multiple `future` releases
   may exist; the user moves tasks into them while planning.
-- **`current`** — actively worked on. **Exactly one** release at a time may
-  be `current`. The Board view shows this release as a kanban.
+- **`current`** — actively worked on; the app calls such a release **active**.
+  One at a time by default; with `multipleActiveReleases` on, several. The Board
+  view shows one of them as a kanban and a switcher picks which.
 - **`finished`** — closed. Read-only. Lives in the Archive.
 
 Transitions:
 
-- **Start release** (`future → current`). Disallowed if another release is
-  already `current`; the user is asked to finish that one first.
+- **Start release** (`future → current`). Disallowed while another release is
+  already active, unless `multipleActiveReleases` is on; the user is otherwise
+  asked to finish that one first. The setting gates the start only: several
+  releases already active render as several whatever it says, and turning it off
+  never touches them.
 - **Complete release** (`current → finished`). If any tasks are not `done`,
   a modal asks the user where to put them: another future release, or the
   Backlog (epic preserved).
@@ -274,8 +278,10 @@ idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
 projectName: My Board # required, human-readable name shown in the app header
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
+boardRelease: v0-8-0  # optional; slug of the active release the Board shows
 wipLimits:            # optional; absent means no limit anywhere
-  in-progress: 3      # at most 3 tasks in the current release's In Progress column
+  in-progress: 3      # at most 3 tasks in an active release's In Progress column
+multipleActiveReleases: true  # optional; absent means one release at a time
 ```
 
 `projectName` is required (set during onboarding) and read-only from the app's
@@ -290,8 +296,9 @@ frontmatter above).
 
 ### WIP limit
 
-`wipLimits` caps how many tasks may sit in the **current release's**
-`in-progress` column. It is a map keyed by status so other columns can be capped
+`wipLimits` caps how many tasks may sit in an **active release's**
+`in-progress` column. The cap is counted per release, so two active releases with
+a limit of 3 allow three each. It is a map keyed by status so other columns can be capped
 later without a format change, but `in-progress` is the only key the schema
 accepts today — a `todo:` or `done:` entry makes the config invalid rather than
 being silently ignored, exactly as an unsupported `customFields` type does. The
@@ -304,23 +311,25 @@ a release holding `in-progress` tasks was started, or a file was hand-edited —
 is valid: nothing is moved, nothing is rewritten, and the column header simply
 reads `4 / 3`. What is refused is every operation that would put one more task
 into the column: a status change to `in-progress`, and a relocation that carries
-an already-`in-progress` task into the current release. Leaving the column,
+an already-`in-progress` task into that release. Leaving the column,
 reordering inside it, and setting a task's status to the value it already has are
 always allowed.
 
 The rule lives in `@boardown/core` beside the `ARCHIVED` and `STATUS_LOCKED`
 refusals, so every shell inherits it. Both of those take precedence: a task in a
-finished release reports `ARCHIVED`, and one outside the current release reports
+finished release reports `ARCHIVED`, and one outside an active release reports
 `STATUS_LOCKED`, before the limit is ever consulted.
 
 On screen the rule is expressed by **prevention, not by complaint** — no toast,
 no banner. The Board's In Progress column header shows `count / limit` and takes a
 warning tone at or over it; while a drag that would breach the limit is running,
-the column (on the Board) and the current release's section (on the Backlog) are
-dimmed and refuse the drop. In the task dialog the `In Progress` status option and
-the current release's option in the Release dropdown are shown **disabled**,
+the column (on the Board) and every full active release's section (on the Backlog)
+are dimmed and refuse the drop. In the task dialog the `In Progress` status option
+and each full active release's option in the Release dropdown are shown **disabled**,
 carrying the count and a tooltip naming the rule. The limit is edited in the
-Settings dialog, and in the Electron shell in its own settings popover.
+Settings dialog, and in the Electron shell in its own settings popover. The
+`multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
+same reason: it is board configuration, not installation configuration.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
@@ -442,7 +451,7 @@ against a task's **id, title and description** — notes, checklist items and cu
 field values are not searched — over **every** task on the board, the archive
 included. Results are ordered in three tiers: a task whose id *is* the query,
 then the tasks matched on id or title, then the tasks matched on the description
-alone; inside a tier the board's reading order applies (current release, future
+alone; inside a tier the board's reading order applies (active releases, future
 releases, the unscheduled backlog, then finished releases). At most **ten** rows
 are shown and nothing says when more matched — the user narrows the query
 instead. A row carries the type icon, the id and the title, and no more; an
@@ -468,11 +477,12 @@ and it has neither the minimum length nor the result cap (see "CLI").
 
 A vertical, Jira-style stack of collapsible sections (top to bottom):
 
-1. **Current release** (if any) — its tasks listed flat, with a
-   "Complete release" button on the section header.
+1. **Active releases** — one section per active release, oldest first by
+   filename, each with its tasks listed flat and its own "Complete release"
+   button on the section header, which completes that release.
 2. **Future releases** — one section per `future` release. Each shows a
-   "Start release" button (enabled only when no other release is currently
-   `current`).
+   "Start release" button, which is hidden while another release is active
+   unless `multipleActiveReleases` is on.
 3. **Backlog** — all tasks with no release: tasks from `epics/*.md` and from
    `epics/no_epic.md`, rendered as a flat list with epic badges (no nested
    grouping), ordered globally by `order` across all backlog containers.
@@ -498,20 +508,26 @@ Drag and drop:
 ### Board
 
 A kanban with the three status columns (`todo`, `in-progress`, `done`), showing
-**only the current release's tasks**. Drag & drop between columns updates the
+**one active release's tasks**. Drag & drop between columns updates the
 task's status; reordering within a column updates `order`. Each column header
 carries a count; when the board declares a WIP limit the In Progress header shows
 `count / limit` instead and the column stops accepting drops once it is full (see
 "WIP limit" under Configuration).
 
 The heading above the columns is the release's name, clickable to open the
-release editor. When the release has a description, it follows the name on the
+release editor. While more than one release is active, a switch-release button
+beside the name opens a list of them and marks the one on screen; picking one
+stores it in `config.yaml` under `boardRelease`, so every shell opens on the same
+release and a reload keeps it. The stored release is resolved on every read: once
+it stops being active the Board falls back to the first active release, and the
+key is left as the user wrote it. With one active release there is no button and
+the header is exactly what it always was. When the release has a description, it follows the name on the
 same line in a muted style, clipped to a single line with an ellipsis (newlines
 collapsed to spaces). This preview is Board-only — the Backlog and Archive
 section headers show the name alone.
 
-If no release is currently `current`, the Board shows an empty state pointing
-the user to start one from Backlog.
+If no release is active, the Board shows an empty state pointing the user to
+start one from Backlog.
 
 ### Archive
 
@@ -605,7 +621,7 @@ when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to. A **finished** release is never
 offered as a destination — the same exclusion the creation dialog applies.
 
-**A status only changes in the current release.** Outside it — a **future**
+**A status only changes in an active release.** Outside one — a **future**
 release, an epic file, the backlog — the status renders as the archived task's
 static pill, with a tooltip saying so, and nothing else about the task becomes
 read-only. Relocation carries the status along and never rewrites it to `todo`, so
@@ -847,8 +863,9 @@ their parent on their own.
 
 A dialog opened from the gear button in the top navigation. It holds the board's
 **Theme** selector; below it a **WIP limit (In Progress)** number field, empty
-meaning no limit (see "WIP limit" under Configuration); below that a read-only
-**CLI** row; and last a read-only **Version** row showing the version of the build
+meaning no limit (see "WIP limit" under Configuration); below that an **Allow
+multiple active releases** checkbox, the dialog's first boolean control, saved the
+moment it is clicked; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
 the user is running — the shell supplies it, so it is the installed extension's
 version in VS Code and the checkout's version in the `web` dev shell.
 
@@ -866,15 +883,15 @@ filesystem), and a false "not installed" reads as a bug.
 
 The Electron shell hides this dialog (it owns the theme app-wide) and surfaces the
 version through the OS-native About window instead. Its own settings popover
-carries the WIP limit field in the **Board** section below the auto-refresh
-checkbox, since it belongs to the board's `config.yaml` rather than to the
-installation, and ends with a **CLI** section holding the same command and link —
-which, unlike the WIP limit, shows with no board open.
+carries the WIP limit field and the multiple-active-releases checkbox in the
+**Board** section below the auto-refresh checkbox, since they belong to the
+board's `config.yaml` rather than to the installation, and ends with a **CLI** section holding the same command and link —
+which, unlike the two board settings, shows with no board open.
 
 ### Empty states
 
 Empty states are a first-class concern. Every screen has a meaningful
-message and a clear next action when its content is absent (no current
+message and a clear next action when its content is absent (no active
 release, no future releases, no archived releases, no tasks under filter).
 
 ## Distribution & shells
@@ -922,7 +939,7 @@ folder (or via `--data-dir`), and maps commands onto board operations
 
 Its output follows the way the UI is read — **a view, then one task**. The three
 UI tabs are three commands: `release current` is the Board, `backlog` is the
-Backlog tab (current release, future releases, then the unscheduled tasks) and
+Backlog tab (active releases, future releases, then the unscheduled tasks) and
 `archive` is the Archive. Any task appearing in a list is rendered as a **task
 summary** — the fields the task card carries (id, title, type, priority, status,
 epic, checklist `done/total`, notes count) — while `task get` returns the whole
@@ -957,13 +974,16 @@ release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /
 `--color`; unlike the UI's palette-only picker it accepts any 6-digit hex, and an
-invalid one is a `USAGE` error. Setting a status outside the current release fails with
+invalid one is a `USAGE` error. Setting a status outside an active release fails with
 `STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
 sets it is judged by its destination. Putting one more task into a full In Progress
 column fails with `WIP_LIMIT` — whether by `task status`, `task edit --status`,
 `task add --status`, or a `task edit --release` that pulls an already-`in-progress`
-task into the current release — and `schema` reports the board's `wipLimits` so an
-agent reads the ceiling instead of discovering it by failing. `task rm <id>` deletes a task with the same rules
+task into a full active release — and `schema` reports the board's `wipLimits` so an
+agent reads the ceiling instead of discovering it by failing. It also reports
+`multipleActiveReleases` always, resolved to a boolean: absent from the config
+means the one-at-a-time rule is in force, so leaving it out would hide a rule an
+agent would then have to discover by being refused. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, archived files untouched, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at

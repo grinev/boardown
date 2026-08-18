@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Menu, Settings } from 'lucide-react';
-import { CliHint, WipLimitField } from '@boardown/ui';
+import { CliHint, MultipleActiveReleasesField, WipLimitField } from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
 import styles from './Sidebar.module.css';
 
@@ -144,7 +144,10 @@ export function Sidebar({
             </label>
             {/* Unlike its neighbours this one is stored in the board's
                 config.yaml, so it only exists while a board is open. */}
-            {boardOpen && <WipLimitField className={styles.wipLimitRow} />}
+            {boardOpen && <WipLimitField className={styles.boardSettingRow} />}
+            {boardOpen && (
+              <MultipleActiveReleasesField className={styles.boardSettingRow} />
+            )}
             {/* Describes the installation rather than the board, so unlike the
                 field above it shows with no board open. */}
             <span className={styles.settingsLabel}>CLI</span>

@@ -21,10 +21,26 @@ const byFilenameAsc = (a: Release, b: Release): number =>
 export const sortTasksByOrder = (tasks: readonly Task[]): Task[] =>
   [...tasks].sort(byOrder);
 
-export const currentRelease = (
+/** Every release being worked on, oldest first — the same order as the future ones. */
+export const activeReleases = (
   snapshot: Pick<BoardSnapshot, 'releases'>,
-): Release | undefined =>
-  snapshot.releases.find((r) => r.frontmatter.status === 'current');
+): Release[] =>
+  snapshot.releases
+    .filter((r) => r.frontmatter.status === 'current')
+    .sort(byFilenameAsc);
+
+/**
+ * The one active release a board view shows: the stored choice while it is still
+ * active, else the first one. Resolved on every read rather than repaired, so a
+ * choice that stopped being active leaves the user's key alone.
+ */
+export const boardRelease = (
+  snapshot: Pick<BoardSnapshot, 'releases' | 'config'>,
+): Release | undefined => {
+  const active = activeReleases(snapshot);
+  const stored = snapshot.config.boardRelease;
+  return active.find((r) => r.slug === stored) ?? active[0];
+};
 
 export const futureReleases = (
   snapshot: Pick<BoardSnapshot, 'releases'>,

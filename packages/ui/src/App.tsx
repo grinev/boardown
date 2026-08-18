@@ -78,7 +78,7 @@ export function App({
   const createEpicOpen = useBoardStore((s) => s.createEpicOpen);
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
   const conflictOpen = useBoardStore((s) => s.conflictOpen);
-  const completeReleaseOpen = useBoardStore((s) => s.completeReleaseOpen);
+  const completeReleaseForFilename = useBoardStore((s) => s.completeReleaseForFilename);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
   const closeStartRelease = useBoardStore((s) => s.closeStartRelease);
@@ -182,6 +182,9 @@ export function App({
   const startReleaseTarget = startReleaseForFilename
     ? snapshot.releases.find((r) => r.filename === startReleaseForFilename)
     : undefined;
+  const completeReleaseTarget = completeReleaseForFilename
+    ? snapshot.releases.find((r) => r.filename === completeReleaseForFilename)
+    : undefined;
 
   return (
     <main className={styles.app}>
@@ -193,12 +196,7 @@ export function App({
         onSelect={setActiveTab}
         hideSettings={forcedTheme !== undefined}
       />
-      <TabContent
-        activeTab={activeTab}
-        releases={snapshot.releases}
-        epics={snapshot.epics}
-        statuses={TASK_STATUSES}
-      />
+      <TabContent activeTab={activeTab} epics={snapshot.epics} statuses={TASK_STATUSES} />
       {problems.length > 0 && (
         <section className={styles.problems} data-testid="problems-banner">
           <strong>Parse warnings:</strong>
@@ -265,8 +263,11 @@ export function App({
       )}
       {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
       {createEpicOpen && <CreateEpicDialog onClose={closeCreateEpic} />}
-      {completeReleaseOpen && (
-        <CompleteReleaseDialog onClose={closeCompleteRelease} />
+      {completeReleaseTarget && (
+        <CompleteReleaseDialog
+          release={completeReleaseTarget}
+          onClose={closeCompleteRelease}
+        />
       )}
       {startReleaseTarget && (
         <StartReleaseDialog

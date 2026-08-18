@@ -7,7 +7,7 @@ import { useBoardStore } from '../store';
 import { formatStatusLabel } from '../utils/format-status';
 import { wipLimitHint } from '../utils/wip-limit';
 import { BoardDndContext } from '../dnd/BoardDndContext';
-import { useBlockedTarget } from '../dnd/BlockedTargetContext';
+import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { useDroppableColumn } from '../dnd/useBoardSortable';
 import { taskDragId } from '../dnd/ids';
 import { SortableTaskCard } from './SortableTaskCard';
@@ -102,7 +102,7 @@ function BoardColumn({
   limit,
   onCreate,
 }: BoardColumnProps) {
-  const blocked = useBlockedTarget() === status;
+  const blocked = useBlockedTargets().has(status);
   const { setNodeRef } = useDroppableColumn(status, blocked);
   const items = tasks.map((t) => taskDragId(t.frontmatter.id));
   const atLimit = limit !== null && tasks.length >= limit;

@@ -50,7 +50,7 @@ describe('applyDragOverBacklog', () => {
     const start = buckets();
     for (const over of [sectionDropId('releases/1.0.md'), taskDragId('BD-1')]) {
       expect(
-        applyDragOverBacklog(dndId(taskDragId('BD-3')), dndId(over), start, 'releases/1.0.md'),
+        applyDragOverBacklog(dndId(taskDragId('BD-3')), dndId(over), start, new Set(['releases/1.0.md'])),
       ).toBe(start);
     }
   });
@@ -60,7 +60,7 @@ describe('applyDragOverBacklog', () => {
       dndId(taskDragId('BD-2')),
       dndId(taskDragId('BD-1')),
       buckets(),
-      'releases/1.0.md',
+      new Set(['releases/1.0.md']),
     );
     expect(ids(reordered.get('releases/1.0.md'))).toEqual(['BD-2', 'BD-1']);
 
@@ -68,7 +68,7 @@ describe('applyDragOverBacklog', () => {
       dndId(taskDragId('BD-1')),
       dndId(sectionDropId(BACKLOG_SECTION_KEY)),
       buckets(),
-      'releases/1.0.md',
+      new Set(['releases/1.0.md']),
     );
     expect(ids(left.get(BACKLOG_SECTION_KEY))).toEqual(['BD-3', 'BD-1']);
   });

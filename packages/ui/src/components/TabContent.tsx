@@ -1,22 +1,24 @@
 import { CheckCircle2 } from 'lucide-react';
-import type { Epic, Release, TaskStatus } from '@boardown/core';
+import { activeReleases, boardRelease, type Epic, type TaskStatus } from '@boardown/core';
 import { useBoardStore, type ActiveTab } from '../store';
 import { ArchiveView } from './ArchiveView';
 import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
 import { DocsView } from './DocsView';
+import { ReleaseSwitcher } from './ReleaseSwitcher';
 import styles from './TabContent.module.css';
 
 interface TabContentProps {
   activeTab: ActiveTab;
-  releases: Release[];
   epics: Epic[];
   statuses: readonly TaskStatus[];
 }
 
-export function TabContent({ activeTab, releases, epics, statuses }: TabContentProps) {
+export function TabContent({ activeTab, epics, statuses }: TabContentProps) {
+  const snapshot = useBoardStore((s) => s.snapshot);
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
   const openRelease = useBoardStore((s) => s.openRelease);
+  const setBoardRelease = useBoardStore((s) => s.setBoardRelease);
 
   if (activeTab === 'backlog') {
     return <BacklogView />;
@@ -30,12 +32,13 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
     return <DocsView />;
   }
 
-  const current = releases.find((r) => r.frontmatter.status === 'current');
+  const actives = snapshot ? activeReleases(snapshot) : [];
+  const current = snapshot ? boardRelease(snapshot) : undefined;
   if (!current) {
     return (
       <section className={styles.placeholder}>
         <h2>Board</h2>
-        <p>No current release.</p>
+        <p>No active release.</p>
         <p className={styles.hint}>Start one from Backlog to begin work.</p>
       </section>
     );
@@ -60,6 +63,11 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
               {heading}
             </button>
           </h2>
+          <ReleaseSwitcher
+            releases={actives}
+            selectedSlug={current.slug}
+            onSelect={(slug) => void setBoardRelease(slug)}
+          />
           {descriptionPreview && (
             <span className={styles.releaseDescription}>
               {descriptionPreview}
@@ -69,7 +77,7 @@ export function TabContent({ activeTab, releases, epics, statuses }: TabContentP
         <button
           type="button"
           className={styles.completeButton}
-          onClick={openCompleteRelease}
+          onClick={() => openCompleteRelease(current.filename)}
         >
           <CheckCircle2 size={14} aria-hidden="true" />
           Complete release

@@ -315,17 +315,22 @@ export const setReleaseStatus = (
 export const startRelease = (
   release: Release,
   existing: readonly Release[],
+  config: BoardConfig,
 ): Release => {
   if (release.frontmatter.status !== 'future') {
     throw new Error('Only a future release can be started');
   }
-  const current = existing.find(
-    (r) => r.frontmatter.status === 'current' && r.filename !== release.filename,
-  );
-  if (current !== undefined) {
-    throw new Error(
-      `Another release is already current: ${current.frontmatter.name ?? current.slug}`,
+  // The setting gates a new start only. Releases already active stay active when
+  // it is turned off, so the board on disk is never brought in line with it.
+  if (config.multipleActiveReleases !== true) {
+    const current = existing.find(
+      (r) => r.frontmatter.status === 'current' && r.filename !== release.filename,
     );
+    if (current !== undefined) {
+      throw new Error(
+        `Another release is already active: ${current.frontmatter.name ?? current.slug}`,
+      );
+    }
   }
   return setReleaseStatus(release, 'current');
 };
@@ -1133,7 +1138,7 @@ export const completeRelease = (
   input: CompleteReleaseContainers,
 ): CompleteReleaseResult => {
   if (input.release.frontmatter.status !== 'current') {
-    throw new Error('Only the current release can be completed');
+    throw new Error('Only an active release can be completed');
   }
   const unfinished = input.release.tasks
     .filter((t) => t.frontmatter.status !== 'done')

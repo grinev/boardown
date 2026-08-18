@@ -15,7 +15,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Epic, Release, Task } from '@boardown/core';
 import {
-  currentRelease,
+  activeReleases,
   effectiveTaskPriority,
   futureReleases,
   isWipLimitReached,
@@ -24,7 +24,7 @@ import {
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogDndContext } from '../dnd/BacklogDndContext';
-import { useBlockedTarget } from '../dnd/BlockedTargetContext';
+import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
 import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
@@ -95,21 +95,25 @@ export function BacklogView() {
     const buckets: SectionBuckets = new Map();
     if (!snapshot) return { sectionMetas: metas, sourceBuckets: buckets };
 
-    const current = currentRelease(snapshot);
+    const actives = activeReleases(snapshot);
     const futures = futureReleases(snapshot);
+    // The setting gates a new start only; with it on, a future release keeps its
+    // Start button next to the ones already running.
+    const startBlocked =
+      actives.length > 0 && snapshot.config.multipleActiveReleases !== true;
 
-    if (current) {
-      const key = releaseSectionKey(current);
+    for (const r of actives) {
+      const key = releaseSectionKey(r);
       metas.push({
         key,
-        title: releaseTitle(current),
+        title: releaseTitle(r),
         statusLabel: 'active',
         hasCreateRelease: false,
         hasCompleteRelease: true,
         startReleaseFilename: null,
-        releaseFilename: current.filename,
+        releaseFilename: r.filename,
       });
-      buckets.set(key, sortTasksByOrder(current.tasks));
+      buckets.set(key, sortTasksByOrder(r.tasks));
     }
     for (const r of futures) {
       const key = releaseSectionKey(r);
@@ -119,7 +123,7 @@ export function BacklogView() {
         statusLabel: 'future',
         hasCreateRelease: false,
         hasCompleteRelease: false,
-        startReleaseFilename: current ? null : r.filename,
+        startReleaseFilename: startBlocked ? null : r.filename,
         releaseFilename: r.filename,
       });
       buckets.set(key, sortTasksByOrder(r.tasks));
@@ -141,13 +145,16 @@ export function BacklogView() {
     return { sectionMetas: metas, sourceBuckets: buckets };
   }, [snapshot, epics]);
 
-  // Dragging an `in-progress` task into the current release enters its In Progress
-  // column, so that one section closes while the column is full.
-  const wipFullSectionKey = useMemo(() => {
-    if (!snapshot) return null;
-    const current = currentRelease(snapshot);
-    if (!current) return null;
-    return isWipLimitReached(current, snapshot.config) ? releaseSectionKey(current) : null;
+  // Dragging an `in-progress` task into an active release enters its In Progress
+  // column, so each section whose column is full closes on its own — the limit is
+  // counted per release, not across the board.
+  const wipFullSectionKeys = useMemo(() => {
+    if (!snapshot) return new Set<string>();
+    return new Set(
+      activeReleases(snapshot)
+        .filter((r) => isWipLimitReached(r, snapshot.config))
+        .map((r) => releaseSectionKey(r)),
+    );
   }, [snapshot]);
 
   const [overlayBuckets, setOverlayBuckets] =
@@ -214,7 +221,7 @@ export function BacklogView() {
         buckets={overlayBuckets}
         setBuckets={setOverlayBuckets}
         epics={epics}
-        wipFullSectionKey={wipFullSectionKey}
+        wipFullSectionKeys={wipFullSectionKeys}
       >
         <div className={styles.scrollArea}>
           {sectionMetas.map((meta) => {
@@ -250,8 +257,8 @@ export function BacklogView() {
                 {...(meta.hasCreateRelease
                   ? { onCreateRelease: openCreateRelease }
                   : {})}
-                {...(meta.hasCompleteRelease
-                  ? { onCompleteRelease: openCompleteRelease }
+                {...(meta.hasCompleteRelease && releaseFilename
+                  ? { onCompleteRelease: () => openCompleteRelease(releaseFilename) }
                   : {})}
                 {...(startReleaseFilename
                   ? {
@@ -308,7 +315,7 @@ function BacklogSection({
   onCompleteRelease,
   onStartRelease,
 }: BacklogSectionProps) {
-  const blocked = useBlockedTarget() === sectionKey;
+  const blocked = useBlockedTargets().has(sectionKey);
   const { setNodeRef, isOver } = useDroppable({
     id: sectionDropId(sectionKey),
     disabled: blocked,

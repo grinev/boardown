@@ -1025,17 +1025,36 @@ const futureRelease = (slug: string): Release => ({
 });
 
 describe('startRelease', () => {
+  const active: Release = {
+    ...futureRelease('0.9'),
+    frontmatter: { status: 'current', name: '0.9' },
+  };
+
   it('promotes a future release to current', () => {
     const r1 = futureRelease('1.0');
     const r2 = futureRelease('2.0');
-    const started = startRelease(r1, [r1, r2]);
+    const started = startRelease(r1, [r1, r2], config);
     expect(started.frontmatter.status).toBe('current');
   });
 
-  it('throws when another release is already current', () => {
+  it('throws when another release is already active', () => {
     const r1 = futureRelease('1.0');
-    const active: Release = { ...futureRelease('0.9'), frontmatter: { status: 'current', name: '0.9' } };
-    expect(() => startRelease(r1, [active, r1])).toThrow(/already current/);
+    expect(() => startRelease(r1, [active, r1], config)).toThrow(/already active/);
+  });
+
+  it('starts a second release when the setting is on', () => {
+    const r1 = futureRelease('1.0');
+    const started = startRelease(r1, [active, r1], {
+      ...config,
+      multipleActiveReleases: true,
+    });
+    expect(started.frontmatter.status).toBe('current');
+  });
+
+  it('still refuses a non-future release with the setting on', () => {
+    expect(() =>
+      startRelease(active, [active], { ...config, multipleActiveReleases: true }),
+    ).toThrow(/future/);
   });
 });
 
@@ -1048,11 +1067,11 @@ describe('process invariants — finished release is archived', () => {
   });
 
   it('startRelease rejects a non-future release', () => {
-    expect(() => startRelease(finished(), [])).toThrow(/future/);
-    expect(() => startRelease(release(), [])).toThrow(/future/);
+    expect(() => startRelease(finished(), [], config)).toThrow(/future/);
+    expect(() => startRelease(release(), [], config)).toThrow(/future/);
   });
 
-  it('completeRelease rejects a non-current release', () => {
+  it('completeRelease rejects a release that is not active', () => {
     expect(() =>
       completeRelease({
         config,
@@ -1061,7 +1080,7 @@ describe('process invariants — finished release is archived', () => {
         backlog: null,
         targetRelease: null,
       }),
-    ).toThrow(/current/);
+    ).toThrow(/active/);
   });
 
   it('createTask rejects a finished release', () => {

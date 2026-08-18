@@ -1,6 +1,6 @@
 import type { Release, Task } from '@boardown/core';
 import {
-  currentRelease,
+  activeReleases,
   futureReleases,
   sortTasksByOrder,
   unscheduledTasks,
@@ -25,7 +25,7 @@ const releaseSection = (release: Release, status: string): Section => ({
   tasks: sortTasksByOrder(release.tasks),
 });
 
-// The Backlog tab: the current release, then each future release, then
+// The Backlog tab: each active release, then each future release, then
 // everything unscheduled. Epic files are not sections — their tasks belong to
 // the unscheduled list, exactly as the tab shows them.
 export const backlogCommand: CommandHandler = async (args, ctx) => {
@@ -34,8 +34,9 @@ export const backlogCommand: CommandHandler = async (args, ctx) => {
   const full = isFull(args.flags);
 
   const sections: Section[] = [];
-  const current = currentRelease(snapshot);
-  if (current) sections.push(releaseSection(current, 'current'));
+  for (const release of activeReleases(snapshot)) {
+    sections.push(releaseSection(release, 'current'));
+  }
   for (const release of futureReleases(snapshot)) {
     sections.push(releaseSection(release, 'future'));
   }

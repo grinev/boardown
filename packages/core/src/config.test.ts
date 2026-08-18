@@ -226,6 +226,60 @@ describe('wipLimits', () => {
   });
 });
 
+describe('multiple active releases', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips both keys in their slots', () => {
+    const cfg: BoardConfig = {
+      ...base,
+      theme: 'dark',
+      boardRelease: 'v0-8-0',
+      wipLimits: { 'in-progress': 3 },
+      multipleActiveReleases: true,
+      customFields: [{ key: 'env', type: 'string' }],
+    };
+    const out = serializeConfig(cfg);
+    expect(out.indexOf('theme:')).toBeLessThan(out.indexOf('boardRelease:'));
+    expect(out.indexOf('boardRelease:')).toBeLessThan(out.indexOf('wipLimits:'));
+    expect(out.indexOf('wipLimits:')).toBeLessThan(out.indexOf('multipleActiveReleases:'));
+    expect(out.indexOf('multipleActiveReleases:')).toBeLessThan(out.indexOf('customFields:'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+
+  it('writes neither key when the user set neither', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('boardRelease');
+    expect(out).not.toContain('multipleActiveReleases');
+  });
+
+  it('writes the setting even when it is false, once the user set it', () => {
+    expect(serializeConfig({ ...base, multipleActiveReleases: false })).toContain(
+      'multipleActiveReleases: false',
+    );
+  });
+
+  it('takes a stored release that no longer exists — resolution is a read-time job', () => {
+    const parsed = parseConfig(
+      'idPrefix: BD\nnextId: 0\nprojectName: P\nboardRelease: gone\n',
+    );
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.value?.boardRelease).toBe('gone');
+  });
+
+  it('rejects an empty stored release and a non-boolean setting', () => {
+    expect(
+      parseConfig('idPrefix: BD\nnextId: 0\nprojectName: P\nboardRelease: ""\n').value,
+    ).toBeNull();
+    expect(
+      parseConfig(
+        'idPrefix: BD\nnextId: 0\nprojectName: P\nmultipleActiveReleases: "yes"\n',
+      ).value,
+    ).toBeNull();
+  });
+});
+
 describe('serializeConfig customFields', () => {
   it('round-trips declarations, so the nextId rewrite cannot erase them', () => {
     const cfg: BoardConfig = {

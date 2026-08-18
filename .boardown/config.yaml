@@ -1,11 +1,10 @@
 idPrefix: BD
-nextId: 97
+nextId: 98
 projectName: Boardown
 theme: dark
+boardRelease: v0.8.0
+multipleActiveReleases: false
 customFields:
-  - key: groom
-    label: Groom
-    type: string
   - key: spec
     label: Spec
     type: string

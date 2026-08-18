@@ -1,4 +1,6 @@
 import {
+  activeReleases,
+  boardRelease,
   completeRelease,
   createRelease,
   editRelease,
@@ -11,14 +13,14 @@ import {
   type Release,
   type ReleasePatch,
 } from '@boardown/core';
-import { flagString, type ParsedArgs } from '../args';
+import { flagBool, flagString, type ParsedArgs } from '../args';
 import { CliError } from '../output';
 import { isFull, summaryLines, taskPayload, summarizeTasks } from '../summary';
 import {
-  currentRelease,
   findRelease,
   loadBoardOrThrow,
   resolveBoardRoot,
+  writeConfig,
   writeContainers,
   type ContainerRef,
   type LoadedBoard,
@@ -119,16 +121,32 @@ async function releaseList(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 async function releaseCurrent(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);
-  const release = currentRelease(board.snapshot);
+  const full = isFull(args.flags);
+
+  if (flagBool(args.flags, 'all')) {
+    const releases = activeReleases(board.snapshot);
+    return {
+      data: { releases: releases.map((r) => releaseView(r, full)) },
+      human:
+        releases.length > 0
+          ? releases.map(renderRelease).join('\n\n')
+          : 'No active release.',
+      ...problemsField(board.problems),
+    };
+  }
+
+  // The single slot follows the Board's stored choice, so the two surfaces never
+  // disagree about which release is meant.
+  const release = boardRelease(board.snapshot);
   if (release === undefined) {
     return {
       data: { release: null },
-      human: 'No current release.',
+      human: 'No active release.',
       ...problemsField(board.problems),
     };
   }
   return {
-    data: { release: releaseView(release, isFull(args.flags)) },
+    data: { release: releaseView(release, full) },
     human: renderRelease(release),
     ...problemsField(board.problems),
   };
@@ -218,6 +236,13 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   if (moved) await board.fs.moveFile(release.filename, updated.filename, content);
   else await board.fs.write(updated.filename, content);
 
+  // The Board's stored choice is a slug, so a rename carries it. After the move,
+  // never with it: a slug that fell behind resolves to the first active release,
+  // while a moved file nothing else knows about would be the harder failure.
+  if (moved && board.snapshot.config.boardRelease === release.slug) {
+    await writeConfig(board.fs, { ...board.snapshot.config, boardRelease: updated.slug });
+  }
+
   return {
     data: { slug: updated.slug },
     human: moved
@@ -239,7 +264,7 @@ async function releaseStart(args: ParsedArgs, ctx: CommandContext): Promise<Comm
 
   let started: Release;
   try {
-    started = startRelease(release, board.snapshot.releases);
+    started = startRelease(release, board.snapshot.releases, board.snapshot.config);
   } catch (err) {
     throw new CliError('RELEASE_CONFLICT', err instanceof Error ? err.message : String(err));
   }

@@ -116,17 +116,15 @@ export function TaskDetailsDialog({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const config = useBoardStore((s) => s.snapshot?.config);
-  const current = useMemo(
-    () => releases.find((r) => r.frontmatter.status === 'current'),
-    [releases],
-  );
   // The board refuses a task entering a full In Progress column, so the controls
   // that would do it are shown unavailable rather than failing after the fact.
+  // The limit is counted per release, so the status control asks the task's own
+  // container and the release dropdown asks each destination in turn.
   const wipFull =
-    current !== undefined && config !== undefined && isWipLimitReached(current, config);
+    release !== undefined && config !== undefined && isWipLimitReached(release, config);
   const wipLimit =
-    current !== undefined && config !== undefined ? wipLimitFor(current, config) : null;
-  const wipCount = current === undefined ? 0 : inProgressCount(current);
+    release !== undefined && config !== undefined ? wipLimitFor(release, config) : null;
+  const wipCount = release === undefined ? 0 : inProgressCount(release);
   const wipHint = wipLimit === null ? undefined : wipLimitHint(wipCount, wipLimit);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
@@ -136,24 +134,28 @@ export function TaskDetailsDialog({
       .filter((r) => r.frontmatter.status !== 'finished')
       .sort((a, b) => a.slug.localeCompare(b.slug));
     const items: IconSelectOption[] = sorted.map((r) => {
-      // Relocating an `in-progress` task into a full current release enters the
-      // column, so that one destination is unavailable — unless the task is
-      // already there, where picking it changes nothing.
+      // Relocating an `in-progress` task into a full active release enters the
+      // column, so that destination is unavailable — unless the task is already
+      // there, where picking it changes nothing.
       const blocked =
-        wipFull &&
         status === 'in-progress' &&
-        r.frontmatter.status === 'current' &&
-        r.filename !== release?.filename;
+        config !== undefined &&
+        r.filename !== release?.filename &&
+        isWipLimitReached(r, config);
+      if (!blocked) return { value: r.filename, label: r.frontmatter.name ?? r.slug };
+      const limit = config === undefined ? null : wipLimitFor(r, config);
+      const count = inProgressCount(r);
       return {
         value: r.filename,
-        label: blocked ? `${r.frontmatter.name ?? r.slug} (${wipCount} / ${wipLimit})` : (r.frontmatter.name ?? r.slug),
-        ...(blocked ? { disabled: true, title: wipHint } : {}),
+        label: `${r.frontmatter.name ?? r.slug} (${count} / ${limit})`,
+        disabled: true,
+        ...(limit === null ? {} : { title: wipLimitHint(count, limit) }),
       };
     });
     // "—" removes the release: a task with an epic falls back to its epic file,
     // an epic-less task to the backlog (no_epic.md).
     return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
-  }, [releases, wipFull, status, release?.filename, wipCount, wipLimit, wipHint]);
+  }, [releases, config, status, release?.filename]);
 
   const statusOptions = useMemo<IconSelectOption[]>(
     () =>

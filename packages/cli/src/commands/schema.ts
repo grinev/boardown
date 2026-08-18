@@ -14,7 +14,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 7,
+  version: 8,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -55,7 +55,7 @@ const DESCRIPTOR = {
       name: 'backlog',
       usage: 'boardown backlog [--full]',
       summary:
-        'The Backlog view: the current release, each future release, then the unscheduled backlog. Data is { sections: [{ key, title, status, filename, taskCount, tasks }] }. --full returns whole tasks instead of summaries.',
+        'The Backlog view: each active release, then each future release, then the unscheduled backlog. Data is { sections: [{ key, title, status, filename, taskCount, tasks }] }. --full returns whole tasks instead of summaries.',
     },
     {
       name: 'archive',
@@ -132,9 +132,9 @@ const DESCRIPTOR = {
     },
     {
       name: 'release current',
-      usage: 'boardown release current [--full]',
+      usage: 'boardown release current [--all] [--full]',
       summary:
-        'The Board view: the current release and its task summaries in order (release is null if none). --full returns whole tasks.',
+        'The Board view: the active release the board shows and its task summaries in order (release is null if none). --all returns every active release under `releases` instead. --full returns whole tasks.',
     },
     {
       name: 'release add',
@@ -150,7 +150,8 @@ const DESCRIPTOR = {
     {
       name: 'release start',
       usage: 'boardown release start <file|slug>',
-      summary: 'Make a release current (only one at a time).',
+      summary:
+        'Make a release active. Refused with RELEASE_CONFLICT while another release is active, unless multipleActiveReleases is true.',
     },
     {
       name: 'release done',
@@ -183,6 +184,7 @@ const DESCRIPTOR = {
     '--json': 'Emit a JSON envelope (default when stdout is not a TTY).',
     '--data-dir': 'Point at a specific .boardown/ directory instead of searching upward.',
     '--full': 'On a listing command, go one level deeper than its default.',
+    '--all': 'On `release current`, return every active release instead of the one the board shows.',
     '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
 } as const;
@@ -190,12 +192,16 @@ const DESCRIPTOR = {
 // The declarations and the WIP limit are board-specific, so they ride along only
 // when a board actually has them; otherwise the command prints the static
 // contract unchanged — a board without either sees no new output.
+// `multipleActiveReleases` is the exception: absent from the config means the
+// one-at-a-time rule is in force, so leaving it out would hide a rule an agent
+// would then have to discover by being refused.
 export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const config = await loadConfigIfAny(ctx.cwd, ctx.dataDir);
   const declared = config?.customFields ?? [];
   const wipLimits = config?.wipLimits;
   const data = {
     ...DESCRIPTOR,
+    multipleActiveReleases: config?.multipleActiveReleases ?? false,
     ...(declared.length > 0
       ? {
           customFields: declared.map((field) => ({

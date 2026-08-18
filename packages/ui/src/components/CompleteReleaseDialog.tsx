@@ -11,17 +11,16 @@ const releaseTitle = (release: Release): string =>
   release.frontmatter.name ?? release.slug;
 
 interface CompleteReleaseDialogProps {
+  // The release being completed — the one whose header the user pressed, which
+  // with several active is not necessarily the first one.
+  release: Release;
   onClose: () => void;
 }
 
-export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
+export function CompleteReleaseDialog({ release, onClose }: CompleteReleaseDialogProps) {
   const completeRelease = useBoardStore((s) => s.completeRelease);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
 
-  const current = useMemo(
-    () => releases.find((r) => r.frontmatter.status === 'current'),
-    [releases],
-  );
   const futures = useMemo(
     () =>
       releases
@@ -30,8 +29,8 @@ export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
     [releases],
   );
   const unfinished = useMemo(
-    () => (current?.tasks ?? []).filter((t) => t.frontmatter.status !== 'done'),
-    [current],
+    () => release.tasks.filter((t) => t.frontmatter.status !== 'done'),
+    [release],
   );
 
   const [destination, setDestination] = useState<string>(
@@ -39,8 +38,6 @@ export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  if (!current) return null;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -52,7 +49,7 @@ export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
         unfinished.length === 0 || destination === BACKLOG_VALUE
           ? { kind: 'backlog' }
           : { kind: 'release', filename: destination };
-      await completeRelease(target);
+      await completeRelease(release.filename, target);
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -70,7 +67,7 @@ export function CompleteReleaseDialog({ onClose }: CompleteReleaseDialogProps) {
       className={styles.dialog}
     >
       <header className={styles.header}>
-        <h2 className={styles.title}>Complete release {releaseTitle(current)}</h2>
+        <h2 className={styles.title}>Complete release {releaseTitle(release)}</h2>
         <button
           type="button"
           className={styles.closeButton}

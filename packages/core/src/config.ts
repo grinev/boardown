@@ -39,9 +39,15 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.theme !== undefined) {
     ordered.theme = config.theme;
   }
+  if (config.boardRelease !== undefined) {
+    ordered.boardRelease = config.boardRelease;
+  }
   const wipLimits = config.wipLimits;
   if (wipLimits !== undefined && wipLimits['in-progress'] !== undefined) {
     ordered.wipLimits = { 'in-progress': wipLimits['in-progress'] };
+  }
+  if (config.multipleActiveReleases !== undefined) {
+    ordered.multipleActiveReleases = config.multipleActiveReleases;
   }
   if (config.customFields !== undefined) {
     ordered.customFields = config.customFields.map((field) => {

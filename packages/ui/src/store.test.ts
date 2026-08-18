@@ -590,7 +590,7 @@ describe('release lifecycle', () => {
       }),
     );
 
-    await state().completeRelease({ kind: 'backlog' });
+    await state().completeRelease('releases/1.0.md', { kind: 'backlog' });
 
     expect(current().releases[0]!.frontmatter.status).toBe('finished');
     expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
@@ -613,7 +613,7 @@ describe('release lifecycle', () => {
       }),
     );
 
-    await state().completeRelease({ kind: 'backlog' });
+    await state().completeRelease('releases/1.0.md', { kind: 'backlog' });
 
     // BD-1 goes back to its epic and BD-2 stays: the untouched epic and the
     // backlog must not be rewritten.
@@ -621,12 +621,42 @@ describe('release lifecycle', () => {
     expect(fs.writes.sort()).toEqual(['epics/ui.md', 'releases/1.0.md'].sort());
   });
 
-  it('reports an error when there is no current release to complete', async () => {
+  it('reports an error for a release that is not on the board', async () => {
     setup(snap({ releases: [release('1.1', 'future')] }));
 
-    await state().completeRelease({ kind: 'backlog' });
+    await state().completeRelease('releases/nope.md', { kind: 'backlog' });
 
-    expect(state().errorMessage).toMatch(/no current release/i);
+    expect(state().errorMessage).toMatch(/not found/i);
+  });
+
+  it('completes the release it was handed, not the first active one', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current'), release('2.0', 'current')],
+        backlog: backlog(),
+      }),
+    );
+
+    await state().completeRelease('releases/2.0.md', { kind: 'backlog' });
+
+    expect(current().releases[0]!.frontmatter.status).toBe('current');
+    expect(current().releases[1]!.frontmatter.status).toBe('finished');
+    expect(fs.writes).toEqual(['releases/2.0.md']);
+  });
+
+  it('refuses a second start while the setting is off and allows it while on', async () => {
+    setup(
+      snap({
+        releases: [release('1.0', 'current'), release('2.0', 'future')],
+      }),
+    );
+
+    await expect(state().startRelease('releases/2.0.md')).rejects.toThrow(/already active/);
+
+    await state().setMultipleActiveReleases(true);
+    await state().startRelease('releases/2.0.md');
+
+    expect(current().releases[1]!.frontmatter.status).toBe('current');
   });
 });
 
@@ -740,6 +770,53 @@ describe('setWipLimit', () => {
 
     expect(current().config.wipLimits).toBeUndefined();
     expect(state().errorMessage).toMatch(/failed to save wip limit/i);
+  });
+});
+
+describe('setBoardRelease and setMultipleActiveReleases', () => {
+  it('stores the board release and rolls back on a failed write', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'current')] }));
+
+    await state().setBoardRelease('2.0');
+    expect(current().config.boardRelease).toBe('2.0');
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('boardRelease: "2.0"');
+
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await state().setBoardRelease('1.0');
+    expect(current().config.boardRelease).toBe('2.0');
+    expect(state().errorMessage).toMatch(/failed to save the board release/i);
+  });
+
+  it('stores the setting and rolls back on a failed write', async () => {
+    const { fs } = setup(snap());
+
+    await state().setMultipleActiveReleases(true);
+    expect(current().config.multipleActiveReleases).toBe(true);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('multipleActiveReleases: true');
+
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await state().setMultipleActiveReleases(false);
+    expect(current().config.multipleActiveReleases).toBe(true);
+    expect(state().errorMessage).toMatch(/failed to save the setting/i);
+  });
+
+  it('carries the stored release through a rename', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
+    await state().setBoardRelease('1.0');
+
+    await state().updateRelease('releases/1.0.md', { name: '1.1' });
+
+    expect(current().config.boardRelease).toBe('1.1');
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('boardRelease: "1.1"');
+  });
+
+  it('leaves the stored release alone when another release is renamed', async () => {
+    setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'current')] }));
+    await state().setBoardRelease('1.0');
+
+    await state().updateRelease('releases/2.0.md', { name: '2.1' });
+
+    expect(current().config.boardRelease).toBe('1.0');
   });
 });
 
@@ -890,7 +967,9 @@ describe('external-change conflict', () => {
     // would already have finished the release by the time this one is refused.
     fs.files.get('epics/ui.md')!.lastModified += 1000;
 
-    await expect(state().completeRelease({ kind: 'backlog' })).rejects.toThrow();
+    await expect(
+      state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
+    ).rejects.toThrow();
 
     expect(state().conflictOpen).toBe(true);
     expect(state().snapshot).toBe(before);
@@ -908,7 +987,7 @@ describe('external-change conflict', () => {
     // pins the whole set of visibility fields the conflict has to reset.
     state().openTask('BD-1');
     state().openRelease('releases/1.0.md');
-    state().openCompleteRelease();
+    state().openCompleteRelease('releases/1.0.md');
     state().openStartRelease('releases/1.0.md');
     state().openCreateTask('releases/1.0.md');
     state().openCreateTaskForEpic('ui');
@@ -920,7 +999,7 @@ describe('external-change conflict', () => {
     state().openCreateDocPage();
     state().openCreateDocFolder();
     state().openDeleteDoc('docs/setup.md');
-    expect(state().completeReleaseOpen).toBe(true);
+    expect(state().completeReleaseForFilename).toBe('releases/1.0.md');
     expect(state().dialogStack).toHaveLength(1);
 
     fs.files.get('releases/1.0.md')!.lastModified += 1000;
@@ -939,7 +1018,7 @@ describe('external-change conflict', () => {
       createTaskBacklog: false,
       createReleaseOpen: false,
       createEpicOpen: false,
-      completeReleaseOpen: false,
+      completeReleaseForFilename: null,
       startReleaseForFilename: null,
       settingsOpen: false,
       createDocPageOpen: false,
@@ -954,14 +1033,16 @@ describe('external-change conflict', () => {
       'releases/1.0.md': RELEASE_WITH_EPIC_MD,
       'epics/ui.md': EPIC_MD,
     });
-    state().openCompleteRelease();
+    state().openCompleteRelease('releases/1.0.md');
     state().openTask('BD-1');
 
     fs.files.get('epics/ui.md')!.lastModified += 1000;
-    await expect(state().completeRelease({ kind: 'backlog' })).rejects.toThrow();
+    await expect(
+      state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
+    ).rejects.toThrow();
 
     expect(state().conflictOpen).toBe(true);
-    expect(state().completeReleaseOpen).toBe(false);
+    expect(state().completeReleaseForFilename).toBeNull();
     expect(state().selectedTaskId).toBeNull();
   });
 

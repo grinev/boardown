@@ -27,7 +27,7 @@ import { useBoardStore } from '../store';
 import { BacklogRowView } from '../components/BacklogRowView';
 import backlogStyles from '../components/BacklogView.module.css';
 import { isTaskDragId, parseTaskDragId } from './ids';
-import { BlockedTargetProvider } from './BlockedTargetContext';
+import { BlockedTargetProvider, NO_BLOCKED_TARGETS } from './BlockedTargetContext';
 import {
   BACKLOG_SECTION_KEY,
   applyDragOverBacklog,
@@ -41,8 +41,8 @@ interface BacklogDndContextProps {
   buckets: SectionBuckets;
   setBuckets: Dispatch<SetStateAction<SectionBuckets>>;
   epics: Epic[];
-  // The current release's section key, when its In Progress column is full.
-  wipFullSectionKey: string | null;
+  // The section key of every active release whose In Progress column is full.
+  wipFullSectionKeys: ReadonlySet<string>;
   children: ReactNode;
 }
 
@@ -50,12 +50,13 @@ export function BacklogDndContext({
   buckets,
   setBuckets,
   epics,
-  wipFullSectionKey,
+  wipFullSectionKeys,
   children,
 }: BacklogDndContextProps) {
   const moveTaskOnBacklog = useBoardStore((s) => s.moveTaskOnBacklog);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [blockedSection, setBlockedSection] = useState<string | null>(null);
+  const [blockedSections, setBlockedSections] =
+    useState<ReadonlySet<string>>(NO_BLOCKED_TARGETS);
   const originalBucketsRef = useRef<SectionBuckets | null>(null);
   const bucketsRef = useRef(buckets);
 
@@ -84,13 +85,11 @@ export function BacklogDndContext({
     // Only an `in-progress` task entering the full release breaches the limit;
     // a task already in that section is merely being reordered.
     const task = findTaskInBuckets(buckets, taskId);
-    const alreadyThere = findSectionOfTask(buckets, taskId) === wipFullSectionKey;
-    setBlockedSection(
-      wipFullSectionKey !== null &&
-        !alreadyThere &&
-        task?.frontmatter.status === 'in-progress'
-        ? wipFullSectionKey
-        : null,
+    const from = findSectionOfTask(buckets, taskId);
+    setBlockedSections(
+      task?.frontmatter.status === 'in-progress'
+        ? new Set([...wipFullSectionKeys].filter((key) => key !== from))
+        : NO_BLOCKED_TARGETS,
     );
     originalBucketsRef.current = cloneBuckets(buckets);
   };
@@ -99,7 +98,7 @@ export function BacklogDndContext({
     const { active, over } = event;
     if (!over) return;
     setBuckets((prev) => {
-      const next = applyDragOverBacklog(active, over, prev, blockedSection);
+      const next = applyDragOverBacklog(active, over, prev, blockedSections);
       bucketsRef.current = next;
       return next;
     });
@@ -107,7 +106,7 @@ export function BacklogDndContext({
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
-    setBlockedSection(null);
+    setBlockedSections(NO_BLOCKED_TARGETS);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
 
@@ -152,7 +151,7 @@ export function BacklogDndContext({
 
   const onDragCancel = () => {
     setActiveTaskId(null);
-    setBlockedSection(null);
+    setBlockedSections(NO_BLOCKED_TARGETS);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
     if (original) {
@@ -178,7 +177,7 @@ export function BacklogDndContext({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <BlockedTargetProvider value={blockedSection}>{children}</BlockedTargetProvider>
+      <BlockedTargetProvider value={blockedSections}>{children}</BlockedTargetProvider>
       <DragOverlay>
         {activeTask ? (
           <ul className={backlogStyles.dragOverlayList}>

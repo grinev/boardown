@@ -25,8 +25,8 @@ const HELP = `boardown — markdown task board CLI
 Usage: boardown <command> [args] [--data-dir <path>] [--json]
 
 Views — what you look at first:
-  release current        The board: the current release and its tasks.
-  backlog                Current + future releases and the unscheduled backlog.
+  release current        The board: the active release it shows and its tasks (--all for every one).
+  backlog                Active + future releases and the unscheduled backlog.
   archive                Finished releases.
 
 Tasks:
@@ -46,7 +46,7 @@ Releases and epics:
   release list           List releases with task counts.
   release add <name>     Create a release (--description).
   release edit <ref>     Edit a release name/description (--name --description).
-  release start <ref>    Make a release current.
+  release start <ref>    Make a release active.
   release done <ref>     Finish a release (--into <release> to carry over open tasks).
   epic get <slug>        Show one epic and its tasks.
   epic list              List epics with task counts.

@@ -100,10 +100,6 @@ export function findEpic(snapshot: BoardSnapshot, slug: string): Epic | undefine
   return snapshot.epics.find((e) => e.slug === slug);
 }
 
-export function currentRelease(snapshot: BoardSnapshot): Release | undefined {
-  return snapshot.releases.find((r) => r.frontmatter.status === 'current');
-}
-
 // All tasks belonging to an epic: those physically in its file, plus tasks in
 // any release that carry the epic tag (filename is authoritative for epic
 // files; the tag carries membership once a task is scheduled into a release).

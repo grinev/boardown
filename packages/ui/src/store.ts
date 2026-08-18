@@ -140,7 +140,7 @@ interface BoardState {
   createTaskBacklog: boolean;
   createReleaseOpen: boolean;
   createEpicOpen: boolean;
-  completeReleaseOpen: boolean;
+  completeReleaseForFilename: string | null;
   startReleaseForFilename: string | null;
   settingsOpen: boolean;
   // Docs: the selected tree node (a page path or a folder path), plus the
@@ -159,6 +159,10 @@ interface BoardState {
   setTheme: (theme: Theme) => Promise<void>;
   // `null` clears the limit; the key is removed from config.yaml entirely.
   setWipLimit: (limit: number | null) => Promise<void>;
+  // The active release the Board shows, by slug. Shared through config.yaml, so
+  // every shell opens on the same one.
+  setBoardRelease: (slug: string) => Promise<void>;
+  setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -175,9 +179,9 @@ interface BoardState {
   closeCreateRelease: () => void;
   openCreateEpic: () => void;
   closeCreateEpic: () => void;
-  openCompleteRelease: () => void;
+  openCompleteRelease: (filename: string) => void;
   closeCompleteRelease: () => void;
-  completeRelease: (target: CompleteReleaseTarget) => Promise<void>;
+  completeRelease: (filename: string, target: CompleteReleaseTarget) => Promise<void>;
   openStartRelease: (filename: string) => void;
   closeStartRelease: () => void;
   startRelease: (filename: string) => Promise<void>;
@@ -517,7 +521,7 @@ const ALL_DIALOGS_CLOSED = {
   createTaskBacklog: false,
   createReleaseOpen: false,
   createEpicOpen: false,
-  completeReleaseOpen: false,
+  completeReleaseForFilename: null,
   startReleaseForFilename: null,
   settingsOpen: false,
   createDocPageOpen: false,
@@ -727,6 +731,36 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
+    setBoardRelease: async (slug) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if (snapshot.config.boardRelease === slug) return;
+      const nextConfig = { ...snapshot.config, boardRelease: slug };
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the board release: ${message}` });
+      }
+    },
+
+    setMultipleActiveReleases: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.multipleActiveReleases ?? false) === enabled) return;
+      const nextConfig = { ...snapshot.config, multipleActiveReleases: enabled };
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
     openTask: (id) =>
       set((state) => ({
         ...NO_DIALOG,
@@ -793,9 +827,9 @@ export const useBoardStore = create<BoardState>(
 
     closeCreateEpic: () => set({ createEpicOpen: false }),
 
-    openCompleteRelease: () => set({ completeReleaseOpen: true }),
+    openCompleteRelease: (filename) => set({ completeReleaseForFilename: filename }),
 
-    closeCompleteRelease: () => set({ completeReleaseOpen: false }),
+    closeCompleteRelease: () => set({ completeReleaseForFilename: null }),
 
     openStartRelease: (filename) => set({ startReleaseForFilename: filename }),
 
@@ -1117,13 +1151,13 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
-    completeRelease: async (target) => {
+    completeRelease: async (filename, target) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
 
-      const releaseIndex = snapshot.releases.findIndex((r) => r.frontmatter.status === 'current');
+      const releaseIndex = snapshot.releases.findIndex((r) => r.filename === filename);
       if (releaseIndex === -1) {
-        set({ errorMessage: 'No current release to complete' });
+        set({ errorMessage: `Release not found: ${filename}` });
         return;
       }
 
@@ -1183,7 +1217,11 @@ export const useBoardStore = create<BoardState>(
         return;
       }
 
-      const started = startReleaseInBoard(snapshot.releases[releaseIndex]!, snapshot.releases);
+      const started = startReleaseInBoard(
+        snapshot.releases[releaseIndex]!,
+        snapshot.releases,
+        snapshot.config,
+      );
 
       const nextReleases = [...snapshot.releases];
       nextReleases[releaseIndex] = started;
@@ -1846,12 +1884,21 @@ export const useBoardStore = create<BoardState>(
 
       const nextReleases = [...snapshot.releases];
       nextReleases[index] = nextRelease;
-      const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
 
       // A rename moves the file, and the release is identified by that path
       // everywhere in the UI state — the open dialog and the history behind it
       // have to follow it, or the dialog unmounts mid-edit.
       const moved = nextRelease.filename !== release.filename;
+      // The Board's stored choice is a slug, so it follows the rename too.
+      const boardReleaseMoved = snapshot.config.boardRelease === release.slug;
+      const nextConfig = boardReleaseMoved
+        ? { ...snapshot.config, boardRelease: nextRelease.slug }
+        : snapshot.config;
+      const nextSnapshot: BoardSnapshot = {
+        ...snapshot,
+        releases: nextReleases,
+        config: nextConfig,
+      };
       const { selectedReleaseFilename, dialogStack } = get();
       const nextSelected =
         moved && selectedReleaseFilename === release.filename
@@ -1884,6 +1931,18 @@ export const useBoardStore = create<BoardState>(
           dialogStack,
         });
         throw err;
+      }
+
+      // After the move, not with it: a stored slug that fell behind resolves to
+      // the first active release, while a moved file the snapshot did not know
+      // about would leave the two out of step for every later write.
+      if (moved && boardReleaseMoved) {
+        try {
+          await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: `Failed to save the board release: ${message}` });
+        }
       }
     },
   })),

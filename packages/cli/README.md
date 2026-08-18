@@ -27,13 +27,14 @@ npx @grinev/boardown-cli release current
 The CLI mirrors the way the app is read: **look at a view, then open one task.**
 The three commands at the top are the app's three tabs; everything in a list is a
 compact *task summary*, and `task get` is the drill-down that returns everything.
-`--full` takes any listing command one level deeper.
+`--full` takes any listing command one level deeper. `--all` widens
+`release current` from the one release the board shows to every active release.
 
 ## Commands
 
 ```
-boardown release current        The board: the current release and its tasks.
-boardown backlog                Current + future releases and the unscheduled backlog.
+boardown release current        The board: the active release it shows and its tasks (--all for every one).
+boardown backlog                Active + future releases and the unscheduled backlog.
 boardown archive                Finished releases.
 
 boardown task get <id>          Show one task in full — the drill-down.
@@ -51,7 +52,7 @@ boardown release get <ref>      Show one release and its tasks.
 boardown release list           List releases with task counts.
 boardown release add <name>     Create a release (--description).
 boardown release edit <ref>     Edit a release (--name --description); --name moves the file.
-boardown release start <ref>    Make a release current (only one at a time).
+boardown release start <ref>    Make a release active (one at a time unless multipleActiveReleases).
 boardown release done <ref>     Finish a release (--into <release> to carry over open tasks).
 
 boardown epic get <slug>        Show one epic and its tasks.
@@ -76,6 +77,7 @@ and checklist item texts come from `task get`.
 |---|---|---|
 | `backlog` | sections with task summaries | tasks in full |
 | `release current` / `release get` | release + task summaries | tasks in full |
+| `release current --all` | every active release + task summaries | tasks in full |
 | `archive` | finished releases + counts | + task summaries |
 | `release list` / `epic list` | one row per release/epic with a task count | + task summaries |
 | `epic get` | epic + task summaries | tasks in full |

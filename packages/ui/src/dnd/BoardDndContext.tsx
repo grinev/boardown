@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -28,7 +29,7 @@ import { TaskCard } from '../components/TaskCard';
 import boardStyles from '../components/BoardView.module.css';
 import { isTaskDragId, parseTaskDragId } from './ids';
 import { applyDragOver, findOverlayPlacement, findStatusOf } from './applyDragOver';
-import { BlockedTargetProvider } from './BlockedTargetContext';
+import { BlockedTargetProvider, NO_BLOCKED_TARGETS } from './BlockedTargetContext';
 
 interface BoardDndContextProps {
   buckets: Map<TaskStatus, Task[]>;
@@ -48,6 +49,12 @@ export function BoardDndContext({
   const moveTask = useBoardStore((s) => s.moveTask);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [blockedStatus, setBlockedStatus] = useState<TaskStatus | null>(null);
+  // One board is one release, so at most one column is ever refused; the shared
+  // context carries a set because the backlog shows several releases at once.
+  const blockedTargets = useMemo(
+    () => (blockedStatus === null ? NO_BLOCKED_TARGETS : new Set([blockedStatus])),
+    [blockedStatus],
+  );
   const originalBucketsRef = useRef<Map<TaskStatus, Task[]> | null>(null);
   const bucketsRef = useRef(buckets);
 
@@ -163,7 +170,7 @@ export function BoardDndContext({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <BlockedTargetProvider value={blockedStatus}>{children}</BlockedTargetProvider>
+      <BlockedTargetProvider value={blockedTargets}>{children}</BlockedTargetProvider>
       <DragOverlay>
         {activeTask ? (
           <div className={boardStyles.dragOverlay}>
