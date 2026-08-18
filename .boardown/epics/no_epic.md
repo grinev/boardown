@@ -29,15 +29,6 @@ status: todo
 order: 1100
 ---
 
-## Add labels to tasks and label filters
-
----
-id: BD-29
-type: feature
-status: todo
-order: 1200
----
-
 ## Make task IDs survive parallel branches
 
 ---
@@ -159,3 +150,60 @@ Both relations had to be written as plain text inside the description — which 
 - or allow the write and accept that a finished release file changes.
 
 Whichever is chosen, `task link rm` and any archive-integrity checks must follow the same rule, and the UI needs to show backlinks on archived tasks.
+
+## Clone a task
+
+---
+id: BD-91
+type: feature
+status: todo
+order: 2200
+links:
+  - type: relates
+    to: BD-51
+---
+
+Clone button near delete
+
+## CLI: batch checklist add and done
+
+---
+id: BD-92
+type: feature
+status: todo
+order: 2300
+---
+
+task checklist add|done|undone|rm take one item per call, so filling a six-item acceptance list is six invocations and six rewrites of the release file. Agents work in batches: accept several texts in one add, and several item ids in one done/undone/rm.
+
+## Optional progress bar for checklist
+
+---
+id: BD-93
+type: feature
+status: todo
+order: 2400
+---
+
+## IconSelect: Escape inside a dialog can close the dialog instead of the select
+
+---
+id: BD-95
+type: bug
+status: todo
+order: 2500
+links:
+  - type: relates
+    to: BD-57
+---
+
+Escape over an open IconSelect popup inside the task dialog can close the whole dialog instead of just the select. Pre-existing and older than BD-57; found by the tester during that run.
+
+## Show full release description on board by hover
+
+---
+id: BD-96
+type: feature
+status: todo
+order: 2600
+---

@@ -36,7 +36,18 @@ export const NoteSchema = z.object({
 });
 export type Note = z.infer<typeof NoteSchema>;
 
-export const LINK_TYPES = ['relates'] as const;
+// Authoring order: the symmetric relation, then each directed pair. It carries no
+// product meaning — the order the task dialog groups its links in is a display rule
+// and lives with the grouping code.
+export const LINK_TYPES = [
+  'relates',
+  'blocks',
+  'blocked-by',
+  'duplicates',
+  'duplicated-by',
+  'includes',
+  'part-of',
+] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
 
 // A link is stored on both tasks. `inverse` is the type the mirrored record
@@ -45,7 +56,18 @@ export type LinkType = (typeof LINK_TYPES)[number];
 // reads from the side that holds the record.
 export const LINK_TYPE_META: Record<LinkType, { label: string; inverse: LinkType }> = {
   relates: { label: 'relates to', inverse: 'relates' },
+  blocks: { label: 'blocks', inverse: 'blocked-by' },
+  'blocked-by': { label: 'is blocked by', inverse: 'blocks' },
+  duplicates: { label: 'duplicates', inverse: 'duplicated-by' },
+  'duplicated-by': { label: 'is duplicated by', inverse: 'duplicates' },
+  includes: { label: 'includes', inverse: 'part-of' },
+  'part-of': { label: 'is part of', inverse: 'includes' },
 };
+
+// What a surface links with when the user names no relation. The board ops take
+// the relation as a required argument; this is the product's fallback, in one place
+// so the dialog and the CLI cannot disagree about it.
+export const DEFAULT_LINK_TYPE: LinkType = 'relates';
 
 export const TaskLinkSchema = z.object({
   type: z.enum(LINK_TYPES),

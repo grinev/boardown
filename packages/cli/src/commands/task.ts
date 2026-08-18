@@ -10,11 +10,14 @@ import {
   moveTaskBetweenContainers,
   nextChecklistItemId,
   nextNoteId,
+  removeAllTaskLinks,
   removeTaskLink,
   reorderTask,
   normalizeSearchQuery,
   sortTasksByOrder,
   taskMatchRank,
+  DEFAULT_LINK_TYPE,
+  LINK_TYPES,
   LINK_TYPE_META,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -123,6 +126,17 @@ function parseTaskPriority(value: string): TaskPriority {
 
 function requireType(value: string | undefined, fallback: TaskType): TaskType {
   return value === undefined ? fallback : parseTaskType(value);
+}
+
+function requireLinkType(value: string): LinkType {
+  if (!(LINK_TYPES as readonly string[]).includes(value)) {
+    throw new CliError(
+      'USAGE',
+      `Invalid link type "${value}" (one of ${LINK_TYPES.join(', ')}).`,
+      2,
+    );
+  }
+  return value as LinkType;
 }
 
 function requireStatus(value: string): TaskStatus {
@@ -1039,7 +1053,7 @@ async function linkMutate(
   ctx: CommandContext,
   kind: 'add' | 'rm',
 ): Promise<CommandOutput> {
-  const usage = `Usage: boardown task link ${kind} <id> <other-id>.`;
+  const usage = `Usage: boardown task link ${kind} <id> <other-id> [--type <${LINK_TYPES.join('|')}>].`;
   const id = args.positionals[3];
   const otherId = args.positionals[4];
   if (id === undefined || otherId === undefined) {
@@ -1048,6 +1062,14 @@ async function linkMutate(
   if (id === otherId) {
     throw new CliError('USAGE', 'A task cannot be linked to itself.', 2);
   }
+  // `add` without --type means the symmetric default; `rm` without it means every
+  // relation between the pair, so the call written before link types keeps working.
+  // A bare `--type` parses as boolean true: the flag is present with a malformed
+  // value, and dropping it here would silently turn `rm` into "clear the pair".
+  const type =
+    args.flags['type'] === undefined
+      ? undefined
+      : requireLinkType(flagString(args.flags, 'type') ?? '');
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
@@ -1060,8 +1082,20 @@ async function linkMutate(
     throw new CliError('TASK_NOT_FOUND', `No task "${otherId}".`);
   }
 
-  const apply = kind === 'add' ? addTaskLink : removeTaskLink;
-  const result = applyOp(() => apply(source.container, target.container, id, otherId));
+  const result = applyOp(() => {
+    if (kind === 'add') {
+      return addTaskLink(
+        source.container,
+        target.container,
+        id,
+        otherId,
+        type ?? DEFAULT_LINK_TYPE,
+      );
+    }
+    return type === undefined
+      ? removeAllTaskLinks(source.container, target.container, id, otherId)
+      : removeTaskLink(source.container, target.container, id, otherId, type);
+  });
 
   const refs: ContainerRef[] = result.changedFilenames.map((filename) =>
     filename === source.container.filename
@@ -1072,16 +1106,21 @@ async function linkMutate(
     await writeContainers(fs, refs);
   }
 
+  // Naming the relation matters once there are seven of them: "Unlinked A and B"
+  // would describe any of the rm calls, including the one that cleared them all.
+  const suffix = type === undefined ? '' : ` (${LINK_TYPE_META[type].label})`;
   const unchangedNote =
-    kind === 'add' ? `${id} and ${otherId} are already linked.` : `${id} and ${otherId} are not linked.`;
+    kind === 'add'
+      ? `${id} and ${otherId} are already linked${suffix}.`
+      : `${id} and ${otherId} are not linked${suffix}.`;
   return {
     data: { id, other: otherId },
     human:
       refs.length === 0
         ? unchangedNote
         : kind === 'add'
-          ? `Linked ${id} and ${otherId}.`
-          : `Unlinked ${id} and ${otherId}.`,
+          ? `Linked ${id} and ${otherId}${suffix}.`
+          : `Unlinked ${id} and ${otherId}${suffix}.`,
     ...problemsField(problems),
   };
 }

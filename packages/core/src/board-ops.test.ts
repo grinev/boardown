@@ -5,6 +5,7 @@ import {
   changeTaskStatus,
   moveTaskInContainer,
   completeRelease,
+  removeAllTaskLinks,
   removeTaskLink,
   createEpic,
   createRelease,
@@ -1414,7 +1415,7 @@ describe('task links', () => {
     const r = release(task('BD-1', 'todo', 100));
     const b = backlogWith(task('BD-2', 'todo', 100));
 
-    const result = addTaskLink(r, b, 'BD-1', 'BD-2');
+    const result = addTaskLink(r, b, 'BD-1', 'BD-2', 'relates');
 
     expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'relates', to: 'BD-2' }]);
     expect(linksOf(result.target, 'BD-2')).toEqual([{ type: 'relates', to: 'BD-1' }]);
@@ -1424,7 +1425,7 @@ describe('task links', () => {
   it('writes both records when the tasks share one container', () => {
     const r = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
 
-    const result = addTaskLink(r, r, 'BD-1', 'BD-2');
+    const result = addTaskLink(r, r, 'BD-1', 'BD-2', 'relates');
 
     expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'relates', to: 'BD-2' }]);
     expect(linksOf(result.source, 'BD-2')).toEqual([{ type: 'relates', to: 'BD-1' }]);
@@ -1435,9 +1436,9 @@ describe('task links', () => {
   it('is idempotent: re-adding changes nothing and reports no files', () => {
     const r = release(task('BD-1', 'todo', 100));
     const b = backlogWith(task('BD-2', 'todo', 100));
-    const first = addTaskLink(r, b, 'BD-1', 'BD-2');
+    const first = addTaskLink(r, b, 'BD-1', 'BD-2', 'relates');
 
-    const second = addTaskLink(first.source, first.target, 'BD-1', 'BD-2');
+    const second = addTaskLink(first.source, first.target, 'BD-1', 'BD-2', 'relates');
 
     expect(second.changedFilenames).toEqual([]);
     expect(linksOf(second.source, 'BD-1')).toHaveLength(1);
@@ -1447,9 +1448,9 @@ describe('task links', () => {
   it('removes both records', () => {
     const r = release(task('BD-1', 'todo', 100));
     const b = backlogWith(task('BD-2', 'todo', 100));
-    const linked = addTaskLink(r, b, 'BD-1', 'BD-2');
+    const linked = addTaskLink(r, b, 'BD-1', 'BD-2', 'relates');
 
-    const result = removeTaskLink(linked.source, linked.target, 'BD-1', 'BD-2');
+    const result = removeTaskLink(linked.source, linked.target, 'BD-1', 'BD-2', 'relates');
 
     expect(linksOf(result.source, 'BD-1')).toBeUndefined();
     expect(linksOf(result.target, 'BD-2')).toBeUndefined();
@@ -1462,7 +1463,7 @@ describe('task links', () => {
     const r = release(half);
     const b = backlogWith(task('BD-2', 'todo', 100));
 
-    const result = removeTaskLink(r, b, 'BD-1', 'BD-2');
+    const result = removeTaskLink(r, b, 'BD-1', 'BD-2', 'relates');
 
     expect(linksOf(result.source, 'BD-1')).toBeUndefined();
     expect(result.changedFilenames).toEqual([r.filename]);
@@ -1472,32 +1473,83 @@ describe('task links', () => {
     const r = release(task('BD-1', 'todo', 100));
     const b = backlogWith(task('BD-2', 'todo', 100));
 
-    const result = removeTaskLink(r, b, 'BD-1', 'BD-2');
+    const result = removeTaskLink(r, b, 'BD-1', 'BD-2', 'relates');
 
     expect(result.changedFilenames).toEqual([]);
   });
 
   it('rejects linking a task to itself', () => {
     const r = release(task('BD-1', 'todo', 100));
-    expect(() => addTaskLink(r, r, 'BD-1', 'BD-1')).toThrow(/itself/);
-    expect(() => removeTaskLink(r, r, 'BD-1', 'BD-1')).toThrow(/itself/);
+    expect(() => addTaskLink(r, r, 'BD-1', 'BD-1', 'relates')).toThrow(/itself/);
+    expect(() => removeTaskLink(r, r, 'BD-1', 'BD-1', 'relates')).toThrow(/itself/);
   });
 
   it('rejects an unknown task on either side', () => {
     const r = release(task('BD-1', 'todo', 100));
     const b = backlogWith(task('BD-2', 'todo', 100));
-    expect(() => addTaskLink(r, b, 'BD-9', 'BD-2')).toThrow(/BD-9/);
-    expect(() => addTaskLink(r, b, 'BD-1', 'BD-9')).toThrow(/BD-9/);
+    expect(() => addTaskLink(r, b, 'BD-9', 'BD-2', 'relates')).toThrow(/BD-9/);
+    expect(() => addTaskLink(r, b, 'BD-1', 'BD-9', 'relates')).toThrow(/BD-9/);
   });
 
   it('rejects a finished release on either side, for add and remove', () => {
     const r = release(task('BD-1', 'todo', 100));
     const a = archived(task('BD-2', 'done', 100));
 
-    expect(() => addTaskLink(a, r, 'BD-2', 'BD-1')).toThrow(/finished/);
-    expect(() => addTaskLink(r, a, 'BD-1', 'BD-2')).toThrow(/finished/);
-    expect(() => removeTaskLink(a, r, 'BD-2', 'BD-1')).toThrow(/finished/);
-    expect(() => removeTaskLink(r, a, 'BD-1', 'BD-2')).toThrow(/finished/);
+    expect(() => addTaskLink(a, r, 'BD-2', 'BD-1', 'relates')).toThrow(/finished/);
+    expect(() => addTaskLink(r, a, 'BD-1', 'BD-2', 'relates')).toThrow(/finished/);
+    expect(() => removeTaskLink(a, r, 'BD-2', 'BD-1', 'relates')).toThrow(/finished/);
+    expect(() => removeTaskLink(r, a, 'BD-1', 'BD-2', 'relates')).toThrow(/finished/);
+  });
+
+  it('mirrors a directed relation as its inverse on the other task', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const b = backlogWith(task('BD-2', 'todo', 100));
+
+    const result = addTaskLink(r, b, 'BD-1', 'BD-2', 'blocks');
+
+    expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'blocks', to: 'BD-2' }]);
+    expect(linksOf(result.target, 'BD-2')).toEqual([{ type: 'blocked-by', to: 'BD-1' }]);
+  });
+
+  it('mirrors a directed relation when both tasks share one container', () => {
+    const r = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
+
+    const result = addTaskLink(r, r, 'BD-1', 'BD-2', 'includes');
+
+    expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'includes', to: 'BD-2' }]);
+    expect(linksOf(result.source, 'BD-2')).toEqual([{ type: 'part-of', to: 'BD-1' }]);
+    expect(result.changedFilenames).toEqual([r.filename]);
+  });
+
+  it('lets one pair carry several relations at once', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const b = backlogWith(task('BD-2', 'todo', 100));
+
+    const first = addTaskLink(r, b, 'BD-1', 'BD-2', 'blocks');
+    const second = addTaskLink(first.source, first.target, 'BD-1', 'BD-2', 'duplicates');
+
+    expect(linksOf(second.source, 'BD-1')).toEqual([
+      { type: 'blocks', to: 'BD-2' },
+      { type: 'duplicates', to: 'BD-2' },
+    ]);
+    expect(linksOf(second.target, 'BD-2')).toEqual([
+      { type: 'blocked-by', to: 'BD-1' },
+      { type: 'duplicated-by', to: 'BD-1' },
+    ]);
+  });
+
+
+  it('refuses a finished release for removeAllTaskLinks too', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const a = archived(task('BD-2', 'done', 100));
+
+    expect(() => removeAllTaskLinks(r, a, 'BD-1', 'BD-2')).toThrow(/finished/);
+    expect(() => removeAllTaskLinks(a, r, 'BD-2', 'BD-1')).toThrow(/finished/);
+  });
+
+  it('refuses removeAllTaskLinks on a task pointed at itself', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    expect(() => removeAllTaskLinks(r, r, 'BD-1', 'BD-1')).toThrow(/itself/);
   });
 });
 

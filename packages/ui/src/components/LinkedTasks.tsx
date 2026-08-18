@@ -1,10 +1,23 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { sortTasksByOrder, type Task, type TaskStatus } from '@boardown/core';
+import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  DEFAULT_LINK_TYPE,
+  LINK_TYPE_META,
+  sortTasksByOrder,
+  type LinkType,
+  type Task,
+  type TaskStatus,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
-import { collectLinkedTasks, isTaskArchived } from '../utils/linked-tasks';
+import {
+  LINK_TYPES_IN_GROUP_ORDER,
+  collectLinkedTasks,
+  groupLinkedTasks,
+  isTaskArchived,
+} from '../utils/linked-tasks';
+import { IconSelect, type IconSelectOption } from './IconSelect';
 import styles from './LinkedTasks.module.css';
 
 interface LinkedTasksProps {
@@ -15,6 +28,11 @@ interface LinkedTasksProps {
 }
 
 const MAX_SUGGESTIONS = 8;
+
+const RELATION_OPTIONS: IconSelectOption[] = LINK_TYPES_IN_GROUP_ORDER.map((type) => ({
+  value: type,
+  label: LINK_TYPE_META[type].label,
+}));
 
 const STATUS_PILL_CLASS: Record<TaskStatus, string | undefined> = {
   todo: styles.statusTodo,
@@ -28,17 +46,23 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
   const removeTaskLink = useBoardStore((s) => s.removeTaskLink);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [relation, setRelation] = useState<LinkType>(DEFAULT_LINK_TYPE);
 
   const id = task.frontmatter.id;
   const rows = useMemo(
     () => (snapshot ? collectLinkedTasks(snapshot, id) : []),
     [snapshot, id],
   );
+  const groups = useMemo(() => groupLinkedTasks(rows), [rows]);
 
   const suggestions = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (snapshot === null || needle === '') return [];
-    const linked = new Set(rows.map((r) => r.task.frontmatter.id));
+    // A pair may carry several relations at once, so only the tasks already linked
+    // with the relation being added are out — the rest are still offerable.
+    const linked = new Set(
+      rows.filter((r) => r.type === relation).map((r) => r.task.frontmatter.id),
+    );
     // Sorted per container: the pool is sliced to the first few matches, and a
     // file's block order says nothing about where a task sits on the board.
     const candidates = [
@@ -58,12 +82,12 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
         );
       })
       .slice(0, MAX_SUGGESTIONS);
-  }, [snapshot, query, rows, id]);
+  }, [snapshot, query, rows, relation, id]);
 
   const select = (otherId: string) => {
     setQuery('');
     setSearching(false);
-    void addTaskLink(id, otherId);
+    void addTaskLink(id, otherId, relation);
   };
 
   const onQueryKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -94,6 +118,7 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
             aria-expanded={searching}
             onClick={() => {
               setQuery('');
+              setRelation(DEFAULT_LINK_TYPE);
               setSearching((open) => !open);
             }}
           >
@@ -102,56 +127,75 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
         )}
       </div>
 
-      {rows.length > 0 && (
-        <div className={styles.table} role="table" aria-label="Linked tasks">
-          {rows.map(({ task: linked, archived }) => {
-            const meta = TASK_TYPE_META[linked.frontmatter.type];
-            const TypeIcon = meta.icon;
-            const linkedId = linked.frontmatter.id;
-            return (
-              // display: contents — the cells sit directly in the grid, while the
-              // row wrapper still gives CSS a hover target for the trash button.
-              <div key={linkedId} role="row" className={styles.row}>
-                <TypeIcon
-                  className={styles.typeIcon}
-                  style={{ color: meta.colorVar }}
-                  aria-label={meta.label}
-                />
-                <span className={styles.taskId}>{linkedId}</span>
-                <button
-                  type="button"
-                  className={styles.titleButton}
-                  onClick={() => onTaskClick(linkedId)}
-                >
-                  {linked.title}
-                </button>
-                <span
-                  className={`${styles.statusPill} ${STATUS_PILL_CLASS[linked.frontmatter.status] ?? ''}`}
-                >
-                  {formatStatusLabel(linked.frontmatter.status)}
-                </span>
-                {readOnly || archived ? (
-                  <span className={styles.removeSpacer} />
-                ) : (
-                  <button
-                    type="button"
-                    className={styles.removeButton}
-                    aria-label={`Remove link to ${linkedId}`}
-                    onClick={() => {
-                      void removeTaskLink(id, linkedId);
-                    }}
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      {groups.length > 0 && (
+        <div className={styles.table}>
+          {groups.map((group) => (
+            <Fragment key={group.type}>
+              {/* The relation is stated here rather than per row: on a frozen
+                  dialog the per-row control is not rendered, so this heading is
+                  the only place it appears. */}
+              <h4 className={styles.groupHeading}>{LINK_TYPE_META[group.type].label}</h4>
+              {group.rows.map(({ task: linked, type, archived }) => {
+                const meta = TASK_TYPE_META[linked.frontmatter.type];
+                const TypeIcon = meta.icon;
+                const linkedId = linked.frontmatter.id;
+                const frozen = readOnly || archived;
+                const label = LINK_TYPE_META[type].label;
+                return (
+                  // display: contents — the cells sit directly in the grid, while
+                  // the row wrapper still gives CSS a hover target for the actions.
+                  <div key={`${type}:${linkedId}`} className={styles.row}>
+                    <TypeIcon
+                      className={styles.typeIcon}
+                      style={{ color: meta.colorVar }}
+                      aria-label={meta.label}
+                    />
+                    <span className={styles.taskId}>{linkedId}</span>
+                    <button
+                      type="button"
+                      className={styles.titleButton}
+                      onClick={() => onTaskClick(linkedId)}
+                    >
+                      {linked.title}
+                    </button>
+                    <span
+                      className={`${styles.statusPill} ${STATUS_PILL_CLASS[linked.frontmatter.status] ?? ''}`}
+                    >
+                      {formatStatusLabel(linked.frontmatter.status)}
+                    </span>
+                    {frozen ? (
+                      <span className={styles.removeSpacer} />
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.removeButton}
+                        // Two rows can point at the same task, so the name has to
+                        // say which of them this button breaks.
+                        aria-label={`Remove "${label}" link to ${linkedId}`}
+                        onClick={() => {
+                          void removeTaskLink(id, linkedId, type);
+                        }}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       )}
 
       {!readOnly && searching && (
         <div className={styles.search}>
+          <IconSelect
+            value={relation}
+            options={RELATION_OPTIONS}
+            onChange={(next) => setRelation(next as LinkType)}
+            ariaLabel="Relation"
+            triggerClassName={styles.searchRelation}
+          />
           <input
             type="text"
             className={styles.searchInput}

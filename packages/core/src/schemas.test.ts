@@ -3,6 +3,8 @@ import {
   BoardConfigSchema,
   EpicFrontmatterSchema,
   effectiveTaskPriority,
+  LINK_TYPES,
+  LINK_TYPE_META,
   ReleaseFrontmatterSchema,
   TaskFrontmatterSchema,
   type TaskFrontmatter,
@@ -195,13 +197,28 @@ describe('TaskFrontmatterSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts every link type, and each one declares the other as its inverse', () => {
+    for (const type of LINK_TYPES) {
+      const result = TaskFrontmatterSchema.safeParse({
+        id: 'BD-1',
+        type: 'feature',
+        status: 'todo',
+        order: 100,
+        links: [{ type, to: 'BD-2' }],
+      });
+      expect(result.success).toBe(true);
+      expect(LINK_TYPE_META[LINK_TYPE_META[type].inverse].inverse).toBe(type);
+    }
+    expect(LINK_TYPES).toHaveLength(7);
+  });
+
   it('rejects a link with an unknown type or a missing target', () => {
     const badType = TaskFrontmatterSchema.safeParse({
       id: 'BD-1',
       type: 'feature',
       status: 'todo',
       order: 100,
-      links: [{ type: 'blocks', to: 'BD-2' }],
+      links: [{ type: 'supersedes', to: 'BD-2' }],
     });
     expect(badType.success).toBe(false);
 

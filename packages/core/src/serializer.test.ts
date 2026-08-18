@@ -464,6 +464,31 @@ description
     expect(serializeEpic(second.value!)).toBe(serialized);
   });
 
+  it('round-trips several relations to the same task, in file order', () => {
+    const source = withLinks.replace(
+      `links:
+  - type: relates
+    to: BD-3
+  - type: relates
+    to: BD-4`,
+      `links:
+  - type: blocks
+    to: BD-3
+  - type: duplicated-by
+    to: BD-3
+  - type: part-of
+    to: BD-4`,
+    );
+    const first = parseEpic(source, 'epics/ui-foundation.md', 'ui-foundation');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'blocks', to: 'BD-3' },
+      { type: 'duplicated-by', to: 'BD-3' },
+      { type: 'part-of', to: 'BD-4' },
+    ]);
+    expect(serializeEpic(first.value!)).toBe(source);
+  });
+
   it('omits an empty links array', () => {
     const epic: Epic = {
       filename: 'epics/ui.md',

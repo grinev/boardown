@@ -455,6 +455,118 @@ describe('cli commands (integration)', () => {
       expect(get.human).toContain('Links (1)');
       expect(get.human).toContain('relates to  TS-2');
     });
+
+    it('--type writes the relation and mirrors its inverse', async () => {
+      const out = await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'blocks', to: 'TS-2' },
+      ]);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'blocked-by', to: 'TS-1' },
+      ]);
+      expect(out.human).toContain('(blocks)');
+    });
+
+    it('reads the relation from each side in ls and task get', async () => {
+      await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+
+      const forward = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-1']), ctx);
+      expect(links(forward.data).map((l) => l.type)).toEqual(['blocks']);
+      expect(forward.human).toContain('blocks  TS-2');
+
+      const backward = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-2']), ctx);
+      expect(links(backward.data).map((l) => l.type)).toEqual(['blocked-by']);
+      expect(backward.human).toContain('is blocked by  TS-1');
+
+      const get = await taskCommand(parseArgs(['task', 'get', 'TS-2']), ctx);
+      expect(get.human).toContain('is blocked by  TS-1');
+    });
+
+    it('one pair carries several relations at once', async () => {
+      await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'blocks', to: 'TS-2' },
+        { type: 'relates', to: 'TS-2' },
+      ]);
+    });
+
+    it('rm --type drops that relation only; rm without it drops them all', async () => {
+      await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+
+      await taskCommand(
+        parseArgs(['task', 'link', 'rm', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-2' },
+      ]);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
+
+      await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'duplicates']),
+        ctx,
+      );
+      await taskCommand(parseArgs(['task', 'link', 'rm', 'TS-1', 'TS-2']), ctx);
+
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toBeUndefined();
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toBeUndefined();
+    });
+
+    it('rejects an unknown --type with USAGE and writes nothing', async () => {
+      await expect(
+        taskCommand(
+          parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'supersedes']),
+          ctx,
+        ),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toBeUndefined();
+    });
+
+    it('a bare --type is a USAGE error rather than clearing the whole pair', async () => {
+      await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+
+      await expect(
+        taskCommand(parseArgs(['task', 'link', 'rm', 'TS-1', 'TS-2', '--type']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'blocks', to: 'TS-2' },
+      ]);
+    });
+
+    it('rm --type on a relation the pair does not carry changes nothing', async () => {
+      await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
+
+      const out = await taskCommand(
+        parseArgs(['task', 'link', 'rm', 'TS-1', 'TS-2', '--type', 'blocks']),
+        ctx,
+      );
+
+      expect(out.human).toContain('are not linked (blocks)');
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-2' },
+      ]);
+    });
   });
 
   it('reports NO_BOARD when no board exists', async () => {

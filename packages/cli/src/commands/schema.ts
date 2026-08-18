@@ -14,7 +14,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 6,
+  version: 7,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -33,7 +33,7 @@ const DESCRIPTOR = {
     checklist: 'optional array of { id, text, done }; managed via `task checklist`',
     notes: 'optional array of { id, text, createdAt }; managed via `task notes`',
     links:
-      'optional array of { type, to }; links to other tasks, mirrored on both sides; managed via `task link`',
+      'optional array of { type, to }; `type` is one of linkTypes, read from the side holding the record; links to other tasks, mirrored onto the other one as the inverse type; managed via `task link`',
     custom:
       'optional map of the board customFields values, stored flat in the task frontmatter; managed via `--field key=value` on `task add`/`task edit`',
   },
@@ -115,9 +115,10 @@ const DESCRIPTOR = {
     },
     {
       name: 'task link',
-      usage: 'boardown task link (add <id> <other-id> | rm <id> <other-id> | ls <id>)',
+      usage:
+        'boardown task link (add <id> <other-id> [--type <linkType>] | rm <id> <other-id> [--type <linkType>] | ls <id>)',
       summary:
-        "Manage a task's links to other tasks. Only the `relates` type exists; it is symmetric and the record is mirrored into both tasks. `add` is idempotent, `rm` removes both records. `ls` data is { links: [{ type, to, title, status, taskType, missing }], count } — `missing` marks a link whose target is not on the board.",
+        "Manage a task's links to other tasks. The relation is one of linkTypes, read from <id>'s side: `--type blocks` means \"<id> blocks <other-id>\". Each relation's record is mirrored into the other task as its inverse, so `blocks` reads as `blocked-by` there; `relates` is symmetric and is the default for `add`. One pair may carry several relations at once. `add` is idempotent per relation. `rm` with `--type` drops that one relation, without it every relation between the pair. Changing a relation is `rm` then `add`. `ls` data is { links: [{ type, to, title, status, taskType, missing }], count } — `missing` marks a link whose target is not on the board.",
     },
     {
       name: 'release get',

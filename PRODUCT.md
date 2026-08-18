@@ -46,7 +46,7 @@ A single unit of work. Fields:
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
-| `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is currently always `relates` (symmetric); `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
+| `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
 Task statuses, types and priorities are currently a fixed set baked into the app:
@@ -568,7 +568,7 @@ from the column on Board.
 
 The Backlog and Archive rows carry the same two glyphs, but the priority one sits
 **last in the row**, after the status pill. The epic dialog's task table and the
-Linked-tasks table show no priority.
+Linked tasks section show no priority.
 
 ### Task editor
 
@@ -658,7 +658,7 @@ clickable — so a page of references shows at a glance what is already finished
 This is purely a rendering rule and applies wherever such a reference is expanded:
 the plain-text fields (task description, custom-field values, notes, epic and
 release descriptions) and the markdown bodies (a Docs page, the doc popup). The
-task dialog's "Linked tasks" table is not affected — its rows carry a status pill
+task dialog's "Linked tasks" section is not affected — its rows carry a status pill
 already.
 
 **Doc links.** A `[[…]]` token holding a doc page's path relative to `docs/`
@@ -732,14 +732,27 @@ there, so Escape with the list open dismisses the list and leaves the dialog ope
 with the form intact; a second Escape closes the dialog as usual.
 
 **Linked tasks.** Above the notes, the task dialog has a **Linked tasks** section:
-a table of the tasks this one is related to (type icon, id, title, status — the
-same columns as the epic dialog's task list). A `+` button at the right end of the
-section heading opens a search field; typing part of another task's id or title
-lists the matches, and picking one creates the link. Hovering a row reveals a
-trash button that breaks the link. Only one link
-type exists — `relates`, which is symmetric — so the user never picks one; the
-stored record carries a type, and each type declares its inverse, so an asymmetric
-type (e.g. `blocks` / "is blocked by") can be added later without a redesign.
+the tasks this one is related to (type icon, id, title, status — the same columns
+as the epic dialog's task list), grouped under a sub-heading per relation. A `+`
+button at the right end of the section heading opens the add row — a relation
+selector, preselected to "relates to", beside a search field; typing part of
+another task's id or title lists the matches, and picking one creates the link with
+the selected relation, read from this task's side. Hovering a row reveals a trash
+button that breaks that one relation, leaving any other relation the pair carries.
+An existing link's relation is not editable in place — as in Jira, the way to change
+one is to break the link and make it again.
+
+There are **seven relations**: `relates`, which is symmetric and is its own
+inverse, plus three directed pairs — `blocks` / "is blocked by", `duplicates` /
+"is duplicated by", `includes` / "is part of". Each side of a pair is a type of its
+own whose inverse is the other side, so a record written as `blocks` is mirrored
+onto the other task as `blocked-by` and reads there as "is blocked by". The set is
+baked into the app; `config.yaml` says nothing about it. Group order in the dialog
+is fixed and independent of the file: blocks · is blocked by · includes · is part
+of · duplicates · is duplicated by · relates to, with the rows inside a group in
+file order. A sub-heading is always shown, including when every link is `relates` —
+it is the only place a row's relation is stated, and on a task in a finished release
+the trash is gone too.
 
 A link is stored on **both** tasks (mirrored). Rendering is lenient: a task shows
 the union of its own records and the records pointing at it, deduplicated, so a
@@ -931,9 +944,15 @@ carries neither the field's three-character minimum nor its ten-result cap: it
 returns every task it matches, in the usual listing order. An empty `--text` is
 no filter at all. `task link ls` is a link listing rather than a task summary, and carries
 no priority. Task links are managed
-with `task link add|rm|ls`: `add` is idempotent, `rm` clears both mirrored
-records, and `ls` lists the linked tasks, flagging a link whose target is no
-longer on the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
+with `task link add|rm|ls`. Both `add` and `rm` take an optional `--type`, read
+from `<id>`'s side — `--type blocks` means "`<id>` blocks `<other-id>`" — and
+default to `relates` on `add`. `add` is idempotent per relation, and a pair may
+accumulate several. `rm --type` clears that one relation on both sides; `rm`
+without it clears **every** relation between the pair, which is what the call
+written before relations existed already meant. Changing a relation is `rm` then
+`add` — there is no subcommand for it. `ls` lists the linked tasks with the
+relation read from the side asked, flagging a link whose target is no longer on
+the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /

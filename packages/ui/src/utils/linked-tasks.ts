@@ -9,6 +9,37 @@ export interface LinkedTaskRow {
   archived: boolean;
 }
 
+export interface LinkedTaskGroup {
+  type: LinkType;
+  rows: LinkedTaskRow[];
+}
+
+// The order the task dialog groups its links in. Display-only — `core` declares the
+// vocabulary, not this — and keyed by relation so a type added to `core` cannot
+// reach the dialog without being given a place here.
+const GROUP_RANK: Record<LinkType, number> = {
+  blocks: 0,
+  'blocked-by': 1,
+  includes: 2,
+  'part-of': 3,
+  duplicates: 4,
+  'duplicated-by': 5,
+  relates: 6,
+};
+
+export const LINK_TYPES_IN_GROUP_ORDER: LinkType[] = (
+  Object.keys(GROUP_RANK) as LinkType[]
+).sort((a, b) => GROUP_RANK[a] - GROUP_RANK[b]);
+
+// Buckets the collected rows by relation. Rows keep the order they arrived in — the
+// file's block order for a task's own records — and a relation with no rows is left
+// out rather than announced.
+export const groupLinkedTasks = (rows: readonly LinkedTaskRow[]): LinkedTaskGroup[] =>
+  LINK_TYPES_IN_GROUP_ORDER.map((type) => ({
+    type,
+    rows: rows.filter((r) => r.type === type),
+  })).filter((g) => g.rows.length > 0);
+
 const allTasks = (snapshot: BoardSnapshot): Task[] => [
   ...snapshot.releases.flatMap((r) => r.tasks),
   ...snapshot.epics.flatMap((e) => e.tasks),

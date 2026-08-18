@@ -803,23 +803,21 @@ const mapTask = <C extends Container>(
     : { container, changed };
 };
 
-const applyLinkPair = <S extends Container, D extends Container>(
+// Edits each side of a pair and reports the files that actually changed. Every link
+// operation is this shape, so the same-file aliasing lives here once: the second
+// edit must see the result of the first, or one of the two mirrored records is lost.
+const applyPairEdit = <S extends Container, D extends Container>(
   source: S,
   target: D,
   sourceTaskId: string,
   targetTaskId: string,
-  type: LinkType,
-  edit: (task: Task, link: TaskLink) => Task,
+  edit: (task: Task, otherTaskId: string) => Task,
 ): TaskLinkResult<S, D> => {
-  const forward: TaskLink = { type, to: targetTaskId };
-  const backward: TaskLink = { type: LINK_TYPE_META[type].inverse, to: sourceTaskId };
-
   if (source.filename === target.filename) {
-    // Both tasks live in the same file: the second edit must be applied to the
-    // result of the first, or one of the two mirrored records is lost. Source and
-    // target are the same container, so the cast restates what the caller passed.
-    const first = mapTask(source, sourceTaskId, (t) => edit(t, forward));
-    const second = mapTask(first.container, targetTaskId, (t) => edit(t, backward));
+    // Source and target are the same container, so the cast restates what the
+    // caller passed.
+    const first = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId));
+    const second = mapTask(first.container, targetTaskId, (t) => edit(t, sourceTaskId));
     const merged = second.container;
     return {
       source: merged,
@@ -828,8 +826,8 @@ const applyLinkPair = <S extends Container, D extends Container>(
     };
   }
 
-  const nextSource = mapTask(source, sourceTaskId, (t) => edit(t, forward));
-  const nextTarget = mapTask(target, targetTaskId, (t) => edit(t, backward));
+  const nextSource = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId));
+  const nextTarget = mapTask(target, targetTaskId, (t) => edit(t, sourceTaskId));
   const changedFilenames: string[] = [];
   if (nextSource.changed) changedFilenames.push(source.filename);
   if (nextTarget.changed) changedFilenames.push(target.filename);
@@ -840,44 +838,28 @@ const applyLinkPair = <S extends Container, D extends Container>(
   };
 };
 
+// The mirrored form: the subject gets the relation, the object its inverse.
+const applyLinkPair = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType,
+  edit: (task: Task, link: TaskLink) => Task,
+): TaskLinkResult<S, D> =>
+  applyPairEdit(source, target, sourceTaskId, targetTaskId, (task, otherTaskId) =>
+    edit(task, {
+      type: otherTaskId === targetTaskId ? type : LINK_TYPE_META[type].inverse,
+      to: otherTaskId,
+    }),
+  );
+
 // A link is mirrored into both tasks, so both files must be writable: an archived
 // task is refused as the target just as much as as the source.
 const assertLinkable = (source: Container, target: Container): void => {
   if (isFinishedRelease(source) || isFinishedRelease(target)) {
     throw new BoardOpError('ARCHIVED', 'Cannot change the links of a task in a finished release');
   }
-};
-
-export const addTaskLink = <S extends Container, D extends Container>(
-  source: S,
-  target: D,
-  sourceTaskId: string,
-  targetTaskId: string,
-  type: LinkType = 'relates',
-): TaskLinkResult<S, D> => {
-  if (sourceTaskId === targetTaskId) {
-    throw new Error('Cannot link a task to itself');
-  }
-  assertLinkable(source, target);
-  findTask(source.tasks, sourceTaskId);
-  findTask(target.tasks, targetTaskId);
-  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithLink);
-};
-
-export const removeTaskLink = <S extends Container, D extends Container>(
-  source: S,
-  target: D,
-  sourceTaskId: string,
-  targetTaskId: string,
-  type: LinkType = 'relates',
-): TaskLinkResult<S, D> => {
-  if (sourceTaskId === targetTaskId) {
-    throw new Error('Cannot unlink a task from itself');
-  }
-  assertLinkable(source, target);
-  findTask(source.tasks, sourceTaskId);
-  findTask(target.tasks, targetTaskId);
-  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink);
 };
 
 const taskWithoutLinksTo = (task: Task, targetId: string): Task => {
@@ -889,6 +871,59 @@ const taskWithoutLinksTo = (task: Task, targetId: string): Task => {
   if (remaining.length === 0) delete frontmatter.links;
   else frontmatter.links = remaining;
   return { ...task, frontmatter };
+};
+
+// The relation is a required argument on every op below: `relates` is the product's
+// fallback, not the ops', and an omitted argument must never be what clears a whole
+// pair (see removeAllTaskLinks).
+const assertLinkableTasks = (
+  source: Container,
+  target: Container,
+  sourceTaskId: string,
+  targetTaskId: string,
+  verb: string,
+): void => {
+  if (sourceTaskId === targetTaskId) {
+    throw new Error(`Cannot ${verb} a task to itself`);
+  }
+  assertLinkable(source, target);
+  findTask(source.tasks, sourceTaskId);
+  findTask(target.tasks, targetTaskId);
+};
+
+export const addTaskLink = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType,
+): TaskLinkResult<S, D> => {
+  assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'link');
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithLink);
+};
+
+export const removeTaskLink = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+  type: LinkType,
+): TaskLinkResult<S, D> => {
+  assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'unlink');
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink);
+};
+
+// Drops every relation between the two tasks at once, whatever their types — what
+// `task link rm` without `--type` means. The per-task edit is the one task deletion
+// already uses to strip records pointing at a removed id.
+export const removeAllTaskLinks = <S extends Container, D extends Container>(
+  source: S,
+  target: D,
+  sourceTaskId: string,
+  targetTaskId: string,
+): TaskLinkResult<S, D> => {
+  assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'unlink');
+  return applyPairEdit(source, target, sourceTaskId, targetTaskId, taskWithoutLinksTo);
 };
 
 export interface DeleteTaskResult {

@@ -10,6 +10,7 @@ import type {
   FsAdapter,
   GuardedFile,
   GuardedFs,
+  LinkType,
   ParseProblem,
   ProjectFileReader,
   Release,
@@ -213,8 +214,12 @@ interface BoardState {
   ) => Promise<void>;
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
   updateRelease: (filename: string, patch: ReleasePatch) => Promise<void>;
-  addTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
-  removeTaskLink: (taskId: string, otherTaskId: string) => Promise<void>;
+  addTaskLink: (taskId: string, otherTaskId: string, type: LinkType) => Promise<void>;
+  removeTaskLink: (
+    taskId: string,
+    otherTaskId: string,
+    type: LinkType,
+  ) => Promise<void>;
 }
 
 export type BacklogMoveTarget = { kind: 'release'; filename: string } | { kind: 'backlog' };
@@ -1721,16 +1726,18 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
-    addTaskLink: async (taskId, otherTaskId) => {
+    addTaskLink: async (taskId, otherTaskId, type) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
-      await applyLinkOp(snapshot, fs, taskId, otherTaskId, addTaskLinkInBoard, set);
+      await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
+        addTaskLinkInBoard(s, t, a, b, type), set);
     },
 
-    removeTaskLink: async (taskId, otherTaskId) => {
+    removeTaskLink: async (taskId, otherTaskId, type) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
-      await applyLinkOp(snapshot, fs, taskId, otherTaskId, removeTaskLinkInBoard, set);
+      await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
+        removeTaskLinkInBoard(s, t, a, b, type), set);
     },
 
     deleteTask: async (taskId) => {

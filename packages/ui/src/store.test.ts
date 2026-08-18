@@ -989,7 +989,7 @@ describe('task links', () => {
       }),
     );
 
-    await state().addTaskLink('BD-1', 'BD-2');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
 
     expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
       { type: 'relates', to: 'BD-2' },
@@ -1007,10 +1007,10 @@ describe('task links', () => {
         backlog: backlog([task('BD-2')]),
       }),
     );
-    await state().addTaskLink('BD-1', 'BD-2');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
     fs.writes = [];
 
-    await state().removeTaskLink('BD-2', 'BD-1');
+    await state().removeTaskLink('BD-2', 'BD-1', 'relates');
 
     expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
     expect(current().backlog!.tasks[0]!.frontmatter.links).toBeUndefined();
@@ -1024,10 +1024,10 @@ describe('task links', () => {
         backlog: backlog([task('BD-2')]),
       }),
     );
-    await state().addTaskLink('BD-1', 'BD-2');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
     fs.writes = [];
 
-    await state().addTaskLink('BD-1', 'BD-2');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
 
     expect(fs.writes).toEqual([]);
   });
@@ -1042,11 +1042,50 @@ describe('task links', () => {
       }),
     );
 
-    await state().addTaskLink('BD-1', 'BD-2');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
 
     expect(state().errorMessage).toMatch(/finished/);
     expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
+
+  it('mirrors a directed relation as its inverse', async () => {
+    setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+
+    await state().addTaskLink('BD-1', 'BD-2', 'blocks');
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'blocks', to: 'BD-2' },
+    ]);
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'blocked-by', to: 'BD-1' },
+    ]);
+  });
+
+  it('removes only the named relation of a pair that carries two', async () => {
+    setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+    await state().addTaskLink('BD-1', 'BD-2', 'blocks');
+    await state().addTaskLink('BD-1', 'BD-2', 'relates');
+
+    await state().removeTaskLink('BD-1', 'BD-2', 'blocks');
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-1' },
+    ]);
+  });
+
 });
 
 describe('docs', () => {

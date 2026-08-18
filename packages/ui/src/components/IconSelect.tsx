@@ -124,6 +124,23 @@ export function IconSelect({
     onClose?.();
   };
 
+  // Escape inside a native <dialog> is a close request the browser handles itself:
+  // preventing the keydown does not stop it, and the listbox only sees the keydown
+  // while it holds focus. Catching the dialog's `cancel` while the listbox is open
+  // lets Escape dismiss it without closing the dialog around it — the same rule the
+  // dialog header's actions menu already follows.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: Event) => {
+      event.preventDefault();
+      closeAndFocusTrigger();
+    };
+    window.addEventListener('cancel', handler, true);
+    return () => window.removeEventListener('cancel', handler, true);
+    // closeAndFocusTrigger is stable in effect: it only touches refs and setState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const selectAt = (index: number) => {
     const option = options[index];
     if (!option || option.disabled) return;

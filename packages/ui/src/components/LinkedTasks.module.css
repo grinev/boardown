@@ -61,6 +61,18 @@
   display: contents;
 }
 
+.groupHeading {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.groupHeading:first-child {
+  margin-top: 0;
+}
+
 .typeIcon {
   width: 16px;
   height: 16px;
@@ -162,11 +174,42 @@
 
 .search {
   position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
   padding-top: 2px;
 }
 
+.searchRelation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.searchRelation:hover {
+  background: var(--surface-muted);
+}
+
+.searchRelation:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .searchInput {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   box-sizing: border-box;
   padding: 6px 8px;
   border: 1px solid var(--card-border);

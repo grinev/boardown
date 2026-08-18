@@ -1,7 +1,11 @@
 import type { BoardSnapshot, Release, Task, TaskLink } from '@boardown/core';
-import { emptyDocsTree } from '@boardown/core';
+import { emptyDocsTree, LINK_TYPE_META } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
-import { collectLinkedTasks } from './linked-tasks';
+import {
+  LINK_TYPES_IN_GROUP_ORDER,
+  collectLinkedTasks,
+  groupLinkedTasks,
+} from './linked-tasks';
 
 const task = (id: string, links?: TaskLink[]): Task => ({
   title: id,
@@ -109,5 +113,105 @@ describe('collectLinkedTasks', () => {
     const rows = collectLinkedTasks(snap, 'BD-1');
 
     expect(rows[0]!.archived).toBe(true);
+  });
+});
+
+describe('collectLinkedTasks with directed relations', () => {
+  it('reads an incoming directed record through its inverse', () => {
+    const snap = snapshot([
+      release('1.0', 'current', [
+        task('BD-1'),
+        task('BD-2', [{ type: 'blocks', to: 'BD-1' }]),
+      ]),
+    ]);
+
+    const rows = collectLinkedTasks(snap, 'BD-1');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.type).toBe('blocked-by');
+    expect(rows[0]!.task.frontmatter.id).toBe('BD-2');
+  });
+
+  it('keeps both relations when a pair carries two, without duplicating the mirror', () => {
+    const snap = snapshot([
+      release('1.0', 'current', [
+        task('BD-1', [
+          { type: 'blocks', to: 'BD-2' },
+          { type: 'relates', to: 'BD-2' },
+        ]),
+        task('BD-2', [
+          { type: 'blocked-by', to: 'BD-1' },
+          { type: 'relates', to: 'BD-1' },
+        ]),
+      ]),
+    ]);
+
+    expect(collectLinkedTasks(snap, 'BD-1').map((r) => r.type)).toEqual([
+      'blocks',
+      'relates',
+    ]);
+    expect(collectLinkedTasks(snap, 'BD-2').map((r) => r.type)).toEqual([
+      'blocked-by',
+      'relates',
+    ]);
+  });
+});
+
+describe('groupLinkedTasks', () => {
+  const rowsFor = (snap: BoardSnapshot, id: string) =>
+    groupLinkedTasks(collectLinkedTasks(snap, id));
+
+  it('groups the rows in the product order and omits empty relations', () => {
+    const snap = snapshot([
+      release('1.0', 'current', [
+        task('BD-1', [
+          { type: 'relates', to: 'BD-2' },
+          { type: 'part-of', to: 'BD-3' },
+          { type: 'blocks', to: 'BD-4' },
+          { type: 'duplicates', to: 'BD-5' },
+        ]),
+        task('BD-2'),
+        task('BD-3'),
+        task('BD-4'),
+        task('BD-5'),
+      ]),
+    ]);
+
+    expect(rowsFor(snap, 'BD-1').map((g) => g.type)).toEqual([
+      'blocks',
+      'part-of',
+      'duplicates',
+      'relates',
+    ]);
+  });
+
+  it('keeps file order inside a group', () => {
+    const snap = snapshot([
+      release('1.0', 'current', [
+        task('BD-1', [
+          { type: 'blocks', to: 'BD-9' },
+          { type: 'blocks', to: 'BD-3' },
+        ]),
+        task('BD-3'),
+        task('BD-9'),
+      ]),
+    ]);
+
+    const groups = rowsFor(snap, 'BD-1');
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.rows.map((r) => r.task.frontmatter.id)).toEqual(['BD-9', 'BD-3']);
+  });
+
+  it('offers the seven relations in the order the dialog groups them', () => {
+    expect(LINK_TYPES_IN_GROUP_ORDER.map((t) => LINK_TYPE_META[t].label)).toEqual([
+      'blocks',
+      'is blocked by',
+      'includes',
+      'is part of',
+      'duplicates',
+      'is duplicated by',
+      'relates to',
+    ]);
   });
 });

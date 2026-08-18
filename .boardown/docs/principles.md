@@ -5,6 +5,11 @@ title: Principles
 How boardown decides. These are not aspirations — each one was read back out of decisions the
 project already made, and each one **forbids something a reasonable developer would otherwise do**.
 
+Examples belong here; snapshots of the product do not. Before a line goes in, ask what its turning
+false would take: a change of principle — keep it, that is the principle speaking; an ordinary
+feature — it describes state, not policy, and belongs in `PRODUCT.md` or `architecture.md`. Past
+tense is the safe tense: what was decided, and why, never goes stale.
+
 Use them to settle a fork, not to justify one after the fact. If a principle does not rule out one of
 the options in front of you, it is not the principle you need — look further down, or the fork
 belongs to the human (see the last section).
@@ -158,8 +163,8 @@ sentence I wrote myself".
 
 ## 10. The agent is a first-class user
 
-The CLI is a published contract: a stable JSON envelope, one error code per rule (`ARCHIVED`,
-`STATUS_LOCKED`, `WIP_LIMIT`), and a `schema` command that states the rules up front — the WIP limit
+The CLI is a published contract: a stable JSON envelope, one error code per rule (`ARCHIVED` and
+`STATUS_LOCKED` among them), and a `schema` command that states the rules up front — the WIP limit
 is reported "so an agent reads the ceiling instead of discovering it by failing". An undeclared
 `--field` key is a `USAGE` error rather than a silent write, because "an agent that gets `USAGE` back
 fixes itself, one that gets `ok` does not". `task rm` asks for no confirmation; a filter returns
@@ -171,10 +176,15 @@ make `--full` lossy for the agents the CLI exists to serve".
 
 ## 11. The format may grow; the schema may not lie; break loudly
 
-Storage is shaped for what is coming — `wipLimits` is a map keyed by status, `customFields` carries a
-`type` with one legal value, a link record carries a type that declares its inverse — but validation
-enforces only what the product does today: a `todo:` entry makes the config invalid rather than being
-accepted and ignored. Adding a status later is a one-line schema change, not a migration.
+Storage is shaped for what is coming, but validation enforces only what the product does today: a
+`todo:` entry makes the config invalid rather than being accepted and ignored.
+
+The headroom was designed in each time, deliberately: `wipLimits` was written as a map keyed by
+status while one key was legal, `customFields` carried a `type` while one type existed, a link record
+carried a type declaring its inverse while `relates` was the only value. What that buys is narrow and
+worth stating exactly — growing the *set* later is data added to a table instead of branches added to
+the code. It is not a promise that the feature around it is cheap: the surfaces that show the new
+values are ordinary work, and boards written before it stay valid either way.
 
 Pre-1.0 there are no compatibility shims. Reserving `priority` is "a **deliberate breaking change** …
 No migration, no shim, no silent takeover"; an action left unused is deleted rather than kept.
