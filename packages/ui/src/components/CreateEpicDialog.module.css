@@ -78,8 +78,9 @@
 }
 
 .textarea {
-  resize: vertical;
+  resize: none;
   min-height: 72px;
+  max-height: 40vh;
   font-family: inherit;
 }
 

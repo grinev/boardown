@@ -108,7 +108,8 @@
   font: inherit;
   font-size: 14px;
   line-height: 1.5;
-  resize: vertical;
+  resize: none;
+  max-height: 40vh;
 }
 
 .addInput::placeholder {

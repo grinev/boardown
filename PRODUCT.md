@@ -627,6 +627,23 @@ static pill, with a tooltip saying so, and nothing else about the task becomes
 read-only. Relocation carries the status along and never rewrites it to `todo`, so
 a task that was `in-progress` freezes as `in-progress` wherever it lands.
 
+**Every multi-line field is as tall as the text inside it.** It starts at its own
+minimum — four rows for a description, two for the "Add a note" composer — and
+grows and shrinks a line at a time as the text does, back down to that minimum;
+a paste sizes it in one step. Height is never something the user sets and never
+something the app remembers: there is no resize grip on any of these fields, and
+the height is recomputed from the text every time, before and after a save. The
+two kinds of field differ in where they stop. A **composer** — the Description of
+the three creation dialogs, and "Add a note" — grows while its dialog can still
+grow and fit on the screen, then stops and scrolls inside itself, so a taller
+window lets it grow further and a shorter one stops it sooner. An **editor** that
+replaces a rendered block — the Description of the task, epic and release dialogs,
+and an existing note — has no such ceiling: it opens at least as tall as the block
+it replaced and grows with the whole text, with the dialog body scrolling around
+it exactly as it does when that text is merely rendered. Entering edit mode
+therefore moves nothing on screen. The Docs page editor is the one multi-line
+field outside this: it fills its pane and scrolls inside itself.
+
 Below Type / Epic / Release, the Details card lists the board's **custom
 fields** (see "Custom fields" under Configuration) — one row per declared field,
 in declaration order, labelled by the declaration's `label` or its `key`. Each is
