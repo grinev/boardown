@@ -260,3 +260,12 @@ order: 3000
 ---
 
 `sanitizeFilenameForFs` keeps non-ASCII characters as typed and never normalizes them, so `epics/рост-и-geo.md` is stored NFC on Linux and NFD on macOS — the classic "the file changed but the diff is empty" on a mixed team. Normalize the derived name to NFC and warn about non-ASCII slugs in the docs. A slug transliteration option in config.yaml is a second level, decided separately.
+
+## Option for disable status change in backlog
+
+---
+id: BD-112
+type: feature
+status: todo
+order: 3100
+---

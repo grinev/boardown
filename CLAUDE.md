@@ -200,12 +200,15 @@ CLI inherits them rather than re-implementing them.
   speculation.
 - No backwards-compatibility shims while the project is pre-1.0. Just change
   the code.
-- boardown dog-foods its own board, stored in `.boardown/`. Commit changes to
-  that board data under the `chore(board): …` scope. This scope is excluded
-  from generated release notes by `scripts/generate-release-notes.mjs`, so
-  task-tracking commits never leak into a user-facing changelog. Reserve
-  `chore(board)` for `.boardown/` data; use normal conventional-commit types
-  for code and docs.
+- boardown dog-foods its own board, stored in `.boardown/`. A change that
+  touches **only** board data — grooming, reordering, a release edited by hand —
+  is committed under the `chore(board): …` scope, which
+  `scripts/generate-release-notes.mjs` excludes from generated release notes, so
+  bookkeeping never leaks into a user-facing changelog. When board data changes
+  **because of the code in the same change** — a task moved to done by the work
+  that did it — it belongs in that same commit under its normal
+  conventional-commit type: the task is the record of the change, and a commit
+  that leaves it behind describes work its own board says never happened.
 - Versioning is **lockstep**: every `package.json` carries the same version,
   with the **root `package.json` as the single source of truth**. Never bump a
   package version by hand — use `pnpm release:prepare` (which mirrors the root
