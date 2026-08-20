@@ -1,5 +1,8 @@
+/* The width of the task dialog's main column: that dialog's 960px cap less its
+   borders, its body padding, the 280px sidebar and the grid gap leaves a 606px
+   description, and this cap less this form's padding leaves the same. */
 .dialog {
-  max-width: min(440px, 92vw);
+  max-width: min(648px, 92vw);
   min-height: auto;
 }
 

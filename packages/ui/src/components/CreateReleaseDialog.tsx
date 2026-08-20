@@ -1,7 +1,8 @@
 import { X } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { releaseFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
 import { useBoardStore } from '../store';
+import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { DocRefTextarea } from './DocRefTextarea';
 import { Modal } from './Modal';
 import styles from './CreateReleaseDialog.module.css';
@@ -30,8 +31,7 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
   const canSubmit =
     trimmedName.length > 0 && slug.length > 0 && !duplicate && !submitting;
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -48,6 +48,16 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // On the dialog itself, not the form: the ✕ is outside the form and a click on
+  // inert space parks focus on the <dialog>, so anything lower would miss them.
+  const handleShortcut = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (!isSubmitShortcut(event)) return;
+    // Prevented even when the dialog refuses to submit, so a refusal never lets
+    // the keystroke through to Cancel, the ✕ or the description's newline.
+    event.preventDefault();
+    void submit();
   };
 
   const renderFilenameHint = () => {
@@ -80,7 +90,13 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
   };
 
   return (
-    <Modal open onClose={onClose} ariaLabel="Create release" className={styles.dialog}>
+    <Modal
+      open
+      onClose={onClose}
+      ariaLabel="Create release"
+      className={styles.dialog}
+      onKeyDown={handleShortcut}
+    >
       <header className={styles.header}>
         <h2 className={styles.title}>Create release</h2>
         <button
@@ -92,7 +108,13 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
           <X size={18} aria-hidden="true" />
         </button>
       </header>
-      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
+      <form
+        className={styles.form}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
         <label className={styles.field}>
           <span className={styles.label}>Name</span>
           <input
@@ -100,7 +122,7 @@ export function CreateReleaseDialog({ onClose }: CreateReleaseDialogProps) {
             className={styles.input}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            autoFocus
+            data-autofocus
             required
             aria-invalid={trimmedName.length > 0 && (slug.length === 0 || duplicate)}
           />

@@ -169,6 +169,10 @@ export function IconSelect({
 
   const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
+    // A closed trigger lets Cmd/Ctrl+Enter through to whatever surrounds the
+    // picker — a creation dialog reads it as submit. An open one keeps the key
+    // whatever the modifier: what a popup does with Enter is the popup's.
+    if (!open && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       setOpen(true);

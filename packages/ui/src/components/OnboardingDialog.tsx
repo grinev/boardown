@@ -74,7 +74,7 @@ export function OnboardingDialog({
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
             placeholder="My Project"
-            autoFocus
+            data-autofocus
             required
           />
         </label>

@@ -1,5 +1,8 @@
+/* The width of the task dialog's main column: that dialog's 960px cap less its
+   borders, its body padding, the 280px sidebar and the grid gap leaves a 606px
+   description, and this cap less this form's padding leaves the same. */
 .dialog {
-  max-width: min(440px, 92vw);
+  max-width: min(648px, 92vw);
   min-height: auto;
 }
 
@@ -99,6 +102,13 @@
 .hint {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* The palette keeps the size it has at the old 440px cap: the wider dialog must
+   not grow the swatches, and the epic details dialog pins the same grid. */
+.colorSwatches {
+  width: 400px;
+  max-width: 100%;
 }
 
 .error {
