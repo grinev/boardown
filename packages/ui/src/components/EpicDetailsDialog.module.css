@@ -129,7 +129,7 @@
   outline-offset: 1px;
 }
 
-/* Matches the width the same grid gets inside the 440px create-epic dialog. */
+/* Matches the width the create-epic dialog pins the same grid to. */
 .colorSwatches {
   width: 400px;
   max-width: 100%;

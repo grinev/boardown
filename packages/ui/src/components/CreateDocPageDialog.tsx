@@ -59,7 +59,7 @@ export function CreateDocPageDialog() {
             className={styles.input}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            autoFocus
+            data-autofocus
             required
           />
           <span className={styles.hint}>

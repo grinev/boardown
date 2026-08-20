@@ -94,7 +94,6 @@ export function CompleteReleaseDialog({ release, onClose }: CompleteReleaseDialo
                 className={styles.select}
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
-                autoFocus
               >
                 {futures.map((r) => (
                   <option key={r.filename} value={r.filename}>

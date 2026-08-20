@@ -186,6 +186,14 @@ CLI inherits them rather than re-implementing them.
     and user text — the file is local and gitignored, but it is not a secrets vault.
   - `packages/core` and `packages/ui` may import `createLogger`, never a sink.
     Choosing a destination is the shell's job.
+- A dialog that wants the caret in a field **when it opens** marks that field
+  `data-autofocus`, and `Modal` focuses it right after `showModal()`. React's
+  `autoFocus` does **not** work there: react-dom calls `focus()` at mount, while
+  the `<dialog>` is still closed and nothing inside it is focusable, and the
+  browser then falls back to the first focusable element — the header ✕. A dialog
+  that declares nothing keeps that fallback, which is how a dialog opts out. This
+  is about focus at open only; a field mounted later into an already-open dialog
+  is an ordinary `autoFocus`.
 - Styling in `packages/ui`: CSS variables for the theme palette (defined in
   `src/theme/theme.css`, scoped via `:root, [data-theme='light']`, etc.) and
   CSS Modules for component-specific styles (`Foo.module.css`). Components

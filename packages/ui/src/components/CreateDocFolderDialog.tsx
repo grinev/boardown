@@ -65,7 +65,7 @@ export function CreateDocFolderDialog() {
             className={styles.input}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            autoFocus
+            data-autofocus
             required
             aria-invalid={problem === 'separator' || problem === 'taken'}
           />

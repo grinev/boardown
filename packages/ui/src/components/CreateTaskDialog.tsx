@@ -1,10 +1,11 @@
 import { X } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import type { Epic, Release, TaskPriority, TaskType } from '@boardown/core';
 import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, TASK_TYPES } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
+import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { Modal } from './Modal';
@@ -108,8 +109,7 @@ export function CreateTaskDialog({
     [],
   );
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -134,8 +134,24 @@ export function CreateTaskDialog({
     }
   };
 
+  // On the dialog itself, not the form: the ✕ is outside the form and a click on
+  // inert space parks focus on the <dialog>, so anything lower would miss them.
+  const handleShortcut = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (!isSubmitShortcut(event)) return;
+    // Prevented even when the dialog refuses to submit, so a refusal never lets
+    // the keystroke through to Cancel, the ✕ or the description's newline.
+    event.preventDefault();
+    void submit();
+  };
+
   return (
-    <Modal open onClose={onClose} ariaLabel="Create task" className={styles.dialog}>
+    <Modal
+      open
+      onClose={onClose}
+      ariaLabel="Create task"
+      className={styles.dialog}
+      onKeyDown={handleShortcut}
+    >
       <header className={styles.header}>
         <h2 className={styles.title}>Create task</h2>
         <button
@@ -147,7 +163,13 @@ export function CreateTaskDialog({
           <X size={18} aria-hidden="true" />
         </button>
       </header>
-      <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
+      <form
+        className={styles.form}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
         <label className={styles.field}>
           <span className={styles.label}>Title</span>
           <input
@@ -155,7 +177,7 @@ export function CreateTaskDialog({
             className={styles.input}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            autoFocus
+            data-autofocus
             required
           />
         </label>

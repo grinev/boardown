@@ -876,6 +876,28 @@ that has since gone says so in the popup. The nested modals (creating a task fro
 an epic, the delete confirmation) are not part of the stack — they close back to
 their parent on their own.
 
+### Creation dialogs
+
+The three **creation dialogs** — Create task, Create epic, Create release — share
+three things beyond their shape. They are as wide as the **task dialog's main
+column**, so the Description a task is written in is exactly the width of the one
+it is later read in; the sidebar's share is not counted, and a window too narrow
+for that falls back to the same viewport rule every dialog uses. Opening one puts
+the caret in its **first field** — Title, or Name — rather than on the close
+button; the field is empty, so the caret simply sits in it, and a locked Epic or
+Release never takes it. And **Cmd/Ctrl+Enter submits** from any focus position in
+the dialog, including the Description, where a plain Enter still inserts a
+newline, and including the Cancel button and the close ✕. It writes exactly what
+the Create button writes, and refuses exactly what the Create button refuses: with
+an empty name, or one colliding with an existing file, it does nothing and the
+dialog stays open with everything typed. A popup keeps the key while it is up —
+an open picker, or the `[[…]]` page list, takes the combo for itself, and the next
+one submits. Nothing on screen announces the shortcut.
+
+Docs → New page, Docs → New folder and the onboarding dialog also open with the
+caret in their first field. They keep their own width, and the shortcut is the
+three creation dialogs' alone.
+
 ### Settings
 
 A dialog opened from the gear button in the top navigation. It holds the board's
