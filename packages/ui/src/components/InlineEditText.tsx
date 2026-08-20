@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useAutoGrow } from '../hooks/use-auto-grow';
 import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
 import { DocRefSuggestions } from './DocRefSuggestions';
 import styles from './InlineEditText.module.css';
@@ -61,9 +62,14 @@ export function InlineEditText({
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const committingRef = useRef(false);
+  // A failed save reopens the field with nobody having asked for it, so it is the
+  // one way in that may land off screen — and the only one that still wants the
+  // browser to scroll it back.
+  const reopenedRef = useRef(false);
   // Always on for a multiline field, since every one of them renders links.
   const suggesting = multiline || docRefs;
   const suggestions = useDocRefSuggestions(fieldRef, draft, setDraft);
+  useAutoGrow(fieldRef);
   // One ref for both branches, so the suggestion hook binds to whichever element
   // is rendered; a callback ref is what lets the two element types share it.
   const setField = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
@@ -74,7 +80,12 @@ export function InlineEditText({
     if (mode !== 'edit') return;
     const el = fieldRef.current;
     if (!el) return;
-    el.focus();
+    // The field is normally opened by a click or a keypress on the block it
+    // replaces, so it is already on screen — and a multiline one is now as tall
+    // as its whole text, which the browser would "bring into view" by scrolling
+    // everything above it out of it.
+    el.focus({ preventScroll: !reopenedRef.current });
+    reopenedRef.current = false;
     if (multiline) {
       const len = el.value.length;
       el.setSelectionRange(len, len);
@@ -123,6 +134,7 @@ export function InlineEditText({
       await onSave(trimmed);
       committingRef.current = false;
     } catch {
+      reopenedRef.current = true;
       setMode('edit');
       setStaleError(false);
       committingRef.current = false;

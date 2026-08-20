@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { useAutoGrow } from '../hooks/use-auto-grow';
 import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
 import { DocRefSuggestions } from './DocRefSuggestions';
 
@@ -20,6 +21,7 @@ export function DocRefTextarea({
 }: DocRefTextareaProps) {
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const suggestions = useDocRefSuggestions(fieldRef, value, onChange);
+  useAutoGrow(fieldRef);
 
   return (
     <>

@@ -65,8 +65,10 @@
   box-sizing: border-box;
 }
 
+/* No max-height: this editor replaces a rendered block and must never open
+   shorter than the text that block was showing. */
 .textarea {
-  resize: vertical;
+  resize: none;
   min-height: 6em;
   font-family: inherit;
 }

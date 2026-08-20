@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { nextNoteId, type Note, type Task } from '@boardown/core';
+import { useAutoGrow } from '../hooks/use-auto-grow';
 import { useDocRefSuggestions } from '../hooks/use-doc-ref-suggestions';
 import { DocRefSuggestions } from './DocRefSuggestions';
 import { InlineEditText } from './InlineEditText';
@@ -90,6 +91,7 @@ function AddNote({ onAdd }: AddNoteProps) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const suggestions = useDocRefSuggestions(textareaRef, text, setText);
+  useAutoGrow(textareaRef);
 
   const commit = () => {
     const trimmed = text.trim();
