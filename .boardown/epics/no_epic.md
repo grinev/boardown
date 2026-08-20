@@ -9,7 +9,14 @@ id: BD-52
 type: feature
 status: todo
 order: 800
+links:
+  - type: relates
+    to: BD-51
 ---
+
+Four types, all of them about code: bug, feature, docs, tech. On a board that also tracks operations and marketing (submit a sitemap to Bing, find a traffic channel, measure the effect in three weeks) everything lands in tech, and tech stops meaning anything.
+
+Two options to settle on grooming: types declared in config.yaml — the customFields mechanics already fit and principle 11 allows the format to grow, but icons and colors in the UI come with it — or simply adding ops/chore to the enum. Same shape as BD-51 (custom statuses); decide the two together.
 
 ## Add assignee field to task
 
@@ -56,6 +63,12 @@ resolve to whichever copy comes first.
 Keep the IDs human-readable (`BD-62`); random suffixes would dodge the collision
 but cost the thing people actually use IDs for.
 
+The counter is only half of it: a new task is appended to the tail of its
+container file, so two sessions creating unrelated tasks also conflict on the
+last lines of `no_epic.md` (27 tasks today). Splitting storage further — a file
+per task — is not the answer; it breaks docs/decisions/storage-format.md and
+principle 2. Close this first and see what pain is left.
+
 ## Conflict modal is unreachable during onboarding
 
 ---
@@ -97,15 +110,6 @@ order: 1900
 ---
 
 Indexes for closed releases with tasks in epic
-
-## Operation notifications
-
----
-id: BD-79
-type: feature
-status: todo
-order: 100
----
 
 ## Customizable docs root
 
@@ -165,17 +169,6 @@ links:
 
 Clone button near delete
 
-## CLI: batch checklist add and done
-
----
-id: BD-92
-type: feature
-status: todo
-order: 2300
----
-
-task checklist add|done|undone|rm take one item per call, so filling a six-item acceptance list is six invocations and six rewrites of the release file. Agents work in batches: accept several texts in one add, and several item ids in one done/undone/rm.
-
 ## Optional progress bar for checklist
 
 ---
@@ -192,9 +185,15 @@ id: BD-95
 type: bug
 status: todo
 order: 2500
+notes:
+  - id: n1
+    text: "Covered by BD-94: the same focus fix in IconSelect. Close once BD-94 is accepted; do not work separately. See .claude/specs/BD-94-picker-keyboard-nav/product.md"
+    createdAt: "2026-08-19T10:47:01.980Z"
 links:
   - type: relates
     to: BD-57
+  - type: relates
+    to: BD-94
 ---
 
 Escape over an open IconSelect popup inside the task dialog can close the whole dialog instead of just the select. Pre-existing and older than BD-57; found by the tester during that run.
@@ -207,3 +206,57 @@ type: feature
 status: todo
 order: 2600
 ---
+
+## Manage custom fields in Settings
+
+---
+id: BD-104
+type: feature
+status: todo
+order: 2700
+---
+
+Custom fields can only be declared by hand in config.yaml. Add, rename and remove them from the Settings dialog.
+
+## Sandbox on a free port instead of hardcoded 5199
+
+---
+id: BD-106
+type: tech
+status: todo
+order: 2800
+---
+
+scripts/dev-sandbox.mjs hardcodes `const PORT = "5199"` and passes `--strictPort`, so a second sandbox refuses to start. The board data is already per-run (`mkdtemp`) — only the port collides. This is what blocks grooming or testing two tasks in parallel: whichever session comes second cannot bring its sandbox up.
+
+Take a free port instead: `net.createServer().listen(0)`, read `address().port`, close it, hand that number to Vite, keep `--strictPort`. Honour `BOARDOWN_SANDBOX_PORT` when it is set. A random number out of a range is not enough — it can be taken just as well, and the failure looks the same.
+
+The script already prints `sandbox url: http://localhost:<port>`. With a variable port that line becomes the only way to learn the address, so it has to stay stable and easy to grep.
+
+Three agent-facing places carry the number today and have to follow in the same change:
+- `.claude/agents/manual-tester.md` — the sample output showing 5199, and the cleanup command that kills whatever listens on 5199, which under parallel work would kill the sandbox of another session
+- `CLAUDE.md` — "The sandbox (`pnpm dev:sandbox`, port 5199)"
+
+## STATUS_LOCKED message names the next step
+
+---
+id: BD-109
+type: feature
+status: todo
+order: 2900
+---
+
+The refusal explains the rule ("a task's status can only be changed in the current release") but not the way out of it. Append the command that resolves it: `boardown task edit BD-2 --release <slug>`. The message lives in core/board-ops.ts, so the CLI error and the UI tooltip both inherit it.
+
+Reported case: a task is half done (code written, waiting for deploy) but sits in an epic, so it cannot be marked in-progress — a release had to be created just to make the board tell the truth. Whether the lock itself should be relaxed is a separate product question; this task only names the next step.
+
+## Normalize slug filenames to NFC
+
+---
+id: BD-110
+type: tech
+status: todo
+order: 3000
+---
+
+`sanitizeFilenameForFs` keeps non-ASCII characters as typed and never normalizes them, so `epics/рост-и-geo.md` is stored NFC on Linux and NFD on macOS — the classic "the file changed but the diff is empty" on a mixed team. Normalize the derived name to NFC and warn about non-ASCII slugs in the docs. A slug transliteration option in config.yaml is a second level, decided separately.
