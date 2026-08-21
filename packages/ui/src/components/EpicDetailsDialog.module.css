@@ -9,19 +9,31 @@
   flex: 0 0 auto;
 }
 
-/* Grows so the inline name editor, which fills its container, is wide enough for
-   a name of any allowed length instead of the input's own 20-character default. */
 .headerName {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
-/* Only the view box, which is the direct child; the editing field sits one level
-   deeper and keeps filling the row. */
-.headerName > .nameText {
+/* The slot the name is read and written in. It hugs the name while the dialog is
+   just showing it, and opens to a fixed width while it is being edited — the
+   editor fills its container, so this is what sizes the field. */
+.nameSlot {
+  min-width: 0;
+}
+
+/* Wide enough for a name of the maximum allowed length in the worst case all
+   capitals, and no wider: a worst-case uppercase character advances ~0.671em at
+   weight 600 (measured in the browser when the 28 was derived), so 28 of them at
+   this header's 18px are ~338px, plus the field's 12px padding and 2px border.
+   Never sized from what is typed — the slot only holds an input while editing. */
+.nameSlot:has(input) {
+  width: 360px;
+}
+
+/* The view box would otherwise take 100% of a slot that is being sized by it. */
+.nameSlot > .nameText {
   width: auto;
 }
 

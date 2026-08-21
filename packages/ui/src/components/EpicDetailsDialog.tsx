@@ -69,15 +69,17 @@ export function EpicDetailsDialog({
       <header className={styles.header}>
         <div className={styles.headerName}>
           <Layers className={styles.headerIcon} aria-hidden="true" />
-          <InlineEditText
-            value={epic.frontmatter.name}
-            required
-            ariaLabel="Epic name"
-            className={styles.nameText}
-            maxLength={EPIC_NAME_MAX_LENGTH}
-            validate={validateName}
-            onSave={(next) => updateEpic(epic.slug, { name: next })}
-          />
+          <div className={styles.nameSlot}>
+            <InlineEditText
+              value={epic.frontmatter.name}
+              required
+              ariaLabel="Epic name"
+              className={styles.nameText}
+              maxLength={EPIC_NAME_MAX_LENGTH}
+              validate={validateName}
+              onSave={(next) => updateEpic(epic.slug, { name: next })}
+            />
+          </div>
           <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
