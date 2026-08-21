@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -35,7 +34,8 @@ interface BoardDndContextProps {
   buckets: Map<TaskStatus, Task[]>;
   setBuckets: Dispatch<SetStateAction<Map<TaskStatus, Task[]>>>;
   epics: Epic[];
-  wipFull: boolean;
+  // The middle columns already at their WIP limit, judged before the drag.
+  fullStatuses: ReadonlySet<TaskStatus>;
   children: ReactNode;
 }
 
@@ -43,18 +43,13 @@ export function BoardDndContext({
   buckets,
   setBuckets,
   epics,
-  wipFull,
+  fullStatuses,
   children,
 }: BoardDndContextProps) {
   const moveTask = useBoardStore((s) => s.moveTask);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [blockedStatus, setBlockedStatus] = useState<TaskStatus | null>(null);
-  // One board is one release, so at most one column is ever refused; the shared
-  // context carries a set because the backlog shows several releases at once.
-  const blockedTargets = useMemo(
-    () => (blockedStatus === null ? NO_BLOCKED_TARGETS : new Set([blockedStatus])),
-    [blockedStatus],
-  );
+  const [blockedTargets, setBlockedTargets] =
+    useState<ReadonlySet<TaskStatus>>(NO_BLOCKED_TARGETS);
   const originalBucketsRef = useRef<Map<TaskStatus, Task[]> | null>(null);
   const bucketsRef = useRef(buckets);
 
@@ -82,8 +77,9 @@ export function BoardDndContext({
     setActiveTaskId(taskId);
     // A card already in the column is only being reordered, so the column stays
     // open to it however full it is.
-    const fromInProgress = findStatusOf(buckets, taskId) === 'in-progress';
-    setBlockedStatus(wipFull && !fromInProgress ? 'in-progress' : null);
+    const from = findStatusOf(buckets, taskId);
+    const blocked = new Set([...fullStatuses].filter((s) => s !== from));
+    setBlockedTargets(blocked.size === 0 ? NO_BLOCKED_TARGETS : blocked);
     originalBucketsRef.current = cloneBuckets(buckets);
   };
 
@@ -91,7 +87,7 @@ export function BoardDndContext({
     const { active, over } = event;
     if (!over) return;
     setBuckets((prev) => {
-      const next = applyDragOver(active, over, prev, blockedStatus);
+      const next = applyDragOver(active, over, prev, blockedTargets);
       bucketsRef.current = next;
       return next;
     });
@@ -99,7 +95,7 @@ export function BoardDndContext({
 
   const onDragEnd = (event: DragEndEvent) => {
     setActiveTaskId(null);
-    setBlockedStatus(null);
+    setBlockedTargets(NO_BLOCKED_TARGETS);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
 
@@ -109,7 +105,7 @@ export function BoardDndContext({
 
     let finalBuckets = bucketsRef.current;
     if (event.over) {
-      const next = applyDragOver(event.active, event.over, finalBuckets, blockedStatus);
+      const next = applyDragOver(event.active, event.over, finalBuckets, blockedTargets);
       if (next !== finalBuckets) {
         finalBuckets = next;
         bucketsRef.current = next;
@@ -144,7 +140,7 @@ export function BoardDndContext({
 
   const onDragCancel = () => {
     setActiveTaskId(null);
-    setBlockedStatus(null);
+    setBlockedTargets(NO_BLOCKED_TARGETS);
     const original = originalBucketsRef.current;
     originalBucketsRef.current = null;
     if (original) {

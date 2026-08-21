@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
-export const TASK_STATUSES = ['todo', 'in-progress', 'done'] as const;
 export const TASK_TYPES = ['bug', 'feature', 'docs', 'tech'] as const;
 // Heaviest first: every list built by mapping over this reads top-down.
 export const TASK_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 export const RELEASE_STATUSES = ['future', 'current', 'finished'] as const;
 
-export type TaskStatus = (typeof TASK_STATUSES)[number];
+// A status is whatever the board declares, so this is a plain string. The alias
+// stays because it says which strings are meant.
+export type TaskStatus = string;
 export type TaskType = (typeof TASK_TYPES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
@@ -82,7 +83,9 @@ export const TaskFrontmatterSchema = z.object({
   // between "absent" and "explicitly medium" at parse time, and the serializer
   // would then write the key into every task it touches.
   priority: z.enum(TASK_PRIORITIES).optional(),
-  status: z.enum(TASK_STATUSES),
+  // Any non-empty string: a board can rename its statuses, and a task written
+  // under an older list must still load rather than be repaired or dropped.
+  status: z.string().min(1),
   epic: z.string().min(1).optional(),
   order: z.number().int(),
   checklist: z.array(ChecklistItemSchema).optional(),
@@ -189,9 +192,11 @@ export const ID_PREFIX_MESSAGE = 'idPrefix must be 2-5 uppercase letters (A-Z)';
 export const CUSTOM_FIELD_TYPES = ['string'] as const;
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
 
-const CUSTOM_FIELD_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/;
-const CUSTOM_FIELD_KEY_MESSAGE =
-  'customFields key must start with a letter and hold 1-40 letters, digits, "_" or "-"';
+// Shared by every list of user-declared keys in config.yaml, so `statuses` and
+// `customFields` cannot drift into two different ideas of a legal key.
+const CONFIG_KEY_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/;
+const configKeyMessage = (field: string): string =>
+  `${field} key must start with a letter and hold 1-40 letters, digits, "_" or "-"`;
 
 // Values are stored flat next to the built-in task frontmatter keys, so a custom
 // key that matched one of them would shadow it.
@@ -209,7 +214,7 @@ export const RESERVED_TASK_KEYS = [
 
 export const CustomFieldSchema = z
   .object({
-    key: z.string().regex(CUSTOM_FIELD_KEY_REGEX, CUSTOM_FIELD_KEY_MESSAGE),
+    key: z.string().regex(CONFIG_KEY_REGEX, configKeyMessage('customFields')),
     label: z.string().min(1).optional(),
     type: z.enum(CUSTOM_FIELD_TYPES),
   })
@@ -226,9 +231,44 @@ const CustomFieldsSchema = z
     message: 'customFields keys must be unique',
   });
 
+// Statuses are positional: the first is the initial one, the last the terminal
+// one, and everything between is a middle column. There are no flags and no
+// reserved keys — the order in the file is the order on the board.
+export const BoardStatusSchema = z
+  .object({
+    key: z.string().regex(CONFIG_KEY_REGEX, configKeyMessage('statuses')),
+    label: z.string().min(1).optional(),
+  })
+  .strict();
+export type BoardStatus = z.infer<typeof BoardStatusSchema>;
+
+// Two is the least that can have an initial and a terminal one; eight is what a
+// board of fixed-width columns still reads as a board.
+export const MIN_BOARD_STATUSES = 2;
+export const MAX_BOARD_STATUSES = 8;
+
+const StatusesSchema = z
+  .array(BoardStatusSchema)
+  .min(MIN_BOARD_STATUSES, `statuses must hold at least ${MIN_BOARD_STATUSES} entries`)
+  .max(MAX_BOARD_STATUSES, `statuses must hold at most ${MAX_BOARD_STATUSES} entries`)
+  .refine((s) => new Set(s.map((e) => e.key)).size === s.length, {
+    message: 'statuses keys must be unique',
+  });
+
+// What a board gets when it declares none. Records rather than bare keys, so a
+// default board and a declaring one are read through the same shape.
+export const DEFAULT_TASK_STATUSES: readonly BoardStatus[] = [
+  { key: 'todo' },
+  { key: 'in-progress' },
+  { key: 'done' },
+];
+
 // The map is keyed by status so limits on other columns need no format change,
-// but only the status the product actually enforces is accepted — a `todo` entry
-// that did nothing would be a value in the file that lies.
+// but only the one key the product ever wrote is accepted — a second entry that
+// did nothing would be a value in the file that lies. The number it holds caps
+// every middle column of the board, whatever those columns are called.
+export const WIP_LIMIT_KEY = 'in-progress';
+
 export const WipLimitsSchema = z
   .object({
     'in-progress': z.number().int().positive().optional(),
@@ -249,6 +289,8 @@ export const BoardConfigSchema = z
     boardRelease: z.string().min(1).optional(),
     wipLimits: WipLimitsSchema.optional(),
     multipleActiveReleases: z.boolean().optional(),
+    // Absent keeps the default three; present replaces the whole set.
+    statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),
   })
   .strict();

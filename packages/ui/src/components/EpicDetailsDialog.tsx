@@ -5,11 +5,10 @@ import {
   validateEpicName,
   type Epic,
   type Task,
-  type TaskStatus,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { DialogBackButton } from './DialogBackButton';
 import { EpicColorSwatches } from './EpicColorSwatches';
 import { InlineEditText } from './InlineEditText';
@@ -24,18 +23,13 @@ interface EpicDetailsDialogProps {
   onTaskClick: (id: string) => void;
 }
 
-const STATUS_PILL_CLASS: Record<TaskStatus, string | undefined> = {
-  todo: styles.statusTodo,
-  'in-progress': styles.statusInProgress,
-  done: styles.statusDone,
-};
-
 export function EpicDetailsDialog({
   epic,
   tasks,
   onClose,
   onTaskClick,
 }: EpicDetailsDialogProps) {
+  const config = useBoardStore((s) => s.snapshot?.config);
   const updateEpic = useBoardStore((s) => s.updateEpic);
   const openCreateTaskForEpic = useBoardStore((s) => s.openCreateTaskForEpic);
   // Non-null while the palette is open; holds the pick that Save would write.
@@ -213,9 +207,10 @@ export function EpicDetailsDialog({
                       {task.title}
                     </button>
                     <span
-                      className={`${styles.statusPill} ${STATUS_PILL_CLASS[status] ?? ''}`}
+                      className={styles.statusPill}
+                      style={statusColorStyle(config, status)}
                     >
-                      {formatStatusLabel(status)}
+                      {statusDisplayLabel(config, status)}
                     </span>
                   </Fragment>
                 );

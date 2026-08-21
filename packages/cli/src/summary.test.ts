@@ -1,6 +1,6 @@
-import type { Task } from '@boardown/core';
+import type { BoardConfig, Task } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
-import { taskSummary } from './summary';
+import { statusMark, taskSummary } from './summary';
 
 const task = (frontmatter: Partial<Task['frontmatter']>): Task => ({
   title: 'Drag & drop',
@@ -70,5 +70,32 @@ describe('taskSummary', () => {
   it('does not expose links', () => {
     const summary = taskSummary(task({ links: [{ type: 'relates', to: 'BD-7' }] }));
     expect(summary).not.toHaveProperty('links');
+  });
+});
+
+describe('statusMark', () => {
+  const config = (...keys: string[]): BoardConfig => ({
+    idPrefix: 'BD',
+    nextId: 0,
+    projectName: 'P',
+    statuses: keys.map((key) => ({ key })),
+  });
+
+  it('draws the glyph by position on the default board', () => {
+    const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'P' };
+    expect(statusMark(base, task({ status: 'todo' }))).toBe('○');
+    expect(statusMark(base, task({ status: 'in-progress' }))).toBe('◐');
+    expect(statusMark(base, task({ status: 'done' }))).toBe('●');
+  });
+
+  it('follows a declared list, and draws a status the board dropped as a middle', () => {
+    const c = config('backlog', 'dev', 'review', 'shipped');
+    expect(statusMark(c, task({ status: 'backlog' }))).toBe('○');
+    expect(statusMark(c, task({ status: 'dev' }))).toBe('◐');
+    expect(statusMark(c, task({ status: 'review' }))).toBe('◐');
+    expect(statusMark(c, task({ status: 'shipped' }))).toBe('●');
+    // Undeclared: half-filled like a middle, since nothing else in the output
+    // states a rule about it.
+    expect(statusMark(c, task({ status: 'in-progress' }))).toBe('◐');
   });
 });

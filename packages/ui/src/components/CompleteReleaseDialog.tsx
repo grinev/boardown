@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import type { Release } from '@boardown/core';
+import { isTerminalStatus, type Release } from '@boardown/core';
 import { useBoardStore, type CompleteReleaseTarget } from '../store';
 import { Modal } from './Modal';
 import styles from './CompleteReleaseDialog.module.css';
@@ -20,6 +20,7 @@ interface CompleteReleaseDialogProps {
 export function CompleteReleaseDialog({ release, onClose }: CompleteReleaseDialogProps) {
   const completeRelease = useBoardStore((s) => s.completeRelease);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
+  const config = useBoardStore((s) => s.snapshot?.config);
 
   const futures = useMemo(
     () =>
@@ -29,8 +30,8 @@ export function CompleteReleaseDialog({ release, onClose }: CompleteReleaseDialo
     [releases],
   );
   const unfinished = useMemo(
-    () => release.tasks.filter((t) => t.frontmatter.status !== 'done'),
-    [release],
+    () => release.tasks.filter((t) => !isTerminalStatus(config, t.frontmatter.status)),
+    [release, config],
   );
 
   const [destination, setDestination] = useState<string>(

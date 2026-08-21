@@ -2,6 +2,7 @@ import type { Active, Over } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Task, TaskStatus } from '@boardown/core';
 import {
+  UNKNOWN_COLUMN,
   isColumnDropId,
   isTaskDragId,
   parseColumnDropId,
@@ -14,7 +15,7 @@ export const applyDragOver = (
   buckets: Map<TaskStatus, Task[]>,
   // Disabling a column's droppable is not enough: the cards inside it are drop
   // nodes of their own, so hovering one would still resolve to that column.
-  blockedStatus: TaskStatus | null = null,
+  blockedStatuses: ReadonlySet<TaskStatus> = new Set(),
 ): Map<TaskStatus, Task[]> => {
   const activeId = String(active.id);
   const overId = String(over.id);
@@ -40,7 +41,10 @@ export const applyDragOver = (
     return buckets;
   }
 
-  if (targetStatus === blockedStatus && targetStatus !== activeStatus) return buckets;
+  // The Unknown column is read-only in both directions of a drop: nothing lands
+  // in it, and nothing is reordered inside it.
+  if (targetStatus === UNKNOWN_COLUMN) return buckets;
+  if (blockedStatuses.has(targetStatus) && targetStatus !== activeStatus) return buckets;
 
   if (targetStatus === activeStatus) {
     if (overTaskId === null) return buckets;

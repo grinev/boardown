@@ -124,6 +124,8 @@
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  background: var(--status-bg);
+  color: var(--status-fg);
 }
 
 .statusPillTrigger {
@@ -144,38 +146,12 @@
   outline-offset: 2px;
 }
 
-.statusTodo {
-  background: var(--status-todo-bg);
-  color: var(--status-todo-fg);
-}
-
-.statusInProgress {
-  background: var(--status-in-progress-bg);
-  color: var(--status-in-progress-fg);
-}
-
-.statusDone {
-  background: var(--status-done-bg);
-  color: var(--status-done-fg);
-}
-
 .statusDot {
   display: inline-block;
   width: 10px;
   height: 10px;
   border-radius: 999px;
-}
-
-.statusDotTodo {
-  background: var(--status-todo-fg);
-}
-
-.statusDotInProgress {
-  background: var(--status-in-progress-fg);
-}
-
-.statusDotDone {
-  background: var(--status-done-fg);
+  background: var(--status-fg);
 }
 
 .detailsCard {

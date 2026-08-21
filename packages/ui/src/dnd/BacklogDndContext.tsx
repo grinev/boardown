@@ -22,7 +22,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import type { Epic, Task } from '@boardown/core';
+import type { Epic, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogRowView } from '../components/BacklogRowView';
 import backlogStyles from '../components/BacklogView.module.css';
@@ -41,8 +41,9 @@ interface BacklogDndContextProps {
   buckets: SectionBuckets;
   setBuckets: Dispatch<SetStateAction<SectionBuckets>>;
   epics: Epic[];
-  // The section key of every active release whose In Progress column is full.
-  wipFullSectionKeys: ReadonlySet<string>;
+  // The section key of every active release whose column for the given status is
+  // full. It depends on the card being dragged, so it is asked, not handed over.
+  fullSectionsFor: (status: TaskStatus) => ReadonlySet<string>;
   children: ReactNode;
 }
 
@@ -50,7 +51,7 @@ export function BacklogDndContext({
   buckets,
   setBuckets,
   epics,
-  wipFullSectionKeys,
+  fullSectionsFor,
   children,
 }: BacklogDndContextProps) {
   const moveTaskOnBacklog = useBoardStore((s) => s.moveTaskOnBacklog);
@@ -82,14 +83,13 @@ export function BacklogDndContext({
     if (!isTaskDragId(id)) return;
     const taskId = parseTaskDragId(id);
     setActiveTaskId(taskId);
-    // Only an `in-progress` task entering the full release breaches the limit;
+    // Only a card entering a full column of the destination breaches the limit;
     // a task already in that section is merely being reordered.
     const task = findTaskInBuckets(buckets, taskId);
     const from = findSectionOfTask(buckets, taskId);
+    const full = task ? fullSectionsFor(task.frontmatter.status) : null;
     setBlockedSections(
-      task?.frontmatter.status === 'in-progress'
-        ? new Set([...wipFullSectionKeys].filter((key) => key !== from))
-        : NO_BLOCKED_TARGETS,
+      full === null ? NO_BLOCKED_TARGETS : new Set([...full].filter((key) => key !== from)),
     );
     originalBucketsRef.current = cloneBuckets(buckets);
   };

@@ -6,7 +6,7 @@ import {
   findOverlayPlacement,
   findStatusOf,
 } from './applyDragOver';
-import { columnDropId, taskDragId } from './ids';
+import { UNKNOWN_COLUMN, columnDropId, taskDragId } from './ids';
 
 const task = (id: string): Task => ({
   title: id,
@@ -50,7 +50,7 @@ describe('applyDragOver', () => {
     const start = buckets();
     for (const over of [columnDropId('in-progress'), taskDragId('BD-3')]) {
       expect(
-        applyDragOver(dndId(taskDragId('BD-1')), dndId(over), start, 'in-progress'),
+        applyDragOver(dndId(taskDragId('BD-1')), dndId(over), start, new Set(['in-progress'])),
       ).toBe(start);
     }
   });
@@ -65,7 +65,7 @@ describe('applyDragOver', () => {
       dndId(taskDragId('BD-4')),
       dndId(taskDragId('BD-3')),
       start,
-      'in-progress',
+      new Set(['in-progress']),
     );
     expect(ids(next.get('in-progress'))).toEqual(['BD-4', 'BD-3']);
   });
@@ -75,10 +75,27 @@ describe('applyDragOver', () => {
       dndId(taskDragId('BD-3')),
       dndId(columnDropId('done')),
       buckets(),
-      'in-progress',
+      new Set(['in-progress']),
     );
     expect(ids(next.get('in-progress'))).toEqual([]);
     expect(ids(next.get('done'))).toEqual(['BD-3']);
+  });
+
+  it('refuses the Unknown column as a target, but lets a task leave it', () => {
+    const start = new Map<TaskStatus, Task[]>([
+      ['todo', [task('BD-1')]],
+      [UNKNOWN_COLUMN, [task('BD-9')]],
+    ]);
+    for (const over of [columnDropId(UNKNOWN_COLUMN), taskDragId('BD-9')]) {
+      expect(applyDragOver(dndId(taskDragId('BD-1')), dndId(over), start)).toBe(start);
+    }
+    const left = applyDragOver(
+      dndId(taskDragId('BD-9')),
+      dndId(columnDropId('todo')),
+      start,
+    );
+    expect(ids(left.get(UNKNOWN_COLUMN))).toEqual([]);
+    expect(ids(left.get('todo'))).toEqual(['BD-1', 'BD-9']);
   });
 
   it('appends to an empty column when dropped on the column container', () => {

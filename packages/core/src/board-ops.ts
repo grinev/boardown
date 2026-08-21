@@ -1,5 +1,12 @@
 import { nextTaskId } from './id-generator.js';
-import { LINK_TYPE_META } from './schemas.js';
+import { LINK_TYPE_META, WIP_LIMIT_KEY } from './schemas.js';
+import {
+  boardStatusKeys,
+  initialStatus,
+  isDeclaredStatus,
+  isMiddleStatus,
+  terminalStatus,
+} from './statuses.js';
 import type {
   Backlog,
   BoardConfig,
@@ -40,7 +47,7 @@ export const emptyBacklog = (): Backlog => ({
   tasks: [],
 });
 
-export type BoardOpErrorCode = 'ARCHIVED' | 'STATUS_LOCKED' | 'WIP_LIMIT';
+export type BoardOpErrorCode = 'ARCHIVED' | 'STATUS_LOCKED' | 'WIP_LIMIT' | 'UNKNOWN_STATUS';
 
 // A process invariant refused a board operation. The code is what lets a shell
 // tell the rules apart — the CLI maps it straight onto its own error code.
@@ -87,43 +94,69 @@ const refuseStatusChange = (container: Container, taskId: string): never => {
   );
 };
 
-// The WIP limit caps how many tasks may sit in the current release's In Progress
-// column. Everything the rule needs is the destination container plus the config:
+// A board only accepts the statuses it declares. The refusal lives here so the UI
+// and the CLI inherit it rather than each policing their own controls.
+const refuseUndeclaredStatus = (
+  config: BoardConfig,
+  subject: string,
+  status: TaskStatus,
+): void => {
+  if (isDeclaredStatus(config, status)) return;
+  throw new BoardOpError(
+    'UNKNOWN_STATUS',
+    `Cannot set the status of ${subject} to "${status}": this board declares ` +
+      `${boardStatusKeys(config).join(', ')}.`,
+  );
+};
+
+// The WIP limit caps how many tasks may sit in one middle column of the current
+// release — each column against the same number, independently. Everything the
+// rule needs is the destination container, the config and the column in question:
 // the container is the current release, so its own tasks are the count. A board
-// already over its limit is valid — the rule only blocks *entering* the column,
-// it never relocates or rewrites anything.
-export const wipLimitFor = (container: Container, config: BoardConfig): number | null => {
+// already over its limit is valid — the rule only blocks *entering* a column, it
+// never relocates or rewrites anything.
+export const wipLimitFor = (
+  container: Container,
+  config: BoardConfig,
+  status: TaskStatus,
+): number | null => {
   if (!isCurrentRelease(container)) return null;
-  return config.wipLimits?.['in-progress'] ?? null;
+  if (!isMiddleStatus(config, status)) return null;
+  return config.wipLimits?.[WIP_LIMIT_KEY] ?? null;
 };
 
-export const inProgressCount = (container: Container): number =>
-  container.tasks.filter((t) => t.frontmatter.status === 'in-progress').length;
+export const statusCount = (container: Container, status: TaskStatus): number =>
+  container.tasks.filter((t) => t.frontmatter.status === status).length;
 
-export const isWipLimitReached = (container: Container, config: BoardConfig): boolean => {
-  const limit = wipLimitFor(container, config);
-  return limit !== null && inProgressCount(container) >= limit;
+export const isWipLimitReached = (
+  container: Container,
+  config: BoardConfig,
+  status: TaskStatus,
+): boolean => {
+  const limit = wipLimitFor(container, config, status);
+  return limit !== null && statusCount(container, status) >= limit;
 };
 
-// Refuses an operation that would put a task into `in-progress` in a full current
-// release. `wasInProgressHere` tells an entry from a reorder or a no-op: a task
+// Refuses an operation that would put a task into a full middle column of the
+// current release. `wasHere` tells an entry from a reorder or a no-op: a task
 // already in the column does not enter it again.
 const refuseIfWipLimitReached = (
   container: Container,
   config: BoardConfig,
   subject: string,
   newStatus: TaskStatus,
-  wasInProgressHere: boolean,
+  wasHere: boolean,
 ): void => {
-  if (newStatus !== 'in-progress' || wasInProgressHere) return;
-  const limit = wipLimitFor(container, config);
+  if (wasHere) return;
+  const limit = wipLimitFor(container, config, newStatus);
   if (limit === null) return;
-  const count = inProgressCount(container);
+  const count = statusCount(container, newStatus);
   if (count < limit) return;
   throw new BoardOpError(
     'WIP_LIMIT',
-    `Cannot put ${subject} into in-progress: ${describeContainer(container)} already has ` +
-      `${count} ${count === 1 ? 'task' : 'tasks'} in progress and the board's WIP limit is ${limit}.`,
+    `Cannot put ${subject} into ${newStatus}: ${describeContainer(container)} already has ` +
+      `${count} ${count === 1 ? 'task' : 'tasks'} in the ${newStatus} column and the board's ` +
+      `WIP limit is ${limit}.`,
   );
 };
 
@@ -490,9 +523,10 @@ export const createTask = <C extends Container>(
   if (isFinishedRelease(container)) {
     throw new BoardOpError('ARCHIVED', 'Cannot create a task in a finished release');
   }
+  refuseUndeclaredStatus(config, 'a new task', input.status);
   // A new task has no status to preserve, so outside the current release the only
-  // status it may start with is the default one.
-  if (input.status !== 'todo' && !isCurrentRelease(container)) {
+  // status it may start with is the board's initial one.
+  if (input.status !== initialStatus(config) && !isCurrentRelease(container)) {
     throw new BoardOpError(
       'STATUS_LOCKED',
       `Cannot create a task with status "${input.status}" in ${describeContainer(container)}. ` +
@@ -545,17 +579,20 @@ export const editTask = <C extends Container>(
   if (isFinishedRelease(container)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
   }
+  const current = findTask(container.tasks, taskId);
+  if (patch.status !== undefined && patch.status !== current.frontmatter.status) {
+    refuseUndeclaredStatus(config, taskId, patch.status);
+  }
   if (patch.status !== undefined && !isCurrentRelease(container)) {
     refuseStatusChange(container, taskId);
   }
-  const current = findTask(container.tasks, taskId);
   if (patch.status !== undefined) {
     refuseIfWipLimitReached(
       container,
       config,
       taskId,
       patch.status,
-      current.frontmatter.status === 'in-progress',
+      current.frontmatter.status === patch.status,
     );
   }
   const workingTasks =
@@ -661,16 +698,14 @@ export const changeTaskStatus = <C extends Container>(
   if (isFinishedRelease(container)) {
     throw new BoardOpError('ARCHIVED', 'Cannot change the status of a task in a finished release');
   }
+  const previousStatus = findTask(container.tasks, taskId).frontmatter.status;
+  if (newStatus !== previousStatus) {
+    refuseUndeclaredStatus(config, taskId, newStatus);
+  }
   if (!isCurrentRelease(container)) {
     refuseStatusChange(container, taskId);
   }
-  refuseIfWipLimitReached(
-    container,
-    config,
-    taskId,
-    newStatus,
-    findTask(container.tasks, taskId).frontmatter.status === 'in-progress',
-  );
+  refuseIfWipLimitReached(container, config, taskId, newStatus, previousStatus === newStatus);
   return replaceTasks(
     container,
     placeTaskInContainer(container.tasks, taskId, {
@@ -710,16 +745,13 @@ export const moveTaskInContainer = <C extends Container>(
   const currentStatus = findTask(container.tasks, taskId).frontmatter.status;
   // This op carries a status incidentally — a reorder within a column passes the
   // one the task already has — so only an actual change is refused.
-  if (args.status !== currentStatus && !isCurrentRelease(container)) {
-    refuseStatusChange(container, taskId);
+  if (args.status !== currentStatus) {
+    refuseUndeclaredStatus(config, taskId, args.status);
+    if (!isCurrentRelease(container)) {
+      refuseStatusChange(container, taskId);
+    }
   }
-  refuseIfWipLimitReached(
-    container,
-    config,
-    taskId,
-    args.status,
-    currentStatus === 'in-progress',
-  );
+  refuseIfWipLimitReached(container, config, taskId, args.status, currentStatus === args.status);
   return replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
 };
 
@@ -764,11 +796,14 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   const task = findTask(source.tasks, taskId);
   // Relocation preserves the status, so it never trips the lock. When a caller does
   // change it, the destination is what decides — that is where the status lands.
-  if (args.newStatus !== task.frontmatter.status && !isCurrentRelease(dest)) {
-    refuseStatusChange(dest, taskId);
+  if (args.newStatus !== task.frontmatter.status) {
+    refuseUndeclaredStatus(config, taskId, args.newStatus);
+    if (!isCurrentRelease(dest)) {
+      refuseStatusChange(dest, taskId);
+    }
   }
   // The task is arriving from elsewhere, so it is always entering the destination's
-  // column — carrying an `in-progress` status into a full current release counts.
+  // column — carrying a middle status into a full current release counts.
   refuseIfWipLimitReached(dest, config, taskId, args.newStatus, false);
   const epicAction: DestEpic = args.destEpic ?? { kind: 'preserve' };
   const updated: Task = {
@@ -1169,8 +1204,9 @@ export const completeRelease = (
   if (input.release.frontmatter.status !== 'current') {
     throw new Error('Only an active release can be completed');
   }
+  const done = terminalStatus(input.config);
   const unfinished = input.release.tasks
-    .filter((t) => t.frontmatter.status !== 'done')
+    .filter((t) => t.frontmatter.status !== done)
     .sort((a, b) => a.frontmatter.order - b.frontmatter.order);
 
   let release = input.release;

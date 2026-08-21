@@ -1,24 +1,24 @@
 import { useMemo } from 'react';
 import type { Epic, TaskPriority, TaskStatus, TaskType } from '@boardown/core';
-import { TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES } from '@boardown/core';
+import { TASK_PRIORITIES, TASK_TYPES, boardStatuses } from '@boardown/core';
+import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import styles from './BacklogFilters.module.css';
 
-export type StatusFilter = TaskStatus | 'all';
+// A board declares its own statuses, so this is a plain string — which means the
+// no-filter sentinel needs a shape a declared key cannot take (they start with a
+// letter), the way the Unknown column's does.
+export const ALL_STATUSES = '*all';
+export type StatusFilter = TaskStatus;
 export type TypeFilter = TaskType | 'all';
 export type EpicFilter = 'all' | 'no-epic' | (string & {});
 export type PriorityFilter = TaskPriority | 'all';
 
 const ALL_OPTION: IconSelectOption = { value: 'all', label: 'All' };
-
-const STATUS_DOT_CLASS: Record<TaskStatus, string | undefined> = {
-  todo: styles.statusDotTodo,
-  'in-progress': styles.statusDotInProgress,
-  done: styles.statusDotDone,
-};
+const ALL_STATUSES_OPTION: IconSelectOption = { value: ALL_STATUSES, label: 'All' };
 
 interface BacklogFiltersProps {
   epics: Epic[];
@@ -43,21 +43,23 @@ export function BacklogFilters({
   onEpicChange,
   onPriorityChange,
 }: BacklogFiltersProps) {
+  const config = useBoardStore((s) => s.snapshot?.config);
   const statusOptions = useMemo<IconSelectOption[]>(
     () => [
-      ALL_OPTION,
-      ...TASK_STATUSES.map((s) => ({
-        value: s,
-        label: formatStatusLabel(s),
+      ALL_STATUSES_OPTION,
+      ...boardStatuses(config).map(({ key }) => ({
+        value: key,
+        label: statusDisplayLabel(config, key),
         icon: (
           <span
-            className={`${styles.statusDot} ${STATUS_DOT_CLASS[s] ?? ''}`}
+            className={styles.statusDot}
+            style={statusColorStyle(config, key)}
             aria-hidden="true"
           />
         ),
       })),
     ],
-    [],
+    [config],
   );
 
   const typeOptions = useMemo<IconSelectOption[]>(
@@ -120,7 +122,7 @@ export function BacklogFilters({
         <IconSelect
           value={statusFilter}
           options={statusOptions}
-          onChange={(v) => onStatusChange(v as StatusFilter)}
+          onChange={(v) => onStatusChange(v)}
           ariaLabel="Filter by status"
           triggerClassName={styles.trigger}
         />

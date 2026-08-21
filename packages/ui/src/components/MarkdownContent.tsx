@@ -2,7 +2,7 @@ import { FileCode2, FileText } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { docPageTitle, resolveDocRef } from '@boardown/core';
+import { docPageTitle, isTerminalStatus, resolveDocRef } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
 import {
@@ -95,8 +95,9 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         }
         if (href !== undefined && href.startsWith(TASK_HREF)) {
           const id = href.slice(TASK_HREF.length);
+          const target = snapshot === null ? null : findTaskById(snapshot, id);
           const done =
-            snapshot !== null && findTaskById(snapshot, id)?.frontmatter.status === 'done';
+            target !== null && isTerminalStatus(snapshot?.config, target.frontmatter.status);
           return (
             <button
               type="button"

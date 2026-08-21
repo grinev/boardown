@@ -1,4 +1,4 @@
-import type { Release, Task } from '@boardown/core';
+import type { BoardConfig, Release, Task } from '@boardown/core';
 import {
   activeReleases,
   futureReleases,
@@ -59,12 +59,13 @@ export const backlogCommand: CommandHandler = async (args, ctx) => {
         tasks: taskPayload(section.tasks, full),
       })),
     },
-    human: render(snapshot.config.projectName, sections),
+    human: render(snapshot.config, sections),
     ...(problems.length > 0 ? { problems } : {}),
   };
 };
 
-function render(projectName: string, sections: readonly Section[]): string {
+function render(config: BoardConfig, sections: readonly Section[]): string {
+  const projectName = config.projectName;
   const lines: string[] = [`${projectName} — backlog`];
   for (const section of sections) {
     const label = section.status === null ? '' : `[${section.status}] `;
@@ -73,7 +74,7 @@ function render(projectName: string, sections: readonly Section[]): string {
       lines.push('  no tasks');
       continue;
     }
-    lines.push(...summaryLines(section.tasks));
+    lines.push(...summaryLines(config, section.tasks));
   }
   return lines.join('\n');
 }

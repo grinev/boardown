@@ -1,5 +1,10 @@
 import type { TaskStatus } from '@boardown/core';
 
+// The board's last column, holding tasks whose status the config no longer
+// declares. A declared key always starts with a letter, so this can never be
+// one; it is read-only, and `applyDragOver` refuses it as a target.
+export const UNKNOWN_COLUMN: TaskStatus = '*unknown';
+
 const TASK_PREFIX = 'task:';
 const COLUMN_PREFIX = 'column:';
 const SECTION_PREFIX = 'section:';
@@ -19,6 +24,6 @@ export const isSectionDropId = (id: string): boolean =>
 export const parseTaskDragId = (id: string): string =>
   id.slice(TASK_PREFIX.length);
 export const parseColumnDropId = (id: string): TaskStatus =>
-  id.slice(COLUMN_PREFIX.length) as TaskStatus;
+  id.slice(COLUMN_PREFIX.length);
 export const parseSectionDropId = (id: string): string =>
   id.slice(SECTION_PREFIX.length);

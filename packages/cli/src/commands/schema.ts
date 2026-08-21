@@ -5,8 +5,10 @@ import {
   LINK_TYPES,
   RELEASE_STATUSES,
   TASK_PRIORITIES,
-  TASK_STATUSES,
   TASK_TYPES,
+  WIP_LIMIT_KEY,
+  boardStatuses,
+  middleStatusKeys,
 } from '@boardown/core';
 import { loadConfigIfAny } from '../persistence';
 import type { CommandHandler } from '../types';
@@ -15,11 +17,10 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 9,
+  version: 10,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
-  taskStatuses: TASK_STATUSES,
   releaseStatuses: RELEASE_STATUSES,
   taskFields: {
     id: 'string, assigned by boardown (e.g. BD-12)',
@@ -28,7 +29,7 @@ const DESCRIPTOR = {
     type: 'one of taskTypes',
     priority:
       'optional, one of taskPriorities; an absent key means defaultTaskPriority. Setting it — including setting it to the default — writes the key and keeps it.',
-    status: 'one of taskStatuses',
+    status: 'one of taskStatuses[].key',
     epic: 'optional epic slug',
     order: 'number, managed by boardown',
     checklist: 'optional array of { id, text, done }; managed via `task checklist`',
@@ -44,7 +45,7 @@ const DESCRIPTOR = {
     title: 'string',
     type: 'one of taskTypes',
     priority: 'one of taskPriorities; always present, resolved to defaultTaskPriority when unset',
-    status: 'one of taskStatuses',
+    status: 'one of taskStatuses[].key',
     epic: 'epic slug; omitted when the task has none',
     checklist: '{ done, total }; omitted when the task has no checklist',
     notes: 'number of notes; omitted when the task has none',
@@ -196,9 +197,13 @@ const DESCRIPTOR = {
 // The declarations and the WIP limit are board-specific, so they ride along only
 // when a board actually has them; otherwise the command prints the static
 // contract unchanged — a board without either sees no new output.
-// `multipleActiveReleases` is the exception: absent from the config means the
-// one-at-a-time rule is in force, so leaving it out would hide a rule an agent
-// would then have to discover by being refused.
+// `multipleActiveReleases` and `taskStatuses` are the exceptions: both have a
+// meaning when the config says nothing, so leaving them out would hide a rule an
+// agent would then have to discover by being refused.
+//
+// `wipLimits` is echoed exactly as the file holds it — the key is literally
+// `in-progress` whatever the board's statuses are called — and the statuses it
+// actually caps are reported beside it rather than by re-keying the echo.
 export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const config = await loadConfigIfAny(ctx.cwd, ctx.dataDir);
   const declared = config?.customFields ?? [];
@@ -206,6 +211,13 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const data = {
     ...DESCRIPTOR,
     multipleActiveReleases: config?.multipleActiveReleases ?? false,
+    // Positional: the first is the status a new task takes and the only one a new
+    // task may be created with outside the current release, the last is the
+    // terminal one.
+    taskStatuses: boardStatuses(config).map((status) => ({
+      key: status.key,
+      ...(status.label !== undefined ? { label: status.label } : {}),
+    })),
     ...(declared.length > 0
       ? {
           customFields: declared.map((field) => ({
@@ -215,8 +227,12 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
           })),
         }
       : {}),
-    ...(wipLimits?.['in-progress'] !== undefined
-      ? { wipLimits: { 'in-progress': wipLimits['in-progress'] } }
+    ...(wipLimits?.[WIP_LIMIT_KEY] !== undefined
+      ? {
+          wipLimits: { [WIP_LIMIT_KEY]: wipLimits[WIP_LIMIT_KEY] },
+          // The one number caps each of these columns independently.
+          wipLimitedStatuses: middleStatusKeys(config),
+        }
       : {}),
   };
   return { data, human: JSON.stringify(data, null, 2) };

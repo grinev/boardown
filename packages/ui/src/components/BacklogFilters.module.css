@@ -60,16 +60,5 @@
   width: 10px;
   height: 10px;
   border-radius: 999px;
-}
-
-.statusDotTodo {
-  background: var(--status-todo-fg);
-}
-
-.statusDotInProgress {
-  background: var(--status-in-progress-fg);
-}
-
-.statusDotDone {
-  background: var(--status-done-fg);
+  background: var(--status-fg);
 }

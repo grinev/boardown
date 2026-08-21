@@ -34,7 +34,7 @@ Tasks:
   task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
   task add <title>       Create a task (--type --priority --status --epic --release --description).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
-  task status <id> <s>   Change a task status (todo | in-progress | done).
+  task status <id> <s>   Change a task status (one of the board's statuses).
   task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
   task rm <id>           Delete a task.
   task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).

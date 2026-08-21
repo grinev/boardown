@@ -46,8 +46,10 @@ instead of overwriting.
   description — finished releases included — and opens it in one click.
 - **Task priority**: four levels (Critical / High / Medium / Low) shown as a
   glyph on task cards and backlog rows, and usable as a backlog filter.
-- **WIP limits**: cap how many tasks the current release may have in progress;
-  once the In Progress column is full, nothing else gets in.
+- **WIP limits**: cap how many tasks the current release may have in each
+  in-flight column; once a column is full, nothing else gets in.
+- **Custom statuses** (beta): replace `todo` / `in-progress` / `done` with your
+  own columns (2–8 of them) in `.boardown/config.yaml`.
 - **Task checklists and notes**: each task can carry a lightweight todo
   checklist (shown as a `done/total` badge) and timestamped notes (shown as a
   count badge), edited in the task dialog.

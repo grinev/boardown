@@ -226,6 +226,74 @@ describe('wipLimits', () => {
   });
 });
 
+describe('statuses', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips a declared list and keeps it between multipleActiveReleases and customFields', () => {
+    const cfg: BoardConfig = {
+      ...base,
+      multipleActiveReleases: true,
+      statuses: [{ key: 'backlog', label: 'To do' }, { key: 'dev' }, { key: 'shipped' }],
+      customFields: [{ key: 'env', type: 'string' }],
+    };
+    const out = serializeConfig(cfg);
+    expect(out.indexOf('multipleActiveReleases:')).toBeLessThan(out.indexOf('statuses:'));
+    expect(out.indexOf('statuses:')).toBeLessThan(out.indexOf('customFields:'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+
+  // The promise this feature makes to every board already on disk: a config that
+  // never declared statuses is not rewritten to mention them.
+  it('writes no key when the board declares none', () => {
+    expect(serializeConfig(base)).not.toContain('statuses');
+  });
+
+  it('accepts two and eight entries', () => {
+    for (const count of [2, 8]) {
+      const keys = Array.from({ length: count }, (_, i) => `s${i}`);
+      const parsed = parseConfig(
+        `${VALID}statuses:
+${keys.map((k) => `  - key: ${k}
+`).join('')}`,
+      );
+      expect(parsed.problems).toEqual([]);
+      expect(parsed.value?.statuses).toHaveLength(count);
+    }
+  });
+
+  it('rejects one entry, nine entries, a duplicate key and a key starting with a digit', () => {
+    const lists = [
+      ['a'],
+      Array.from({ length: 9 }, (_, i) => `s${i}`),
+      ['todo', 'todo'],
+      ['1st'],
+    ];
+    for (const keys of lists) {
+      const parsed = parseConfig(
+        `${VALID}statuses:
+${keys.map((k) => `  - key: ${k}
+`).join('')}`,
+      );
+      expect(parsed.value).toBeNull();
+      expect(parsed.problems).toHaveLength(1);
+    }
+  });
+
+  it('rejects an empty list and an unknown key on an entry', () => {
+    expect(parseConfig(`${VALID}statuses: []
+`).value).toBeNull();
+    expect(
+      parseConfig(`${VALID}statuses:
+  - key: a
+    color: red
+  - key: b
+`).value,
+    ).toBeNull();
+  });
+});
+
 describe('multiple active releases', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 

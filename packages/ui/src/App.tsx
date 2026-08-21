@@ -1,6 +1,6 @@
 import type { FsAdapter, ProjectFileReader, Theme } from '@boardown/core';
-import { TASK_STATUSES } from '@boardown/core';
-import { useEffect, useLayoutEffect } from 'react';
+import { boardStatusKeys } from '@boardown/core';
+import { useEffect, useLayoutEffect, useMemo } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
@@ -60,6 +60,12 @@ export function App({
 }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
+  // Stable identity: the board columns memoise on it, and a fresh array every
+  // render would rebuild every bucket on any unrelated state change.
+  const statuses = useMemo(
+    () => (snapshot === null ? [] : boardStatusKeys(snapshot.config)),
+    [snapshot],
+  );
   const problems = useBoardStore((s) => s.problems);
   const errorMessage = useBoardStore((s) => s.errorMessage);
   const activeTab = useBoardStore((s) => s.activeTab);
@@ -196,7 +202,11 @@ export function App({
         onSelect={setActiveTab}
         hideSettings={forcedTheme !== undefined}
       />
-      <TabContent activeTab={activeTab} epics={snapshot.epics} statuses={TASK_STATUSES} />
+      <TabContent
+        activeTab={activeTab}
+        epics={snapshot.epics}
+        statuses={statuses}
+      />
       {problems.length > 0 && (
         <section className={styles.problems} data-testid="problems-banner">
           <strong>Parse warnings:</strong>

@@ -270,21 +270,8 @@
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.statusTodo {
-  background: var(--status-todo-bg);
-  color: var(--status-todo-fg);
-}
-
-.statusInProgress {
-  background: var(--status-in-progress-bg);
-  color: var(--status-in-progress-fg);
-}
-
-.statusDone {
-  background: var(--status-done-bg);
-  color: var(--status-done-fg);
+  background: var(--status-bg);
+  color: var(--status-fg);
 }
 
 .tasksEmpty {

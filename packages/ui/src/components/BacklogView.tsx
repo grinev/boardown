@@ -13,7 +13,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Epic, Release, Task } from '@boardown/core';
+import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import {
   activeReleases,
   effectiveTaskPriority,
@@ -28,6 +28,7 @@ import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
 import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
+  ALL_STATUSES,
   BacklogFilters,
   type EpicFilter,
   type PriorityFilter,
@@ -65,7 +66,7 @@ export function BacklogView() {
   const openCreateTask = useBoardStore((s) => s.openCreateTask);
   const openCreateTaskBacklog = useBoardStore((s) => s.openCreateTaskBacklog);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(ALL_STATUSES);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
@@ -145,17 +146,20 @@ export function BacklogView() {
     return { sectionMetas: metas, sourceBuckets: buckets };
   }, [snapshot, epics]);
 
-  // Dragging an `in-progress` task into an active release enters its In Progress
-  // column, so each section whose column is full closes on its own — the limit is
+  // Dragging a task into an active release enters the column its status names, so
+  // which sections are closed depends on the card being dragged — and the limit is
   // counted per release, not across the board.
-  const wipFullSectionKeys = useMemo(() => {
-    if (!snapshot) return new Set<string>();
-    return new Set(
-      activeReleases(snapshot)
-        .filter((r) => isWipLimitReached(r, snapshot.config))
-        .map((r) => releaseSectionKey(r)),
-    );
-  }, [snapshot]);
+  const fullSectionsFor = useCallback(
+    (status: TaskStatus): ReadonlySet<string> => {
+      if (!snapshot) return new Set<string>();
+      return new Set(
+        activeReleases(snapshot)
+          .filter((r) => isWipLimitReached(r, snapshot.config, status))
+          .map((r) => releaseSectionKey(r)),
+      );
+    },
+    [snapshot],
+  );
 
   const [overlayBuckets, setOverlayBuckets] =
     useState<SectionBuckets>(sourceBuckets);
@@ -184,13 +188,13 @@ export function BacklogView() {
   if (snapshot === null) return null;
 
   const filtersActive =
-    statusFilter !== 'all' ||
+    statusFilter !== ALL_STATUSES ||
     typeFilter !== 'all' ||
     epicFilter !== 'all' ||
     priorityFilter !== 'all';
 
   const matchesFilters = (task: Task): boolean => {
-    if (statusFilter !== 'all' && task.frontmatter.status !== statusFilter) return false;
+    if (statusFilter !== ALL_STATUSES && task.frontmatter.status !== statusFilter) return false;
     if (typeFilter !== 'all' && task.frontmatter.type !== typeFilter) return false;
     if (epicFilter === 'no-epic') {
       if (task.frontmatter.epic !== undefined) return false;
@@ -221,7 +225,7 @@ export function BacklogView() {
         buckets={overlayBuckets}
         setBuckets={setOverlayBuckets}
         epics={epics}
-        wipFullSectionKeys={wipFullSectionKeys}
+        fullSectionsFor={fullSectionsFor}
       >
         <div className={styles.scrollArea}>
           {sectionMetas.map((meta) => {

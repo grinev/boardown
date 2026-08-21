@@ -108,16 +108,16 @@
 }
 
 .statusFuture {
-  background: var(--status-todo-bg);
-  color: var(--status-todo-fg);
+  background: var(--release-future-bg);
+  color: var(--release-future-fg);
 }
 
 .statusCurrent {
-  background: var(--status-in-progress-bg);
-  color: var(--status-in-progress-fg);
+  background: var(--release-current-bg);
+  color: var(--release-current-fg);
 }
 
 .statusFinished {
-  background: var(--status-done-bg);
-  color: var(--status-done-fg);
+  background: var(--release-finished-bg);
+  color: var(--release-finished-fg);
 }
