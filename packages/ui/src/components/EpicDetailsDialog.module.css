@@ -2,17 +2,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--divider);
   background: var(--surface);
   flex: 0 0 auto;
 }
 
+/* Grows so the inline name editor, which fills its container, is wide enough for
+   a name of any allowed length instead of the input's own 20-character default. */
 .headerName {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Only the view box, which is the direct child; the editing field sits one level
+   deeper and keeps filling the row. */
+.headerName > .nameText {
+  width: auto;
 }
 
 .headerActions {
