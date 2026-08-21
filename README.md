@@ -134,6 +134,43 @@ as compact summaries; `task get <id>` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 
+## Custom task statuses (beta)
+
+> **Beta.** Statuses are declared by hand in `config.yaml` and there is no UI for
+> managing them yet. The on-disk format may still change before 1.0 — expect to
+> edit your config when it does.
+
+A board can replace `todo` / `in-progress` / `done` with its own columns. Declare
+them in `.boardown/config.yaml`:
+
+```yaml
+statuses:
+  - key: backlog
+    label: Not started   # optional — the key is shown when absent
+  - key: dev
+  - key: review
+  - key: shipped
+```
+
+It is all-or-nothing: absent keeps the three built-ins, present replaces the whole
+set. Between 2 and 8 entries; `key` follows the same rule as a custom field's —
+1–40 characters, starts with a letter, then letters, digits, `_` or `-` — and keys
+must be unique.
+
+The meaning is **positional**. The **first** status is the one a new task takes,
+and the only one a task may be created with outside an active release. The **last** is the
+terminal one: a link to a task in it is struck through, and completing a release
+counts everything else as unfinished. The columns **between** are what the WIP
+limit caps — one number in `wipLimits`, applied to each of them independently.
+Colours follow the same order, so the first column stays grey and the last stays
+green whatever you call them.
+
+Editing the list under an existing board never rewrites your files. Tasks whose
+status you dropped keep it and gather in a read-only **Unknown** column at the end
+of the board, which you can drag them out of; the CLI answers `USAGE` naming the
+board's own list if you try to *set* a status it does not declare, and `boardown
+schema` reports the list so an agent reads it up front.
+
 ## Custom task fields (beta)
 
 > **Beta.** This is the first slice of a larger customization story: only the

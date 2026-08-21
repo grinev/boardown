@@ -20,8 +20,10 @@ import {
   LINK_TYPES,
   LINK_TYPE_META,
   TASK_PRIORITIES,
-  TASK_STATUSES,
   TASK_TYPES,
+  boardStatusKeys,
+  initialStatus,
+  isDeclaredStatus,
   type BoardConfig,
   type BoardSnapshot,
   type ChecklistItem,
@@ -100,9 +102,6 @@ export const taskCommand: CommandHandler = (args, ctx) => {
 const isTaskType = (value: string): value is TaskType =>
   (TASK_TYPES as readonly string[]).includes(value);
 
-const isTaskStatus = (value: string): value is TaskStatus =>
-  (TASK_STATUSES as readonly string[]).includes(value);
-
 const isTaskPriority = (value: string): value is TaskPriority =>
   (TASK_PRIORITIES as readonly string[]).includes(value);
 
@@ -139,11 +138,14 @@ function requireLinkType(value: string): LinkType {
   return value as LinkType;
 }
 
-function requireStatus(value: string): TaskStatus {
-  if (!isTaskStatus(value)) {
+// A status the board does not declare is a usage error naming the board's own
+// vocabulary — the same shape an undeclared `--field` key gets, so an agent
+// corrects itself instead of collecting refusals.
+function requireStatus(config: BoardConfig, value: string): TaskStatus {
+  if (!isDeclaredStatus(config, value)) {
     throw new CliError(
       'USAGE',
-      `Invalid status "${value}" (one of ${TASK_STATUSES.join(', ')}).`,
+      `Invalid status "${value}" (one of ${boardStatusKeys(config).join(', ')}).`,
       2,
     );
   }
@@ -215,7 +217,8 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   const priorityFlag = flagString(args.flags, 'priority');
   const priority = priorityFlag === undefined ? undefined : parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
-  const status = statusFlag === undefined ? 'todo' : requireStatus(statusFlag);
+  const status =
+    statusFlag === undefined ? initialStatus(snapshot.config) : requireStatus(snapshot.config, statusFlag);
   const description = flagString(args.flags, 'description');
   const releaseRef = flagString(args.flags, 'release');
   const epicSlug = flagString(args.flags, 'epic');
@@ -392,7 +395,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const priorityFlag = flagString(args.flags, 'priority');
   if (priorityFlag !== undefined) fields.priority = parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
-  if (statusFlag !== undefined) fields.status = requireStatus(statusFlag);
+  if (statusFlag !== undefined) fields.status = requireStatus(snapshot.config, statusFlag);
   const custom = parseCustomFields(args, snapshot.config);
   if (custom !== undefined) fields.custom = custom;
   const hasFields = Object.keys(fields).length > 0;
@@ -467,10 +470,9 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   if (id === undefined || statusArg === undefined) {
     throw new CliError('USAGE', 'Usage: boardown task status <id> <status>.', 2);
   }
-  const status = requireStatus(statusArg);
-
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const status = requireStatus(snapshot.config, statusArg);
   const location = locateTask(snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
@@ -570,12 +572,12 @@ function collectEntries(snapshot: BoardSnapshot): TaskListEntry[] {
   return entries;
 }
 
-const renderTaskList = (entries: readonly TaskListEntry[]): string => {
+const renderTaskList = (config: BoardConfig, entries: readonly TaskListEntry[]): string => {
   if (entries.length === 0) return 'No matching tasks.';
   const lines = entries.map(({ task, in: loc }) => {
     const s = taskSummary(task);
     const parts = [
-      `${statusMark(task)} ${s.id}`,
+      `${statusMark(config, task)} ${s.id}`,
       s.title,
       `[${s.type}/${s.priority}/${s.status}]`,
     ];
@@ -598,7 +600,6 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const backlogOnly = flagBool(args.flags, 'backlog');
   const textFlag = flagString(args.flags, 'text');
 
-  const status = statusFlag !== undefined ? requireStatus(statusFlag) : undefined;
   const type = typeFlag !== undefined ? parseTaskType(typeFlag) : undefined;
   const priority = priorityFlag !== undefined ? parseTaskPriority(priorityFlag) : undefined;
   // An empty --text has always meant "no filter", while the shared rule reads an
@@ -608,6 +609,9 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { snapshot, problems } = await loadBoardOrThrow(root);
+
+  const status =
+    statusFlag !== undefined ? requireStatus(snapshot.config, statusFlag) : undefined;
 
   // Unknown --epic / --release is a caller mistake, not an empty result: fail
   // loud like `task get`, resolving the ref against the loaded board.
@@ -648,7 +652,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       })),
       count: entries.length,
     },
-    human: renderTaskList(entries),
+    human: renderTaskList(snapshot.config, entries),
     ...problemsField(problems),
   };
 }

@@ -67,7 +67,7 @@ async function epicGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     `Epic ${epic.frontmatter.name}  (${epic.slug})  ${epic.frontmatter.color}  ${tasks.length}`,
   ];
   if (tasks.length === 0) lines.push('  no tasks');
-  else lines.push(...summaryLines(tasks));
+  else lines.push(...summaryLines(board.snapshot.config, tasks));
   return {
     data: {
       epic: {

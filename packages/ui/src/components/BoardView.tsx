@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { isWipLimitReached, wipLimitFor } from '@boardown/core';
+import { isWipLimitReached, wipLimitFor, type StatusConfig } from '@boardown/core';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
 import { BoardDndContext } from '../dnd/BoardDndContext';
 import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { useDroppableColumn } from '../dnd/useBoardSortable';
-import { taskDragId } from '../dnd/ids';
+import { UNKNOWN_COLUMN, taskDragId } from '../dnd/ids';
 import { SortableTaskCard } from './SortableTaskCard';
 import styles from './BoardView.module.css';
 
@@ -19,15 +19,22 @@ interface BoardViewProps {
   statuses: readonly TaskStatus[];
 }
 
-const groupTasksByStatus = (
+// A task whose status the board no longer declares still belongs to the release,
+// so it goes into one shared trailing bucket rather than disappearing. The bucket
+// is created only when something lands in it.
+export const groupTasksByStatus = (
   tasks: Task[],
   statuses: readonly TaskStatus[],
 ): Map<TaskStatus, Task[]> => {
   const buckets = new Map<TaskStatus, Task[]>();
   for (const status of statuses) buckets.set(status, []);
   for (const task of tasks) {
-    const list = buckets.get(task.frontmatter.status);
-    if (list !== undefined) list.push(task);
+    const list = buckets.get(task.frontmatter.status) ?? buckets.get(UNKNOWN_COLUMN);
+    if (list !== undefined) {
+      list.push(task);
+      continue;
+    }
+    buckets.set(UNKNOWN_COLUMN, [task]);
   }
   for (const list of buckets.values()) {
     list.sort((a, b) => a.frontmatter.order - b.frontmatter.order);
@@ -37,8 +44,16 @@ const groupTasksByStatus = (
 
 export function BoardView({ release, epics, statuses }: BoardViewProps) {
   const config = useBoardStore((s) => s.snapshot?.config);
-  const wipLimit = config === undefined ? null : wipLimitFor(release, config);
-  const wipFull = config !== undefined && isWipLimitReached(release, config);
+  // Every middle column carries the limit on its own count, so "full" is a set,
+  // not a flag.
+  const fullStatuses = useMemo(() => {
+    const full = new Set<TaskStatus>();
+    if (config === undefined) return full;
+    for (const status of statuses) {
+      if (isWipLimitReached(release, config, status)) full.add(status);
+    }
+    return full;
+  }, [release, config, statuses]);
   const sourceBuckets = useMemo(
     () => groupTasksByStatus(release.tasks, statuses),
     [release.tasks, statuses],
@@ -55,30 +70,39 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
     [epics],
   );
   const openCreateTask = useBoardStore((s) => s.openCreateTask);
+  const unknownTasks = overlayBuckets.get(UNKNOWN_COLUMN) ?? [];
 
   return (
     <BoardDndContext
       buckets={overlayBuckets}
       setBuckets={setOverlayBuckets}
       epics={epics}
-      wipFull={wipFull}
+      fullStatuses={fullStatuses}
     >
       <div className={styles.board}>
-        {statuses.map((status, index) => {
-          const tasks = overlayBuckets.get(status) ?? [];
-          const isFirstColumn = index === 0;
-          return (
-            <BoardColumn
-              key={status}
-              status={status}
-              tasks={tasks}
-              epicsBySlug={epicsBySlug}
-              showCreateButton={isFirstColumn}
-              limit={status === 'in-progress' ? wipLimit : null}
-              onCreate={() => openCreateTask(release.filename)}
-            />
-          );
-        })}
+        {statuses.map((status, index) => (
+          <BoardColumn
+            key={status}
+            status={status}
+            config={config}
+            tasks={overlayBuckets.get(status) ?? []}
+            epicsBySlug={epicsBySlug}
+            showCreateButton={index === 0}
+            limit={config === undefined ? null : wipLimitFor(release, config, status)}
+            onCreate={() => openCreateTask(release.filename)}
+          />
+        ))}
+        {unknownTasks.length > 0 && (
+          <BoardColumn
+            status={UNKNOWN_COLUMN}
+            config={config}
+            tasks={unknownTasks}
+            epicsBySlug={epicsBySlug}
+            showCreateButton={false}
+            limit={null}
+            onCreate={() => openCreateTask(release.filename)}
+          />
+        )}
       </div>
     </BoardDndContext>
   );
@@ -86,6 +110,7 @@ export function BoardView({ release, epics, statuses }: BoardViewProps) {
 
 interface BoardColumnProps {
   status: TaskStatus;
+  config: StatusConfig;
   tasks: Task[];
   epicsBySlug: Map<string, Epic>;
   showCreateButton: boolean;
@@ -96,14 +121,18 @@ interface BoardColumnProps {
 
 function BoardColumn({
   status,
+  config,
   tasks,
   epicsBySlug,
   showCreateButton,
   limit,
   onCreate,
 }: BoardColumnProps) {
+  // The Unknown column takes no droppable at all — the product refuses a drop by
+  // removing the target, not by dimming one.
+  const readOnly = status === UNKNOWN_COLUMN;
   const blocked = useBlockedTargets().has(status);
-  const { setNodeRef } = useDroppableColumn(status, blocked);
+  const { setNodeRef } = useDroppableColumn(status, blocked || readOnly);
   const items = tasks.map((t) => taskDragId(t.frontmatter.id));
   const atLimit = limit !== null && tasks.length >= limit;
 
@@ -111,10 +140,14 @@ function BoardColumn({
     <div
       className={`${styles.column}${blocked ? ` ${styles.columnBlocked}` : ''}`}
       data-testid={`column-${status}`}
-      title={blocked && limit !== null ? wipLimitHint(tasks.length, limit) : undefined}
+      title={
+        blocked && limit !== null
+          ? wipLimitHint(tasks.length, limit, statusDisplayLabel(config, status))
+          : undefined
+      }
     >
       <div className={styles.columnHeader}>
-        <span>{formatStatusLabel(status)}</span>
+        <span>{readOnly ? 'Unknown' : statusDisplayLabel(config, status)}</span>
         <span
           className={`${styles.columnCount}${atLimit ? ` ${styles.columnCountAtLimit}` : ''}`}
         >

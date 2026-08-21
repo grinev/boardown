@@ -19,7 +19,7 @@ import {
   editRelease,
   editTask,
   emptyBacklog,
-  inProgressCount,
+  statusCount,
   isWipLimitReached,
   wipLimitFor,
   moveTaskBetweenContainers,
@@ -1324,12 +1324,21 @@ describe('process invariants — a status only changes in the current release', 
       );
 
     it('reports the count and the limit only for a current release', () => {
-      expect(inProgressCount(full())).toBe(2);
-      expect(wipLimitFor(full(), limited(2))).toBe(2);
-      expect(wipLimitFor(full(), config)).toBeNull();
-      expect(wipLimitFor(withTasks(futureRelease('next'), task('BD-1', 'in-progress', 100)), limited(1))).toBeNull();
-      expect(isWipLimitReached(full(), limited(2))).toBe(true);
-      expect(isWipLimitReached(full(), limited(3))).toBe(false);
+      expect(statusCount(full(), 'in-progress')).toBe(2);
+      expect(wipLimitFor(full(), limited(2), 'in-progress')).toBe(2);
+      expect(wipLimitFor(full(), config, 'in-progress')).toBeNull();
+      // The initial and the terminal column are never capped.
+      expect(wipLimitFor(full(), limited(2), 'todo')).toBeNull();
+      expect(wipLimitFor(full(), limited(2), 'done')).toBeNull();
+      expect(
+        wipLimitFor(
+          withTasks(futureRelease('next'), task('BD-1', 'in-progress', 100)),
+          limited(1),
+          'in-progress',
+        ),
+      ).toBeNull();
+      expect(isWipLimitReached(full(), limited(2), 'in-progress')).toBe(true);
+      expect(isWipLimitReached(full(), limited(3), 'in-progress')).toBe(false);
     });
 
     it('refuses a status change into a full column, with the WIP_LIMIT code', () => {
@@ -1339,7 +1348,7 @@ describe('process invariants — a status only changes in the current release', 
       } catch (err) {
         expect(err).toBeInstanceOf(BoardOpError);
         expect((err as BoardOpError).code).toBe('WIP_LIMIT');
-        expect((err as BoardOpError).message).toContain('2 tasks in progress');
+        expect((err as BoardOpError).message).toContain('2 tasks in the in-progress column');
         expect((err as BoardOpError).message).toContain('WIP limit is 2');
       }
     });
@@ -1444,6 +1453,106 @@ describe('process invariants — a status only changes in the current release', 
           targetRelease: null,
         }),
       ).not.toThrow();
+    });
+  });
+
+  describe('a board that declares its own statuses', () => {
+    const custom = (limit?: number): BoardConfig => ({
+      ...config,
+      statuses: [{ key: 'backlog' }, { key: 'dev' }, { key: 'review' }, { key: 'shipped' }],
+      ...(limit === undefined ? {} : { wipLimits: { 'in-progress': limit } }),
+    });
+
+    it('refuses a status the board does not declare, with the UNKNOWN_STATUS code', () => {
+      const r = release(task('BD-1', 'backlog', 100));
+      try {
+        changeTaskStatus(r, custom(), 'BD-1', 'in-progress');
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(BoardOpError);
+        expect((err as BoardOpError).code).toBe('UNKNOWN_STATUS');
+        expect((err as BoardOpError).message).toContain('backlog, dev, review, shipped');
+      }
+      expect(() => editTask(r, custom(), 'BD-1', { status: 'nope' })).toThrow(/this board declares/);
+      expect(() =>
+        createTask(r, custom(), { title: 'N', type: 'feature', status: 'nope' }),
+      ).toThrow(/this board declares/);
+      expect(() =>
+        moveTaskInContainer(r, custom(), 'BD-1', { status: 'nope', beforeTaskId: null }),
+      ).toThrow(/this board declares/);
+    });
+
+    it('refuses an undeclared status set by a move between containers', () => {
+      const source = withTasks(futureRelease('next'), task('BD-1', 'backlog', 100));
+      try {
+        moveTaskBetweenContainers(source, release(), custom(), 'BD-1', {
+          newStatus: 'in-progress',
+          beforeTaskId: null,
+        });
+        expect.unreachable();
+      } catch (err) {
+        expect((err as BoardOpError).code).toBe('UNKNOWN_STATUS');
+      }
+    });
+
+    // Principle: the file belongs to the user. A task whose status the board no
+    // longer declares still moves between containers and still edits.
+    it('lets a task keep an undeclared status through an edit and a relocation', () => {
+      const r = release(task('BD-1', 'in-progress', 100));
+      expect(() => editTask(r, custom(), 'BD-1', { title: 'X' })).not.toThrow();
+      const moved = moveTaskBetweenContainers(r, futureRelease('next'), custom(), 'BD-1', {
+        newStatus: 'in-progress',
+        beforeTaskId: null,
+      });
+      expect(moved.dest.tasks[0]!.frontmatter.status).toBe('in-progress');
+    });
+
+    it('names the declared initial status as the only one allowed outside the board', () => {
+      const future = futureRelease('next');
+      expect(() =>
+        createTask(future, custom(), { title: 'N', type: 'feature', status: 'backlog' }),
+      ).not.toThrow();
+      try {
+        createTask(future, custom(), { title: 'N', type: 'feature', status: 'dev' });
+        expect.unreachable();
+      } catch (err) {
+        expect((err as BoardOpError).code).toBe('STATUS_LOCKED');
+      }
+    });
+
+    it('caps each middle column independently and neither end at all', () => {
+      const r = release(
+        task('BD-1', 'dev', 100),
+        task('BD-2', 'dev', 200),
+        task('BD-3', 'review', 300),
+        task('BD-4', 'backlog', 400),
+        task('BD-5', 'backlog', 500),
+        task('BD-6', 'shipped', 600),
+      );
+      expect(isWipLimitReached(r, custom(2), 'dev')).toBe(true);
+      expect(isWipLimitReached(r, custom(2), 'review')).toBe(false);
+      // Two backlog tasks and the limit of two, but the initial column is uncapped.
+      expect(isWipLimitReached(r, custom(2), 'backlog')).toBe(false);
+      expect(wipLimitFor(r, custom(2), 'shipped')).toBeNull();
+      expect(() => changeTaskStatus(r, custom(2), 'BD-4', 'dev')).toThrow(/WIP limit/);
+      expect(() => changeTaskStatus(r, custom(2), 'BD-4', 'review')).not.toThrow();
+      expect(() => changeTaskStatus(r, custom(2), 'BD-4', 'shipped')).not.toThrow();
+    });
+
+    it('counts the declared terminal status when a release is completed', () => {
+      const result = completeRelease({
+        release: release(
+          task('BD-1', 'shipped', 100),
+          task('BD-2', 'review', 200),
+          task('BD-3', 'in-progress', 300),
+        ),
+        config: custom(),
+        epics: [],
+        backlog: backlog(),
+        targetRelease: null,
+      });
+      // Only the terminal one stays behind; an undeclared status is unfinished too.
+      expect(result.release.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
     });
   });
 

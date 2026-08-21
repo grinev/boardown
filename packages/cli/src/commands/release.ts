@@ -8,6 +8,7 @@ import {
   serializeRelease,
   sortTasksByOrder,
   startRelease,
+  type BoardConfig,
   type CompleteReleaseResult,
   type NewReleaseInput,
   type Release,
@@ -75,13 +76,13 @@ const releaseView = (release: Release, full: boolean) => {
   };
 };
 
-const renderRelease = (release: Release): string => {
+const renderRelease = (config: BoardConfig, release: Release): string => {
   const tasks = sortTasksByOrder(release.tasks);
   const lines = [
     `[${release.frontmatter.status}] ${releaseName(release)}  (${release.filename})  ${tasks.length}`,
   ];
   if (tasks.length === 0) lines.push('  no tasks');
-  else lines.push(...summaryLines(tasks));
+  else lines.push(...summaryLines(config, tasks));
   return lines.join('\n');
 };
 
@@ -95,7 +96,7 @@ async function releaseGet(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   const release = requireRelease(board, ref);
   return {
     data: { release: releaseView(release, isFull(args.flags)) },
-    human: renderRelease(release),
+    human: renderRelease(board.snapshot.config, release),
     ...problemsField(board.problems),
   };
 }
@@ -129,7 +130,7 @@ async function releaseCurrent(args: ParsedArgs, ctx: CommandContext): Promise<Co
       data: { releases: releases.map((r) => releaseView(r, full)) },
       human:
         releases.length > 0
-          ? releases.map(renderRelease).join('\n\n')
+          ? releases.map((r) => renderRelease(board.snapshot.config, r)).join('\n\n')
           : 'No active release.',
       ...problemsField(board.problems),
     };
@@ -147,7 +148,7 @@ async function releaseCurrent(args: ParsedArgs, ctx: CommandContext): Promise<Co
   }
   return {
     data: { release: releaseView(release, full) },
-    human: renderRelease(release),
+    human: renderRelease(board.snapshot.config, release),
     ...problemsField(board.problems),
   };
 }

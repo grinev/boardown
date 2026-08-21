@@ -1,4 +1,4 @@
-import type { Release } from '@boardown/core';
+import type { BoardConfig, Release } from '@boardown/core';
 import { finishedReleases, sortTasksByOrder } from '@boardown/core';
 import { loadBoardOrThrow, resolveBoardRoot } from '../persistence';
 import { isFull, summaryLines, summarizeTasks } from '../summary';
@@ -22,19 +22,20 @@ export const archiveCommand: CommandHandler = async (args, ctx) => {
         ...(full ? { tasks: summarizeTasks(sortTasksByOrder(release.tasks)) } : {}),
       })),
     },
-    human: render(snapshot.config.projectName, releases, full),
+    human: render(snapshot.config, releases, full),
     ...(problems.length > 0 ? { problems } : {}),
   };
 };
 
-function render(projectName: string, releases: readonly Release[], full: boolean): string {
+function render(config: BoardConfig, releases: readonly Release[], full: boolean): string {
+  const projectName = config.projectName;
   if (releases.length === 0) return `${projectName} — archive\n\nNo finished releases.`;
 
   const lines: string[] = [`${projectName} — archive`];
   for (const release of releases) {
     const name = release.frontmatter.name ?? release.slug;
     lines.push(`\n[finished] ${name}  (${release.tasks.length})`);
-    if (full) lines.push(...summaryLines(sortTasksByOrder(release.tasks)));
+    if (full) lines.push(...summaryLines(config, sortTasksByOrder(release.tasks)));
   }
   return lines.join('\n');
 }

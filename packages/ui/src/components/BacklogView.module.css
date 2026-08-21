@@ -328,19 +328,7 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  background: var(--status-bg);
+  color: var(--status-fg);
 }
 
-.statusTodo {
-  background: var(--status-todo-bg);
-  color: var(--status-todo-fg);
-}
-
-.statusInProgress {
-  background: var(--status-in-progress-bg);
-  color: var(--status-in-progress-fg);
-}
-
-.statusDone {
-  background: var(--status-done-bg);
-  color: var(--status-done-fg);
-}

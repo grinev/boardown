@@ -51,12 +51,36 @@
   --create-task: #38bdf8;
   --create-release: #c2410c;
 
+  /* Statuses are positional: the first column reads --status-todo-*, the last
+     --status-done-*, and every column between takes the next --status-mid-N-*
+     pair. Six of them, because eight statuses hold at most six middles. */
   --status-todo-bg: #ececec;
   --status-todo-fg: #424242;
-  --status-in-progress-bg: #e6f2fa;
-  --status-in-progress-fg: #0069cc;
+  --status-mid-1-bg: #e6f2fa;
+  --status-mid-1-fg: #0069cc;
+  --status-mid-2-bg: #f3ebfb;
+  --status-mid-2-fg: #6d28d9;
+  --status-mid-3-bg: #fdf0e3;
+  --status-mid-3-fg: #b45309;
+  --status-mid-4-bg: #e6f7f5;
+  --status-mid-4-fg: #0f766e;
+  --status-mid-5-bg: #fbeaf2;
+  --status-mid-5-fg: #a21456;
+  --status-mid-6-bg: #eef2da;
+  --status-mid-6-fg: #4d7c0f;
   --status-done-bg: #e7f3e8;
   --status-done-fg: #2f8132;
+  /* A status the board no longer declares: shown, never coloured as if it were
+     part of the palette. */
+  --status-unknown-bg: #f2f2f2;
+  --status-unknown-fg: #767676;
+
+  --release-future-bg: #ececec;
+  --release-future-fg: #424242;
+  --release-current-bg: #e6f2fa;
+  --release-current-fg: #0069cc;
+  --release-finished-bg: #e7f3e8;
+  --release-finished-fg: #2f8132;
 
   --banner-warn-bg: #fdf6e3;
   --banner-warn-border: #e8d9a0;
@@ -120,10 +144,29 @@
 
   --status-todo-bg: #2a2b2c;
   --status-todo-fg: #bfbfbf;
-  --status-in-progress-bg: #1e3a47;
-  --status-in-progress-fg: #6fb8dc;
+  --status-mid-1-bg: #1e3a47;
+  --status-mid-1-fg: #6fb8dc;
+  --status-mid-2-bg: #2e2545;
+  --status-mid-2-fg: #b39ddb;
+  --status-mid-3-bg: #3d2f1b;
+  --status-mid-3-fg: #d8a657;
+  --status-mid-4-bg: #16332f;
+  --status-mid-4-fg: #5fbfae;
+  --status-mid-5-bg: #3a1f2c;
+  --status-mid-5-fg: #dd8fb0;
+  --status-mid-6-bg: #2b3318;
+  --status-mid-6-fg: #a6c56a;
   --status-done-bg: #1b3326;
   --status-done-fg: #73c991;
+  --status-unknown-bg: #262728;
+  --status-unknown-fg: #909090;
+
+  --release-future-bg: #2a2b2c;
+  --release-future-fg: #bfbfbf;
+  --release-current-bg: #1e3a47;
+  --release-current-fg: #6fb8dc;
+  --release-finished-bg: #1b3326;
+  --release-finished-fg: #73c991;
 
   --banner-warn-bg: #352a05;
   --banner-warn-border: #5a4a17;

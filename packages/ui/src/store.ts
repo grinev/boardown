@@ -37,6 +37,7 @@ import {
   createTask as createTaskInContainer,
   docFilenameForTitle,
   docPagePath,
+  initialStatus,
   findDocFolder,
   findDocPage,
   isDocFolderEmpty,
@@ -1020,7 +1021,7 @@ export const useBoardStore = create<BoardState>(
         title: input.title,
         type: input.type,
         ...(input.priority !== undefined ? { priority: input.priority } : {}),
-        status: 'todo' as const,
+        status: initialStatus(snapshot.config),
         ...(input.description !== undefined ? { description: input.description } : {}),
       };
 

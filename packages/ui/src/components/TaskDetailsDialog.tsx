@@ -10,10 +10,9 @@ import {
 import {
   customFieldLabel,
   effectiveTaskPriority,
-  inProgressCount,
-  isWipLimitReached,
+  boardStatuses,
+  statusCount,
   TASK_PRIORITIES,
-  TASK_STATUSES,
   TASK_TYPES,
   wipLimitFor,
   type CustomField,
@@ -21,14 +20,13 @@ import {
   type Release,
   type Task,
   type TaskPriority,
-  type TaskStatus,
   type TaskType,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
 import { Checklist } from './Checklist';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
@@ -57,25 +55,7 @@ const NO_RELEASE_VALUE = '__none__';
 // Stable identity, so the selector doesn't return a fresh array every render.
 const EMPTY_FIELDS: CustomField[] = [];
 
-const STATUS_PILL_CLASS: Record<TaskStatus, string | undefined> = {
-  todo: styles.statusTodo,
-  'in-progress': styles.statusInProgress,
-  done: styles.statusDone,
-};
-
-const STATUS_DOT_CLASS: Record<TaskStatus, string | undefined> = {
-  todo: styles.statusDotTodo,
-  'in-progress': styles.statusDotInProgress,
-  done: styles.statusDotDone,
-};
-
 const STATUS_LOCKED_HINT = 'Status changes only in the current release.';
-
-const STATUS_OPTIONS: IconSelectOption[] = TASK_STATUSES.map((s) => ({
-  value: s,
-  label: formatStatusLabel(s),
-  icon: <span className={`${styles.statusDot} ${STATUS_DOT_CLASS[s] ?? ''}`} />,
-}));
 
 const TYPE_OPTIONS: IconSelectOption[] = TASK_TYPES.map((t) => {
   const meta = TASK_TYPE_META[t];
@@ -127,12 +107,6 @@ export function TaskDetailsDialog({
   // that would do it are shown unavailable rather than failing after the fact.
   // The limit is counted per release, so the status control asks the task's own
   // container and the release dropdown asks each destination in turn.
-  const wipFull =
-    release !== undefined && config !== undefined && isWipLimitReached(release, config);
-  const wipLimit =
-    release !== undefined && config !== undefined ? wipLimitFor(release, config) : null;
-  const wipCount = release === undefined ? 0 : inProgressCount(release);
-  const wipHint = wipLimit === null ? undefined : wipLimitHint(wipCount, wipLimit);
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
     // A finished release is archived: core refuses a task moved into one, so it is
@@ -141,22 +115,22 @@ export function TaskDetailsDialog({
       .filter((r) => r.frontmatter.status !== 'finished')
       .sort((a, b) => a.slug.localeCompare(b.slug));
     const items: IconSelectOption[] = sorted.map((r) => {
-      // Relocating an `in-progress` task into a full active release enters the
-      // column, so that destination is unavailable — unless the task is already
-      // there, where picking it changes nothing.
-      const blocked =
-        status === 'in-progress' &&
-        config !== undefined &&
-        r.filename !== release?.filename &&
-        isWipLimitReached(r, config);
-      if (!blocked) return { value: r.filename, label: r.frontmatter.name ?? r.slug };
-      const limit = config === undefined ? null : wipLimitFor(r, config);
-      const count = inProgressCount(r);
+      // Relocating a task that sits in a capped middle column into a full active
+      // release enters that column, so the destination is unavailable — unless the
+      // task is already there, where picking it changes nothing.
+      const limit =
+        config === undefined || r.filename === release?.filename
+          ? null
+          : wipLimitFor(r, config, status);
+      const count = statusCount(r, status);
+      if (limit === null || count < limit) {
+        return { value: r.filename, label: r.frontmatter.name ?? r.slug };
+      }
       return {
         value: r.filename,
         label: `${r.frontmatter.name ?? r.slug} (${count} / ${limit})`,
         disabled: true,
-        ...(limit === null ? {} : { title: wipLimitHint(count, limit) }),
+        title: wipLimitHint(count, limit, statusDisplayLabel(config, status)),
       };
     });
     // "—" removes the release: a task with an epic falls back to its epic file,
@@ -164,20 +138,30 @@ export function TaskDetailsDialog({
     return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
   }, [releases, config, status, release?.filename]);
 
+  // Every middle column carries the WIP limit on its own count, so an option is
+  // judged against the column it would enter, not against one named column.
   const statusOptions = useMemo<IconSelectOption[]>(
     () =>
-      STATUS_OPTIONS.map((option) => {
-        const blocked =
-          option.value === 'in-progress' && wipFull && status !== 'in-progress';
-        if (!blocked) return option;
+      boardStatuses(config).map(({ key }) => {
+        const option: IconSelectOption = {
+          value: key,
+          label: statusDisplayLabel(config, key),
+          icon: <span className={styles.statusDot} style={statusColorStyle(config, key)} />,
+        };
+        const limit =
+          release === undefined || config === undefined || key === status
+            ? null
+            : wipLimitFor(release, config, key);
+        const count = release === undefined ? 0 : statusCount(release, key);
+        if (limit === null || count < limit) return option;
         return {
           ...option,
-          label: `${option.label} (${wipCount} / ${wipLimit})`,
+          label: `${option.label} (${count} / ${limit})`,
           disabled: true,
-          title: wipHint,
+          title: wipLimitHint(count, limit, option.label),
         };
       }),
-    [wipFull, status, wipCount, wipLimit, wipHint],
+    [config, release, status],
   );
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
@@ -267,12 +251,13 @@ export function TaskDetailsDialog({
         <aside className={styles.sidebar}>
           {statusLocked ? (
             <span
-              className={`${styles.statusPill} ${STATUS_PILL_CLASS[status] ?? ''}`}
+              className={styles.statusPill}
+              style={statusColorStyle(config, status)}
               // An archived task explains none of its frozen fields, so it gets no
               // hint here either; the lock is the only one worth a reason.
               title={archived ? undefined : STATUS_LOCKED_HINT}
             >
-              {formatStatusLabel(status)}
+              {statusDisplayLabel(config, status)}
             </span>
           ) : (
             <IconSelect
@@ -281,11 +266,12 @@ export function TaskDetailsDialog({
               ariaLabel="Status"
               hideChevron
               hideTriggerIcon
-              triggerClassName={`${styles.statusPill} ${styles.statusPillTrigger} ${STATUS_PILL_CLASS[status] ?? ''}`}
+              triggerClassName={`${styles.statusPill} ${styles.statusPillTrigger}`}
+              triggerStyle={statusColorStyle(config, status)}
               onChange={(next) => {
                 // A refused option is disabled, so a rejection here is a race on a
                 // stale snapshot; the store has already reported it.
-                void updateTask(id, { status: next as TaskStatus }).catch(() => {});
+                void updateTask(id, { status: next }).catch(() => {});
               }}
             />
           )}

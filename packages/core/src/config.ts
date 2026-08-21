@@ -49,6 +49,13 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.multipleActiveReleases !== undefined) {
     ordered.multipleActiveReleases = config.multipleActiveReleases;
   }
+  if (config.statuses !== undefined) {
+    ordered.statuses = config.statuses.map((status) => {
+      const entry: Record<string, unknown> = { key: status.key };
+      if (status.label !== undefined) entry.label = status.label;
+      return entry;
+    });
+  }
   if (config.customFields !== undefined) {
     ordered.customFields = config.customFields.map((field) => {
       const entry: Record<string, unknown> = { key: field.key };

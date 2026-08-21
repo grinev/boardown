@@ -41,7 +41,7 @@ A single unit of work. Fields:
 | `description` | string    | Plain text body below the frontmatter.                          |
 | `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
 | `priority`    | string?   | One of `critical`, `high`, `medium`, `low`. **Optional**: an absent key means `medium`, so a task never has to carry one. Setting a priority — including setting it back to `medium` — writes the key and keeps it; nothing ever strips it. Existing boards are not backfilled. |
-| `status`      | string    | One of `todo`, `in-progress`, `done`.                           |
+| `status`      | string    | One of the board's statuses — `todo`, `in-progress`, `done` unless `config.yaml` declares its own. Stored as written: any non-empty string loads, so a task written under a status the board has since dropped is shown rather than repaired. See "Statuses" under Configuration. |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
 | `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
@@ -49,9 +49,10 @@ A single unit of work. Fields:
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
-Task statuses, types and priorities are currently a fixed set baked into the app:
-each type and each priority has an icon and a color used for the badge on the card
-and as a filter dimension. Priority is a **label, never a sort key** — the order of
+Task types and priorities are a fixed set baked into the app: each type and each
+priority has an icon and a color used for the badge on the card and as a filter
+dimension. Statuses are the exception — a board may declare its own (see
+"Statuses" under Configuration). Priority is a **label, never a sort key** — the order of
 work stays `order` and the position of the block in the file, and nothing sorts,
 groups or gates on priority.
 
@@ -280,8 +281,13 @@ projectName: My Board # required, human-readable name shown in the app header
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
 boardRelease: v0-8-0  # optional; slug of the active release the Board shows
 wipLimits:            # optional; absent means no limit anywhere
-  in-progress: 3      # at most 3 tasks in an active release's In Progress column
+  in-progress: 3      # at most 3 tasks in each middle column of an active release
 multipleActiveReleases: true  # optional; absent means one release at a time
+statuses:             # optional (beta); absent means todo / in-progress / done
+  - key: backlog
+    label: Not started  # optional; absent means the key, prettified
+  - key: dev
+  - key: shipped
 ```
 
 `projectName` is required (set during onboarding) and read-only from the app's
@@ -294,24 +300,62 @@ default (e.g. the dev web shell) leave it absent, in which case it defaults to
 theme no longer influences it. Epic colors are user-defined per epic (see Epic
 frontmatter above).
 
+### Statuses
+
+**Beta.** `statuses` declares the board's own status set, replacing
+`todo` / `in-progress` / `done`. It is all-or-nothing: absent keeps the three
+built-ins untouched, present replaces the whole set. Between 2 and 8 entries, each
+a `key` plus an optional `label`; keys follow the `customFields` rule — start with
+a letter, 1–40 letters, digits, `_` or `-` — and must be unique. An absent `label`
+falls back to the key, prettified the way `in-progress` reads as "In progress"
+today. Like `customFields`, it is edited in `config.yaml` only; there is no
+management UI.
+
+The meaning of a status is **positional**, with no flags and no reserved keys.
+The **first** is the initial one: the status a new task takes, and the only status
+a task may be *created* with outside an active release. (A task relocated out of one
+keeps whatever status it had — nothing is rewritten.) The **last** is the terminal one: a
+link to a task in it renders struck through, and completing a release counts
+everything that is not in it as unfinished. Everything between is a **middle**
+column, which is what the WIP limit caps.
+
+Colours are positional too: the first column keeps the grey the `todo` pill has
+today, the last the green of `done`, and the middles take a six-colour palette in
+order, starting with today's blue — six, because eight statuses hold at most six
+middles. Column headers on the Board stay uncoloured.
+
+A status is only *set* to a value the board declares — the task dialog offers
+nothing else, and the CLI answers `USAGE` naming the board's own list. A status
+already **on disk** is a different matter: nothing is repaired or rewritten, so
+editing the list under a live board leaves those tasks readable. On the Board they
+gather in a single read-only **Unknown** column at the end, shown only while such
+tasks exist in the release; it is not a drop target and nothing is reordered inside
+it, but a card can be dragged out of it into a real column, and the task dialog's
+status picker shows the raw key on its trigger while offering only declared
+options. Elsewhere — the Backlog, an epic, the Archive — such a task shows its raw
+status in a neutral pill, and the Backlog's status filter, which lists declared
+statuses only, simply does not match it.
+
 ### WIP limit
 
-`wipLimits` caps how many tasks may sit in an **active release's**
-`in-progress` column. The cap is counted per release, so two active releases with
-a limit of 3 allow three each. It is a map keyed by status so other columns can be capped
-later without a format change, but `in-progress` is the only key the schema
-accepts today — a `todo:` or `done:` entry makes the config invalid rather than
-being silently ignored, exactly as an unsupported `customFields` type does. The
-value is a positive integer; the key is absent by default, and absent means no
-limit anywhere.
+`wipLimits` caps how many tasks may sit in **each middle column** of an
+**active release**. The cap is counted per column and per release, so a board with
+two middle columns and a limit of 3 allows three in each, and two active releases
+allow three each again. It is a map keyed by status, but `in-progress` stays the
+only key the schema accepts whatever the board's statuses are called — the number
+under it is the board's one WIP limit — and a second entry makes the config invalid
+rather than being silently ignored, exactly as an unsupported `customFields` type
+does. The value is a positive integer; the key is absent by default, and absent
+means no limit anywhere. A board with only two statuses has no middle column, so
+the limit caps nothing.
 
 The limit is a ceiling on **entering** the column, never a rule applied
 retroactively. A board that is already over its limit — the number was lowered,
-a release holding `in-progress` tasks was started, or a file was hand-edited —
+a release holding tasks in a middle column was started, or a file was hand-edited —
 is valid: nothing is moved, nothing is rewritten, and the column header simply
 reads `4 / 3`. What is refused is every operation that would put one more task
-into the column: a status change to `in-progress`, and a relocation that carries
-an already-`in-progress` task into that release. Leaving the column,
+into a full column: a status change into it, and a relocation that carries a task
+already in that column into that release. Leaving the column,
 reordering inside it, and setting a task's status to the value it already has are
 always allowed.
 
@@ -321,11 +365,12 @@ finished release reports `ARCHIVED`, and one outside an active release reports
 `STATUS_LOCKED`, before the limit is ever consulted.
 
 On screen the rule is expressed by **prevention, not by complaint** — no toast,
-no banner. The Board's In Progress column header shows `count / limit` and takes a
-warning tone at or over it; while a drag that would breach the limit is running,
-the column (on the Board) and every full active release's section (on the Backlog)
-are dimmed and refuse the drop. In the task dialog the `In Progress` status option
-and each full active release's option in the Release dropdown are shown **disabled**,
+no banner. Each middle column header shows `count / limit` and takes a warning tone
+at or over it; while a drag that would breach the limit is running, every full
+column (on the Board) and every active release whose column for the dragged card's
+status is full (on the Backlog) are dimmed and refuse the drop. In the task dialog
+each full middle status option and each such release option in the Release dropdown
+are shown **disabled**,
 carrying the count and a tooltip naming the rule. The limit is edited in the
 Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
@@ -507,10 +552,12 @@ Drag and drop:
 
 ### Board
 
-A kanban with the three status columns (`todo`, `in-progress`, `done`), showing
+A kanban with one column per board status — `todo`, `in-progress`, `done` unless
+the board declares its own, plus a trailing read-only `Unknown` column while the
+release holds a task whose status is not declared — showing
 **one active release's tasks**. Drag & drop between columns updates the
 task's status; reordering within a column updates `order`. Each column header
-carries a count; when the board declares a WIP limit the In Progress header shows
+carries a count; when the board declares a WIP limit each middle column header shows
 `count / limit` instead and the column stops accepting drops once it is full (see
 "WIP limit" under Configuration).
 
@@ -638,8 +685,8 @@ letter does nothing: these lists have no type-ahead.
 **A status only changes in an active release.** Outside one — a **future**
 release, an epic file, the backlog — the status renders as the archived task's
 static pill, with a tooltip saying so, and nothing else about the task becomes
-read-only. Relocation carries the status along and never rewrites it to `todo`, so
-a task that was `in-progress` freezes as `in-progress` wherever it lands.
+read-only. Relocation carries the status along and never rewrites it to the initial
+one, so a task that was `in-progress` freezes as `in-progress` wherever it lands.
 
 **Every multi-line field is as tall as the text inside it.** It starts at its own
 minimum — four rows for a description, two for the "Add a note" composer — and
@@ -1058,13 +1105,19 @@ name rule the UI's field does: a name over the maximum is refused with
 `EPIC_INVALID` and nothing is written, as is an `epic edit --name ""`. A missing
 name on `epic add` stays the `USAGE` error it has always been — the argument is
 absent rather than wrong. `schema` reports the maximum as `epicNameMaxLength`,
-always, for the same reason it reports the rules below. Setting a status outside an active release fails with
-`STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
-sets it is judged by its destination. Putting one more task into a full In Progress
-column fails with `WIP_LIMIT` — whether by `task status`, `task edit --status`,
-`task add --status`, or a `task edit --release` that pulls an already-`in-progress`
-task into a full active release — and `schema` reports the board's `wipLimits` so an
-agent reads the ceiling instead of discovering it by failing. It also reports
+always, for the same reason it reports the rules below. A status the board does not
+declare is a `USAGE` error naming the board's own list, at every site that takes one
+— `task status`, `task add --status`, `task edit --status` and `task list --status`
+— and `schema` reports `taskStatuses` so an agent reads the vocabulary up front;
+`task add` without `--status` uses the board's initial status. Setting a status
+outside an active release fails with `STATUS_LOCKED`; a relocation that carries the
+status along succeeds, and one that sets it is judged by its destination. Putting one
+more task into a full middle column fails with `WIP_LIMIT` — whether by
+`task status`, `task edit --status`, `task add --status`, or a `task edit --release`
+that pulls a task already in that column into a full active release — and `schema`
+reports the board's `wipLimits` exactly as the config file holds it, plus
+`wipLimitedStatuses` naming the columns that number caps, so an agent reads the
+ceiling and its reach instead of discovering them by failing. It also reports
 `multipleActiveReleases` always, resolved to a boolean: absent from the config
 means the one-at-a-time rule is in force, so leaving it out would hide a rule an
 agent would then have to discover by being refused. `task rm <id>` deletes a task with the same rules
@@ -1115,8 +1168,8 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
 
 - **Richer task model** — labels with label filters, assignee, per-task
   last-updated date.
-- **Customization** — user-defined task statuses and task types instead of the
-  fixed sets baked in today.
+- **Customization** — user-defined task types instead of the fixed set baked in
+  today, alongside the user-defined statuses that already ship.
 - **Fuller release management** — editing a release's dates, reordering releases
   in the Backlog, and support for multiple simultaneously active releases (e.g. a
   large release in flight plus an urgent hotfix).

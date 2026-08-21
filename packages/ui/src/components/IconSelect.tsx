@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -40,6 +41,7 @@ interface IconSelectProps {
   ariaLabel?: string | undefined;
   disabled?: boolean | undefined;
   triggerClassName?: string | undefined;
+  triggerStyle?: CSSProperties | undefined;
   listboxClassName?: string | undefined;
   hideChevron?: boolean | undefined;
   hideTriggerIcon?: boolean | undefined;
@@ -57,6 +59,7 @@ export function IconSelect({
   ariaLabel,
   disabled = false,
   triggerClassName,
+  triggerStyle,
   listboxClassName,
   hideChevron = false,
   hideTriggerIcon = false,
@@ -76,6 +79,9 @@ export function IconSelect({
   const optionIdPrefix = useId();
 
   const selectedOption = options.find((o) => o.value === value);
+  // A value the board no longer offers still has to read on the trigger — showing
+  // the raw key is what keeps the file's own word visible instead of a blank.
+  const triggerLabel = selectedOption?.label ?? value;
   // The listbox is only in the DOM once it has been measured, and that second
   // render is what anything reaching for it has to wait on.
   const listMounted = open && position !== null;
@@ -260,12 +266,13 @@ export function IconSelect({
         ref={triggerRef}
         type="button"
         className={triggerClassName ?? styles.trigger}
+        style={triggerStyle}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         // Without the value the accessible name is just the field name, so the
         // current selection is invisible to screen readers and to Playwright.
-        aria-label={selectedOption ? `${ariaLabel}: ${selectedOption.label}` : ariaLabel}
+        aria-label={ariaLabel === undefined ? undefined : `${ariaLabel}: ${triggerLabel}`}
         disabled={disabled}
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={handleTriggerKeyDown}
@@ -276,7 +283,7 @@ export function IconSelect({
               {selectedOption.icon}
             </span>
           )}
-          <span className={styles.label}>{selectedOption?.label ?? ''}</span>
+          <span className={styles.label}>{triggerLabel}</span>
         </span>
         {!hideChevron && (
           <ChevronDown size={16} className={styles.chevron} aria-hidden="true" />

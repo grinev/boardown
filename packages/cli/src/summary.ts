@@ -1,5 +1,5 @@
-import type { Task } from '@boardown/core';
-import { effectiveTaskPriority } from '@boardown/core';
+import type { StatusConfig, Task } from '@boardown/core';
+import { boardStatuses, effectiveTaskPriority, statusIndex } from '@boardown/core';
 import { flagBool, type ParsedArgs } from './args';
 
 /**
@@ -20,15 +20,14 @@ export interface TaskSummary {
   notes?: number;
 }
 
-export const statusMark = (task: Task): string => {
-  switch (task.frontmatter.status) {
-    case 'todo':
-      return '○';
-    case 'in-progress':
-      return '◐';
-    case 'done':
-      return '●';
-  }
+// Positional, like the columns themselves: the initial status is empty, the
+// terminal one full, everything else — including a status the board no longer
+// declares — half.
+export const statusMark = (config: StatusConfig, task: Task): string => {
+  const index = statusIndex(config, task.frontmatter.status);
+  if (index === 0) return '○';
+  if (index === boardStatuses(config).length - 1) return '●';
+  return '◐';
 };
 
 export function taskSummary(task: Task): TaskSummary {
@@ -56,10 +55,10 @@ export const summarizeTasks = (tasks: readonly Task[]): TaskSummary[] =>
   tasks.map(taskSummary);
 
 /** One task as a line of a list: the shared human counterpart of `taskSummary`. */
-export function summaryLine(task: Task, indent = '  '): string {
+export function summaryLine(config: StatusConfig, task: Task, indent = '  '): string {
   const s = taskSummary(task);
   const parts = [
-    `${indent}${statusMark(task)} ${s.id}`,
+    `${indent}${statusMark(config, task)} ${s.id}`,
     s.title,
     `[${s.type}/${s.priority}/${s.status}]`,
   ];
@@ -69,8 +68,11 @@ export function summaryLine(task: Task, indent = '  '): string {
   return parts.join('  ');
 }
 
-export const summaryLines = (tasks: readonly Task[], indent = '  '): string[] =>
-  tasks.map((task) => summaryLine(task, indent));
+export const summaryLines = (
+  config: StatusConfig,
+  tasks: readonly Task[],
+  indent = '  ',
+): string[] => tasks.map((task) => summaryLine(config, task, indent));
 
 /** Shared by every listing command: `--full` means "one level deeper". */
 export const isFull = (flags: ParsedArgs['flags']): boolean => flagBool(flags, 'full');

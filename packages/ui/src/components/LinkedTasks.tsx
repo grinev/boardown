@@ -14,11 +14,10 @@ import {
   sortTasksByOrder,
   type LinkType,
   type Task,
-  type TaskStatus,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import {
   LINK_TYPES_IN_GROUP_ORDER,
   collectLinkedTasks,
@@ -42,14 +41,9 @@ const RELATION_OPTIONS: IconSelectOption[] = LINK_TYPES_IN_GROUP_ORDER.map((type
   label: LINK_TYPE_META[type].label,
 }));
 
-const STATUS_PILL_CLASS: Record<TaskStatus, string | undefined> = {
-  todo: styles.statusTodo,
-  'in-progress': styles.statusInProgress,
-  done: styles.statusDone,
-};
-
 export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
+  const config = snapshot?.config;
   const addTaskLink = useBoardStore((s) => s.addTaskLink);
   const removeTaskLink = useBoardStore((s) => s.removeTaskLink);
   const [query, setQuery] = useState('');
@@ -263,9 +257,10 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
                       {linked.title}
                     </button>
                     <span
-                      className={`${styles.statusPill} ${STATUS_PILL_CLASS[linked.frontmatter.status] ?? ''}`}
+                      className={styles.statusPill}
+                      style={statusColorStyle(config, linked.frontmatter.status)}
                     >
-                      {formatStatusLabel(linked.frontmatter.status)}
+                      {statusDisplayLabel(config, linked.frontmatter.status)}
                     </span>
                     {frozen ? (
                       <span className={styles.removeSpacer} />

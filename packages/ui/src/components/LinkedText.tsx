@@ -1,6 +1,6 @@
 import { FileCode2, FileText } from 'lucide-react';
 import { Fragment, type KeyboardEvent } from 'react';
-import { docPageTitle, resolveDocRef } from '@boardown/core';
+import { docPageTitle, isTerminalStatus, resolveDocRef } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
 import { splitRefs } from '../utils/refs';
@@ -79,7 +79,7 @@ export function LinkedText({ text }: LinkedTextProps) {
         if (!target) {
           return <Fragment key={i}>{segment.id}</Fragment>;
         }
-        const done = target.frontmatter.status === 'done';
+        const done = isTerminalStatus(snapshot?.config, target.frontmatter.status);
         return (
           <button
             key={i}

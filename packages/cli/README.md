@@ -41,7 +41,7 @@ boardown task get <id>          Show one task in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
 boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
-boardown task status <id> <s>   Change a task status (todo | in-progress | done).
+boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
 boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
@@ -96,6 +96,39 @@ substring match on a task's title and description. It searches nothing else —
 not notes, checklist items or custom field values, and not the **id**, since
 every id carries the board's prefix and `--text bd` would return the whole
 board; `task get <id>` is how you reach a task by id.
+
+### Custom statuses (beta)
+
+> **Beta.** Statuses are declared by hand in `.boardown/config.yaml`; the storage
+> format may still change before 1.0.
+
+A board can replace `todo` / `in-progress` / `done` with its own list:
+
+```yaml
+statuses:
+  - key: backlog
+    label: Not started   # optional; the key is shown when absent
+  - key: dev
+  - key: review
+  - key: shipped
+```
+
+Absent keeps the built-in three; present replaces the whole set (2–8 entries,
+unique keys, same key rule as a custom field). The order carries the meaning: the
+**first** status is what `task add` uses without `--status` and the only one
+`task add` may set outside an active release, the **last** is the terminal one that
+`release done` counts as finished, and each column **between** is capped by the
+board's single `wipLimits` number.
+
+Every site that takes a status — `task status`, `task add --status`,
+`task edit --status`, `task list --status` — refuses one the board does not declare
+with a `USAGE` error naming the board's own list. A status already on disk is left
+alone: a task written under a list you have since changed still loads and still
+reports its own value.
+
+```bash
+boardown schema --json   # taskStatuses, plus wipLimitedStatuses when a limit is set
+```
 
 ### Custom fields (beta)
 
@@ -169,8 +202,8 @@ emits a stable envelope:
 Parse problems from a malformed file ride alongside either shape as `problems`.
 
 Exit codes: `0` success, `1` operation failed, `2` usage error. Run
-`boardown schema --json` for the full contract (valid task types, statuses, and
-command grammar) — agents can read it instead of guessing.
+`boardown schema --json` for the full contract (valid task types, the board's
+statuses, and command grammar) — agents can read it instead of guessing.
 
 ## Develop (from the monorepo)
 

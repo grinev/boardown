@@ -1,17 +1,12 @@
 import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react';
-import type { Epic, Task, TaskStatus } from '@boardown/core';
+import type { Epic, Task } from '@boardown/core';
 import { effectiveTaskPriority } from '@boardown/core';
+import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
-import { formatStatusLabel } from '../utils/format-status';
+import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import styles from './BacklogView.module.css';
-
-const STATUS_CLASS: Record<TaskStatus, string> = {
-  todo: styles.statusTodo!,
-  'in-progress': styles.statusInProgress!,
-  done: styles.statusDone!,
-};
 
 export interface BacklogRowViewProps extends HTMLAttributes<HTMLLIElement> {
   task: Task;
@@ -22,6 +17,7 @@ export interface BacklogRowViewProps extends HTMLAttributes<HTMLLIElement> {
 
 export const BacklogRowView = forwardRef<HTMLLIElement, BacklogRowViewProps>(
   ({ task, epic, onOpenTask, onOpenEpic, className, ...rest }, ref) => {
+    const config = useBoardStore((s) => s.snapshot?.config);
     const { id, type, status } = task.frontmatter;
     const typeMeta = TASK_TYPE_META[type];
     const TypeIcon = typeMeta.icon;
@@ -73,8 +69,8 @@ export const BacklogRowView = forwardRef<HTMLLIElement, BacklogRowViewProps>(
             </button>
           )}
         </span>
-        <span className={`${styles.statusPill} ${STATUS_CLASS[status]}`}>
-          {formatStatusLabel(status)}
+        <span className={styles.statusPill} style={statusColorStyle(config, status)}>
+          {statusDisplayLabel(config, status)}
         </span>
         <PriorityIcon
           className={styles.priorityIcon}

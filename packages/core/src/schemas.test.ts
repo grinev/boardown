@@ -47,11 +47,23 @@ describe('TaskFrontmatterSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects an unknown status', () => {
+  // A board can rename its statuses, so a task written under an older list still
+  // loads; the board shows it in its Unknown column rather than dropping it.
+  it('takes a status the board does not declare', () => {
     const result = TaskFrontmatterSchema.safeParse({
       id: 'BD-1',
       type: 'feature',
       status: 'wip',
+      order: 100,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty status', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: '',
       order: 100,
     });
     expect(result.success).toBe(false);
@@ -357,7 +369,7 @@ describe('BoardConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects legacy statuses field (strict mode)', () => {
+  it('rejects a statuses list of bare strings', () => {
     const result = BoardConfigSchema.safeParse({
       idPrefix: 'BD',
       nextId: 0,
