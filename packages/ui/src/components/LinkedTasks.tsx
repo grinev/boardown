@@ -1,5 +1,13 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import {
   DEFAULT_LINK_TYPE,
   LINK_TYPE_META,
@@ -47,6 +55,16 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [relation, setRelation] = useState<LinkType>(DEFAULT_LINK_TYPE);
+  // Nothing is lit until an arrow key says so: with no highlight Enter still means
+  // the first match, which is what the search row has always done.
+  const [highlighted, setHighlighted] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const returnFocusRef = useRef(false);
+  const listId = useId();
+  const optionIdPrefix = useId();
 
   const id = task.frontmatter.id;
   const rows = useMemo(
@@ -84,24 +102,109 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
       .slice(0, MAX_SUGGESTIONS);
   }, [snapshot, query, rows, relation, id]);
 
+  const listShowing = query.trim() !== '' && !dismissed;
+  // A highlight left pointing past the end of a shorter list reads as nothing.
+  const activeIndex =
+    highlighted !== null && highlighted < suggestions.length ? highlighted : null;
+
+  // The user re-filtering is what clears the highlight and brings a dismissed list
+  // back — not the suggestions changing, which a reload or an external edit does
+  // too without the user having typed anything.
+  useEffect(() => {
+    setHighlighted(null);
+    setDismissed(false);
+  }, [query, relation]);
+
+  // Both paths out of the search row unmount it, so the focus lands on the button
+  // that opened it a render later rather than from inside the handler.
+  useEffect(() => {
+    if (searching || !returnFocusRef.current) return;
+    returnFocusRef.current = false;
+    addButtonRef.current?.focus();
+  }, [searching]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    const option = activeIndex === null ? null : list?.children[activeIndex];
+    if (!list || !(option instanceof HTMLElement)) return;
+    const bottom = option.offsetTop + option.offsetHeight;
+    if (option.offsetTop < list.scrollTop) {
+      list.scrollTop = option.offsetTop;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
+  }, [activeIndex]);
+
   const select = (otherId: string) => {
+    returnFocusRef.current = true;
     setQuery('');
     setSearching(false);
     void addTaskLink(id, otherId, relation);
   };
 
+  // Escape backs out one stage: the list first, then the search row, and only then
+  // the dialog. It has to be caught twice over, because neither catch is enough on
+  // its own. The keydown is what a browser that treats Escape as an ordinary
+  // default action listens to; the dialog's `cancel` is where a browser that runs
+  // its own close request raises it, and there the second Escape in a row can
+  // arrive uncancellable, so the keydown has to have stopped it already. The ref
+  // keeps one keystroke from spending two stages when both fire.
+  const escapeHandledRef = useRef(false);
+
+  const backOutOneStage = () => {
+    if (listShowing) {
+      setDismissed(true);
+      return;
+    }
+    returnFocusRef.current = true;
+    setQuery('');
+    setSearching(false);
+  };
+
+  useEffect(() => {
+    if (!searching) return;
+    const handler = (event: Event) => {
+      // An Escape aimed at the relation picker's own listbox is that popup's: its
+      // handler runs alongside this one, so this one has to decline outright.
+      if (document.activeElement !== inputRef.current) return;
+      event.preventDefault();
+      if (escapeHandledRef.current) {
+        escapeHandledRef.current = false;
+        return;
+      }
+      backOutOneStage();
+    };
+    window.addEventListener('cancel', handler, true);
+    return () => window.removeEventListener('cancel', handler, true);
+    // backOutOneStage is rebuilt every render and closes over the state below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searching, listShowing]);
+
   const onQueryKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      // Escape backs out of the search; preventDefault keeps it from reaching the
-      // native <dialog>, which would close the whole task dialog (same rule as
-      // InlineEditText's cancel).
       e.preventDefault();
-      setQuery('');
-      setSearching(false);
+      escapeHandledRef.current = true;
+      backOutOneStage();
+      return;
+    }
+    escapeHandledRef.current = false;
+    if (e.key === 'Tab') {
+      // No preventDefault: the list goes and focus moves on, nothing is linked.
+      setDismissed(true);
+      return;
+    }
+    if (!listShowing || suggestions.length === 0) return;
+    const last = suggestions.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlighted(activeIndex === null ? 0 : (activeIndex + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlighted(activeIndex === null ? last : (activeIndex - 1 + suggestions.length) % suggestions.length);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const first = suggestions[0];
-      if (first) select(first.frontmatter.id);
+      const picked = suggestions[activeIndex ?? 0];
+      if (picked) select(picked.frontmatter.id);
     }
   };
 
@@ -112,6 +215,7 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
         {rows.length > 0 && <span className={styles.count}>{rows.length}</span>}
         {!readOnly && (
           <button
+            ref={addButtonRef}
             type="button"
             className={styles.addButton}
             aria-label="Link a task"
@@ -197,32 +301,56 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
             triggerClassName={styles.searchRelation}
           />
           <input
+            ref={inputRef}
             type="text"
             className={styles.searchInput}
             value={query}
             placeholder="Search by title or id…"
             aria-label="Search tasks to link"
+            role="combobox"
+            aria-expanded={listShowing}
+            aria-controls={listShowing ? listId : undefined}
+            aria-activedescendant={
+              activeIndex === null ? undefined : `${optionIdPrefix}-${activeIndex}`
+            }
+            aria-autocomplete="list"
+            autoComplete="off"
             autoFocus
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onQueryKeyDown}
           />
-          {query.trim() !== '' && (
-            <ul className={styles.suggestions} role="listbox" aria-label="Matching tasks">
+          {listShowing && (
+            <ul
+              ref={listRef}
+              id={listId}
+              className={styles.suggestions}
+              role="listbox"
+              aria-label="Matching tasks"
+            >
               {suggestions.length === 0 ? (
                 <li className={styles.suggestionEmpty}>No matching tasks</li>
               ) : (
-                suggestions.map((t) => (
-                  <li key={t.frontmatter.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected="false"
-                      className={styles.suggestion}
-                      onClick={() => select(t.frontmatter.id)}
-                    >
-                      <span className={styles.taskId}>{t.frontmatter.id}</span>
-                      <span className={styles.suggestionTitle}>{t.title}</span>
-                    </button>
+                suggestions.map((t, index) => (
+                  <li
+                    key={t.frontmatter.id}
+                    id={`${optionIdPrefix}-${index}`}
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    className={
+                      `${styles.suggestion}` +
+                      (index === activeIndex ? ` ${styles.suggestionHighlighted}` : '')
+                    }
+                    onMouseEnter={() => setHighlighted(index)}
+                    onMouseDown={(e) => {
+                      // Keeps the click from blurring the field before it links,
+                      // and only a primary click links: writing to two task files
+                      // is not what a right-click asked for.
+                      e.preventDefault();
+                      if (e.button === 0) select(t.frontmatter.id);
+                    }}
+                  >
+                    <span className={styles.taskId}>{t.frontmatter.id}</span>
+                    <span className={styles.suggestionTitle}>{t.title}</span>
                   </li>
                 ))
               )}

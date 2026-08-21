@@ -610,7 +610,8 @@ focused with the cursor; changes save on blur or Enter (Cmd/Ctrl+Enter for
 the multiline description) and revert on Escape. **Title** and
 **description** are inline-editable as text fields; **status**, **type**,
 **priority**, **epic**, and **release** are inline-editable via a dropdown that
-opens on click and commits on selection (Escape / outside-click cancels). The
+opens on click — or, from the keyboard, on Enter, Space or an arrow key — and
+commits on selection (Escape / outside-click cancels). The
 **Priority** row sits directly after **Type**; picking the level the file already
 carries writes nothing, but picking `Medium` on a task that has no `priority` key
 does write one, since that is an explicit set rather than a repeat. The
@@ -620,6 +621,19 @@ moves the task between containers (release-to-release, release-to-epic
 when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to. A **finished** release is never
 offered as a destination — the same exclusion the creation dialog applies.
+
+**Every one of these pickers is fully keyboard-driven**, and they all behave the
+same — the five in the task dialog, the three in the create-task dialog, the four
+in the backlog's filter bar and the relation selector of the add-link row. Enter,
+Space or an arrow key on the closed control opens it with the **current value
+highlighted**; ↑ and ↓ move the highlight by one option and wrap at either end,
+scrolling it into view in a list too long to show at once; Home and End jump to
+the first and last; an option the board refuses is stepped over and cannot be
+picked. Enter commits the highlighted option and Escape closes the list without
+committing — leaving the dialog around it open — and both put focus back on the
+control. Tab closes the list without committing and moves focus on. Hovering an
+option moves the same highlight, so Enter always takes what is lit. Typing a
+letter does nothing: these lists have no type-ahead.
 
 **A status only changes in an active release.** Outside one — a **future**
 release, an epic file, the backlog — the status renders as the archived task's
@@ -774,6 +788,21 @@ the selected relation, read from this task's side. Hovering a row reveals a tras
 button that breaks that one relation, leaving any other relation the pair carries.
 An existing link's relation is not editable in place — as in Jira, the way to change
 one is to break the link and make it again.
+
+The add row is driven from the keyboard as well as the mouse. The match list opens
+with **nothing highlighted**: the first ↓ lights the first row and the first ↑ the
+last, from there the arrows wrap through the ends, and Enter links the row that is
+lit — with nothing lit, the first match. Hovering a row lights the same highlight
+the arrows move, so Enter always takes the row on screen. Any re-filter — a
+keystroke or a change of relation — puts the highlight back to nothing. Tab
+dismisses the list and moves focus on without linking anything. **Escape, with the caret in the search field, reads the
+screen**: with a list showing it dismisses the list and keeps what was typed, with
+no list showing it leaves the add row and clears it, and only with no add row does
+it close the task dialog. Anywhere else — including the relation selector's own
+list — Escape belongs to whatever holds the caret, and with the add row open but
+unfocused it closes the dialog; a dismissed list comes back on the next keystroke.
+Picking a row, or leaving the add row by Escape, puts focus back on the `+` button
+that opened it. "No matching tasks" is not a row that can be picked.
 
 There are **seven relations**: `relates`, which is symmetric and is its own
 inverse, plus three directed pairs — `blocks` / "is blocked by", `duplicates` /

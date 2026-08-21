@@ -1,5 +1,12 @@
 import { X } from 'lucide-react';
-import { useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react';
 import {
   customFieldLabel,
   effectiveTaskPriority,
@@ -423,9 +430,24 @@ function EpicEditor({
   onNavigate,
 }: EpicEditorProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const viewRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
 
   const enterEdit = () => setMode('edit');
-  const exitEdit = () => setMode('view');
+  // The picker's own trigger is exactly what the badge takes the place of, so the
+  // focus it hands back on Escape or on a selection dies with the swap and has to
+  // land on the badge instead. A Tab or an outside click hands nothing back: the
+  // user aimed focus elsewhere and it stays there.
+  const exitEdit = (returnedFocus: boolean) => {
+    restoreFocusRef.current = returnedFocus;
+    setMode('view');
+  };
+
+  useEffect(() => {
+    if (mode !== 'view' || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    viewRef.current?.focus();
+  }, [mode]);
 
   // The release can finish under an open dropdown (an external edit plus Reload),
   // so read-only has to win over the mode this component is already in.
@@ -490,6 +512,7 @@ function EpicEditor({
 
   return (
     <div
+      ref={viewRef}
       role="button"
       tabIndex={0}
       aria-label="Edit epic"
