@@ -44,7 +44,10 @@ interface IconSelectProps {
   hideChevron?: boolean | undefined;
   hideTriggerIcon?: boolean | undefined;
   autoOpen?: boolean | undefined;
-  onClose?: (() => void) | undefined;
+  // `returnedFocus` says whether the picker put focus back on its own trigger.
+  // A caller that replaces the trigger with something else needs to know, because
+  // that focus dies with the swap.
+  onClose?: ((returnedFocus: boolean) => void) | undefined;
 }
 
 export function IconSelect({
@@ -73,10 +76,13 @@ export function IconSelect({
   const optionIdPrefix = useId();
 
   const selectedOption = options.find((o) => o.value === value);
+  // The listbox is only in the DOM once it has been measured, and that second
+  // render is what anything reaching for it has to wait on.
+  const listMounted = open && position !== null;
 
   const closeWithCallback = () => {
     setOpen(false);
-    onClose?.();
+    onClose?.(false);
   };
 
   useEffect(() => {
@@ -121,18 +127,39 @@ export function IconSelect({
     };
   }, [open]);
 
+  // Keyed on the list being mounted rather than on `open`: on the render that
+  // opens the picker the listbox does not exist yet, so a focus call there lands
+  // on nothing and the keyboard is left on the trigger, where the arrows do
+  // nothing but re-open an already-open list.
   useEffect(() => {
-    if (open) {
-      const idx = options.findIndex((o) => o.value === value);
-      setHighlightedIndex(idx === -1 ? 0 : idx);
-      listboxRef.current?.focus();
+    if (!listMounted) return;
+    const idx = options.findIndex((o) => o.value === value);
+    setHighlightedIndex(idx === -1 ? 0 : idx);
+    listboxRef.current?.focus();
+  }, [listMounted, options, value]);
+
+  // The list is capped in height and scrolls, so a highlight moved past its window
+  // has to be brought back into it or the arrows look dead. Scrolled by hand
+  // rather than with scrollIntoView, which would also scroll whatever the popup
+  // is floating over. Keyed on whether the list is up rather than on `position`,
+  // which is re-measured on every scroll — reacting to that would drag the list
+  // back under the user's own wheel.
+  useEffect(() => {
+    const list = listboxRef.current;
+    const option = list?.children[highlightedIndex];
+    if (!list || !(option instanceof HTMLElement)) return;
+    const bottom = option.offsetTop + option.offsetHeight;
+    if (option.offsetTop < list.scrollTop) {
+      list.scrollTop = option.offsetTop;
+    } else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
     }
-  }, [open, options, value]);
+  }, [listMounted, highlightedIndex]);
 
   const closeAndFocusTrigger = () => {
     setOpen(false);
     triggerRef.current?.focus();
-    onClose?.();
+    onClose?.(true);
   };
 
   // Escape inside a native <dialog> is a close request the browser handles itself:
@@ -223,7 +250,7 @@ export function IconSelect({
     }
     if (event.key === 'Tab') {
       setOpen(false);
-      onClose?.();
+      onClose?.(false);
     }
   };
 

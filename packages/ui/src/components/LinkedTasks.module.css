@@ -264,10 +264,14 @@
   cursor: pointer;
 }
 
-.suggestion:hover,
-.suggestion:focus-visible {
-  background: var(--surface-muted);
-  outline: none;
+.suggestionHighlighted {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+/* The id carries its own colour, which would leave a highlighted row two-tone. */
+.suggestionHighlighted .taskId {
+  color: inherit;
 }
 
 .suggestionTitle {
