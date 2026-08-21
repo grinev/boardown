@@ -18,6 +18,29 @@
   min-width: 0;
 }
 
+/* The slot the name is read and written in, the same one the epic dialog uses: it
+   hugs its content in both states and never drops below the height of the Save /
+   Cancel pair, so opening the editor leaves the header exactly as tall as it was —
+   including on a finished release, which only ever shows the heading. */
+.nameSlot {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  min-width: 0;
+}
+
+/* The width the epic header derived from its 28-character name limit. A release
+   name has no limit to derive one from; it opens at the epic's so the two dialogs
+   read the same, and a longer name scrolls inside the field. */
+.nameSlot input.nameText {
+  width: 360px;
+}
+
+/* The view box would otherwise take 100% of a slot that is being sized by it. */
+.nameSlot > .nameText {
+  width: auto;
+}
+
 .nameText {
   margin: 0;
   min-width: 0;

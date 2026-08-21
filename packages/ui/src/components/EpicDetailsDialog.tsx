@@ -71,6 +71,7 @@ export function EpicDetailsDialog({
               className={styles.nameText}
               maxLength={EPIC_NAME_MAX_LENGTH}
               validate={validateName}
+              actionsBesideField
               onSave={(next) => updateEpic(epic.slug, { name: next })}
             />
           </div>

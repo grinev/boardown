@@ -16,10 +16,14 @@
   min-width: 0;
 }
 
-/* The slot the name is read and written in. It hugs the name while the dialog is
-   just showing it, and opens to a fixed width while it is being edited — the
-   editor fills its container, so this is what sizes the field. */
+/* The slot the name is read and written in. It hugs its content in both states —
+   the name while the dialog is just showing it, the field and its Save / Cancel
+   pair while it is being edited — and never drops below the height of those
+   buttons, so opening the editor leaves the header exactly as tall as it was. */
 .nameSlot {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
   min-width: 0;
 }
 
@@ -28,7 +32,7 @@
    weight 600 (measured in the browser when the 28 was derived), so 28 of them at
    this header's 18px are ~338px, plus the field's 12px padding and 2px border.
    Never sized from what is typed — the slot only holds an input while editing. */
-.nameSlot:has(input) {
+.nameSlot input.nameText {
   width: 360px;
 }
 
