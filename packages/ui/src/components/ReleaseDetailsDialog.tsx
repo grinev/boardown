@@ -75,19 +75,22 @@ export function ReleaseDetailsDialog({
     <Modal open onClose={onClose} ariaLabel={`Release ${title}`}>
       <header className={styles.header}>
         <div className={styles.headerName}>
-          {readOnly ? (
-            <h2 className={styles.nameText}>{title}</h2>
-          ) : (
-            <InlineEditText
-              value={title}
-              required
-              ariaLabel="Release name"
-              className={styles.nameText}
-              validate={validateName}
-              error={saveError}
-              onSave={(next) => save({ name: next })}
-            />
-          )}
+          <div className={styles.nameSlot}>
+            {readOnly ? (
+              <h2 className={styles.nameText}>{title}</h2>
+            ) : (
+              <InlineEditText
+                value={title}
+                required
+                ariaLabel="Release name"
+                className={styles.nameText}
+                validate={validateName}
+                error={saveError}
+                actionsBesideField
+                onSave={(next) => save({ name: next })}
+              />
+            )}
+          </div>
           <DialogBackButton />
         </div>
         <div className={styles.headerActions}>

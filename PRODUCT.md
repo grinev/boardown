@@ -924,8 +924,8 @@ dialogs and are written to the release file's frontmatter; clearing the
 description removes the key. Editing the name also **moves the file** to the slug
 that name derives (see "Release" above) — silently, with no confirmation step. A
 save the rename makes impossible — the slug is taken, or the name has nothing
-usable in a filename — is refused with a message at the top of the dialog body,
-and nothing is written.
+usable in a filename — is refused with a message under the name field in the
+header, and nothing is written.
 
 Status is not editable here: it is owned by the Start / Complete release actions.
 A **finished** release opens the same dialog read-only — an archived file is

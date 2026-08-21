@@ -80,6 +80,29 @@
   border-color: var(--accent);
 }
 
+/* The Save / Cancel pair beside the field instead of under it. `flex-start` is
+   what keeps the pair attached to the field: the row would otherwise stretch to
+   the wrapper whenever the message below it is wider, and `.actions`' auto margin
+   would carry the buttons off to the far end. The field shrinks under pressure,
+   the buttons never do, so a narrow header narrows the field instead of breaking
+   the row. */
+.fieldRow {
+  display: flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The use site sizes the field here; filling the row would leave no room for the
+   buttons it now shares that row with. */
+.fieldRow > .input {
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 /* The buttons keep their place at the right; the message fills the room they
    already left, so it costs the dialog no height. */
 .footer {

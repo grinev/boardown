@@ -38,6 +38,11 @@ interface InlineEditTextProps {
   // single-line fields (title, checklist item) render no links, so a reference
   // typed there would be dead text.
   docRefs?: boolean;
+  // Put the Save / Cancel pair on the field's own row instead of a row below it.
+  // Opt-in: it only pays off where the second row would cost the layout height,
+  // which is the two dialog headers — everywhere else the field is multi-line or
+  // sits in a dialog body with room to spare.
+  actionsBesideField?: boolean;
 }
 
 const cx = (...parts: Array<string | false | undefined>): string =>
@@ -57,6 +62,7 @@ export function InlineEditText({
   maxLength,
   error = null,
   docRefs = false,
+  actionsBesideField = false,
 }: InlineEditTextProps) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [draft, setDraft] = useState(value);
@@ -231,12 +237,44 @@ export function InlineEditText({
     e.preventDefault();
   };
 
-  // Sits on the same row as the Save/Cancel buttons, in the space they leave, so
-  // showing it never moves anything around it.
+  // In the default layout it sits on the same row as the Save/Cancel buttons, in
+  // the space they leave, so showing it never moves anything around it. Beside the
+  // field the buttons take that room, and the message gets a row of its own.
   const message = validate?.(draft.trim()) ?? (staleError ? null : error);
 
-  return (
-    <div className={styles.editWrapper} ref={wrapperRef}>
+  const messageNode = message !== null && (
+    <p className={styles.error} role="alert">
+      {message}
+    </p>
+  );
+
+  const actions = (
+    <div className={styles.actions}>
+      <button
+        type="button"
+        className={styles.actionButton}
+        aria-label="Save"
+        onMouseDown={preventBlurSteal}
+        onClick={() => {
+          void commit();
+        }}
+      >
+        <Check size={14} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className={styles.actionButton}
+        aria-label="Cancel"
+        onMouseDown={preventBlurSteal}
+        onClick={cancel}
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+    </div>
+  );
+
+  const field = (
+    <>
       {multiline ? (
         <textarea
           ref={setField}
@@ -270,35 +308,29 @@ export function InlineEditText({
           maxLength={maxLength}
         />
       )}
+    </>
+  );
+
+  if (actionsBesideField) {
+    return (
+      <div className={styles.editWrapper} ref={wrapperRef}>
+        <div className={styles.fieldRow}>
+          {field}
+          {actions}
+        </div>
+        {suggesting && <DocRefSuggestions suggestions={suggestions} />}
+        {messageNode}
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.editWrapper} ref={wrapperRef}>
+      {field}
       {suggesting && <DocRefSuggestions suggestions={suggestions} />}
       <div className={styles.footer}>
-        {message !== null && (
-          <p className={styles.error} role="alert">
-            {message}
-          </p>
-        )}
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.actionButton}
-            aria-label="Save"
-            onMouseDown={preventBlurSteal}
-            onClick={() => {
-              void commit();
-            }}
-          >
-            <Check size={14} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className={styles.actionButton}
-            aria-label="Cancel"
-            onMouseDown={preventBlurSteal}
-            onClick={cancel}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        {messageNode}
+        {actions}
       </div>
     </div>
   );
