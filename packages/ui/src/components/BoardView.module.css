@@ -10,6 +10,10 @@
 
 .column {
   flex: 0 0 280px;
+  /* Without this the column's automatic minimum is its min-content width, and a
+     card holding an unbreakable badge — an epic name from before the length
+     limit — widens the whole column past its 280px basis. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface-muted);
@@ -167,6 +171,14 @@
 
 .epicBadge {
   align-self: flex-start;
+  /* 240px is the same cap the backlog and archive rows use, so one name is
+     clipped to the same width wherever it appears — including the drag overlay,
+     which is not inside a column. */
+  max-width: min(100%, 240px);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: inherit;
   font-size: 11px;
   font-weight: 600;

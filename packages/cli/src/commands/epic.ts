@@ -1,4 +1,5 @@
 import {
+  EPIC_NAME_MAX_LENGTH,
   createEpic,
   editEpic,
   serializeEpic,
@@ -107,7 +108,11 @@ async function epicList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const name = args.positionals[2];
   if (name === undefined || name.length === 0) {
-    throw new CliError('USAGE', 'Usage: boardown epic add <name> [--color #rrggbb] [--description ...].', 2);
+    throw new CliError(
+      'USAGE',
+      `Usage: boardown epic add <name> [--color #rrggbb] [--description ...]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
+      2,
+    );
   }
 
   const color = flagString(args.flags, 'color') ?? DEFAULT_COLOR;
@@ -145,7 +150,7 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (slug === undefined) {
     throw new CliError(
       'USAGE',
-      'Usage: boardown epic edit <slug> [--name ...] [--description ...] [--color #rrggbb].',
+      `Usage: boardown epic edit <slug> [--name ...] [--description ...] [--color #rrggbb]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
       2,
     );
   }
@@ -179,7 +184,13 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     );
   }
 
-  const updated = editEpic(epic, patch);
+  let updated: Epic;
+  try {
+    updated = editEpic(epic, patch);
+  } catch (err) {
+    throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
+  }
+
   await board.fs.write(updated.filename, serializeEpic(updated));
   return {
     data: { slug: updated.slug },

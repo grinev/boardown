@@ -225,6 +225,11 @@
   justify-self: end;
   display: flex;
   align-items: center;
+  min-width: 0;
+  /* The epic column is a content-sized grid track, so a percentage cap has
+     nothing to resolve against. 240px is the board card's own allowance, so one
+     name is clipped to the same width wherever it is shown. */
+  max-width: 240px;
 }
 
 .row:last-child {
@@ -288,6 +293,11 @@
 }
 
 .epicBadge {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: inherit;
   font-size: 11px;
   font-weight: 600;

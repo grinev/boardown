@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Task } from '@boardown/core';
+import { EPIC_NAME_MAX_LENGTH, type Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import type { CommandContext } from '../types';
@@ -202,6 +202,52 @@ describe('release / epic / move (deepening layer)', () => {
       epic: { color: string };
     };
     expect(after.epic.color).toBe('#00ff00');
+  });
+
+  it('refuses an epic name over the maximum on add, writing nothing', async () => {
+    await expect(
+      epicCommand(parseArgs(['epic', 'add', 'x'.repeat(EPIC_NAME_MAX_LENGTH + 1)]), ctx),
+    ).rejects.toMatchObject({ code: 'EPIC_INVALID', exitCode: 2 });
+
+    const out = await epicCommand(parseArgs(['epic', 'list']), ctx);
+    expect((out.data as { epics: unknown[] }).epics).toHaveLength(0);
+  });
+
+  it('refuses an epic name over the maximum on edit, leaving the stored name', async () => {
+    const epic = (await epicCommand(parseArgs(['epic', 'add', 'Parser']), ctx)).data as {
+      slug: string;
+    };
+
+    await expect(
+      epicCommand(
+        parseArgs(['epic', 'edit', epic.slug, '--name', 'x'.repeat(EPIC_NAME_MAX_LENGTH + 1)]),
+        ctx,
+      ),
+    ).rejects.toMatchObject({ code: 'EPIC_INVALID', exitCode: 2 });
+    expect(await epicName(ctx, epic.slug)).toBe('Parser');
+  });
+
+  it('refuses an empty epic name on edit instead of writing an unparseable file', async () => {
+    const epic = (await epicCommand(parseArgs(['epic', 'add', 'Parser']), ctx)).data as {
+      slug: string;
+    };
+
+    await expect(
+      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--name', '']), ctx),
+    ).rejects.toMatchObject({ code: 'EPIC_INVALID', exitCode: 2 });
+    expect(await epicName(ctx, epic.slug)).toBe('Parser');
+  });
+
+  it('accepts an epic name of exactly the maximum on add and on edit', async () => {
+    const atMax = 'x'.repeat(EPIC_NAME_MAX_LENGTH);
+    const epic = (await epicCommand(parseArgs(['epic', 'add', atMax]), ctx)).data as {
+      slug: string;
+    };
+    expect(await epicName(ctx, epic.slug)).toBe(atMax);
+
+    const renamed = `y${'z'.repeat(EPIC_NAME_MAX_LENGTH - 1)}`;
+    await epicCommand(parseArgs(['epic', 'edit', epic.slug, '--name', renamed]), ctx);
+    expect(await epicName(ctx, epic.slug)).toBe(renamed);
   });
 
   it('edits an epic color, alone and together with a name', async () => {

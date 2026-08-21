@@ -70,7 +70,6 @@
   z-index: 10;
   min-width: 100%;
   width: max-content;
-  max-width: 320px;
   max-height: 240px;
   overflow-y: auto;
   outline: none;

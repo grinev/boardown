@@ -209,12 +209,30 @@ export interface NewEpicInput {
 export const epicFilenameForSlug = (slug: string): string =>
   `${EPICS_DIR}/${slug}.md`;
 
+// Chosen so a name of this length still fits on one line inside a board card's
+// epic badge. Enforced when a name is written, never when one is read: an epic
+// file already carrying a longer name keeps loading and is clipped on display.
+export const EPIC_NAME_MAX_LENGTH = 28;
+
+// The one name rule, shared by create, edit, the CLI and the epic dialog's
+// inline editor, so the field and the file can never disagree about which names
+// are refused or about the words used to refuse one. Counts the trimmed name.
+export const validateEpicName = (name: string): string | null => {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return 'Epic name is required';
+  if (trimmed.length > EPIC_NAME_MAX_LENGTH) {
+    return `Epic name must be at most ${EPIC_NAME_MAX_LENGTH} characters (got ${trimmed.length}).`;
+  }
+  return null;
+};
+
 export const createEpic = (
   existing: readonly Epic[],
   input: NewEpicInput,
 ): Epic => {
   const name = input.name.trim();
-  if (name.length === 0) throw new Error('Epic name is required');
+  const invalid = validateEpicName(name);
+  if (invalid !== null) throw new Error(invalid);
 
   const slug = sanitizeFilenameForFs(name);
   if (slug.length === 0) {
@@ -603,15 +621,26 @@ export interface EpicPatch {
   color?: string;
 }
 
-export const editEpic = (epic: Epic, patch: EpicPatch): Epic => ({
-  ...epic,
-  preamble: patch.preamble ?? epic.preamble,
-  frontmatter: {
-    ...epic.frontmatter,
-    name: patch.name ?? epic.frontmatter.name,
-    color: patch.color ?? epic.frontmatter.color,
-  },
-});
+export const editEpic = (epic: Epic, patch: EpicPatch): Epic => {
+  let name = epic.frontmatter.name;
+  // Only a name actually being written is checked, so an epic whose stored name
+  // predates the limit can still have its color or description edited.
+  if (patch.name !== undefined) {
+    const invalid = validateEpicName(patch.name);
+    if (invalid !== null) throw new Error(invalid);
+    name = patch.name.trim();
+  }
+
+  return {
+    ...epic,
+    preamble: patch.preamble ?? epic.preamble,
+    frontmatter: {
+      ...epic.frontmatter,
+      name,
+      color: patch.color ?? epic.frontmatter.color,
+    },
+  };
+};
 
 export const deleteTask = <C extends Container>(container: C, taskId: string): C => {
   if (isFinishedRelease(container)) {

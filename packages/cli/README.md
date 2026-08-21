@@ -57,8 +57,8 @@ boardown release done <ref>     Finish a release (--into <release> to carry over
 
 boardown epic get <slug>        Show one epic and its tasks.
 boardown epic list              List epics with task counts.
-boardown epic add <name>        Create an epic (--color #rrggbb --description).
-boardown epic edit <slug>       Edit an epic (--name --description --color #rrggbb).
+boardown epic add <name>        Create an epic (--color #rrggbb --description; name max 28 chars).
+boardown epic edit <slug>       Edit an epic (--name --description --color #rrggbb; name max 28 chars).
 
 boardown init                   Create a .boardown/ board here (--id-prefix --project-name).
 boardown schema                 Print the machine-readable command/enum contract.

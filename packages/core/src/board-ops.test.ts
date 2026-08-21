@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EPIC_NAME_MAX_LENGTH,
+  validateEpicName,
   addTaskLink,
   BoardOpError,
   changeTaskStatus,
@@ -393,6 +395,54 @@ describe('editEpic', () => {
     expect(e.preamble).toBe('old preamble');
     expect(e.tasks).toHaveLength(1);
   });
+
+  it('trims the name it is given', () => {
+    const e = editEpic(baseEpic(), { name: '  New Parser  ' });
+    expect(e.frontmatter.name).toBe('New Parser');
+  });
+
+  it('throws when the name is empty after trimming', () => {
+    expect(() => editEpic(baseEpic(), { name: '   ' })).toThrow(/required/i);
+  });
+
+  it('throws when the name is over the maximum length', () => {
+    expect(() =>
+      editEpic(baseEpic(), { name: 'x'.repeat(EPIC_NAME_MAX_LENGTH + 1) }),
+    ).toThrow(/at most/i);
+  });
+
+  it('accepts a name of exactly the maximum length', () => {
+    const name = 'x'.repeat(EPIC_NAME_MAX_LENGTH);
+    expect(editEpic(baseEpic(), { name }).frontmatter.name).toBe(name);
+  });
+
+  it('leaves a stored name that is already over the maximum editable by color', () => {
+    const legacy = baseEpic();
+    legacy.frontmatter = { ...legacy.frontmatter, name: 'x'.repeat(80) };
+    const e = editEpic(legacy, { color: '#22c55e' });
+    expect(e.frontmatter.color).toBe('#22c55e');
+    expect(e.frontmatter.name).toBe('x'.repeat(80));
+  });
+});
+
+describe('validateEpicName', () => {
+  it('accepts a plain name', () => {
+    expect(validateEpicName('Parser')).toBeNull();
+  });
+
+  it('reports an empty or whitespace-only name as required', () => {
+    expect(validateEpicName('')).toMatch(/required/i);
+    expect(validateEpicName('   ')).toMatch(/required/i);
+  });
+
+  it('accepts exactly the maximum and refuses one more', () => {
+    expect(validateEpicName('x'.repeat(EPIC_NAME_MAX_LENGTH))).toBeNull();
+    expect(validateEpicName('x'.repeat(EPIC_NAME_MAX_LENGTH + 1))).toMatch(/at most/i);
+  });
+
+  it('counts the trimmed name, so surrounding spaces never decide it', () => {
+    expect(validateEpicName(`  ${'x'.repeat(EPIC_NAME_MAX_LENGTH)}  `)).toBeNull();
+  });
 });
 
 describe('deleteTask', () => {
@@ -684,6 +734,17 @@ describe('createEpic', () => {
     expect(() => createEpic([], { name: '   ', color: '#1f6feb' })).toThrow(
       /required/i,
     );
+  });
+
+  it('throws when the name is over the maximum length', () => {
+    expect(() =>
+      createEpic([], { name: 'x'.repeat(EPIC_NAME_MAX_LENGTH + 1), color: '#1f6feb' }),
+    ).toThrow(/at most/i);
+  });
+
+  it('accepts a name of exactly the maximum length', () => {
+    const name = 'x'.repeat(EPIC_NAME_MAX_LENGTH);
+    expect(createEpic([], { name, color: '#1f6feb' }).frontmatter.name).toBe(name);
   });
 });
 

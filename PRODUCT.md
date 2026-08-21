@@ -801,7 +801,10 @@ whole operation instead of leaving one side linked.
 
 **Creation** uses a dedicated modal dialog with:
 
-- **Name** — required, human-readable.
+- **Name** — required, human-readable, at most 28 characters — the length that
+  still fits on one line inside an epic badge on a board card. The field stops
+  accepting characters there, and a longer paste is cut to fit rather than
+  refused.
 - **Slug** — auto-generated from the name (lowercase kebab-case), same
   derivation as releases. Stable thereafter (renaming is a manual file move).
 - **Description** — optional, plain text.
@@ -814,7 +817,14 @@ Above the description, a **color** swatch opens the creation dialog's palette in
 its place, with Save and Cancel — the only way to change the color in the UI, so
 the palette stays the whole vocabulary.
 The epic's slug never changes through editing — renaming the underlying file is
-a manual operation outside this UI.
+a manual operation outside this UI. The name is bounded on the way in only: an
+epic file already carrying a longer name loads and shows exactly as before, and
+nothing rewrites it to fit. Wherever a name is too long for the space it is
+given — the badge on a board card, on a backlog or archive row, on the task
+dialog's Epic chip, the epic dialog's own header, and every epic picker — it
+renders on one line, clipped with an ellipsis. Editing such a name shows it in
+full and lets characters be deleted, but refuses to save until it is short
+enough.
 
 Clicking an existing epic opens the details dialog with the list of linked tasks
 displayed below the description. Tasks in the list are clickable and open the
@@ -1013,7 +1023,12 @@ release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /
 `--color`; unlike the UI's palette-only picker it accepts any 6-digit hex, and an
-invalid one is a `USAGE` error. Setting a status outside an active release fails with
+invalid one is a `USAGE` error. `epic add` and `epic edit --name` enforce the same
+name rule the UI's field does: a name over the maximum is refused with
+`EPIC_INVALID` and nothing is written, as is an `epic edit --name ""`. A missing
+name on `epic add` stays the `USAGE` error it has always been — the argument is
+absent rather than wrong. `schema` reports the maximum as `epicNameMaxLength`,
+always, for the same reason it reports the rules below. Setting a status outside an active release fails with
 `STATUS_LOCKED`; a relocation that carries the status along succeeds, and one that
 sets it is judged by its destination. Putting one more task into a full In Progress
 column fails with `WIP_LIMIT` — whether by `task status`, `task edit --status`,

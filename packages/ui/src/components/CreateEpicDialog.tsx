@@ -1,6 +1,10 @@
 import { X } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { epicFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
+import {
+  EPIC_NAME_MAX_LENGTH,
+  epicFilenameForSlug,
+  sanitizeFilenameForFs,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { pickDefaultEpicColor } from '../epic-colors';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
@@ -128,6 +132,7 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
             onChange={(e) => setName(e.target.value)}
             data-autofocus
             required
+            maxLength={EPIC_NAME_MAX_LENGTH}
             aria-invalid={trimmedName.length > 0 && (slug.length === 0 || duplicate)}
           />
           {renderFilenameHint()}

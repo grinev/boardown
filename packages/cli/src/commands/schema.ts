@@ -1,6 +1,7 @@
 import {
   customFieldLabel,
   DEFAULT_TASK_PRIORITY,
+  EPIC_NAME_MAX_LENGTH,
   LINK_TYPES,
   RELEASE_STATUSES,
   TASK_PRIORITIES,
@@ -14,7 +15,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 8,
+  version: 9,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -171,12 +172,14 @@ const DESCRIPTOR = {
     {
       name: 'epic add',
       usage: 'boardown epic add <name> [--color #rrggbb] [--description TEXT]',
-      summary: 'Create an epic.',
+      summary:
+        'Create an epic. A name longer than epicNameMaxLength is refused with EPIC_INVALID.',
     },
     {
       name: 'epic edit',
       usage: 'boardown epic edit <slug> [--name NAME] [--description TEXT] [--color #rrggbb]',
-      summary: 'Rename an epic or change its description or color.',
+      summary:
+        'Rename an epic or change its description or color. An empty name, or one longer than epicNameMaxLength, is refused with EPIC_INVALID.',
     },
     { name: 'schema', usage: 'boardown schema [--json]', summary: 'Print this contract.' },
   ],
@@ -187,6 +190,7 @@ const DESCRIPTOR = {
     '--all': 'On `release current`, return every active release instead of the one the board shows.',
     '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
+  epicNameMaxLength: EPIC_NAME_MAX_LENGTH,
 } as const;
 
 // The declarations and the WIP limit are board-specific, so they ride along only

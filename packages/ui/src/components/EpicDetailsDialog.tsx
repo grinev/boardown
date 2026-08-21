@@ -1,6 +1,12 @@
 import { Check, Layers, Plus, X } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import type { Epic, Task, TaskStatus } from '@boardown/core';
+import {
+  EPIC_NAME_MAX_LENGTH,
+  validateEpicName,
+  type Epic,
+  type Task,
+  type TaskStatus,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_TYPE_META } from '../task-types';
 import { formatStatusLabel } from '../utils/format-status';
@@ -52,6 +58,12 @@ export function EpicDetailsDialog({
     paletteWasOpen.current = paletteOpen;
   }, [paletteOpen]);
 
+  // Core's rule, minus its empty-name message: an emptied field is `required`'s
+  // business, and it restores the old name rather than reporting anything — the
+  // same split the release rename makes.
+  const validateName = (next: string): string | null =>
+    next.trim().length === 0 ? null : validateEpicName(next);
+
   return (
     <Modal open onClose={onClose} ariaLabel={`Epic ${epic.frontmatter.name}`}>
       <header className={styles.header}>
@@ -62,6 +74,8 @@ export function EpicDetailsDialog({
             required
             ariaLabel="Epic name"
             className={styles.nameText}
+            maxLength={EPIC_NAME_MAX_LENGTH}
+            validate={validateName}
             onSave={(next) => updateEpic(epic.slug, { name: next })}
           />
           <DialogBackButton />

@@ -10,10 +10,17 @@ import {
 } from 'react';
 import styles from './IconSelect.module.css';
 
+// The listbox is placed with an inline style, which beats any max-width the
+// stylesheet could set — so its own maximum lives here too, and there is one
+// source of truth for how wide a picker gets.
+const MAX_LISTBOX_WIDTH = 320;
+const VIEWPORT_MARGIN = 8;
+
 interface ListboxPosition {
   top: number;
   left: number;
   minWidth: number;
+  maxWidth: number;
 }
 
 export interface IconSelectOption {
@@ -95,10 +102,14 @@ export function IconSelect({
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
+      // Floored at the trigger's own width so a picker anchored near the right
+      // edge shrinks to the space left rather than to nothing.
+      const available = window.innerWidth - rect.left - VIEWPORT_MARGIN;
       setPosition({
         top: rect.bottom + 4,
         left: rect.left,
         minWidth: rect.width,
+        maxWidth: Math.max(rect.width, Math.min(MAX_LISTBOX_WIDTH, available)),
       });
     };
     update();
@@ -259,6 +270,7 @@ export function IconSelect({
             top: position.top,
             left: position.left,
             minWidth: position.minWidth,
+            maxWidth: position.maxWidth,
           }}
           tabIndex={-1}
           ref={listboxRef}
