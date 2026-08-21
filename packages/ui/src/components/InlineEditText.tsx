@@ -28,6 +28,9 @@ interface InlineEditTextProps {
   // Checked on every keystroke: a message means the value cannot be saved, so the
   // field reports it while typing and refuses to commit.
   validate?: (value: string) => string | null;
+  // A hard stop on the field: typing past it does nothing and a longer paste is
+  // cut. A value already over it opens in full and can only be shortened.
+  maxLength?: number | undefined;
   // A failure that only the save could discover (the write itself). Shown in the
   // same slot, and only while `validate` is happy.
   error?: string | null;
@@ -51,6 +54,7 @@ export function InlineEditText({
   readOnly = false,
   renderView,
   validate,
+  maxLength,
   error = null,
   docRefs = false,
 }: InlineEditTextProps) {
@@ -246,6 +250,7 @@ export function InlineEditText({
           onSelect={suggestions.sync}
           onKeyDown={onKeyDown}
           onBlur={onBlur}
+          maxLength={maxLength}
           rows={4}
         />
       ) : (
@@ -262,6 +267,7 @@ export function InlineEditText({
           onSelect={suggesting ? suggestions.sync : undefined}
           onKeyDown={onKeyDown}
           onBlur={onBlur}
+          maxLength={maxLength}
         />
       )}
       {suggesting && <DocRefSuggestions suggestions={suggestions} />}
