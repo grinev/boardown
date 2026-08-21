@@ -822,9 +822,10 @@ epic file already carrying a longer name loads and shows exactly as before, and
 nothing rewrites it to fit. Wherever a name is too long for the space it is
 given — the badge on a board card, on a backlog or archive row, on the task
 dialog's Epic chip, the epic dialog's own header, and every epic picker — it
-renders on one line, clipped with an ellipsis. Editing such a name shows it in
-full and lets characters be deleted, but refuses to save until it is short
-enough.
+renders on one line, clipped with an ellipsis. Editing such a name opens it
+complete — nothing is cut from the value — in a field sized for a name of the
+maximum length, so an over-long one scrolls inside it while characters are
+deleted, and the editor refuses to save until it is short enough.
 
 Clicking an existing epic opens the details dialog with the list of linked tasks
 displayed below the description. Tasks in the list are clickable and open the
