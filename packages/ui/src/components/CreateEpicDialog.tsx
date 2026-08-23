@@ -8,6 +8,7 @@ import {
 import { useBoardStore } from '../store';
 import { pickDefaultEpicColor } from '../epic-colors';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
+import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
 import { EpicColorSwatches } from './EpicColorSwatches';
 import { Modal } from './Modal';
@@ -23,9 +24,13 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState(() => pickDefaultEpicColor(existingEpics));
+  // The swatch the dialog picked for itself is the baseline, captured once: an
+  // epic created elsewhere while this dialog is open must not make it look dirty.
+  const [initialColor] = useState(() => pickDefaultEpicColor(existingEpics));
+  const [color, setColor] = useState(initialColor);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const trimmedName = name.trim();
   const slug = useMemo(() => sanitizeFilenameForFs(trimmedName), [trimmedName]);
@@ -37,6 +42,10 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
 
   const canSubmit =
     trimmedName.length > 0 && slug.length > 0 && !duplicate && !submitting;
+
+  // Anything the user could have put there, against what the dialog opened with.
+  // Untrimmed: a name of spaces is still something typed.
+  const dirty = name !== '' || description !== '' || color !== initialColor;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -61,6 +70,9 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
   // On the dialog itself, not the form: the ✕ is outside the form and a click on
   // inert space parks focus on the <dialog>, so anything lower would miss them.
   const handleShortcut = (event: KeyboardEvent<HTMLDialogElement>) => {
+    // The confirmation is a dialog inside this one, so its keystrokes bubble
+    // through here. While it is up, the form is not what is being addressed.
+    if (discardOpen) return;
     if (!isSubmitShortcut(event)) return;
     // Prevented even when the dialog refuses to submit, so a refusal never lets
     // the keystroke through to Cancel, the ✕ or the description's newline.
@@ -103,6 +115,8 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
       onClose={onClose}
       ariaLabel="Create epic"
       className={styles.dialog}
+      dismissable={!dirty}
+      onDismissBlocked={() => setDiscardOpen(true)}
       onKeyDown={handleShortcut}
     >
       <header className={styles.header}>
@@ -173,6 +187,12 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
           </button>
         </footer>
       </form>
+      {discardOpen && (
+        <DiscardChangesDialog
+          onCancel={() => setDiscardOpen(false)}
+          onDiscard={onClose}
+        />
+      )}
     </Modal>
   );
 }

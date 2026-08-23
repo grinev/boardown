@@ -966,7 +966,7 @@ their parent on their own.
 ### Creation dialogs
 
 The three **creation dialogs** — Create task, Create epic, Create release — share
-three things beyond their shape. They are as wide as the **task dialog's main
+four things beyond their shape. They are as wide as the **task dialog's main
 column**, so the Description a task is written in is exactly the width of the one
 it is later read in; the sidebar's share is not counted, and a window too narrow
 for that falls back to the same viewport rule every dialog uses. Opening one puts
@@ -980,6 +980,22 @@ an empty name, or one colliding with an existing file, it does nothing and the
 dialog stays open with everything typed. A popup keeps the key while it is up —
 an open picker, or the `[[…]]` page list, takes the combo for itself, and the next
 one submits. Nothing on screen announces the shortcut.
+
+And a form with something in it is not thrown away by accident. While any field
+differs from what it held when the dialog opened — a Title or Name or Description
+with text in it, a Type, Priority, Epic, Release or colour moved off the value it
+started on — **Escape and a click on the backdrop** open a **Discard changes?**
+confirmation over the dialog instead of closing it: one line, `What you typed will
+be lost.`, and a `Cancel` / `Discard` pair. `Cancel`, the confirmation's own ✕,
+Escape and its backdrop all return to the form with everything still typed;
+`Discard` closes both and writes nothing, and the dialog reopens empty. A locked
+Epic or Release never counts, since the user cannot move it, and neither does the
+colour Create epic picked for itself. The dialog's own ✕ and its Cancel button
+close outright whether or not anything was typed, and a form still holding what it
+opened with closes on Escape and the backdrop as it always did. A popup keeps
+Escape the same way it keeps the submit combo: the first one dismisses the picker
+or the `[[…]]` list, the next one is the one that asks. The edit dialogs and the
+inline editors do not ask.
 
 Docs → New page, Docs → New folder and the onboarding dialog also open with the
 caret in their first field. They keep their own width, and the shortcut is the
