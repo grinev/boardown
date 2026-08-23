@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.8.0
+
+- **Several active releases at once**: turn on the new Settings checkbox and you
+  can start a second release while the first is still running — the Board header
+  gains a switcher next to the release name, and the Backlog lists one `(active)`
+  section per active release.
+- **Custom task statuses** (beta): a board can declare its own statuses in
+  `.boardown/config.yaml` — two to eight of them, replacing `todo` /
+  `in-progress` / `done` — with the first as the status a new task starts in and
+  the last as the one that counts as finished. Tasks holding an undeclared status
+  are collected in a read-only `Unknown` column instead of being rewritten.
+- **Seven kinds of task link**: linking two tasks now offers blocks / is blocked
+  by, includes / is part of and duplicates / is duplicated by alongside the
+  existing relates to. Each dialog reads the relation from its own side, and the
+  Linked tasks section groups its rows under relation headings.
+- **Confirmation before a filled create form is discarded**: Escape or a click on
+  the backdrop no longer throws away what you typed into Create task, Create epic
+  or Create release — a `Discard changes?` confirmation appears, with the form
+  still intact behind it.
+- **Fields that grow with the text**: every multi-line field — the three Create
+  dialogs' Description, the task, epic and release descriptions, and both note
+  editors — is now exactly as tall as its text, growing until the dialog stops
+  fitting the window. The manual resize grip is gone, and opening an existing
+  description for editing no longer shrinks it.
+- **Wider creation dialogs, focus where you type**: Create task, Create epic and
+  Create release are as wide as the task dialog's description column, open with
+  the caret already in the first field, and submit on Cmd/Ctrl+Enter from
+  anywhere in the form.
+- **Keyboard navigation in every picker**: ↑ / ↓ move the highlight and Enter
+  picks it in all thirteen selects and in the Linked tasks search, Home / End
+  jump to the ends, Tab closes the list without changing the value, and Escape
+  closes just the list instead of the whole dialog behind it. An open picker also
+  no longer runs off the right edge of the window.
+- **Epic names are limited to 28 characters**: a longer name can no longer be
+  typed or pasted in, and every place a name is shown — the board card badge, the
+  backlog and archive rows, the task dialog's Epic chip — renders it on one line,
+  clipped with `…`. An existing longer name still loads untouched.
+- **Inline name edits confirm on their own row**: editing an epic or release name
+  in the dialog header keeps the ✓ / ✗ pair beside the field instead of pushing
+  them onto a second row, so the header no longer changes height. The release
+  field opens at the epic's width.
+
 ## 0.7.0
 
 - **Repo file links**: write `[[repo:packages/cli/src/node-fs.ts]]` anywhere doc

@@ -33,7 +33,8 @@ instead of overwriting.
   current release, and a read-only archive of finished releases.
 - **Releases** with a `future → current → finished` lifecycle, with start /
   complete actions and unfinished-task relocation on completion; click a
-  release's name to view and edit its details.
+  release's name to view and edit its details. Opt in from Settings to keep
+  **several releases active at once** and switch the board between them.
 - **Docs**: a **Docs** tab turns `.boardown/docs/` into a small project wiki,
   and any doc page can be referenced from a task or epic and opened in a popup
   without leaving the board.
@@ -56,8 +57,9 @@ instead of overwriting.
 - **Custom fields** (beta): declare extra per-task fields in
   `.boardown/config.yaml` and edit them in the task dialog's Details card.
 - **Task links**: relate two tasks from the task dialog's **Linked tasks**
-  section — the link is stored on both sides. Any task id mentioned in a
-  description or a note renders as a link to that task.
+  section — blocks, includes, duplicates or plain relates to, each stored on
+  both sides and shown from the right end in each task. Any task id mentioned in
+  a description or a note renders as a link to that task.
 - **Drag & drop** to move tasks between statuses, releases and the backlog, and
   to reorder within a section.
 - **Delete a task** from the task dialog, with a confirmation step — git stays
