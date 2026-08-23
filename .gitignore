@@ -58,8 +58,9 @@ desktop.ini
 
 # --- AI assistants (local-only state, not for commit) ---
 
-# Claude Code
-.claude/
+# Claude Code: agents, commands and skills are committed; local state is not.
+.claude/specs/
+.claude/settings.local.json
 CLAUDE.local.md
 
 # OpenAI Codex
