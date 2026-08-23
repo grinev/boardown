@@ -6,6 +6,7 @@ import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
+import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { Modal } from './Modal';
@@ -38,10 +39,16 @@ export function CreateTaskDialog({
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TaskType>('feature');
   const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
-  const [epicSlug, setEpicSlug] = useState(epic?.slug ?? '');
-  const [releaseFilename, setReleaseFilename] = useState(release?.filename ?? '');
+  // Captured beside the state they seed: a board refresh under an open dialog
+  // re-renders it with fresh props, and the dirty check compares against what the
+  // dialog opened with, not against what the board says now.
+  const [initialEpicSlug] = useState(epic?.slug ?? '');
+  const [epicSlug, setEpicSlug] = useState(initialEpicSlug);
+  const [initialReleaseFilename] = useState(release?.filename ?? '');
+  const [releaseFilename, setReleaseFilename] = useState(initialReleaseFilename);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const releaseLocked = release !== undefined || backlogLocked;
   const releaseOptions =
@@ -55,6 +62,17 @@ export function CreateTaskDialog({
   const canSubmit = trimmedTitle.length > 0 && !submitting;
 
   const epicLocked = epic !== undefined;
+
+  // Anything the user could have put there, against what the dialog opened with.
+  // A locked Epic or Release is disabled, so it can never differ. Untrimmed: a
+  // title of spaces is still something typed.
+  const dirty =
+    title !== '' ||
+    description !== '' ||
+    type !== 'feature' ||
+    priority !== DEFAULT_TASK_PRIORITY ||
+    epicSlug !== initialEpicSlug ||
+    releaseFilename !== initialReleaseFilename;
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
     const toOption = (e: Epic): IconSelectOption => ({
@@ -137,6 +155,9 @@ export function CreateTaskDialog({
   // On the dialog itself, not the form: the ✕ is outside the form and a click on
   // inert space parks focus on the <dialog>, so anything lower would miss them.
   const handleShortcut = (event: KeyboardEvent<HTMLDialogElement>) => {
+    // The confirmation is a dialog inside this one, so its keystrokes bubble
+    // through here. While it is up, the form is not what is being addressed.
+    if (discardOpen) return;
     if (!isSubmitShortcut(event)) return;
     // Prevented even when the dialog refuses to submit, so a refusal never lets
     // the keystroke through to Cancel, the ✕ or the description's newline.
@@ -150,6 +171,8 @@ export function CreateTaskDialog({
       onClose={onClose}
       ariaLabel="Create task"
       className={styles.dialog}
+      dismissable={!dirty}
+      onDismissBlocked={() => setDiscardOpen(true)}
       onKeyDown={handleShortcut}
     >
       <header className={styles.header}>
@@ -257,6 +280,12 @@ export function CreateTaskDialog({
           </button>
         </footer>
       </form>
+      {discardOpen && (
+        <DiscardChangesDialog
+          onCancel={() => setDiscardOpen(false)}
+          onDiscard={onClose}
+        />
+      )}
     </Modal>
   );
 }
