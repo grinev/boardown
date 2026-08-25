@@ -7,6 +7,8 @@ import {
   classifyProjectFile,
   type ProjectFileRead,
 } from '../../../core/src/project-file';
+import { CLIENT_ID_HEADER } from '../board-events-endpoint.js';
+import type { BoardWatchHub } from './board-events.js';
 
 // The endpoints both hosts serve: the Vite dev middleware and the boardown-web
 // server. Each host resolves a request to a root and calls in; nothing here
@@ -134,13 +136,27 @@ export const readJsonBody = async (
 
 // `pathname` is the request path with any board prefix already stripped, so it
 // always starts at /api/fs/.
+//
+// `watch` is the host's hub when it is watching the board, and absent when it is
+// not — `boardown-web --no-watch`, and every test that only cares about the
+// filesystem. Each landed change is recorded against the tab that asked for it,
+// so the watcher event it produces is skipped for that tab and nobody else.
 export const handleBoardFs = async (
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   params: URLSearchParams,
   boardRoot: string,
+  watch?: BoardWatchHub,
 ): Promise<void> => {
+  const noteWrite = (...absolutePaths: (string | undefined)[]): void => {
+    const clientId = req.headers[CLIENT_ID_HEADER];
+    const id = typeof clientId === 'string' ? clientId : undefined;
+    for (const absolutePath of absolutePaths) {
+      if (absolutePath !== undefined) watch?.noteWrite(boardRoot, id, absolutePath);
+    }
+  };
+
   try {
     const userPath = params.get('path');
 
@@ -212,8 +228,17 @@ export const handleBoardFs = async (
         return;
       }
       try {
-        await fs.mkdir(path.dirname(target.abs), { recursive: true });
+        // Writing the first release makes `releases/` as well, and that folder
+        // is an *ancestor* of the file, so recording the file alone would let
+        // the folder's own event through and refresh the tab that made it. A
+        // recursive mkdir answers with nothing when every level already existed;
+        // what it answers with otherwise is the platform's business (Windows
+        // gives an extended-length path), so the folder recorded is the one we
+        // asked for.
+        const folder = path.dirname(target.abs);
+        const created = await fs.mkdir(folder, { recursive: true });
         await fs.writeFile(target.abs, content, 'utf-8');
+        noteWrite(target.abs, created === undefined ? undefined : folder);
         log.info(`write ${target.rel}: 204 (${content.length} chars)`);
         res.statusCode = 204;
         res.end();
@@ -241,10 +266,14 @@ export const handleBoardFs = async (
       }
       try {
         if (pathname === '/api/fs/mkdir') {
+          // The event to skip here names the new directory itself, on its
+          // parent's watcher — which is the path recorded.
           await fs.mkdir(target.abs, { recursive: true });
+          noteWrite(target.abs);
           log.debug(`mkdir ${target.rel}: 204`);
         } else {
           await fs.rm(target.abs, { recursive: true, force: true });
+          noteWrite(target.abs);
           // A removal changes the board on disk, so it belongs with writes
           // rather than in the debug-level noise.
           log.info(`remove ${target.rel}: 204`);

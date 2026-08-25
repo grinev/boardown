@@ -58,8 +58,9 @@ boardown/
 │   ├── web/           # Two roles over one set of endpoints: the Vite dev
 │   │                  # shell (HttpFsAdapter over a Vite middleware serving a
 │   │                  # selected .boardown/), and boardown-web, a local server
-│   │                  # for one board or a registry of several. Manual Reload
-│   │                  # only. Mounts @boardown/ui. Nothing is published.
+│   │                  # for one board or a registry of several. Watches the
+│   │                  # board and pushes a refresh over SSE. Mounts
+│   │                  # @boardown/ui. Nothing is published.
 │   ├── vscode/        # Primary shell: extension host (esbuild) + webview
 │   │                  # (Vite) hosting @boardown/ui. Shipped (.vsix per
 │   │                  # release; Marketplace + Open VSX).
@@ -96,18 +97,25 @@ out of scope (Electron territory). The Electron desktop build follows the same
 shell pattern and ships installers with each release.
 
 `packages/web` owns one set of HTTP endpoints — `/api/fs/{read,list,stat,write,
-mkdir,remove}` scoped to a board root, plus the read-only `/api/project-file`
-scoped to the project folder around it — and two hosts for them. The Vite
+mkdir,remove}` scoped to a board root, the read-only `/api/project-file` scoped to
+the project folder around it, and `/api/events`, the stream a browser tab holds
+open to hear that its board changed — and two hosts for them. The Vite
 middleware serves them for the dev shell; `boardown-web` serves them for a
 locally installed server, where they sit under `/b/<id>/` when a registry lists
-several boards. The handlers live in one module (`src/api/`), given a root per
-request by whichever host is running, so the two can never drift into two
-implementations of the same rule; the browser side talks to them through
-`HttpFsAdapter` and `HttpProjectFileReader`, which take the endpoint base and so
-follow the prefix. The two roots stay apart on purpose: no write path is ever
-handed the project root. This is the **only** browser-side path — it is the
-working environment for `@boardown/ui` development, not a stepping stone to a
-deployable browser app.
+several boards. What they share lives in one module (`src/api/`), so the two can
+never drift into two implementations of the same rule: the per-request handlers,
+given a root per request by whichever host is running, and next to them the watch
+hub, which is long-lived instead — each host builds one at startup and hands it
+down the same way it hands down a root, and a host that is not watching
+(`--no-watch`) builds none, which is the whole of what the flag does. The browser
+side talks to them through `HttpFsAdapter` and `HttpProjectFileReader`, which take
+the endpoint base and so follow the prefix. Which tab is asking is a fact about the
+request rather than an argument of the operation, so it rides in a header
+(`X-Boardown-Client`) — and on the stream, which cannot send one, in a query
+parameter — leaving the `/api/fs/*` bodies the operation's own arguments. The two
+roots stay apart on purpose: no write path is ever handed the project root. This is
+the **only** browser-side path — it is the working environment for `@boardown/ui`
+development, not a stepping stone to a deployable browser app.
 
 Next to those, `boardown-web` in registry mode serves `/api/projects/{add,remove}`,
 which the list page's inline script calls. They are a **third** root: the only file
@@ -181,10 +189,12 @@ CLI inherits them rather than re-implementing them.
   undoing the copy if the removal fails. Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
   directory before removing it, so deleting a docs folder is all-or-nothing. Re-reading on
-  demand is the manual Reload button; in addition the VS Code and Electron shells
-  auto-refresh on external `.boardown/` changes via a host file watcher (gated by
-  the `boardown.autoRefresh` setting), while the `web` dev shell stays
-  manual-only.
+  demand is the manual Reload button; in addition every shell auto-refreshes on
+  external `.boardown/` changes via a host file watcher — gated by the
+  `boardown.autoRefresh` setting in VS Code and Electron, and by `--no-watch` on
+  `boardown-web`, while the Vite dev shell is always on. All three deliver it the
+  same way: the host debounces a burst, drops the echo of its own writes, and the
+  UI side calls the store's `reloadSilent()`.
 - Logging goes through the logger in `packages/core` (`createLogger`), never
   `console.*` — ESLint enforces `no-console` across `packages/**` source. Build
   and dev scripts (`*.mjs`) are exempt: their output is ordinary tool output.

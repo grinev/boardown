@@ -35,6 +35,15 @@ describe('parseArgs', () => {
     });
   });
 
+  it('reads --no-watch, which takes no value', () => {
+    expect(parseArgs(['--no-watch'])).toEqual({ noWatch: true });
+    expect(parseArgs(['--no-watch', '--port', '7777'])).toEqual({ noWatch: true, port: 7777 });
+  });
+
+  it('refuses --no-watch with a value', () => {
+    expect(() => parseArgs(['--no-watch=yes'])).toThrow(/takes no value/);
+  });
+
   it('refuses a flag with no value', () => {
     expect(() => parseArgs(['--data-dir'])).toThrow(UsageError);
     expect(() => parseArgs(['--registry='])).toThrow(UsageError);

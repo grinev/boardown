@@ -1,5 +1,6 @@
 import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
 import { createLogger } from '@boardown/core';
+import { CLIENT_ID_HEADER } from '../board-events-endpoint';
 
 const log = createLogger('web.fs-adapter');
 
@@ -13,7 +14,20 @@ const failed = async (op: string, target: string, res: Response): Promise<Error>
 };
 
 export class HttpFsAdapter implements FsAdapter {
-  constructor(private readonly base: string = '/api/fs') {}
+  // `clientId` names this tab on every change it makes, so the watcher event the
+  // change produces is skipped for this tab and for no other.
+  constructor(
+    private readonly base: string = '/api/fs',
+    private readonly clientId: string = '',
+  ) {}
+
+  private mutation(body: unknown): RequestInit {
+    return {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [CLIENT_ID_HEADER]: this.clientId },
+      body: JSON.stringify(body),
+    };
+  }
 
   async read(path: string): Promise<string> {
     const res = await fetch(`${this.base}/read?path=${encodeURIComponent(path)}`);
@@ -25,11 +39,7 @@ export class HttpFsAdapter implements FsAdapter {
   }
 
   async write(path: string, content: string): Promise<void> {
-    const res = await fetch(`${this.base}/write`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
-    });
+    const res = await fetch(`${this.base}/write`, this.mutation({ path, content }));
     if (!res.ok) {
       throw await failed('write', path, res);
     }
@@ -48,11 +58,7 @@ export class HttpFsAdapter implements FsAdapter {
   }
 
   async mkdir(dir: string): Promise<void> {
-    const res = await fetch(`${this.base}/mkdir`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dir }),
-    });
+    const res = await fetch(`${this.base}/mkdir`, this.mutation({ path: dir }));
     if (!res.ok) {
       throw await failed('mkdir', dir, res);
     }
@@ -60,11 +66,7 @@ export class HttpFsAdapter implements FsAdapter {
   }
 
   async remove(path: string): Promise<void> {
-    const res = await fetch(`${this.base}/remove`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
+    const res = await fetch(`${this.base}/remove`, this.mutation({ path }));
     if (!res.ok) {
       throw await failed('remove', path, res);
     }

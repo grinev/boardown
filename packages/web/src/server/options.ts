@@ -9,9 +9,11 @@ export interface CliArgs {
   dataDir?: string;
   registry?: string;
   port?: number;
+  noWatch?: boolean;
 }
 
 const VALUE_FLAGS = ['--data-dir', '--registry', '--port'] as const;
+const BARE_FLAGS = ['--no-watch'] as const;
 
 export const parseArgs = (argv: readonly string[]): CliArgs => {
   const args: CliArgs = {};
@@ -25,6 +27,11 @@ export const parseArgs = (argv: readonly string[]): CliArgs => {
     const arg = argv[i] ?? '';
     const eq = arg.indexOf('=');
     const flag = eq === -1 ? arg : arg.slice(0, eq);
+    if ((BARE_FLAGS as readonly string[]).includes(flag)) {
+      if (eq !== -1) throw new UsageError(`${flag} takes no value`);
+      args.noWatch = true;
+      continue;
+    }
     if (!(VALUE_FLAGS as readonly string[]).includes(flag)) {
       throw new UsageError(`Unknown argument: ${arg}`);
     }

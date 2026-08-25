@@ -50,6 +50,26 @@ const request = (
     req.end();
   });
 
+// A stream never ends, so it cannot go through `request`: the response headers
+// are the answer, and the caller destroys it before the server is closed —
+// otherwise `server.close()` waits on the socket for the rest of the run.
+const openStream = (
+  requestPath: string,
+): Promise<{ status: number; contentType: string; close: () => void }> =>
+  new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, path: requestPath }, (res) => {
+      res.on('data', () => {});
+      res.on('error', () => {});
+      resolve({
+        status: res.statusCode ?? 0,
+        contentType: res.headers['content-type'] ?? '',
+        close: () => req.destroy(),
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+
 const listen = (created: http.Server): Promise<number> =>
   new Promise((resolve) => {
     created.listen(0, '127.0.0.1', () => {
@@ -70,11 +90,14 @@ const writeBoard = async (folder: string, projectName: string): Promise<void> =>
 
 const clientDir = (): string => path.join(dir, 'client');
 
-const start = async (mode: Parameters<typeof createBoardownServer>[0]['mode']): Promise<void> => {
+const start = async (
+  mode: Parameters<typeof createBoardownServer>[0]['mode'],
+  watch = true,
+): Promise<void> => {
   // A test that starts a second server drops the first one, so it is closed here
   // rather than left listening for the rest of the run.
   if (server !== null) await new Promise((resolve) => server?.close(resolve));
-  server = createBoardownServer({ mode, clientDir: clientDir() });
+  server = createBoardownServer({ mode, clientDir: clientDir(), watch });
   port = await listen(server);
 };
 
@@ -140,6 +163,19 @@ describe('single-board mode', () => {
     expect(reply.body).toContain('projectName: Solo');
   });
 
+  it('serves the board event stream', async () => {
+    const stream = await openStream('/api/events?client=a');
+    expect(stream.status).toBe(200);
+    expect(stream.contentType).toContain('text/event-stream');
+    stream.close();
+  });
+
+  it('has no event stream under --no-watch, and still serves the board', async () => {
+    await start({ kind: 'single', roots: rootsFromProjectFolder(dir) }, false);
+    expect((await request('/api/events?client=a')).status).toBe(404);
+    expect((await request('/api/fs/read?path=config.yaml')).status).toBe(200);
+  });
+
   it('serves static assets', async () => {
     const reply = await request('/assets/app.js');
     expect(reply.status).toBe(200);
@@ -203,6 +239,15 @@ describe('registry mode', () => {
       'utf-8',
     );
     expect(written).toBe('hello');
+  });
+
+  it('serves an event stream per board, under that board prefix', async () => {
+    const shop = await openStream('/b/shop/api/events?client=a');
+    expect(shop.status).toBe(200);
+    expect(shop.contentType).toContain('text/event-stream');
+    shop.close();
+    // An unregistered id has no board, so it has no stream either.
+    expect((await request('/b/nope/api/events?client=a')).status).toBe(404);
   });
 
   it('redirects a prefix without its trailing slash', async () => {

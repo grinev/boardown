@@ -8,6 +8,8 @@ import {
   resolveContained,
   sendText,
 } from '../api/board-api.js';
+import { createBoardWatchHub, type BoardWatchHub } from '../api/board-events.js';
+import { BOARD_EVENTS_ENDPOINT } from '../board-events-endpoint.js';
 import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
 import { describeEntries } from './board-list.js';
 import { renderListPage } from './list-page.js';
@@ -28,6 +30,12 @@ export interface ServerOptions {
   mode: ServeMode;
   /** Directory holding the built client — index.html and its assets. */
   clientDir: string;
+  /**
+   * Watch each open board and push a refresh on external changes. Off is
+   * `--no-watch`, and then no hub exists at all: the events endpoint is never
+   * routed, so the browser's one attempt 404s and it stops asking.
+   */
+  watch?: boolean;
 }
 
 export const LOOPBACK_HOST = '127.0.0.1';
@@ -95,6 +103,8 @@ const BOARD_PATH_PATTERN = /^\/b\/([^/]+)(\/.*)?$/;
 
 export const createBoardownServer = (options: ServerOptions): http.Server => {
   const clientDir = path.resolve(options.clientDir);
+  const watch: BoardWatchHub | undefined =
+    options.watch === false ? undefined : createBoardWatchHub();
 
   const sendFile = async (res: http.ServerResponse, abs: string): Promise<void> => {
     try {
@@ -138,11 +148,18 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
       return;
     }
     if (rest.startsWith(BOARD_FS_PREFIX)) {
-      await handleBoardFs(req, res, rest, params, roots.boardRoot);
+      await handleBoardFs(req, res, rest, params, roots.boardRoot, watch);
       return;
     }
     if (req.method === 'GET' && rest === PROJECT_FILE_ENDPOINT) {
       await handleProjectFile(res, params, roots.projectRoot);
+      return;
+    }
+    // The board root comes from whichever registry entry this request resolved
+    // to, which is the whole of what keeps one board's changes off another
+    // board's tabs.
+    if (watch !== undefined && req.method === 'GET' && rest === BOARD_EVENTS_ENDPOINT) {
+      watch.openStream(res, params, roots.boardRoot);
       return;
     }
     sendText(res, 404, `Not found: ${rest}`);

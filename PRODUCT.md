@@ -1162,8 +1162,9 @@ a local `.boardown/` over HTTP. Without arguments it opens the repo's own
 `.boardown/`; from sources it can also open another data directory with
 `pnpm dev -- --data-dir /path/to/project/.boardown`. **This is a development and
 local-from-sources shell**, not a distribution channel: there is no folder picker
-and no File System Access API. Refresh is the manual **Reload** button only — no
-file watching.
+and no File System Access API. It watches the open board and refreshes it in place
+on an external change, like the other shells, and there is no switch to turn that
+off — a dev shell is started by a script, not by a user typing flags.
 
 The package carries a second role next to that dev shell: **`boardown-web`, a
 local server** that serves the same UI, built, over the same endpoints. It is
@@ -1172,6 +1173,20 @@ published to a registry, so this is still not a distribution channel. It binds
 the loopback interface and nothing else, prints the address it listens on, and
 refuses a request whose `Host` or `Origin` names anything but `127.0.0.1`,
 `localhost` or `[::1]`.
+
+It watches each board somebody has open and refreshes that board's tabs on an
+external change, the same behaviour as the VS Code and Electron shells: the board's
+content is replaced in place, no loading screen, no dialog closed, and a burst of
+changes is one refresh rather than one per file. A tab's own writes are not an
+external change to itself, but they are to every other tab on that board. A board
+is watched only while a browser is on it. `--no-watch` turns it off for the run,
+and the board then updates on the **Reload** button only.
+
+A tab holds its side of that open connection only while its contents are on screen:
+it lets it go when it goes to the background and takes it back — refreshing once —
+when it is looked at again, so that a browser's small budget of connections to one
+address is not spent by tabs nobody is watching. Nothing about any of this is
+announced on screen.
 
 It serves either one board or several. With no flag it serves the **default
 registry**: the file where this shell keeps the projects of the machine it runs
@@ -1204,9 +1219,11 @@ reason and the path. The file is
 re-read when it changes: a project added to it appears without a restart, and one
 removed from it stops being served at once. A re-read that fails leaves the last
 mapping that worked in place and says so on the list page; a file that never
-loaded has no mapping to keep, so the page carries the reason alone. Refresh is the manual
-**Reload** button here too, and the server creates nothing inside a project folder
-— a registered folder with no board opens onboarding, like any other empty board.
+loaded has no mapping to keep, so the page carries the reason alone. The list page
+itself is not live: it reflects the registry as of the moment it was rendered, and
+reloading the page is how it is brought up to date. The server creates nothing
+inside a project folder — a registered folder with no board opens onboarding, like
+any other empty board.
 
 The list page **maintains** that file. Each row carries a **Remove** control at
 its right edge, beside the link rather than inside it, and below the list an
