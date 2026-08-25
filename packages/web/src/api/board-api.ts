@@ -116,7 +116,10 @@ export const handleProjectFile = async (
   sendJson(res, 200, result);
 };
 
-const readJsonBody = async (
+// Exported because the registry endpoints in the server half read a body by the
+// same rule, and answer a malformed one the same way, rather than growing a
+// second reader of their own.
+export const readJsonBody = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<Record<string, unknown> | null> => {

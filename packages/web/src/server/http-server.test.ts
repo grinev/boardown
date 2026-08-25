@@ -71,6 +71,9 @@ const writeBoard = async (folder: string, projectName: string): Promise<void> =>
 const clientDir = (): string => path.join(dir, 'client');
 
 const start = async (mode: Parameters<typeof createBoardownServer>[0]['mode']): Promise<void> => {
+  // A test that starts a second server drops the first one, so it is closed here
+  // rather than left listening for the rest of the run.
+  if (server !== null) await new Promise((resolve) => server?.close(resolve));
   server = createBoardownServer({ mode, clientDir: clientDir() });
   port = await listen(server);
 };
@@ -271,5 +274,121 @@ describe('registry mode', () => {
     expect(list.status).toBe(200);
     expect(list.body).toContain('last version that loaded');
     expect((await request('/b/shop/api/fs/read?path=config.yaml')).status).toBe(200);
+  });
+});
+
+describe('the registry endpoints', () => {
+  let registryFile = '';
+  let projectA = '';
+  let projectB = '';
+
+  const post = (endpoint: string, body: unknown): Promise<Reply> =>
+    request(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const registryText = (): Promise<string> => fs.readFile(registryFile, 'utf-8');
+
+  beforeEach(async () => {
+    registryFile = path.join(dir, 'projects.yaml');
+    projectA = path.join(dir, 'alpha');
+    projectB = path.join(dir, 'beta');
+    await fs.mkdir(projectA, { recursive: true });
+    await fs.mkdir(projectB, { recursive: true });
+    await writeBoard(projectA, 'Alpha');
+    await fs.writeFile(registryFile, `# mine\nprojects:\n  alpha: ${projectA}\n`, 'utf-8');
+    await start({ kind: 'registry', registry: new RegistryFile(registryFile) });
+  });
+
+  it('adds a project and answers with the list it is now', async () => {
+    const reply = await post('/api/projects/add', { path: projectB, id: 'beta' });
+    expect(reply.status).toBe(200);
+    const html = (JSON.parse(reply.body) as { html: string }).html;
+    expect(html).toContain('/b/beta/');
+    expect(html).toContain('no board yet');
+    expect(await registryText()).toBe(`# mine\nprojects:\n  alpha: ${projectA}\n  beta: ${projectB}\n`);
+  });
+
+  it('shows the new project on the page too', async () => {
+    await post('/api/projects/add', { path: projectB, id: 'beta' });
+    expect((await request('/')).body).toContain('/b/beta/');
+  });
+
+  it('creates a registry file that was not there', async () => {
+    const fresh = path.join(dir, 'fresh', 'projects.yaml');
+    await start({ kind: 'registry', registry: new RegistryFile(fresh, { absentIsEmpty: true }) });
+    const reply = await post('/api/projects/add', { path: projectA, id: 'alpha' });
+    expect(reply.status).toBe(200);
+    expect(await fs.readFile(fresh, 'utf-8')).toBe(`projects:\n  alpha: ${projectA}\n`);
+  });
+
+  it('refuses a path that names nothing, at the path field', async () => {
+    const reply = await post('/api/projects/add', {
+      path: path.join(dir, 'nowhere'),
+      id: 'gamma',
+    });
+    expect(reply.status).toBe(400);
+    expect(JSON.parse(reply.body)).toMatchObject({ field: 'path' });
+  });
+
+  it('refuses a folder already registered, at the path field', async () => {
+    const reply = await post('/api/projects/add', { path: projectA, id: 'second' });
+    expect(reply.status).toBe(400);
+    expect(JSON.parse(reply.body)).toMatchObject({ field: 'path' });
+  });
+
+  it('refuses an id already taken, and one that is no URL segment', async () => {
+    expect(JSON.parse((await post('/api/projects/add', { path: projectB, id: 'alpha' })).body))
+      .toMatchObject({ field: 'id' });
+    expect(JSON.parse((await post('/api/projects/add', { path: projectB, id: 'Beta One' })).body))
+      .toMatchObject({ field: 'id' });
+    expect(await registryText()).not.toContain('beta');
+  });
+
+  it('removes a project and leaves its files alone', async () => {
+    const reply = await post('/api/projects/remove', { id: 'alpha' });
+    expect(reply.status).toBe(200);
+    expect(await registryText()).toBe('# mine\nprojects: {}\n');
+    expect((await fs.stat(path.join(projectA, '.boardown', 'config.yaml'))).isFile()).toBe(true);
+  });
+
+  it('reports success for an id that is already gone', async () => {
+    const reply = await post('/api/projects/remove', { id: 'nobody' });
+    expect(reply.status).toBe(200);
+    expect(await registryText()).toContain('alpha:');
+  });
+
+  it('refuses both writes while the registry cannot be read', async () => {
+    await fs.writeFile(registryFile, 'projects:\n  - [unclosed\n', 'utf-8');
+    const add = await post('/api/projects/add', { path: projectB, id: 'beta' });
+    const remove = await post('/api/projects/remove', { id: 'alpha' });
+    expect(add.status).toBe(409);
+    expect(remove.status).toBe(409);
+    expect(JSON.parse(add.body)).toMatchObject({ field: null });
+    expect(await registryText()).toBe('projects:\n  - [unclosed\n');
+  });
+
+  it('writes against the file as it is, not as it was loaded', async () => {
+    await request('/');
+    await fs.writeFile(
+      registryFile,
+      `# mine\nprojects:\n  alpha: ${projectA}\n  byhand: ${projectB}\n`,
+      'utf-8',
+    );
+    const reply = await post('/api/projects/remove', { id: 'alpha' });
+    expect(reply.status).toBe(200);
+    expect(await registryText()).toBe(`# mine\nprojects:\n  byhand: ${projectB}\n`);
+  });
+
+  it('answers a body of the wrong shape with a 400', async () => {
+    expect((await post('/api/projects/add', { path: projectB })).status).toBe(400);
+    expect((await post('/api/projects/remove', {})).status).toBe(400);
+  });
+
+  it('has no such endpoints in single-board mode', async () => {
+    await start({ kind: 'single', roots: rootsFromProjectFolder(projectA) });
+    expect((await post('/api/projects/add', { path: projectB, id: 'beta' })).status).toBe(404);
   });
 });

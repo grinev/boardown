@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardListRow } from './board-list';
-import { renderListPage } from './list-page';
+import { renderListPage, renderProjects } from './list-page';
 
 const row = (id: string): BoardListRow => ({
   id,
@@ -32,7 +32,43 @@ describe('renderListPage', () => {
 
   it('escapes the reason, which carries a message from outside', () => {
     const html = renderListPage([], '<script>alert(1)</script>');
-    expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
+    // The page's own inline script is the only one on it.
+    expect(html.match(/<script>/g)).toHaveLength(1);
+    expect(html).not.toContain('<script>alert');
+  });
+
+  it('gives every row a Remove control outside its link, named for its project', () => {
+    const html = renderListPage([row('shop')], null);
+    const link = '<a href="/b/shop/">';
+    expect(html.indexOf('data-id="shop"')).toBeGreaterThan(html.indexOf(link));
+    expect(html.indexOf('data-id="shop"')).toBeGreaterThan(html.indexOf('</a>'));
+    expect(html).toContain('aria-label="Remove shop"');
+  });
+
+  it('offers the Add form, with a message slot for each field and one for neither', () => {
+    const html = renderListPage([], null);
+    expect(html).toContain('Add a project');
+    expect(html).toContain('<label for="add-path">Path</label>');
+    expect(html).toContain('<label for="add-id">ID</label>');
+    expect(html).toContain('id="error-path"');
+    expect(html).toContain('id="error-id"');
+    expect(html).toContain('id="error-form"');
+  });
+
+  it('renders the fragment the write endpoints answer with inside the page', () => {
+    const rows = [row('shop')];
+    expect(renderListPage(rows, null)).toContain(
+      `<div id="projects">${renderProjects(rows, null)}</div>`,
+    );
+  });
+});
+
+describe('renderProjects', () => {
+  it('escapes a project name, which comes from a board config', () => {
+    const html = renderProjects([{ ...row('shop'), name: '<b>Shop</b>' }], null);
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('&lt;b&gt;');
+    expect(html).toContain('aria-label="Remove &lt;b&gt;Shop&lt;/b&gt;"');
   });
 });

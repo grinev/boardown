@@ -11,6 +11,12 @@ import {
 import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
 import { describeEntries } from './board-list.js';
 import { renderListPage } from './list-page.js';
+import {
+  PROJECTS_ADD,
+  PROJECTS_REMOVE,
+  handleProjectAdd,
+  handleProjectRemove,
+} from './projects-api.js';
 import type { RegistryFile } from './registry.js';
 import type { BoardRoots } from './roots.js';
 
@@ -166,6 +172,16 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     const registry = options.mode.registry;
     const board = BOARD_PATH_PATTERN.exec(pathname);
     if (board === null) {
+      // The registry's own endpoints: they edit the file this server runs on, so
+      // they belong to no board and exist in no other mode.
+      if (req.method === 'POST' && pathname === PROJECTS_ADD) {
+        await handleProjectAdd(req, res, registry);
+        return;
+      }
+      if (req.method === 'POST' && pathname === PROJECTS_REMOVE) {
+        await handleProjectRemove(req, res, registry);
+        return;
+      }
       if (pathname === '/') {
         const state = await registry.read();
         const rows = await describeEntries(state.entries);

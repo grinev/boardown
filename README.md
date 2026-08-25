@@ -171,9 +171,11 @@ It prints the address it is listening on, and the registry file it opened. It
 binds the loopback interface only and refuses a request from anywhere else, so it
 is a board on your machine, not a board on your network.
 
-Nothing is created for you: until that file exists the server starts anyway and
-`/` lists no projects. A file that is there but does not parse refuses the start
-instead, naming the reason — the same as one you passed with `--registry`.
+Nothing is created for you up front: until that file exists the server starts
+anyway and `/` lists no projects — the file, and the folder above it, are written
+the first time you add a project. A file that is there but does not parse refuses
+the start instead, naming the reason — the same as one you passed with
+`--registry`.
 
 The registry is a list of projects, whether it is the default file or one you
 name with `--registry`:
@@ -194,6 +196,15 @@ reason on it, so one bad line never costs the others. Editing the file is enough
 a project added to it shows up without a restart, and one removed from it stops
 being served. Refresh is the manual **Reload** button, as everywhere else — the
 server watches nothing.
+
+You do not have to edit it by hand, though. The list page keeps it for you: every
+row has a **Remove** button, and under the list an **Add a project** form takes a
+path and an id, filling the id in from the folder's name as you type. A folder
+with no board yet is fine — it is registered like any other, and opens onboarding
+when you click it. Removing a project takes it out of the list and nothing else;
+your files stay exactly where they are. Both write one line of the registry file
+and leave the rest of it, comments included, alone — so the file is still yours to
+edit, and a project you add by hand and one you add from the page look the same.
 
 ## Custom task statuses (beta)
 

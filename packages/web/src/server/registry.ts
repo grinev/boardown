@@ -65,6 +65,22 @@ export const parseRegistry = (text: string): RegistryParse => {
   return { ok: true, entries };
 };
 
+/**
+ * Two entry lists name the same projects. What the write path compares a patched
+ * file against before it lets the patch land.
+ *
+ * Order is not compared, because it is not the file's: an id of digits alone is
+ * a valid one, and JavaScript reads an integer-like key back before every other
+ * key whatever line it was written on. Ids are unique here — a duplicate key
+ * makes the file unparseable long before this — so a pair-for-pair match at the
+ * same length is exact.
+ */
+export const sameEntries = (a: readonly RegistryEntry[], b: readonly RegistryEntry[]): boolean => {
+  if (a.length !== b.length) return false;
+  const byId = new Map(a.map((entry) => [entry.id, entry.projectRoot]));
+  return b.every((entry) => byId.get(entry.id) === entry.projectRoot);
+};
+
 export interface RegistryState {
   entries: RegistryEntry[];
   /**
@@ -73,6 +89,10 @@ export interface RegistryState {
    */
   staleReason: string | null;
 }
+
+export type RegistryText =
+  | { ok: true; text: string | null }
+  | { ok: false; error: string };
 
 export interface RegistryFileOptions {
   /**
@@ -134,6 +154,45 @@ export class RegistryFile {
     this.mtimeMs = mtimeMs;
     this.staleReason = null;
     return { entries: parsed.entries, staleReason: null };
+  }
+
+  /**
+   * The file as it stands right now, for a write that patches it — the cache is
+   * bypassed, because a patch applied to entries parsed a while ago would drop
+   * whatever was added to the file by hand since. `text: null` means the file is
+   * not there and this registry treats that as empty, so a write creates it.
+   */
+  async readForWrite(): Promise<RegistryText> {
+    try {
+      return { ok: true, text: await fs.readFile(this.filePath, 'utf-8') };
+    } catch (err) {
+      if (this.absentIsEmpty && isAbsent(err)) return { ok: true, text: null };
+      return { ok: false, error: messageOf(err) };
+    }
+  }
+
+  /**
+   * Replaces the file's contents. The bytes go to a temporary file beside it and
+   * only a complete one is renamed over the target: the registry lives in the
+   * OS's configuration folder rather than a repo, so a half-written one has no
+   * git to come back from — and would not parse, which is the one state the page
+   * cannot repair, since a registry it cannot read is a registry it will not patch.
+   *
+   * Forgetting the mtime rather than adopting the new text is what makes the next
+   * `read()` come from disk: the cache turns over on a millisecond, and a write
+   * fast enough not to move it would otherwise be invisible to the very next read.
+   */
+  async writeText(text: string): Promise<void> {
+    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+    const temp = `${this.filePath}.${process.pid}-${Date.now()}.tmp`;
+    try {
+      await fs.writeFile(temp, text, 'utf-8');
+      await fs.rename(temp, this.filePath);
+    } catch (err) {
+      await fs.rm(temp, { force: true });
+      throw err;
+    }
+    this.mtimeMs = -1;
   }
 
   // A file that is not there registers nothing, so entries it once held are

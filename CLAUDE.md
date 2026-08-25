@@ -109,6 +109,18 @@ handed the project root. This is the **only** browser-side path — it is the
 working environment for `@boardown/ui` development, not a stepping stone to a
 deployable browser app.
 
+Next to those, `boardown-web` in registry mode serves `/api/projects/{add,remove}`,
+which the list page's inline script calls. They are a **third** root: the only file
+they write is the registry the server was started on — no board and no project
+folder is ever a write target — which is why they sit outside `/b/<id>/`, live in
+`src/server/` rather than the shared `src/api/`, and exist in no other mode. They
+do *read* outside it: a folder is stat'd before it is registered, and each row's
+name comes from that project's own `config.yaml`. The registry is patched as text —
+one line in or out, the rest of the file including its comments untouched — and
+every patch is re-parsed and compared against what the edit meant before it is
+allowed to land, so a file shape the patcher misreads becomes a refusal instead of
+a corrupted registry.
+
 `packages/cli` is a headless shell that does **not** mount `@boardown/ui` — it has
 no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,
 serializer, schemas) and implements `FsAdapter` over `node:fs/promises`, mapping

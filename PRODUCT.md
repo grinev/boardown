@@ -1205,8 +1205,28 @@ re-read when it changes: a project added to it appears without a restart, and on
 removed from it stops being served at once. A re-read that fails leaves the last
 mapping that worked in place and says so on the list page; a file that never
 loaded has no mapping to keep, so the page carries the reason alone. Refresh is the manual
-**Reload** button here too, and the server creates nothing on disk — a registered
-folder with no board opens onboarding, like any other empty board.
+**Reload** button here too, and the server creates nothing inside a project folder
+— a registered folder with no board opens onboarding, like any other empty board.
+
+The list page **maintains** that file. Each row carries a **Remove** control at
+its right edge, beside the link rather than inside it, and below the list an
+**Add a project** section takes an absolute path and an id. Typing the path fills
+the id in from the folder's name — lowercased, anything outside `a-z0-9` becoming
+a dash — and the field stays editable, keeping whatever is typed into it. Adding
+appends the entry and the row appears without a reload. It does not require a
+board: a folder with no `.boardown/` is registered like any other and its row
+reads `no board yet`. It refuses, saying why under the field that caused it, a
+path that is not absolute, a path that is not an existing folder, a folder already
+registered under some id however it was typed, an id already in the registry, and
+an id that is not a URL segment. Removing asks first, naming the project, and then
+drops that one entry — the project folder, its `.boardown/` and everything under
+it are untouched, and nothing on this page ever deletes a file of a project's own.
+Both edits patch the registry in place, one line inserted or one line deleted,
+leaving every comment and the order of everything else as they were, and both
+re-read the file first, so an entry added to it by hand meanwhile is still there
+afterwards. While the file cannot be read, both refuse and say so on the page: a
+file the server cannot parse is not one it writes back over from what it
+remembers.
 
 The two registries differ in one thing only: what an **absent** file means. A
 `--registry` path that names nothing is a mistake in the argument and refuses the

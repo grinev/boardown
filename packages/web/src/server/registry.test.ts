@@ -172,3 +172,72 @@ describe('RegistryFile with absentIsEmpty', () => {
     expect(registry.loaded).toBe(false);
   });
 });
+
+describe('RegistryFile write side', () => {
+  const OTHER = path.resolve('/projects/blog');
+
+  it('hands out the file as it is now, past the cache', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n`, 'utf-8');
+    const registry = new RegistryFile(file);
+    await registry.read();
+
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n  blog: ${OTHER}\n`, 'utf-8');
+    const text = await registry.readForWrite();
+    expect(text).toMatchObject({ ok: true });
+    if (text.ok) expect(text.text).toContain('blog:');
+  });
+
+  it('calls an absent file no file at all only where absence is allowed', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'nothing', 'projects.yaml');
+    await expect(new RegistryFile(file, { absentIsEmpty: true }).readForWrite()).resolves.toEqual({
+      ok: true,
+      text: null,
+    });
+    expect(await new RegistryFile(file).readForWrite()).toMatchObject({ ok: false });
+  });
+
+  it('creates the file and the folder above it', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'boardown-web', 'projects.yaml');
+    const registry = new RegistryFile(file, { absentIsEmpty: true });
+    await registry.writeText(`projects:\n  shop: ${ABS}\n`);
+    expect(await fs.readFile(file, 'utf-8')).toContain('shop:');
+  });
+
+  it('reads the new entries back even when the file kept its modification time', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n`, 'utf-8');
+    const registry = new RegistryFile(file);
+    const before = await fs.stat(file);
+    expect((await registry.read()).entries).toHaveLength(1);
+
+    await registry.writeText(`projects:\n  shop: ${ABS}\n  blog: ${OTHER}\n`);
+    // The cache turns over on a millisecond; pinning the time back is how a
+    // write too fast to move it is made reproducible.
+    await fs.utimes(file, before.atime, before.mtime);
+    expect((await registry.read()).entries).toHaveLength(2);
+  });
+
+  it('leaves no temporary file behind', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    const registry = new RegistryFile(file, { absentIsEmpty: true });
+    await registry.writeText('projects: {}\n');
+    expect(await fs.readdir(dir)).toEqual(['projects.yaml']);
+  });
+
+  it('leaves the old file in place when the new text cannot be written', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n`, 'utf-8');
+    // The target's own folder is made unwritable by making the temporary name a
+    // folder, which is the closest reproducible stand-in for a failing write.
+    const registry = new RegistryFile(path.join(file, 'nested', 'projects.yaml'));
+    await expect(registry.writeText('projects: {}\n')).rejects.toThrow();
+    expect(await fs.readFile(file, 'utf-8')).toContain('shop:');
+  });
+});
