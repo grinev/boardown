@@ -1173,10 +1173,18 @@ the loopback interface and nothing else, prints the address it listens on, and
 refuses a request whose `Host` or `Origin` names anything but `127.0.0.1`,
 `localhost` or `[::1]`.
 
-It serves either one board or several. `boardown-web` with no flag serves the
-board of the current directory at `/`, and `--data-dir` serves a named
-`.boardown/` folder the same way. `--registry <file>` serves every project listed
-in a YAML file, each under its own `/b/<id>/`, with `/` listing them:
+It serves either one board or several. With no flag it serves the **default
+registry**: the file where this shell keeps the projects of the machine it runs
+on — `%APPDATA%\boardown-web\projects.yaml` on Windows,
+`~/Library/Application Support/boardown-web/projects.yaml` on macOS, and
+`${XDG_CONFIG_HOME:-~/.config}/boardown-web/projects.yaml` elsewhere. It is a
+server started once from a shortcut, where the directory it happened to start in
+means nothing, so the source of a board is the machine's own list rather than the
+current folder. `--data-dir` serves one named `.boardown/` folder at `/`, and
+`--registry <file>` serves another registry file the same way the default one is
+served; the two flags name different things and passing both is refused. Every
+registry, default or named, is the same YAML file — every project under its own
+`/b/<id>/`, with `/` listing them:
 
 ```yaml
 projects:
@@ -1191,12 +1199,23 @@ its own `config.yaml`; a project whose board cannot be read keeps its row and
 carries the reason instead — `no board yet`, `config.yaml is invalid`,
 `folder not found`, `could not be read` — so one bad entry never costs the
 others. A file that does not parse, has no `projects` key, or carries an id that
-is not a URL segment is invalid configuration and refuses the start. The file is
+is not a URL segment is invalid configuration and refuses the start, naming the
+reason and the path. The file is
 re-read when it changes: a project added to it appears without a restart, and one
 removed from it stops being served at once. A re-read that fails leaves the last
-mapping that worked in place and says so on the list page. Refresh is the manual
+mapping that worked in place and says so on the list page; a file that never
+loaded has no mapping to keep, so the page carries the reason alone. Refresh is the manual
 **Reload** button here too, and the server creates nothing on disk — a registered
 folder with no board opens onboarding, like any other empty board.
+
+The two registries differ in one thing only: what an **absent** file means. A
+`--registry` path that names nothing is a mistake in the argument and refuses the
+start. The default file is this shell's own state and starts out not existing, so
+the server starts on it, `/` lists no projects, and neither the folder nor the
+file is created — they are written the first time a project is added. A default
+file that exists but cannot be read is not absence, and refuses the start like any
+other invalid one. The startup lines name the registry's absolute path either way,
+so which file was opened never has to be guessed.
 
 The **dev shell** is also the only thing in the project that writes a **log
 file** — `boardown-web` installs no log destination, like every other shell a

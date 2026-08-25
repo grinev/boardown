@@ -47,15 +47,21 @@ const renderRow = (row: BoardListRow): string => {
   );
 };
 
+// A failed re-read with rows behind it is a stale mapping; with no rows there is
+// nothing to be stale, so the page says only that the file could not be read —
+// promising the last version that loaded when none ever did would be a lie the
+// default registry reaches on its first bad edit.
 export const renderListPage = (rows: readonly BoardListRow[], staleReason: string | null): string => {
   const note =
     staleReason === null
       ? ''
-      : `<p class="note">The registry file could not be re-read (${escapeHtml(staleReason)}). ` +
-        `Showing the last version that loaded.</p>`;
+      : `<p class="note">The registry file could not be read (${escapeHtml(staleReason)}).` +
+        `${rows.length === 0 ? '' : ' Showing the last version that loaded.'}</p>`;
   const body =
     rows.length === 0
-      ? '<p class="note">The registry lists no projects.</p>'
+      ? staleReason === null
+        ? '<p class="note">The registry lists no projects.</p>'
+        : ''
       : `<ul>${rows.map(renderRow).join('')}</ul>`;
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +

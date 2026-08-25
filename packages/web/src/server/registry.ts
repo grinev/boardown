@@ -74,12 +74,32 @@ export interface RegistryState {
   staleReason: string | null;
 }
 
+export interface RegistryFileOptions {
+  /**
+   * Whether a file that is simply not there counts as a registry with no
+   * projects. True for the default registry, which the server owns and nothing
+   * has written yet; false for `--registry`, where a path that names nothing is
+   * a typo the user has to see. Only absence is covered — a path that exists and
+   * cannot be read is a failure either way.
+   */
+  absentIsEmpty?: boolean;
+}
+
+const isAbsent = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'ENOENT';
+
 export class RegistryFile {
   private entries: RegistryEntry[] | null = null;
   private mtimeMs = -1;
   private staleReason: string | null = null;
+  private readonly absentIsEmpty: boolean;
 
-  constructor(readonly filePath: string) {}
+  constructor(
+    readonly filePath: string,
+    options: RegistryFileOptions = {},
+  ) {
+    this.absentIsEmpty = options.absentIsEmpty ?? false;
+  }
 
   /** True once the file has parsed at least one time. */
   get loaded(): boolean {
@@ -93,6 +113,7 @@ export class RegistryFile {
     try {
       mtimeMs = (await fs.stat(this.filePath)).mtimeMs;
     } catch (err) {
+      if (this.absentIsEmpty && isAbsent(err)) return this.empty();
       return this.fail(messageOf(err));
     }
     if (this.entries !== null && mtimeMs === this.mtimeMs) {
@@ -102,6 +123,7 @@ export class RegistryFile {
     try {
       text = await fs.readFile(this.filePath, 'utf-8');
     } catch (err) {
+      if (this.absentIsEmpty && isAbsent(err)) return this.empty();
       return this.fail(messageOf(err));
     }
     const parsed = parseRegistry(text);
@@ -112,6 +134,16 @@ export class RegistryFile {
     this.mtimeMs = mtimeMs;
     this.staleReason = null;
     return { entries: parsed.entries, staleReason: null };
+  }
+
+  // A file that is not there registers nothing, so entries it once held are
+  // dropped rather than kept as the last version that worked. Forgetting the
+  // mtime is what lets a file written afterwards be picked up.
+  private empty(): RegistryState {
+    this.entries = [];
+    this.mtimeMs = -1;
+    this.staleReason = null;
+    return { entries: [], staleReason: null };
   }
 
   private fail(reason: string): RegistryState {

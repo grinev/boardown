@@ -9,10 +9,10 @@ export interface BoardRoots {
   projectRoot: string;
 }
 
-// The three sources of a root do not name the same thing, so the mapping lives
-// here once rather than being composed again by every caller: a project folder
-// holds its board in `.boardown`, while `--data-dir` names that board folder
-// directly, the way the dev shell has always meant it.
+// The two sources of a root do not name the same thing, so the mapping lives
+// here once rather than being composed again by every caller: a registry entry
+// is a project folder, which holds its board in `.boardown`, while `--data-dir`
+// names that board folder directly, the way the dev shell has always meant it.
 export const rootsFromProjectFolder = (folder: string): BoardRoots => {
   const projectRoot = path.resolve(folder);
   return { projectRoot, boardRoot: path.join(projectRoot, BOARD_DIR_NAME) };

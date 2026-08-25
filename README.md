@@ -148,30 +148,41 @@ cd packages/web && npm pack          # → boardown-web-<version>.tgz
 npm i -g ./boardown-web-<version>.tgz
 ```
 
-Run it in a project folder, or point it at a board:
+With no argument it serves your **registry** of projects — the list of boards you
+keep on this machine. Point it at a single board instead with `--data-dir`, or at
+another registry file with `--registry`:
 
 ```sh
-boardown-web                                      # the .boardown/ of the current folder
+boardown-web                                      # your registry of projects
 boardown-web --data-dir /path/to/project/.boardown
+boardown-web --registry /home/me/projects.yaml
 boardown-web --port 7777                          # otherwise the OS picks the port
 ```
 
-It prints the address it is listening on. It binds the loopback interface only
-and refuses a request from anywhere else, so it is a board on your machine, not a
-board on your network.
+The default registry file lives where your OS keeps user configuration:
 
-To keep several projects on one server, list them in a registry file and pass it
-with `--registry`:
+| OS | File |
+| --- | --- |
+| Windows | `%APPDATA%\boardown-web\projects.yaml` |
+| macOS | `~/Library/Application Support/boardown-web/projects.yaml` |
+| Linux and the rest | `${XDG_CONFIG_HOME:-~/.config}/boardown-web/projects.yaml` |
+
+It prints the address it is listening on, and the registry file it opened. It
+binds the loopback interface only and refuses a request from anywhere else, so it
+is a board on your machine, not a board on your network.
+
+Nothing is created for you: until that file exists the server starts anyway and
+`/` lists no projects. A file that is there but does not parse refuses the start
+instead, naming the reason — the same as one you passed with `--registry`.
+
+The registry is a list of projects, whether it is the default file or one you
+name with `--registry`:
 
 ```yaml
 # projects.yaml
 projects:
   boardown: /home/me/code/boardown
   shop: /home/me/work/shop
-```
-
-```sh
-boardown-web --registry /home/me/projects.yaml
 ```
 
 Each key is the id that appears in the URL — lowercase letters, digits and dashes
