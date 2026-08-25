@@ -134,6 +134,56 @@ as compact summaries; `task get <id>` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 
+### Local server (`boardown-web`)
+
+A local HTTP server that serves the board UI in an ordinary browser tab, for one
+project or for several at once. It is **not published to npm**: you build a
+tarball from a checkout and install that, which is the whole of its distribution
+story.
+
+```sh
+pnpm install
+pnpm --filter @boardown/web build
+cd packages/web && npm pack          # → boardown-web-<version>.tgz
+npm i -g ./boardown-web-<version>.tgz
+```
+
+Run it in a project folder, or point it at a board:
+
+```sh
+boardown-web                                      # the .boardown/ of the current folder
+boardown-web --data-dir /path/to/project/.boardown
+boardown-web --port 7777                          # otherwise the OS picks the port
+```
+
+It prints the address it is listening on. It binds the loopback interface only
+and refuses a request from anywhere else, so it is a board on your machine, not a
+board on your network.
+
+To keep several projects on one server, list them in a registry file and pass it
+with `--registry`:
+
+```yaml
+# projects.yaml
+projects:
+  boardown: /home/me/code/boardown
+  shop: /home/me/work/shop
+```
+
+```sh
+boardown-web --registry /home/me/projects.yaml
+```
+
+Each key is the id that appears in the URL — lowercase letters, digits and dashes
+— and each value is an absolute path to the **project** folder, whose board is
+the `.boardown/` inside it. The boards are then at `http://127.0.0.1:<port>/b/boardown/`
+and `/b/shop/`, and `/` lists them with each project's name taken from its own
+`config.yaml`. A project whose board cannot be read still gets a row, with the
+reason on it, so one bad line never costs the others. Editing the file is enough:
+a project added to it shows up without a restart, and one removed from it stops
+being served. Refresh is the manual **Reload** button, as everywhere else — the
+server watches nothing.
+
 ## Custom task statuses (beta)
 
 > **Beta.** Statuses are declared by hand in `config.yaml` and there is no UI for
@@ -334,9 +384,11 @@ The repo is a pnpm workspace with six packages:
 - [`packages/ui`](./packages/ui) — the React app: components, Zustand store,
   UI flow. Takes an `FsAdapter` as input, knows nothing about the host.
   Source-only (consumed directly by the shell's bundler).
-- [`packages/web`](./packages/web) — dev-only browser shell: Vite app that
-  mounts `@boardown/ui` over a Vite middleware which serves a local
-  `.boardown/` data directory. Used for iterating on the UI from sources.
+- [`packages/web`](./packages/web) — the browser shell, in two roles over one set
+  of endpoints: the Vite dev app that mounts `@boardown/ui` over a middleware
+  serving a local `.boardown/` data directory, used for iterating on the UI from
+  sources, and `boardown-web`, a local server for one board or a registry of
+  several. Nothing here is published to a registry.
 - [`packages/vscode`](./packages/vscode) — the primary MVP distribution target,
   a VS Code extension shell next to `web` (extension host via esbuild + webview
   via Vite), reusing `@boardown/ui` unchanged. Packages into an installable
@@ -449,8 +501,8 @@ SVG and re-run `pnpm icons`.
 The repo ships a `.boardown/` folder at the root with a minimal config and a
 couple of empty releases / epics. `pnpm dev` reads the selected data directory
 via a small Vite middleware that exposes `/api/fs/{read,list,stat,write}` over
-HTTP, and `@boardown/ui` mounts on top of a `DevHttpFsAdapter` that talks to
-those endpoints. This is the working environment for UI development and local
+HTTP, and `@boardown/ui` mounts on top of an `HttpFsAdapter` that talks to
+those endpoints — the same pair `boardown-web` serves. This is the working environment for UI development and local
 use from sources; a production browser deployment (folder picker, FS Access
 API or otherwise) is not in the MVP scope.
 

@@ -1,7 +1,8 @@
 idPrefix: BD
-nextId: 114
+nextId: 115
 projectName: Boardown
 theme: dark
+multipleActiveReleases: true
 customFields:
   - key: spec
     label: Spec

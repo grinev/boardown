@@ -39,7 +39,11 @@ installable `.vsix` and published to the Marketplace and Open VSX), which reads
 CLI. The **browser shell (`packages/web`) is a development and
 local-from-sources tool** — it boots `@boardown/ui` against a selected
 `.boardown/` over a Vite middleware, and is not a distribution channel. It has
-no folder picker and no File System Access API integration.
+no folder picker and no File System Access API integration. The same package
+also carries **`boardown-web`**, a local HTTP server that serves the built UI
+over those same endpoints, for one board or for several listed in a registry
+file; it is installed from a tarball packed on the machine that runs it, so
+nothing about it reaches a registry either.
 
 ## Repo layout
 
@@ -51,10 +55,11 @@ boardown/
 │   ├── ui/            # React app: components, Zustand store, UI flow.
 │   │                  # Takes an FsAdapter as a prop. No DOM-only / Node /
 │   │                  # VS Code imports.
-│   ├── web/           # Dev-only browser shell: Vite app, DevHttpFsAdapter
-│   │                  # over a Vite middleware that serves a selected
-│   │                  # .boardown/, manual Reload only. Mounts @boardown/ui.
-│   │                  # Not a distribution channel.
+│   ├── web/           # Two roles over one set of endpoints: the Vite dev
+│   │                  # shell (HttpFsAdapter over a Vite middleware serving a
+│   │                  # selected .boardown/), and boardown-web, a local server
+│   │                  # for one board or a registry of several. Manual Reload
+│   │                  # only. Mounts @boardown/ui. Nothing is published.
 │   ├── vscode/        # Primary shell: extension host (esbuild) + webview
 │   │                  # (Vite) hosting @boardown/ui. Shipped (.vsix per
 │   │                  # release; Marketplace + Open VSX).
@@ -90,12 +95,19 @@ folder's `.boardown/`; choosing among multiple roots or an arbitrary folder is
 out of scope (Electron territory). The Electron desktop build follows the same
 shell pattern and ships installers with each release.
 
-`packages/web` ships a small Vite middleware that exposes
-`/api/fs/{read,list,stat,write}` over HTTP, scoped to a selected `.boardown/`
-folder, plus a `DevHttpFsAdapter` that talks to those
-endpoints. This is the **only** browser-side path — it is the working
-environment for `@boardown/ui` development, not a stepping stone to a deployable
-browser app.
+`packages/web` owns one set of HTTP endpoints — `/api/fs/{read,list,stat,write,
+mkdir,remove}` scoped to a board root, plus the read-only `/api/project-file`
+scoped to the project folder around it — and two hosts for them. The Vite
+middleware serves them for the dev shell; `boardown-web` serves them for a
+locally installed server, where they sit under `/b/<id>/` when a registry lists
+several boards. The handlers live in one module (`src/api/`), given a root per
+request by whichever host is running, so the two can never drift into two
+implementations of the same rule; the browser side talks to them through
+`HttpFsAdapter` and `HttpProjectFileReader`, which take the endpoint base and so
+follow the prefix. The two roots stay apart on purpose: no write path is ever
+handed the project root. This is the **only** browser-side path — it is the
+working environment for `@boardown/ui` development, not a stepping stone to a
+deployable browser app.
 
 `packages/cli` is a headless shell that does **not** mount `@boardown/ui` — it has
 no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,

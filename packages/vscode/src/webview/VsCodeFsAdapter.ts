@@ -10,7 +10,7 @@ interface Pending {
   reject: (reason: Error) => void;
 }
 
-// Mirror of packages/web DevHttpFsAdapter, but the transport is the VS Code
+// Mirror of packages/web HttpFsAdapter, but the transport is the VS Code
 // webview message channel instead of HTTP: each call is a request the host
 // answers via postMessage, correlated by a numeric id.
 export class VsCodeFsAdapter implements FsAdapter {

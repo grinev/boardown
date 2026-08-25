@@ -1165,7 +1165,42 @@ local-from-sources shell**, not a distribution channel: there is no folder picke
 and no File System Access API. Refresh is the manual **Reload** button only — no
 file watching.
 
-It is also the only shell that writes a **log file**. Each `pnpm dev` /
+The package carries a second role next to that dev shell: **`boardown-web`, a
+local server** that serves the same UI, built, over the same endpoints. It is
+installed from a tarball packed on the machine that runs it — nothing is
+published to a registry, so this is still not a distribution channel. It binds
+the loopback interface and nothing else, prints the address it listens on, and
+refuses a request whose `Host` or `Origin` names anything but `127.0.0.1`,
+`localhost` or `[::1]`.
+
+It serves either one board or several. `boardown-web` with no flag serves the
+board of the current directory at `/`, and `--data-dir` serves a named
+`.boardown/` folder the same way. `--registry <file>` serves every project listed
+in a YAML file, each under its own `/b/<id>/`, with `/` listing them:
+
+```yaml
+projects:
+  boardown: D:/Projects/AI/boardown
+  shop: D:/Projects/work/shop
+```
+
+The key is the id in the URL — lowercase letters, digits and dashes — and the
+value is an absolute path to the **project** folder, whose board is the
+`.boardown/` inside it. Each project's display name on the list page comes from
+its own `config.yaml`; a project whose board cannot be read keeps its row and
+carries the reason instead — `no board yet`, `config.yaml is invalid`,
+`folder not found`, `could not be read` — so one bad entry never costs the
+others. A file that does not parse, has no `projects` key, or carries an id that
+is not a URL segment is invalid configuration and refuses the start. The file is
+re-read when it changes: a project added to it appears without a restart, and one
+removed from it stops being served at once. A re-read that fails leaves the last
+mapping that worked in place and says so on the list page. Refresh is the manual
+**Reload** button here too, and the server creates nothing on disk — a registered
+folder with no board opens onboarding, like any other empty board.
+
+The **dev shell** is also the only thing in the project that writes a **log
+file** — `boardown-web` installs no log destination, like every other shell a
+user runs. Each `pnpm dev` /
 `pnpm dev:sandbox` run opens a fresh `logs/web-<timestamp>.log` at the repo root
 (gitignored), holding both the dev server's own events and the log lines the
 browser-side app forwards to it, so a crash a tester hits can be handed to a

@@ -12,7 +12,7 @@ const failed = async (op: string, target: string, res: Response): Promise<Error>
   return error;
 };
 
-export class DevHttpFsAdapter implements FsAdapter {
+export class HttpFsAdapter implements FsAdapter {
   constructor(private readonly base: string = '/api/fs') {}
 
   async read(path: string): Promise<string> {

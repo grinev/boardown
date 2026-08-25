@@ -39,11 +39,16 @@ for (const { out, size } of pngTargets) {
 // VS Code's command/tab button reuses the master mark as a small colored SVG,
 // so it never drifts from the app icon. Drop the comment and shrink the default
 // width/height; the 1024 viewBox keeps scaling it crisply.
-const toolbarSvg = svg
-  .toString()
-  .replace(/^<!--[\s\S]*?-->\s*/, '')
-  .replace('width="1024" height="1024"', 'width="24" height="24"');
-await write('packages/vscode/media/board.svg', toolbarSvg);
+const bare = svg.toString().replace(/^<!--[\s\S]*?-->\s*/, '');
+await write(
+  'packages/vscode/media/board.svg',
+  bare.replace('width="1024" height="1024"', 'width="24" height="24"'),
+);
+
+// The browser tab of the web shell — the dev server and boardown-web both serve
+// it from public/ at an absolute /favicon.svg, so it is the same file under
+// every board prefix. The viewBox scales it down; no raster sizes needed.
+await write('packages/web/public/favicon.svg', bare);
 
 // ICO (Windows) and ICNS (macOS) are built from a single high-res PNG;
 // png2icons downscales it to every embedded size internally.

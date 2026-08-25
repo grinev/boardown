@@ -1,9 +1,9 @@
 ---
-description: Build a groomed task end to end — read its product spec, plan, implement, review, browser-test — stopping for the human only on decisions that are genuinely his.
-argument-hint: <a board task id whose spec field is filled>
+description: Take a board task end to end — groom it with the user into a product spec, then plan, implement, review, browser-test — stopping for him only on decisions that are genuinely his.
+argument-hint: <a board task id, groomed or not>
 ---
 
-Take this task from its product spec to reviewed, tested code:
+Take this task from the board to reviewed, tested code:
 
 **$1**
 
@@ -12,20 +12,26 @@ give you independent judgement — a critic, an architect, an arbiter, a reviewe
 tester — and you decide what to do with it. Never delegate the writing of code or
 of the plan.
 
-**The product spec is not yours to write.** It was written with the user during
-grooming and it is the input to this run.
+**The product spec is never yours to write alone.** It is written with the user —
+in phase 0 of this run, or in a `/groom` session before it. From phase 1 on it is
+settled input, and nothing after that reopens it.
 
 ## The task on the board
 
-`$1` is a board task id (`BD-42`). **Invoke the `task-tracking` skill first and
-follow it**: which task you are working, where its `<slug>` folder is, what goes
+**Invoke the `task-tracking` skill first and follow it**: which task you are
+working, where its `<slug>` folder is, what goes
 into its fields, the progress checklist, the log you keep as you go, the outcome
 you end on. It runs alongside every phase below.
 
-**A task whose `spec` field is empty is not ready to be built.** Say so and stop:
-the spec is written with the user in `/groom`, and starting without one means
-inventing the product from a title. The same holds when `$1` is an idea rather
-than an id — that is a grooming session, not this command.
+**An empty `spec` field does not stop this command** — it is what makes phase 0
+run. The rule `task-tracking` states holds for the autonomous flows, where there
+is nobody to groom with; here the user is in the room from the first message, so
+an ungroomed task is groomed and then built in one sitting.
+
+What does stop the run is an argument that is not a task. `$1` is a board task id
+(`BD-42`); an idea in prose has no id, no folder and no field to write the spec
+into. Say so and stop — it goes on the board first, either by him or by you when
+he asks for it.
 
 ## Exploring the codebase — a standing rule, every phase
 
@@ -69,9 +75,11 @@ in parallel in one go, then stop. Read the report when it comes.
 Everything lives in the task's `.claude/specs/<slug>/` — the folder named
 `<TASK-ID>-<kebab-case title>`, `BD-42-csv-export`, as `task-tracking` fixes it:
 
-- `product.md` — **the input.** Written during grooming, with the user. You read
-  it, you build what it says, and you extend only its "Decided by default"
-  section as calls get made during the run. Everything else in it stands.
+- `product.md` — **the input to phase 1.** Written with the user, in phase 0 or in
+  a `/groom` session before this run. From phase 1 on you read it, you build what
+  it says, and you extend only its "Decided by default" section as calls get made
+  during the run. Everything else in it stands — including the lines you wrote
+  yourself an hour earlier.
 - `tech.md` — how we build it. Yours.
 - `refs/` — frames and references the spec cites. A frame taken during grooming
   shows the product **as it is today** and marks what must not move; a mockup the
@@ -148,6 +156,40 @@ change. A fork arises from the *spec* being silent, not from yesterday's documen
 **"Decided by default"** in the spec holds what was settled without the user, each
 line marked with its source: `(expert)`, `(human)`, or unmarked for your own call.
 
+## Phase 0 — Grooming
+
+**Skip this phase when the task's `spec` field is already filled.** It was groomed
+in a `/groom` session, that file is settled product, and re-opening it here would
+ask the user to decide twice. Say so in one line and go to phase 1.
+
+Otherwise the product gets decided now, with him in the room. **Read
+`.claude/commands/groom.md` and follow it** — "The order of work on a task", "What
+gets closed with the user" and "How to ask" carry the whole procedure, and the
+`product-spec` skill carries the shape of the file. Do not groom from memory of
+this file.
+
+What that command does across a release, you do for `$1` alone: draft the spec off
+`Explore` reports and the neighbouring specs, one batched `AskUserQuestion` for
+the forks the draft could not close, `spec-critic` once, fold in his answers, set
+the `spec` field.
+
+Three of its rules this phase does not relax:
+
+- **nothing is built here.** No `tech.md`, no code, no gates — those are phases 2
+  and 4, and reaching for them early is what grooming exists to prevent;
+- **there is no `expert` in this phase.** That agent settles a fork when the user
+  is out of reach; here he is answering you directly, and the answer is his;
+- **the board gets the `spec` field last**, once the forks are closed.
+
+The checklist `task-tracking` writes at the start of the run gets a `0. groomed,
+spec written` item ahead of the seven when this phase runs.
+
+**Then the boundary is hard.** Once the spec is written the run treats it exactly
+as it would a spec written a week ago by someone else: phase 1 does not reopen it,
+no later phase edits a line of it, and a line that implementation proves
+impossible goes back to the user as a quoted fork — not as a quiet rewrite of what
+he just agreed to.
+
 ## Phase 1 — Read the spec, explore the code it lands in, close what it left open
 
 The spec is settled product; this phase does not reopen it. What it does is learn
@@ -155,9 +197,11 @@ how the code stands where that product lands, and close the forks the spec does
 not reach — both before a line of the plan is written, the cheapest moment there
 is.
 
-**Read `product.md` yourself, whole**, plus every frame in `refs/`. It was already
-reviewed during grooming — a critic read it cold and its findings were closed with
-the user — so it does not get reviewed again here.
+**Read `product.md` yourself, whole**, plus every frame in `refs/` — unless phase
+0 just wrote it and it is still in front of you. It was already reviewed during
+grooming — a critic read it cold and its findings were closed with the user — so
+it does not get reviewed again here, and `spec-critic` is not invoked a second
+time.
 
 **Then send the exploring out, one `Explore` per package the reach line touches,
 all of them at once.** This is the phase that pays for the whole run: phase 2 is

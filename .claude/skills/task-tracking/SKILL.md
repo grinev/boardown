@@ -22,10 +22,15 @@ The flow is invoked with either a task id (`BD-42`) or an idea in prose.
 checklist, the notes and the custom fields — `spec`, `plan`, `log`, `session`,
 `outcome`.
 
-**An empty `spec` field stops the run.** The product spec is written with the user
-in `/groom`, and a run that starts without one is inventing the product from a
-title. Say that the task is not groomed and stop; do not write a spec yourself and
-do not proceed on the description alone.
+**An empty `spec` field stops an autonomous run** — `/feature_auto` and
+`/rework_auto`. The product spec is written with the user, and a headless run that
+starts without one is inventing the product from a title. Say that the task is not
+groomed and stop; do not write a spec yourself and do not proceed on the
+description alone.
+
+**In `/feature` it does not stop anything**: the user is in the room, and the run
+opens with its own grooming phase that writes the spec with him. A filled `spec`
+field there means the task was groomed earlier and phase 0 is skipped.
 
 Then, before reading the spec and before any code: `boardown task status BD-42
 in-progress`, the run's first log line, and the `log` field pointing at it.
@@ -63,7 +68,7 @@ Each artifact gets its field **when it is born**, not in a batch at the end:
 
 | Field | Set it | Value |
 |---|---|---|
-| `spec` | never by you — `/groom` sets it when the task is groomed | `[[repo:.claude/specs/<slug>/product.md]]` |
+| `spec` | only by a grooming session — `/groom`, or phase 0 of `/feature`; never by an implementing phase | `[[repo:.claude/specs/<slug>/product.md]]` |
 | `plan` | after the technical plan is written | `[[repo:.claude/specs/<slug>/tech.md]]` |
 | `log` | with the first line, right after the status | `[[repo:.claude/specs/<slug>/log.md]]` |
 | `outcome` | last action of the run | one of the five values below |
@@ -194,6 +199,17 @@ boardown task checklist add BD-42 "7. committed"
 Tick each one as its phase closes. This is what the user reads off the board in
 the evening without opening the log: the row says how far the run got and where
 it stopped.
+
+**Item 7 is the flow's own last phase, and the two flows end differently.** An
+autonomous run commits, and the item reads `7. committed`. `/feature` never
+commits — its phase 7 is the summary to the user and the working tree is left for
+him — so there the item is `7. summary written`. Writing `committed` into an
+interactive run's checklist buys a row that can only stay unticked or be ticked
+untruthfully.
+
+**A `/feature` run that grooms the task itself puts `0. groomed, spec written`
+ahead of the seven.** A run that started from an already groomed task does not —
+the item would claim work this run did not do.
 
 **The two `r` items are rounds, not findings.** Tick one when its round is done —
 including when the witness found nothing and there was nothing to fix; leave it

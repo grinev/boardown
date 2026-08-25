@@ -24,6 +24,10 @@ const { version } = createRequire(import.meta.url)(
 
 export default defineConfig({
   plugins: [react(), devFsPlugin({ boardRoot, logsDir })],
+  // The client lands in a subdirectory so the server bundle can sit beside it in
+  // dist/ and find it at runtime. Assets keep the default absolute base: one
+  // copy serves every /b/<id>/ prefix.
+  build: { outDir: 'dist/client', emptyOutDir: true },
   define: {
     // core never reads process.env, and the browser has no environment to read,
     // so the level travels into the bundle as a build-time constant.

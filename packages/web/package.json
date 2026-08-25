@@ -4,26 +4,39 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "boardown-web": "./dist/boardown-web.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "vite build",
+    "build": "node scripts/clean-dist.mjs && vite build && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@boardown/core": "workspace:*",
-    "@boardown/ui": "workspace:*",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "test:watch": "vitest",
+    "prepack": "pnpm build"
   },
   "devDependencies": {
+    "@boardown/core": "workspace:*",
+    "@boardown/ui": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.0",
+    "js-yaml": "^4.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vite": "^6.0.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "zod": "^4.4.3"
   }
 }
