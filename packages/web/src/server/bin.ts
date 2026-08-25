@@ -32,6 +32,7 @@ const run = async (argv: readonly string[]): Promise<void> => {
   const server = createBoardownServer({
     mode,
     clientDir: path.join(__dirname, 'client'),
+    watch: args.noWatch !== true,
   });
   const port = await listen(server, args.port ?? 0);
   const origin = `http://${LOOPBACK_HOST}:${port}`;

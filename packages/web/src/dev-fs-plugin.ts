@@ -3,6 +3,8 @@ import path from 'node:path';
 import { configureLogging, createLogger, isLogLevel, type LogRecord } from '../../core/src/logger';
 import type { Plugin } from 'vite';
 import { BOARD_FS_PREFIX, handleBoardFs, handleProjectFile, readBody } from './api/board-api.js';
+import { createBoardWatchHub } from './api/board-events.js';
+import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint.js';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint.js';
 import { createLogFileSink } from './log-file-sink.js';
@@ -48,7 +50,9 @@ const asLogRecord = (value: unknown): LogRecord | null => {
 
 // The dev host for the endpoints in api/board-api. What stays here is what only
 // the dev shell has: the run's log file, the sink the browser posts into, and a
-// board root created up front so a fresh checkout can be served.
+// board root created up front so a fresh checkout can be served. Auto-refresh is
+// always on here — the dev shell is started by a pnpm script, not by a user
+// typing flags, so there is nobody to turn a switch.
 export function devFsPlugin(options: DevFsPluginOptions): Plugin {
   const boardRoot = path.resolve(options.boardRoot);
   const projectRoot = path.dirname(boardRoot);
@@ -70,6 +74,13 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
         server.config.logger.info(`boardown log file: ${fileSink.filePath} (level ${level})`);
         log.info(`dev server started, board root ${boardRoot}`);
       }
+
+      const watch = createBoardWatchHub();
+      // Vite starts a fresh server when its config changes, and a dev session can
+      // do that many times over; the watchers go with the one they belonged to.
+      server.httpServer?.on('close', () => {
+        watch.close();
+      });
 
       // connect's middleware signature is void-returning; the async body owns
       // its own error handling, so the returned promise is intentionally not
@@ -102,12 +113,17 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
           return;
         }
 
+        if (req.method === 'GET' && url.pathname === BOARD_EVENTS_ENDPOINT) {
+          watch.openStream(res, url.searchParams, boardRoot);
+          return;
+        }
+
         if (!url.pathname.startsWith(BOARD_FS_PREFIX)) {
           next();
           return;
         }
 
-        await handleBoardFs(req, res, url.pathname, url.searchParams, boardRoot);
+        await handleBoardFs(req, res, url.pathname, url.searchParams, boardRoot, watch);
       });
     },
   };

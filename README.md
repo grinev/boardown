@@ -157,6 +157,7 @@ boardown-web                                      # your registry of projects
 boardown-web --data-dir /path/to/project/.boardown
 boardown-web --registry /home/me/projects.yaml
 boardown-web --port 7777                          # otherwise the OS picks the port
+boardown-web --no-watch                           # do not watch; Reload only
 ```
 
 The default registry file lives where your OS keeps user configuration:
@@ -170,6 +171,10 @@ The default registry file lives where your OS keeps user configuration:
 It prints the address it is listening on, and the registry file it opened. It
 binds the loopback interface only and refuses a request from anywhere else, so it
 is a board on your machine, not a board on your network.
+
+An open board refreshes itself when its files change on disk — from git, an
+editor, or the CLI — updating in place without the Reload button, as in the
+VS Code and desktop shells. Pass `--no-watch` to turn that off for the run.
 
 Nothing is created for you up front: until that file exists the server starts
 anyway and `/` lists no projects — the file, and the folder above it, are written
@@ -194,8 +199,7 @@ and `/b/shop/`, and `/` lists them with each project's name taken from its own
 `config.yaml`. A project whose board cannot be read still gets a row, with the
 reason on it, so one bad line never costs the others. Editing the file is enough:
 a project added to it shows up without a restart, and one removed from it stops
-being served. Refresh is the manual **Reload** button, as everywhere else — the
-server watches nothing.
+being served, and reloading `/` is what re-renders the list.
 
 You do not have to edit it by hand, though. The list page keeps it for you: every
 row has a **Remove** button, and under the list an **Add a project** form takes a
