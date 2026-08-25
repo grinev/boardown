@@ -1227,7 +1227,8 @@ any other empty board.
 
 The list page **maintains** that file. Each row carries a **Remove** control at
 its right edge, beside the link rather than inside it, and below the list an
-**Add a project** section takes an absolute path and an id. Typing the path fills
+**Add project** button opens a dialog taking an absolute path and an id. Typing
+the path fills
 the id in from the folder's name — lowercased, anything outside `a-z0-9` becoming
 a dash — and the field stays editable, keeping whatever is typed into it. Adding
 appends the entry and the row appears without a reload. It does not require a
@@ -1235,8 +1236,8 @@ board: a folder with no `.boardown/` is registered like any other and its row
 reads `no board yet`. It refuses, saying why under the field that caused it, a
 path that is not absolute, a path that is not an existing folder, a folder already
 registered under some id however it was typed, an id already in the registry, and
-an id that is not a URL segment. Removing asks first, naming the project, and then
-drops that one entry — the project folder, its `.boardown/` and everything under
+an id that is not a URL segment. Removing asks first in a dialog of the page's
+own, naming the project, and then drops that one entry — the project folder, its `.boardown/` and everything under
 it are untouched, and nothing on this page ever deletes a file of a project's own.
 Both edits patch the registry in place, one line inserted or one line deleted,
 leaving every comment and the order of everything else as they were, and both

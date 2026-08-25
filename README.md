@@ -202,8 +202,9 @@ a project added to it shows up without a restart, and one removed from it stops
 being served, and reloading `/` is what re-renders the list.
 
 You do not have to edit it by hand, though. The list page keeps it for you: every
-row has a **Remove** button, and under the list an **Add a project** form takes a
-path and an id, filling the id in from the folder's name as you type. A folder
+row has a **Remove** button, and under the list an **Add project** button opens a
+dialog taking a path and an id, filling the id in from the folder's name as you
+type. A folder
 with no board yet is fine — it is registered like any other, and opens onboarding
 when you click it. Removing a project takes it out of the list and nothing else;
 your files stay exactly where they are. Both write one line of the registry file
