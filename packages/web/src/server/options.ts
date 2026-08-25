@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { ServeMode } from './http-server.js';
 import { RegistryFile } from './registry.js';
-import { rootsFromBoardFolder, rootsFromProjectFolder, type BoardRoots } from './roots.js';
+import { rootsFromBoardFolder, type BoardRoots } from './roots.js';
 
 export class UsageError extends Error {}
 
@@ -59,21 +59,28 @@ export interface ResolvedMode {
   singleRoots: BoardRoots | null;
 }
 
-// The three sources do not name the same thing: the current directory and a
-// registry entry are project folders, while --data-dir names the board folder
-// itself, the way the dev shell has always meant it.
-export const resolveMode = async (args: CliArgs, cwd: string): Promise<ResolvedMode> => {
-  if (args.registry !== undefined) {
-    const registry = new RegistryFile(path.resolve(cwd, args.registry));
-    const state = await registry.read();
-    if (!registry.loaded) {
-      throw new Error(`Registry ${registry.filePath} cannot be used: ${state.staleReason ?? ''}`);
-    }
-    return { mode: { kind: 'registry', registry }, registry, singleRoots: null };
+// The two flags do not name the same thing: a registry entry is a project
+// folder, while --data-dir names the board folder itself, the way the dev shell
+// has always meant it. With neither, the source is the default registry, which
+// bin.ts knows how to locate — this file stays out of the business of platforms,
+// and asks for the path only on the branch that needs it, so a machine with no
+// resolvable home can still run --data-dir.
+export const resolveMode = async (
+  args: CliArgs,
+  cwd: string,
+  defaultRegistryPath: () => string,
+): Promise<ResolvedMode> => {
+  if (args.dataDir !== undefined) {
+    const singleRoots = rootsFromBoardFolder(path.resolve(cwd, args.dataDir));
+    return { mode: { kind: 'single', roots: singleRoots }, registry: null, singleRoots };
   }
-  const singleRoots =
-    args.dataDir !== undefined
-      ? rootsFromBoardFolder(path.resolve(cwd, args.dataDir))
-      : rootsFromProjectFolder(cwd);
-  return { mode: { kind: 'single', roots: singleRoots }, registry: null, singleRoots };
+  const registry =
+    args.registry !== undefined
+      ? new RegistryFile(path.resolve(cwd, args.registry))
+      : new RegistryFile(defaultRegistryPath(), { absentIsEmpty: true });
+  const state = await registry.read();
+  if (!registry.loaded) {
+    throw new Error(`Registry ${registry.filePath} cannot be used: ${state.staleReason ?? ''}`);
+  }
+  return { mode: { kind: 'registry', registry }, registry, singleRoots: null };
 };

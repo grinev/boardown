@@ -57,26 +57,26 @@ describe('parseArgs', () => {
   });
 });
 
-describe('resolveMode', () => {
-  it('treats the current directory as a project folder', async () => {
-    const dir = await tempDir();
-    const resolved = await resolveMode({}, dir);
-    expect(resolved.singleRoots).toEqual({
-      projectRoot: dir,
-      boardRoot: path.join(dir, BOARD_DIR_NAME),
-    });
-  });
+const writeRegistry = async (file: string, project: string): Promise<void> => {
+  await fs.writeFile(file, `projects:\n  shop: ${project.replace(/\\/g, '/')}\n`, 'utf-8');
+};
 
+/** Nothing under test may ask for it; a case that expects it to be asked names its own. */
+const noDefault = (): string => {
+  throw new Error('the default registry path was asked for');
+};
+
+describe('resolveMode', () => {
   it('treats --data-dir as the board folder itself', async () => {
     const dir = await tempDir();
     const board = path.join(dir, BOARD_DIR_NAME);
-    const resolved = await resolveMode({ dataDir: board }, dir);
+    const resolved = await resolveMode({ dataDir: board }, dir, noDefault);
     expect(resolved.singleRoots).toEqual({ projectRoot: dir, boardRoot: board });
   });
 
   it('resolves a relative --data-dir against the working directory', async () => {
     const dir = await tempDir();
-    const resolved = await resolveMode({ dataDir: BOARD_DIR_NAME }, dir);
+    const resolved = await resolveMode({ dataDir: BOARD_DIR_NAME }, dir, noDefault);
     expect(resolved.singleRoots?.boardRoot).toBe(path.join(dir, BOARD_DIR_NAME));
   });
 
@@ -84,8 +84,8 @@ describe('resolveMode', () => {
     const dir = await tempDir();
     const project = path.join(dir, 'shop');
     const file = path.join(dir, 'projects.yaml');
-    await fs.writeFile(file, `projects:\n  shop: ${project.replace(/\\/g, '/')}\n`, 'utf-8');
-    const resolved = await resolveMode({ registry: file }, dir);
+    await writeRegistry(file, project);
+    const resolved = await resolveMode({ registry: file }, dir, noDefault);
     expect(resolved.singleRoots).toBeNull();
     const entries = (await resolved.registry?.read())?.entries ?? [];
     expect(entries[0]).toMatchObject({
@@ -98,13 +98,53 @@ describe('resolveMode', () => {
   it('refuses a registry that cannot be read, naming the file', async () => {
     const dir = await tempDir();
     const missing = path.join(dir, 'nope.yaml');
-    await expect(resolveMode({ registry: missing }, dir)).rejects.toThrow(missing);
+    await expect(resolveMode({ registry: missing }, dir, noDefault)).rejects.toThrow(missing);
   });
 
   it('refuses a registry that does not validate', async () => {
     const dir = await tempDir();
     const file = path.join(dir, 'projects.yaml');
     await fs.writeFile(file, 'projects:\n  "My Shop": /somewhere\n', 'utf-8');
-    await expect(resolveMode({ registry: file }, dir)).rejects.toThrow(/lowercase/);
+    await expect(resolveMode({ registry: file }, dir, noDefault)).rejects.toThrow(/lowercase/);
+  });
+
+  it('serves the default registry when neither flag is given', async () => {
+    const dir = await tempDir();
+    const project = path.join(dir, 'shop');
+    const file = path.join(dir, 'default.yaml');
+    await writeRegistry(file, project);
+    const resolved = await resolveMode({}, dir, () => file);
+    expect(resolved.singleRoots).toBeNull();
+    expect(resolved.registry?.filePath).toBe(file);
+    const entries = (await resolved.registry?.read())?.entries ?? [];
+    expect(entries.map((entry) => entry.id)).toEqual(['shop']);
+  });
+
+  it('starts on a default registry that is not there, listing nothing', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'default.yaml');
+    const resolved = await resolveMode({}, dir, () => file);
+    expect(resolved.registry?.filePath).toBe(file);
+    expect(await resolved.registry?.read()).toEqual({ entries: [], staleReason: null });
+    await expect(fs.stat(file)).rejects.toThrow();
+  });
+
+  it('refuses a default registry that does not validate, naming the file', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'default.yaml');
+    await fs.writeFile(file, 'projects:\n  "My Shop": /somewhere\n', 'utf-8');
+    await expect(resolveMode({}, dir, () => file)).rejects.toThrow(file);
+  });
+
+  it('lets the default path refuse to resolve, and does not ask for it otherwise', async () => {
+    const dir = await tempDir();
+    const board = path.join(dir, BOARD_DIR_NAME);
+    const unresolvable = (): string => {
+      throw new Error('no home directory is set');
+    };
+    await expect(resolveMode({}, dir, unresolvable)).rejects.toThrow(/no home directory/);
+    await expect(resolveMode({ dataDir: board }, dir, unresolvable)).resolves.toMatchObject({
+      singleRoots: { boardRoot: board },
+    });
   });
 });

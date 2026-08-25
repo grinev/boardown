@@ -123,3 +123,52 @@ describe('RegistryFile', () => {
     expect(state.staleReason).not.toBeNull();
   });
 });
+
+describe('RegistryFile with absentIsEmpty', () => {
+  it('reads a file that is not there as a registry with no projects', async () => {
+    const dir = await tempDir();
+    const registry = new RegistryFile(path.join(dir, 'missing.yaml'), { absentIsEmpty: true });
+    expect(await registry.read()).toEqual({ entries: [], staleReason: null });
+    expect(registry.loaded).toBe(true);
+  });
+
+  it('picks up a file written after it was found missing', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    const registry = new RegistryFile(file, { absentIsEmpty: true });
+    expect((await registry.read()).entries).toEqual([]);
+
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n`, 'utf-8');
+    expect((await registry.read()).entries.map((entry) => entry.id)).toEqual(['shop']);
+  });
+
+  it('forgets the projects of a file that was deleted', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    await fs.writeFile(file, `projects:\n  shop: ${ABS}\n`, 'utf-8');
+    const registry = new RegistryFile(file, { absentIsEmpty: true });
+    expect((await registry.read()).entries).toHaveLength(1);
+
+    await fs.rm(file);
+    expect(await registry.read()).toEqual({ entries: [], staleReason: null });
+  });
+
+  it('still refuses a file that is there and does not parse', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'projects.yaml');
+    await fs.writeFile(file, 'projects:\n  - [unclosed\n', 'utf-8');
+    const registry = new RegistryFile(file, { absentIsEmpty: true });
+    const state = await registry.read();
+    expect(registry.loaded).toBe(false);
+    expect(state.staleReason).not.toBeNull();
+  });
+
+  it('still refuses a path that is a folder rather than a file', async () => {
+    const dir = await tempDir();
+    const asFolder = path.join(dir, 'projects.yaml');
+    await fs.mkdir(asFolder);
+    const registry = new RegistryFile(asFolder, { absentIsEmpty: true });
+    expect((await registry.read()).staleReason).not.toBeNull();
+    expect(registry.loaded).toBe(false);
+  });
+});

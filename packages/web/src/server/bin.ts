@@ -1,6 +1,8 @@
 import type { Server } from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { defaultRegistryPath } from './default-registry.js';
 import { createBoardownServer, LOOPBACK_HOST } from './http-server.js';
 import { UsageError, parseArgs, resolveMode } from './options.js';
 
@@ -19,7 +21,13 @@ const out = (line: string): void => {
 
 const run = async (argv: readonly string[]): Promise<void> => {
   const args = parseArgs(argv);
-  const { mode, registry, singleRoots } = await resolveMode(args, process.cwd());
+  const { mode, registry, singleRoots } = await resolveMode(args, process.cwd(), () =>
+    defaultRegistryPath({
+      platform: process.platform,
+      env: process.env,
+      homedir: () => os.homedir(),
+    }),
+  );
 
   const server = createBoardownServer({
     mode,
