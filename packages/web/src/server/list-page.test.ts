@@ -46,14 +46,29 @@ describe('renderListPage', () => {
     expect(html).toContain('aria-label="Remove shop"');
   });
 
-  it('offers the Add form, with a message slot for each field and one for neither', () => {
+  it('offers Add project as a button, with the form in a dialog behind it', () => {
     const html = renderListPage([], null);
-    expect(html).toContain('Add a project');
-    expect(html).toContain('<label for="add-path">Path</label>');
+    expect(html).toContain('id="add-open"');
+    expect(html).toContain('Add project</button>');
+    const dialog = '<dialog id="add-dialog"';
+    expect(html).toContain(dialog);
+    expect(html.indexOf('<label for="add-path">Path</label>')).toBeGreaterThan(
+      html.indexOf(dialog),
+    );
     expect(html).toContain('<label for="add-id">ID</label>');
+    // A message slot for each field and one for a refusal that belongs to
+    // neither — a registry that cannot be read, a write that failed.
     expect(html).toContain('id="error-path"');
     expect(html).toContain('id="error-id"');
     expect(html).toContain('id="error-form"');
+  });
+
+  it('asks for a removal in a dialog of its own rather than the browser’s', () => {
+    const html = renderListPage([row('shop')], null);
+    expect(html).toContain('<dialog id="remove-dialog"');
+    expect(html).toContain('id="remove-question"');
+    expect(html).toContain('id="remove-confirm"');
+    expect(html).not.toContain('window.confirm');
   });
 
   it('renders the fragment the write endpoints answer with inside the page', () => {
