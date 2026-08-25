@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Reviews the code written for a feature against its product spec, its technical plan and the rules in CLAUDE.md. Reports findings; it never fixes them. Use after implementation and after lint/typecheck/build/test pass. Read-only — no edits, no commits.
 model: opus
-effort: xhigh
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 
