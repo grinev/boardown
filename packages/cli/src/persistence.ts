@@ -138,17 +138,54 @@ export function serializeContainer(ref: ContainerRef): string {
   }
 }
 
-export async function writeContainer(fs: FsAdapter, ref: ContainerRef): Promise<void> {
+// A task with unreadable frontmatter never made it into the container's
+// `tasks` array (see parser.ts), so serializing that container drops it
+// silently. Refuse instead of writing a file that would lose the block.
+function assertWritable(problems: readonly ParseProblem[], file: string): void {
+  const matching = problems.filter((p) => p.file === file && p.level === 'error');
+  if (matching.length === 0) return;
+  throw new CliError(
+    'UNREADABLE_FRONTMATTER',
+    `Refusing to write ${file}: it contains a task with unreadable frontmatter that would be lost. Fix or remove the broken block by hand, then retry.`,
+    1,
+    matching,
+  );
+}
+
+export async function writeContainer(
+  fs: FsAdapter,
+  ref: ContainerRef,
+  problems: readonly ParseProblem[],
+): Promise<void> {
+  assertWritable(problems, ref.container.filename);
   await fs.write(ref.container.filename, serializeContainer(ref));
 }
 
 // Containers that must land together (a link mirrored into two tasks): the guard
 // checks every target before writing any of them, so an external change aborts the
 // whole operation instead of half-applying it.
-export async function writeContainers(fs: GuardedFs, refs: ContainerRef[]): Promise<void> {
+export async function writeContainers(
+  fs: GuardedFs,
+  refs: ContainerRef[],
+  problems: readonly ParseProblem[],
+): Promise<void> {
+  for (const ref of refs) assertWritable(problems, ref.container.filename);
   await fs.writeAll(
     refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
   );
+}
+
+// A rename (e.g. a release renamed to a new slug): the content being moved was
+// parsed from `fromFilename`, so that is where a lost broken block would have
+// come from — same guard as writeContainer, checked against the old path.
+export async function moveContainer(
+  fs: GuardedFs,
+  ref: ContainerRef,
+  fromFilename: string,
+  problems: readonly ParseProblem[],
+): Promise<void> {
+  assertWritable(problems, fromFilename);
+  await fs.moveFile(fromFilename, ref.container.filename, serializeContainer(ref));
 }
 
 export async function writeConfig(fs: FsAdapter, config: BoardConfig): Promise<void> {

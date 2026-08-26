@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EPIC_NAME_MAX_LENGTH } from '@boardown/core';
@@ -177,6 +177,168 @@ describe('run() — routing, envelopes, exit codes', () => {
     it('--json forces the JSON envelope even under a TTY', async () => {
       const { stdout } = await capture(['backlog', '--json'], { cwd: project, tty: true });
       expect(parse(stdout)).toMatchObject({ ok: true });
+    });
+  });
+
+  // A task block with unreadable frontmatter is dropped by the parser
+  // (never lands in the container's `tasks` array), so serializing that
+  // container back to disk would silently lose it. Writing to that file must
+  // refuse instead, leaving the file exactly as it was.
+  describe('writing a file with a broken task block', () => {
+    let project: string;
+    let releaseSlug: string;
+    let releaseFile: string;
+
+    beforeEach(async () => {
+      project = await mkdtemp(join(tmpdir(), 'bd-cli-run-broken-'));
+      expect((await capture(['init', '--id-prefix', 'TS', '--project-name', 'Demo'], { cwd: project })).code).toBe(0);
+      const added = await capture(['release', 'add', 'Active'], { cwd: project });
+      expect(added.code).toBe(0);
+      releaseSlug = (parse(added.stdout).data as { slug: string }).slug;
+      releaseFile = join(project, '.boardown', 'releases', `${releaseSlug}.md`);
+
+      // Corrupt the release file by hand: valid file frontmatter, but a task
+      // block whose YAML frontmatter fails to parse.
+      const original = await readFile(releaseFile, 'utf8');
+      await writeFile(
+        releaseFile,
+        `${original}\n## Broken task\n\n---\nid: [unterminated\n---\n\nbody\n`,
+        'utf8',
+      );
+    });
+
+    afterEach(async () => {
+      await rm(project, { recursive: true, force: true });
+    });
+
+    it('refuses the write with a non-zero exit code and leaves the file untouched', async () => {
+      const before = await readFile(releaseFile, 'utf8');
+
+      const { code, stdout } = await capture(
+        ['task', 'add', 'New task', '--release', releaseSlug],
+        { cwd: project },
+      );
+
+      expect(code).not.toBe(0);
+      const env = parse(stdout);
+      expect(env.ok).toBe(false);
+      expect(errorCode(env)).toBe('UNREADABLE_FRONTMATTER');
+
+      const after = await readFile(releaseFile, 'utf8');
+      expect(after).toBe(before);
+      expect(after).toContain('id: [unterminated');
+    });
+  });
+
+  // Same class of bug, second door: an epic file can also hold task blocks
+  // (unscheduled tasks), and `epic edit` writes the file back too.
+  describe('editing an epic file with a broken task block', () => {
+    let project: string;
+    let epicSlug: string;
+    let epicFile: string;
+
+    beforeEach(async () => {
+      project = await mkdtemp(join(tmpdir(), 'bd-cli-run-broken-epic-'));
+      expect((await capture(['init', '--id-prefix', 'TS', '--project-name', 'Demo'], { cwd: project })).code).toBe(0);
+      const added = await capture(['epic', 'add', 'UI'], { cwd: project });
+      expect(added.code).toBe(0);
+      epicSlug = (parse(added.stdout).data as { slug: string }).slug;
+      epicFile = join(project, '.boardown', 'epics', `${epicSlug}.md`);
+
+      const original = await readFile(epicFile, 'utf8');
+      await writeFile(
+        epicFile,
+        `${original}\n## Broken task\n\n---\nid: [unterminated\n---\n\nbody\n`,
+        'utf8',
+      );
+    });
+
+    afterEach(async () => {
+      await rm(project, { recursive: true, force: true });
+    });
+
+    it('refuses the write with a non-zero exit code and leaves the file untouched', async () => {
+      const before = await readFile(epicFile, 'utf8');
+
+      const { code, stdout } = await capture(['epic', 'edit', epicSlug, '--name', 'UI Renamed'], {
+        cwd: project,
+      });
+
+      expect(code).not.toBe(0);
+      const env = parse(stdout);
+      expect(env.ok).toBe(false);
+      expect(errorCode(env)).toBe('UNREADABLE_FRONTMATTER');
+
+      const after = await readFile(epicFile, 'utf8');
+      expect(after).toBe(before);
+      expect(after).toContain('id: [unterminated');
+    });
+  });
+
+  // Third and fourth doors onto the same file class: `release edit` (in-place,
+  // and the rename path via moveFile) and `release start` also write a
+  // release container back to disk outside writeContainer's original call sites.
+  describe('writing a release file with a broken task block', () => {
+    let project: string;
+    let releaseSlug: string;
+    let releaseFile: string;
+
+    beforeEach(async () => {
+      project = await mkdtemp(join(tmpdir(), 'bd-cli-run-broken-rel2-'));
+      expect((await capture(['init', '--id-prefix', 'TS', '--project-name', 'Demo'], { cwd: project })).code).toBe(0);
+      const added = await capture(['release', 'add', 'Active'], { cwd: project });
+      expect(added.code).toBe(0);
+      releaseSlug = (parse(added.stdout).data as { slug: string }).slug;
+      releaseFile = join(project, '.boardown', 'releases', `${releaseSlug}.md`);
+
+      const original = await readFile(releaseFile, 'utf8');
+      await writeFile(
+        releaseFile,
+        `${original}\n## Broken task\n\n---\nid: [unterminated\n---\n\nbody\n`,
+        'utf8',
+      );
+    });
+
+    afterEach(async () => {
+      await rm(project, { recursive: true, force: true });
+    });
+
+    it('release edit (in-place) refuses and leaves the file untouched', async () => {
+      const before = await readFile(releaseFile, 'utf8');
+
+      const { code, stdout } = await capture(
+        ['release', 'edit', releaseSlug, '--description', 'updated'],
+        { cwd: project },
+      );
+
+      expect(code).not.toBe(0);
+      expect(errorCode(parse(stdout))).toBe('UNREADABLE_FRONTMATTER');
+      expect(await readFile(releaseFile, 'utf8')).toBe(before);
+    });
+
+    it('release edit --name (rename, moveFile path) refuses and leaves the file untouched', async () => {
+      const before = await readFile(releaseFile, 'utf8');
+
+      const { code, stdout } = await capture(
+        ['release', 'edit', releaseSlug, '--name', 'Renamed Active'],
+        { cwd: project },
+      );
+
+      expect(code).not.toBe(0);
+      expect(errorCode(parse(stdout))).toBe('UNREADABLE_FRONTMATTER');
+      expect(await readFile(releaseFile, 'utf8')).toBe(before);
+      const renamedFile = join(project, '.boardown', 'releases', 'renamed-active.md');
+      await expect(readFile(renamedFile, 'utf8')).rejects.toThrow();
+    });
+
+    it('release start refuses and leaves the file untouched', async () => {
+      const before = await readFile(releaseFile, 'utf8');
+
+      const { code, stdout } = await capture(['release', 'start', releaseSlug], { cwd: project });
+
+      expect(code).not.toBe(0);
+      expect(errorCode(parse(stdout))).toBe('UNREADABLE_FRONTMATTER');
+      expect(await readFile(releaseFile, 'utf8')).toBe(before);
     });
   });
 });

@@ -2,7 +2,6 @@ import {
   EPIC_NAME_MAX_LENGTH,
   createEpic,
   editEpic,
-  serializeEpic,
   sortTasksByOrder,
   type Epic,
   type EpicPatch,
@@ -16,6 +15,7 @@ import {
   findEpic,
   loadBoardOrThrow,
   resolveBoardRoot,
+  writeContainer,
   type LoadedBoard,
 } from '../persistence';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
@@ -137,7 +137,7 @@ async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await board.fs.write(epic.filename, serializeEpic(epic));
+  await writeContainer(board.fs, { kind: 'epic', container: epic }, board.problems);
   return {
     data: { slug: epic.slug },
     human: `Created epic "${epic.frontmatter.name}" (${epic.slug}).`,
@@ -191,7 +191,7 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await board.fs.write(updated.filename, serializeEpic(updated));
+  await writeContainer(board.fs, { kind: 'epic', container: updated }, board.problems);
   return {
     data: { slug: updated.slug },
     human: `Updated epic ${slug}.`,

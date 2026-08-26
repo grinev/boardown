@@ -5,7 +5,6 @@ import {
   createRelease,
   editRelease,
   emptyBacklog,
-  serializeRelease,
   sortTasksByOrder,
   startRelease,
   type BoardConfig,
@@ -20,8 +19,10 @@ import { isFull, summaryLines, taskPayload, summarizeTasks } from '../summary';
 import {
   findRelease,
   loadBoardOrThrow,
+  moveContainer,
   resolveBoardRoot,
   writeConfig,
+  writeContainer,
   writeContainers,
   type ContainerRef,
   type LoadedBoard,
@@ -186,7 +187,7 @@ async function releaseAdd(args: ParsedArgs, ctx: CommandContext): Promise<Comman
     throw new CliError('RELEASE_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await board.fs.write(release.filename, serializeRelease(release));
+  await writeContainer(board.fs, { kind: 'release', container: release }, board.problems);
   return {
     data: { slug: release.slug },
     human: `Created release "${releaseName(release)}" (${release.filename}).`,
@@ -232,10 +233,17 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     throw new CliError('RELEASE_INVALID', message, 2);
   }
 
-  const content = serializeRelease(updated);
   const moved = updated.filename !== release.filename;
-  if (moved) await board.fs.moveFile(release.filename, updated.filename, content);
-  else await board.fs.write(updated.filename, content);
+  if (moved) {
+    await moveContainer(
+      board.fs,
+      { kind: 'release', container: updated },
+      release.filename,
+      board.problems,
+    );
+  } else {
+    await writeContainer(board.fs, { kind: 'release', container: updated }, board.problems);
+  }
 
   // The Board's stored choice is a slug, so a rename carries it. After the move,
   // never with it: a slug that fell behind resolves to the first active release,
@@ -270,7 +278,7 @@ async function releaseStart(args: ParsedArgs, ctx: CommandContext): Promise<Comm
     throw new CliError('RELEASE_CONFLICT', err instanceof Error ? err.message : String(err));
   }
 
-  await board.fs.write(started.filename, serializeRelease(started));
+  await writeContainer(board.fs, { kind: 'release', container: started }, board.problems);
   return {
     data: { slug: started.slug },
     human: `Started release ${releaseName(started)} (now current).`,
@@ -319,7 +327,7 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   if (result.backlog !== null && changed.has(result.backlog.filename)) {
     refs.push({ kind: 'backlog', container: result.backlog });
   }
-  await writeContainers(board.fs, refs);
+  await writeContainers(board.fs, refs, board.problems);
 
   return {
     data: { slug: result.release.slug },
