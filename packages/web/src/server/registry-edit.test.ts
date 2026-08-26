@@ -99,8 +99,12 @@ describe('addEntry', () => {
     expect(entries(after)[0]?.projectRoot).toBe(folder);
   });
 
-  it('writes a Windows path so that it reads back unchanged', () => {
-    const folder = 'C:\\Users\\me\\shop';
+  // A backslash is ordinary in a path only on the platform whose paths carry
+  // them: on POSIX a Windows path is not an absolute path at all, and the
+  // parser refuses it long before the writer's quoting is what is being tested.
+  // So the case is written with a path the platform running it actually has.
+  it('writes a path carrying backslashes so that it reads back unchanged', () => {
+    const folder = process.platform === 'win32' ? 'C:\\Users\\me\\shop' : '/projects/a\\b';
     const after = added('projects: {}\n', 'shop', folder);
     expect(entries(after)[0]?.projectRoot).toBe(rootsFromProjectFolder(folder).projectRoot);
   });
