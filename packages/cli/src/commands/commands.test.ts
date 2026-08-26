@@ -612,7 +612,9 @@ describe('cli commands (integration)', () => {
         .map((container): ContainerRef => ({ kind: 'epic', container })),
     ];
 
-    await expect(writeContainers(board.fs, refs)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(writeContainers(board.fs, refs, board.problems)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
 
     // The release is written first, so a sequence of single writes would already
     // have finished it here.

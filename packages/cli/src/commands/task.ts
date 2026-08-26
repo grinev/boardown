@@ -263,7 +263,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   };
 
   const result = applyOp(() => createTask(target.container, snapshot.config, input));
-  await writeContainer(fs, { kind: target.kind, container: result.container });
+  await writeContainer(fs, { kind: target.kind, container: result.container }, problems);
   await writeConfig(fs, result.config);
 
   return {
@@ -327,7 +327,7 @@ async function moveAndReport(
   newStatus?: TaskStatus,
 ): Promise<CommandOutput> {
   if (edited.filename === dest.container.filename) {
-    await writeContainer(fs, { kind: location.kind, container: edited });
+    await writeContainer(fs, { kind: location.kind, container: edited }, problems);
     return { data: { id: taskId }, human: `Updated ${taskId}.`, ...problemsField(problems) };
   }
   const movingTask = edited.tasks.find((t) => t.frontmatter.id === taskId);
@@ -341,8 +341,8 @@ async function moveAndReport(
       destEpic: dest.destEpic,
     }),
   );
-  await writeContainer(fs, { kind: location.kind, container: result.source });
-  await writeContainer(fs, { kind: dest.kind, container: result.dest });
+  await writeContainer(fs, { kind: location.kind, container: result.source }, problems);
+  await writeContainer(fs, { kind: dest.kind, container: result.dest }, problems);
   return {
     data: { id: taskId },
     human: `Updated ${taskId}; moved to ${result.dest.filename}.`,
@@ -422,7 +422,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       ? applyOp(() => editTask(location.container, snapshot.config, id, patch))
       : location.container;
     if (dest === null) {
-      await writeContainer(fs, { kind: location.kind, container: edited });
+      await writeContainer(fs, { kind: location.kind, container: edited }, problems);
       return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
     }
     return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems, movedStatus);
@@ -460,7 +460,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const patch: TaskPatch = { ...fields };
   if (nextEpic !== undefined) patch.epic = nextEpic;
   const edited = applyOp(() => editTask(location.container, snapshot.config, id, patch));
-  await writeContainer(fs, { kind: location.kind, container: edited });
+  await writeContainer(fs, { kind: location.kind, container: edited }, problems);
   return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
 }
 
@@ -479,7 +479,7 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   }
 
   const updated = applyOp(() => changeTaskStatus(location.container, snapshot.config, id, status));
-  await writeContainer(fs, { kind: location.kind, container: updated });
+  await writeContainer(fs, { kind: location.kind, container: updated }, problems);
 
   return { data: { id }, human: `${id} → ${status}.`, ...problemsField(problems) };
 }
@@ -741,7 +741,7 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   }
 
   const updated = applyOp(() => reorderTask(location.container, id, beforeTaskId));
-  await writeContainer(fs, { kind: location.kind, container: updated });
+  await writeContainer(fs, { kind: location.kind, container: updated }, problems);
 
   return {
     data: { id },
@@ -781,7 +781,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
   const changed = result.containers
     .map((container, i): ContainerRef => ({ kind: refs[i]!.kind, container }))
     .filter((ref) => result.changedFilenames.includes(ref.container.filename));
-  await writeContainers(fs, changed);
+  await writeContainers(fs, changed, problems);
 
   return {
     data: { id },
@@ -817,7 +817,7 @@ async function mutateTask(
 
   const { patch, human, extra } = build(task);
   const edited = applyOp(() => editTask(location.container, snapshot.config, taskId, patch));
-  await writeContainer(fs, { kind: location.kind, container: edited });
+  await writeContainer(fs, { kind: location.kind, container: edited }, problems);
 
   return {
     data: { id: taskId, ...(extra ?? {}) },
@@ -1107,7 +1107,7 @@ async function linkMutate(
       : { kind: target.kind, container: result.target },
   );
   if (refs.length > 0) {
-    await writeContainers(fs, refs);
+    await writeContainers(fs, refs, problems);
   }
 
   // Naming the relation matters once there are seven of them: "Unlinked A and B"
