@@ -122,6 +122,9 @@ interface BoardState {
   // path may ever hold it.
   projectFiles: ProjectFileReader | null;
   conflictOpen: boolean;
+  // The file a write was refused on because the parser could not read all of it,
+  // with the problems that justify the refusal. Null when nothing was refused.
+  unwritableFile: { path: string; problems: ParseProblem[] } | null;
   selectedTaskId: string | null;
   selectedEpicSlug: string | null;
   selectedReleaseFilename: string | null;
@@ -155,6 +158,8 @@ interface BoardState {
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
+  openUnwritable: (path: string, problems: readonly ParseProblem[]) => void;
+  closeUnwritable: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
@@ -515,6 +520,7 @@ const selectionFor = (ref: DialogRef) => {
 // belongs here rather than inline, or the conflict will not know about it.
 const ALL_DIALOGS_CLOSED = {
   ...NO_DIALOG,
+  unwritableFile: null as { path: string; problems: ParseProblem[] } | null,
   dialogStack: [] as DialogRef[],
   createTaskForReleaseFilename: null,
   createTaskForEpicSlug: null,
@@ -573,9 +579,15 @@ export const useBoardStore = create<BoardState>(
         // Guarded with an empty version map until the board loads: the only write
         // possible before that is onboarding's config.yaml, which does not exist
         // yet, so the guard's stat check passes. Keeps `fs` a single type.
-        fs: createGuardedFs(fs, {}, () => get().openConflict()),
+        fs: createGuardedFs(fs, {
+          versions: {},
+          problems: [],
+          onConflict: () => get().openConflict(),
+          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+        }),
         rawFs: fs,
         conflictOpen: false,
+        unwritableFile: null,
         // Keep a previously captured default when the caller (e.g. reload) omits it.
         // Seed `theme` from it too so the loading screen matches the host theme
         // (e.g. VS Code dark) instead of flashing the light-theme default before
@@ -605,7 +617,12 @@ export const useBoardStore = create<BoardState>(
         }
         // From here on writes go through a guard that refuses to clobber files
         // changed on disk since this load, surfacing the conflict modal instead.
-        const guarded = createGuardedFs(fs, result.fileVersions, () => get().openConflict());
+        const guarded = createGuardedFs(fs, {
+          versions: result.fileVersions,
+          problems: result.problems,
+          onConflict: () => get().openConflict(),
+          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+        });
         set({
           status: 'ready',
           fs: guarded,
@@ -613,6 +630,7 @@ export const useBoardStore = create<BoardState>(
           problems: result.snapshot.problems,
           errorMessage: null,
           conflictOpen: false,
+          unwritableFile: null,
           theme: result.snapshot.config.theme ?? 'light',
         });
       } catch (err) {
@@ -650,13 +668,19 @@ export const useBoardStore = create<BoardState>(
           await get().load(rawFs);
           return;
         }
-        const guarded = createGuardedFs(rawFs, result.fileVersions, () => get().openConflict());
+        const guarded = createGuardedFs(rawFs, {
+          versions: result.fileVersions,
+          problems: result.problems,
+          onConflict: () => get().openConflict(),
+          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+        });
         set({
           fs: guarded,
           snapshot: result.snapshot,
           problems: result.snapshot.problems,
           errorMessage: null,
           conflictOpen: false,
+          unwritableFile: null,
           theme: result.snapshot.config.theme ?? 'light',
         });
       } catch (err) {
@@ -673,6 +697,14 @@ export const useBoardStore = create<BoardState>(
     // next to this one — two backdrops, overlapping boxes and an inline error
     // contradicting the modal — so the conflict closes every dialog it finds.
     openConflict: () => set({ conflictOpen: true, ...ALL_DIALOGS_CLOSED }),
+
+    // Same reason the conflict closes everything: what is on screen was about to
+    // be saved and was not, so leaving it there contradicts the modal. Unlike the
+    // conflict this one is dismissable — only the named file is locked.
+    openUnwritable: (path, problems) =>
+      set({ ...ALL_DIALOGS_CLOSED, unwritableFile: { path, problems: [...problems] } }),
+
+    closeUnwritable: () => set({ unwritableFile: null }),
 
     completeOnboarding: async (input) => {
       const { fs } = get();
@@ -1333,14 +1365,18 @@ export const useBoardStore = create<BoardState>(
         set({ snapshot: nextSnapshot, errorMessage: null });
 
         try {
-          await fs.write(
-            moved.source.filename,
-            serializeContainer({ kind: sourceLoc.kind, container: moved.source }),
-          );
-          await fs.write(
-            destWithRemainder.filename,
-            serializeContainer({ kind: destLoc.kind, container: destWithRemainder }),
-          );
+          // The task leaves one file and lands in another, so the two writes have
+          // to stand or fall together.
+          await fs.writeAll([
+            {
+              path: moved.source.filename,
+              content: serializeContainer({ kind: sourceLoc.kind, container: moved.source }),
+            },
+            {
+              path: destWithRemainder.filename,
+              content: serializeContainer({ kind: destLoc.kind, container: destWithRemainder }),
+            },
+          ]);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           set({ snapshot, errorMessage: `Failed to save task: ${message}` });
@@ -1547,14 +1583,18 @@ export const useBoardStore = create<BoardState>(
       set({ snapshot: nextSnapshot, errorMessage: null });
 
       try {
-        await fs.write(
-          moved.source.filename,
-          serializeContainer({ kind: sourceLoc.kind, container: moved.source }),
-        );
-        await fs.write(
-          moved.dest.filename,
-          serializeContainer({ kind: destLoc.kind, container: moved.dest }),
-        );
+        // The task leaves one file and lands in another, so the two writes have
+        // to stand or fall together.
+        await fs.writeAll([
+          {
+            path: moved.source.filename,
+            content: serializeContainer({ kind: sourceLoc.kind, container: moved.source }),
+          },
+          {
+            path: moved.dest.filename,
+            content: serializeContainer({ kind: destLoc.kind, container: moved.dest }),
+          },
+        ]);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to move task: ${message}` });
@@ -1649,16 +1689,22 @@ export const useBoardStore = create<BoardState>(
         set({ snapshot: nextSnapshot, errorMessage: null });
 
         try {
-          await fs.write(
-            nextSource.filename,
-            serializeContainer({ kind: sourceLoc.kind, container: nextSource }),
-          );
-          if (!sameContainer) {
-            await fs.write(
-              nextDest.filename,
-              serializeContainer({ kind: destLoc.kind, container: nextDest }),
-            );
-          }
+          // The task leaves one file and lands in another, so the two writes have
+          // to stand or fall together.
+          await fs.writeAll([
+            {
+              path: nextSource.filename,
+              content: serializeContainer({ kind: sourceLoc.kind, container: nextSource }),
+            },
+            ...(sameContainer
+              ? []
+              : [
+                  {
+                    path: nextDest.filename,
+                    content: serializeContainer({ kind: destLoc.kind, container: nextDest }),
+                  },
+                ]),
+          ]);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           set({ snapshot, errorMessage: `Failed to move task: ${message}` });
@@ -1925,11 +1971,14 @@ export const useBoardStore = create<BoardState>(
         else await fs.write(nextRelease.filename, content);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // The rename is undone either way, but the dialog comes back only if the
+        // guard did not just take the screen: putting it back on top of a refusal
+        // modal is the stacking both modals exist to avoid.
+        const refused = get().conflictOpen || get().unwritableFile !== null;
         set({
           snapshot,
           errorMessage: `Failed to save release: ${message}`,
-          selectedReleaseFilename,
-          dialogStack,
+          ...(refused ? {} : { selectedReleaseFilename, dialogStack }),
         });
         throw err;
       }

@@ -1,4 +1,5 @@
 import type { FsAdapter } from './fs-adapter.js';
+import type { ParseProblem } from './problems.js';
 
 export class ConflictError extends Error {
   readonly path: string;
@@ -6,6 +7,20 @@ export class ConflictError extends Error {
     super(`File changed on disk since it was loaded: ${path}`);
     this.name = 'ConflictError';
     this.path = path;
+  }
+}
+
+// A block the parser could not read never enters the loaded model, so writing
+// the file back would drop it. The guard refuses instead, and carries the
+// problems that justify the refusal so a shell can show them.
+export class UnreadableFileError extends Error {
+  readonly path: string;
+  readonly problems: readonly ParseProblem[];
+  constructor(path: string, problems: readonly ParseProblem[]) {
+    super(`Refusing to write ${path}: it holds a block boardown could not read`);
+    this.name = 'UnreadableFileError';
+    this.path = path;
+    this.problems = problems;
   }
 }
 
@@ -32,16 +47,34 @@ export interface GuardedFs extends FsAdapter {
   removeDir(path: string): Promise<void>;
 }
 
-// Wraps an FsAdapter so that every write first checks the target's lastModified
-// against the version recorded at load time. A mismatch (edited externally, git
-// pull, another window) means writing would clobber that change, so it calls
-// onConflict and throws instead. `versions` is owned by the caller and mutated
-// in place as writes succeed; reload re-seeds it with a fresh guard.
-export function createGuardedFs(
-  inner: FsAdapter,
-  versions: Record<string, number>,
-  onConflict: (path: string) => void,
-): GuardedFs {
+export interface GuardOptions {
+  // Owned by the caller and mutated in place as writes succeed; reload re-seeds
+  // it with a fresh guard.
+  versions: Record<string, number>;
+  // The problems the load reported, used to refuse a write that would lose a
+  // block the parser could not read.
+  problems: readonly ParseProblem[];
+  onConflict: (path: string) => void;
+  onUnreadable: (path: string, problems: readonly ParseProblem[]) => void;
+}
+
+// Wraps an FsAdapter so that every write is refused when it would lose data.
+// Two rules, in this order: the target must be one the parser fully understood,
+// and its lastModified must still match the version recorded at load time — a
+// mismatch (edited externally, git pull, another window) means writing would
+// clobber that change. Either refusal calls its callback and throws.
+export function createGuardedFs(inner: FsAdapter, options: GuardOptions): GuardedFs {
+  const { versions, problems, onConflict, onUnreadable } = options;
+
+  // Deletion is deliberate and total, so only the write paths use this: what it
+  // guards against is a silent partial loss, not a removal the user asked for.
+  const checkReadable = (path: string): void => {
+    const matching = problems.filter((p) => p.file === path && p.level === 'error');
+    if (matching.length === 0) return;
+    onUnreadable(path, matching);
+    throw new UnreadableFileError(path, matching);
+  };
+
   const check = async (path: string): Promise<void> => {
     const current = await inner.stat(path);
     if (current === null) return;
@@ -74,16 +107,21 @@ export function createGuardedFs(
     mkdir: (dir) => inner.mkdir(dir),
 
     async write(path, content) {
+      checkReadable(path);
       await check(path);
       await put(path, content);
     },
 
     async writeAll(files) {
+      for (const file of files) checkReadable(file.path);
       for (const file of files) await check(file.path);
       for (const file of files) await put(file.path, file.content);
     },
 
     async moveFile(from, to, content) {
+      // The content being moved was parsed from `from`, so that is the path a
+      // lost block would have come from.
+      checkReadable(from);
       await check(from);
       // Unlike a write, the target must not exist at all: the caller picked this
       // path for a file that is not there, so anything sitting on it is a state

@@ -4,6 +4,7 @@ import {
   type FileStat,
   type FsAdapter,
   type FsEntry,
+  type GuardedFs,
   type ParseProblem,
 } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
@@ -32,68 +33,73 @@ class InMemoryFs implements FsAdapter {
   }
 }
 
+// The same wiring loadBoardOrThrow builds, minus the board: the refusal the CLI
+// shows for an unreadable file is the guard's, mapped onto a CliError.
+const guard = (inner: FsAdapter, problems: ParseProblem[]): GuardedFs =>
+  createGuardedFs(inner, {
+    versions: {},
+    problems,
+    onConflict: () => {
+      throw new CliError('CONFLICT', 'unexpected conflict');
+    },
+    onUnreadable: (path, matching) => {
+      throw new CliError('UNREADABLE_FRONTMATTER', `Refusing to write ${path}`, 1, [...matching]);
+    },
+  });
+
 const backlogRef = (): ContainerRef => ({ kind: 'backlog', container: emptyBacklog() });
+
+const errorOn = (file: string): ParseProblem => ({
+  level: 'error',
+  scope: 'task',
+  file,
+  taskIndex: 0,
+  message: 'Invalid task frontmatter YAML: bad indentation',
+});
 
 describe('writeContainer', () => {
   it('writes normally when there are no problems for the file', async () => {
-    const fs = new InMemoryFs();
+    const inner = new InMemoryFs();
     const ref = backlogRef();
-    await writeContainer(fs, ref, []);
-    expect(fs.files.has(ref.container.filename)).toBe(true);
+    await writeContainer(guard(inner, []), ref);
+    expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
   it('writes normally when problems exist for a different file', async () => {
-    const fs = new InMemoryFs();
+    const inner = new InMemoryFs();
     const ref = backlogRef();
-    const problems: ParseProblem[] = [
-      { level: 'error', scope: 'task', file: 'releases/other.md', taskIndex: 0, message: 'bad' },
-    ];
-    await writeContainer(fs, ref, problems);
-    expect(fs.files.has(ref.container.filename)).toBe(true);
+    await writeContainer(guard(inner, [errorOn('releases/other.md')]), ref);
+    expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
   it('refuses to write a file with an unresolved task-level parse error', async () => {
-    const fs = new InMemoryFs();
+    const inner = new InMemoryFs();
     const ref = backlogRef();
-    const problems: ParseProblem[] = [
-      {
-        level: 'error',
-        scope: 'task',
-        file: ref.container.filename,
-        taskIndex: 1,
-        message: 'Invalid task frontmatter YAML: bad indentation',
-      },
-    ];
+    const fs = guard(inner, [errorOn(ref.container.filename)]);
 
-    await expect(writeContainer(fs, ref, problems)).rejects.toMatchObject({
+    await expect(writeContainer(fs, ref)).rejects.toMatchObject({
       code: 'UNREADABLE_FRONTMATTER',
     });
-    expect(fs.files.has(ref.container.filename)).toBe(false);
+    expect(inner.files.has(ref.container.filename)).toBe(false);
   });
 
   it('does not refuse on a warning-level problem for the same file', async () => {
-    const fs = new InMemoryFs();
+    const inner = new InMemoryFs();
     const ref = backlogRef();
     const problems: ParseProblem[] = [
       { level: 'warning', scope: 'file', file: ref.container.filename, message: 'heads up' },
     ];
-    await writeContainer(fs, ref, problems);
-    expect(fs.files.has(ref.container.filename)).toBe(true);
+    await writeContainer(guard(inner, problems), ref);
+    expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
   it('carries the matching problems on the thrown error', async () => {
-    const fs = new InMemoryFs();
+    const inner = new InMemoryFs();
     const ref = backlogRef();
-    const problem: ParseProblem = {
-      level: 'error',
-      scope: 'task',
-      file: ref.container.filename,
-      taskIndex: 0,
-      message: 'broken',
-    };
+    const problem = errorOn(ref.container.filename);
 
     try {
-      await writeContainer(fs, ref, [problem]);
+      await writeContainer(guard(inner, [problem]), ref);
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(CliError);
@@ -105,19 +111,14 @@ describe('writeContainer', () => {
 describe('writeContainers', () => {
   it('refuses the whole batch if any target has an unresolved parse error, writing nothing', async () => {
     const inner = new InMemoryFs();
-    const fs = createGuardedFs(inner, {}, () => {
-      throw new Error('unexpected conflict');
-    });
     const ok = backlogRef();
     const broken: ContainerRef = {
       kind: 'backlog',
       container: { ...emptyBacklog(), filename: 'broken.md' },
     };
-    const problems: ParseProblem[] = [
-      { level: 'error', scope: 'task', file: broken.container.filename, taskIndex: 0, message: 'bad' },
-    ];
+    const fs = guard(inner, [errorOn(broken.container.filename)]);
 
-    await expect(writeContainers(fs, [ok, broken], problems)).rejects.toMatchObject({
+    await expect(writeContainers(fs, [ok, broken])).rejects.toMatchObject({
       code: 'UNREADABLE_FRONTMATTER',
     });
     expect(inner.files.size).toBe(0);

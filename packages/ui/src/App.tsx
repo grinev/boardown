@@ -5,6 +5,7 @@ import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
 import { ConflictDialog } from './components/ConflictDialog';
+import { UnwritableFileDialog } from './components/UnwritableFileDialog';
 import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
 import { CreateTaskDialog } from './components/CreateTaskDialog';
@@ -67,6 +68,10 @@ export function App({
     [snapshot],
   );
   const problems = useBoardStore((s) => s.problems);
+  // An error-level problem means the file is not written back until it is fixed
+  // by hand, so it is a different message from a warning, not a louder one.
+  const blocking = useMemo(() => problems.filter((p) => p.level === 'error'), [problems]);
+  const warnings = useMemo(() => problems.filter((p) => p.level !== 'error'), [problems]);
   const errorMessage = useBoardStore((s) => s.errorMessage);
   const activeTab = useBoardStore((s) => s.activeTab);
   const theme = useBoardStore((s) => s.theme);
@@ -84,6 +89,7 @@ export function App({
   const createEpicOpen = useBoardStore((s) => s.createEpicOpen);
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
   const conflictOpen = useBoardStore((s) => s.conflictOpen);
+  const unwritableFile = useBoardStore((s) => s.unwritableFile);
   const completeReleaseForFilename = useBoardStore((s) => s.completeReleaseForFilename);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
@@ -209,14 +215,30 @@ export function App({
       />
       {problems.length > 0 && (
         <section className={styles.problems} data-testid="problems-banner">
-          <strong>Parse warnings:</strong>
-          <ul>
-            {problems.map((p, i) => (
-              <li key={i}>
-                {p.file}: {p.message}
-              </li>
-            ))}
-          </ul>
+          {blocking.length > 0 && (
+            <div className={styles.problemGroup} data-testid="problems-blocking">
+              <strong>Not writable — fix these files by hand:</strong>
+              <ul>
+                {blocking.map((p, i) => (
+                  <li key={i}>
+                    {p.file}: {p.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div className={styles.problemGroup} data-testid="problems-warnings">
+              <strong>Parse warnings:</strong>
+              <ul>
+                {warnings.map((p, i) => (
+                  <li key={i}>
+                    {p.file}: {p.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
       {selectedTask && (
@@ -288,7 +310,16 @@ export function App({
       {settingsOpen && !forcedTheme && (
         <SettingsDialog onClose={closeSettings} version={version} />
       )}
-      {conflictOpen && <ConflictDialog />}
+      {conflictOpen ? (
+        <ConflictDialog />
+      ) : (
+        unwritableFile && (
+          <UnwritableFileDialog
+            path={unwritableFile.path}
+            problems={unwritableFile.problems}
+          />
+        )
+      )}
     </main>
   );
 }

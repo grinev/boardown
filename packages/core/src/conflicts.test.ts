@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
-import { ConflictError, createGuardedFs } from './conflicts.js';
+import { ConflictError, UnreadableFileError, createGuardedFs } from './conflicts.js';
+import type { ParseProblem } from './problems.js';
 
 class InMemoryFs implements FsAdapter {
   files = new Map<string, { content: string; lastModified: number }>();
@@ -43,7 +44,7 @@ describe('createGuardedFs', () => {
     await inner.write('a.md', 'one');
     const versions: Record<string, number> = { 'a.md': inner.files.get('a.md')!.lastModified };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await fs.write('a.md', 'two');
 
@@ -57,7 +58,7 @@ describe('createGuardedFs', () => {
     await inner.write('a.md', 'one');
     const versions: Record<string, number> = { 'a.md': inner.files.get('a.md')!.lastModified };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     // External edit moves the mtime forward.
     inner.files.get('a.md')!.lastModified += 100;
@@ -71,7 +72,7 @@ describe('createGuardedFs', () => {
     const inner = new InMemoryFs();
     const versions: Record<string, number> = {};
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await fs.write('new.md', 'hi');
 
@@ -85,7 +86,7 @@ describe('createGuardedFs', () => {
     await inner.write('surprise.md', 'external');
     const versions: Record<string, number> = {};
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await expect(fs.write('surprise.md', 'mine')).rejects.toBeInstanceOf(ConflictError);
     expect(onConflict).toHaveBeenCalledWith('surprise.md');
@@ -102,7 +103,7 @@ describe('createGuardedFs — writeAll', () => {
       'b.md': (await inner.stat('b.md'))!.lastModified,
     };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await fs.writeAll([
       { path: 'a.md', content: 'two' },
@@ -124,7 +125,7 @@ describe('createGuardedFs — writeAll', () => {
       'b.md': (await inner.stat('b.md'))!.lastModified,
     };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     // Only the second target moved: the first must still not be written.
     await inner.write('b.md', 'external');
@@ -145,7 +146,7 @@ describe('createGuardedFs — writeAll', () => {
     const inner = new InMemoryFs();
     await inner.write('docs/a.md', 'one');
     const versions: Record<string, number> = { 'docs/a.md': inner.files.get('docs/a.md')!.lastModified };
-    const fs = createGuardedFs(inner, versions, vi.fn());
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict: vi.fn(), onUnreadable: vi.fn() });
 
     await fs.remove('docs/a.md');
 
@@ -158,7 +159,7 @@ describe('createGuardedFs — writeAll', () => {
     await inner.write('docs/a.md', 'one');
     const versions: Record<string, number> = { 'docs/a.md': 999 };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await expect(fs.remove('docs/a.md')).rejects.toBeInstanceOf(ConflictError);
     expect(inner.files.has('docs/a.md')).toBe(true);
@@ -172,7 +173,7 @@ describe('createGuardedFs — writeAll', () => {
       'releases/old.md': inner.files.get('releases/old.md')!.lastModified,
     };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await fs.moveFile('releases/old.md', 'releases/new.md', 'two');
 
@@ -187,7 +188,7 @@ describe('createGuardedFs — writeAll', () => {
     const inner = new InMemoryFs();
     await inner.write('releases/old.md', 'one');
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, { 'releases/old.md': 999 }, onConflict);
+    const fs = createGuardedFs(inner, { versions: { 'releases/old.md': 999 }, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await expect(
       fs.moveFile('releases/old.md', 'releases/new.md', 'two'),
@@ -209,7 +210,7 @@ describe('createGuardedFs — writeAll', () => {
       'releases/new.md': inner.files.get('releases/new.md')!.lastModified,
     };
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, versions, onConflict);
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await expect(
       fs.moveFile('releases/old.md', 'releases/new.md', 'two'),
@@ -226,7 +227,7 @@ describe('createGuardedFs — writeAll', () => {
     const versions: Record<string, number> = {
       'releases/old.md': inner.files.get('releases/old.md')!.lastModified,
     };
-    const fs = createGuardedFs(inner, versions, vi.fn());
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict: vi.fn(), onUnreadable: vi.fn() });
     const remove = inner.remove.bind(inner);
     inner.remove = async (path: string) => {
       if (path === 'releases/old.md') throw new Error('locked');
@@ -244,7 +245,7 @@ describe('createGuardedFs — writeAll', () => {
 
   it('removeDir deletes a directory that is still empty on disk', async () => {
     const inner = new InMemoryFs();
-    const fs = createGuardedFs(inner, {}, vi.fn());
+    const fs = createGuardedFs(inner, { versions: {}, problems: [], onConflict: vi.fn(), onUnreadable: vi.fn() });
 
     await expect(fs.removeDir('docs/guides')).resolves.toBeUndefined();
   });
@@ -253,12 +254,136 @@ describe('createGuardedFs — writeAll', () => {
     const inner = new InMemoryFs();
     await inner.write('docs/guides/surprise.md', 'appeared externally');
     const onConflict = vi.fn();
-    const fs = createGuardedFs(inner, {}, onConflict);
+    const fs = createGuardedFs(inner, { versions: {}, problems: [], onConflict, onUnreadable: vi.fn() });
 
     await expect(fs.removeDir('docs/guides')).rejects.toBeInstanceOf(ConflictError);
 
     // The file someone else put there survives.
     expect(inner.files.has('docs/guides/surprise.md')).toBe(true);
     expect(onConflict).toHaveBeenCalledWith('docs/guides');
+  });
+
+  it('refuses to write a path the parser could not fully read', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/a.md', 'one');
+    const versions = { 'releases/a.md': inner.files.get('releases/a.md')!.lastModified };
+    const problems: ParseProblem[] = [
+      { level: 'error', scope: 'task', file: 'releases/a.md', taskIndex: 1, message: 'bad yaml' },
+    ];
+    const onUnreadable = vi.fn();
+    const fs = createGuardedFs(inner, { versions, problems, onConflict: vi.fn(), onUnreadable });
+
+    await expect(fs.write('releases/a.md', 'two')).rejects.toBeInstanceOf(UnreadableFileError);
+
+    expect(await inner.read('releases/a.md')).toBe('one');
+    expect(onUnreadable).toHaveBeenCalledWith('releases/a.md', problems);
+  });
+
+  it('writes a path whose only problems are warnings, or belong to another file', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/a.md', 'one');
+    const versions = { 'releases/a.md': inner.files.get('releases/a.md')!.lastModified };
+    const problems: ParseProblem[] = [
+      { level: 'warning', scope: 'file', file: 'releases/a.md', message: 'heads up' },
+      { level: 'error', scope: 'file', file: 'releases/b.md', message: 'broken' },
+    ];
+    const fs = createGuardedFs(inner, {
+      versions,
+      problems,
+      onConflict: vi.fn(),
+      onUnreadable: vi.fn(),
+    });
+
+    await fs.write('releases/a.md', 'two');
+
+    expect(await inner.read('releases/a.md')).toBe('two');
+  });
+
+  it('refuses the whole batch when one target is unreadable, writing nothing', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/a.md', 'one');
+    await inner.write('releases/b.md', 'one');
+    const versions = {
+      'releases/a.md': inner.files.get('releases/a.md')!.lastModified,
+      'releases/b.md': inner.files.get('releases/b.md')!.lastModified,
+    };
+    const problems: ParseProblem[] = [
+      { level: 'error', scope: 'task', file: 'releases/b.md', taskIndex: 0, message: 'bad yaml' },
+    ];
+    const fs = createGuardedFs(inner, {
+      versions,
+      problems,
+      onConflict: vi.fn(),
+      onUnreadable: vi.fn(),
+    });
+
+    await expect(
+      fs.writeAll([
+        { path: 'releases/a.md', content: 'two' },
+        { path: 'releases/b.md', content: 'two' },
+      ]),
+    ).rejects.toBeInstanceOf(UnreadableFileError);
+
+    expect(await inner.read('releases/a.md')).toBe('one');
+    expect(await inner.read('releases/b.md')).toBe('one');
+  });
+
+  it('moveFile refuses on the source path and leaves no target behind', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/old.md', 'one');
+    const versions = { 'releases/old.md': inner.files.get('releases/old.md')!.lastModified };
+    const problems: ParseProblem[] = [
+      { level: 'error', scope: 'task', file: 'releases/old.md', taskIndex: 0, message: 'bad yaml' },
+    ];
+    const fs = createGuardedFs(inner, {
+      versions,
+      problems,
+      onConflict: vi.fn(),
+      onUnreadable: vi.fn(),
+    });
+
+    await expect(
+      fs.moveFile('releases/old.md', 'releases/new.md', 'two'),
+    ).rejects.toBeInstanceOf(UnreadableFileError);
+
+    expect(await inner.read('releases/old.md')).toBe('one');
+    expect(inner.files.has('releases/new.md')).toBe(false);
+  });
+
+  it('still removes an unreadable file: a deletion is deliberate and total', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/a.md', 'one');
+    const versions = { 'releases/a.md': inner.files.get('releases/a.md')!.lastModified };
+    const problems: ParseProblem[] = [
+      { level: 'error', scope: 'task', file: 'releases/a.md', taskIndex: 0, message: 'bad yaml' },
+    ];
+    const fs = createGuardedFs(inner, {
+      versions,
+      problems,
+      onConflict: vi.fn(),
+      onUnreadable: vi.fn(),
+    });
+
+    await fs.remove('releases/a.md');
+
+    expect(inner.files.has('releases/a.md')).toBe(false);
+  });
+
+  it('the unreadable refusal wins over a file that also changed on disk', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('releases/a.md', 'one');
+    // Stale on purpose: the mtime check would refuse this too.
+    const versions = { 'releases/a.md': 999 };
+    const problems: ParseProblem[] = [
+      { level: 'error', scope: 'task', file: 'releases/a.md', taskIndex: 0, message: 'bad yaml' },
+    ];
+    const onConflict = vi.fn();
+    const onUnreadable = vi.fn();
+    const fs = createGuardedFs(inner, { versions, problems, onConflict, onUnreadable });
+
+    await expect(fs.write('releases/a.md', 'two')).rejects.toBeInstanceOf(UnreadableFileError);
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+    expect(onConflict).not.toHaveBeenCalled();
   });
 });

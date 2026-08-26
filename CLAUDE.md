@@ -175,11 +175,20 @@ CLI inherits them rather than re-implementing them.
   flow, and do not fall back to defaults — a present-but-invalid config is
   always an error, never silently replaced.
 - No automated backups — git is the safety net.
-- External-change safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
-  (`packages/core`), which compares each write target's `lastModified` against
-  the value captured at load and refuses to clobber a file changed on disk,
-  opening the Reload conflict modal instead — which closes every other dialog, so
-  the two never stack in the top layer. Shared by all shells. The guard also
+- Write safety: `ui` wraps the `FsAdapter` in `createGuardedFs`
+  (`packages/core`), which refuses a write that would lose data, on two rules
+  checked in that order. **Unreadable target:** the guard holds the load's parse
+  problems, and a target carrying an error-level one is refused with an
+  `UnreadableFileError` — the block the parser could not read is not in the model,
+  so writing the file back would drop it. **External change:** it compares each
+  write target's `lastModified` against the value captured at load and refuses to
+  clobber a file changed on disk. Each refusal calls its own callback before it
+  throws, which is how a shell with no access to the write's call site puts
+  something on screen: the UI opens the "File cannot be written" modal for the
+  first and the Reload conflict modal for the second, the CLI throws
+  `UNREADABLE_FRONTMATTER` and `CONFLICT`. Both modals close every other dialog, so
+  no two ever stack in the top layer. Shared by all shells — a new rule about what
+  may be written belongs in the guard, not in a shell. The guard also
   exposes `writeAll`, for a set of files that must land together (e.g. a task link
   mirrored into two tasks): it checks every target before writing any of them, so
   an external change aborts the whole operation instead of half-applying it —
@@ -188,7 +197,9 @@ CLI inherits them rather than re-implementing them.
   a target that already exists, then writes the new path and removes the old one,
   undoing the copy if the removal fails. Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
-  directory before removing it, so deleting a docs folder is all-or-nothing. Re-reading on
+  directory before removing it, so deleting a docs folder is all-or-nothing —
+  though the unreadable rule does not apply to a deletion, which is deliberate and
+  total rather than a silent partial loss. Re-reading on
   demand is the manual Reload button; in addition every shell auto-refreshes on
   external `.boardown/` changes via a host file watcher — gated by the
   `boardown.autoRefresh` setting in VS Code and Electron, and by `--no-watch` on

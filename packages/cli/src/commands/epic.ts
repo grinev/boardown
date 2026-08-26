@@ -137,7 +137,7 @@ async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await writeContainer(board.fs, { kind: 'epic', container: epic }, board.problems);
+  await writeContainer(board.fs, { kind: 'epic', container: epic });
   return {
     data: { slug: epic.slug },
     human: `Created epic "${epic.frontmatter.name}" (${epic.slug}).`,
@@ -191,7 +191,7 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await writeContainer(board.fs, { kind: 'epic', container: updated }, board.problems);
+  await writeContainer(board.fs, { kind: 'epic', container: updated });
   return {
     data: { slug: updated.slug },
     human: `Updated epic ${slug}.`,

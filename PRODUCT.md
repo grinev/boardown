@@ -444,16 +444,26 @@ and left untouched on disk.
 
 - A broken file does not block other files.
 - A broken task does not block other tasks in the same file.
-- Problems are surfaced in a banner at the top of the app.
-- The app **never** rewrites a file it could not fully parse without an
-  explicit user confirmation.
+- Problems are surfaced in a banner at the app's edge, in two groups: the
+  error-level ones under a heading saying those files are not writable and must be
+  fixed by hand, then the rest as parse warnings.
+- The app **never** rewrites a file it could not fully parse. A block whose
+  frontmatter does not parse is not in the loaded board, so writing that file back
+  would delete it; every write to such a file is refused instead, and the change
+  is not applied. The user gets a modal naming the file and listing what could not
+  be read, with a Reload button for after he has fixed it by hand. Only that file
+  is locked — the rest of the board stays editable — and deleting the file
+  outright is still allowed, since that loses nothing silently.
+- The CLI refuses the same writes, with the error code `UNREADABLE_FRONTMATTER`
+  and exit code 1.
 
 ### Conflict handling
 
 Before writing, the app re-stat's the file and compares `lastModified`
 against what it had when the data was last loaded. If the file changed
 externally, the write is refused and the user gets a modal offering to
-**Reload**. That modal takes over the screen: any dialog open when the write was
+**Reload**. A file that is both unreadable and changed on disk is refused as
+unreadable — that check runs first. That modal takes over the screen: any dialog open when the write was
 refused is closed, so the only thing on offer is Reload — the refused change was
 not written, and reloading is the only way on.
 

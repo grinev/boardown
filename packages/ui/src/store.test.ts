@@ -11,7 +11,8 @@ import type {
   ReleaseStatus,
   Task,
 } from '@boardown/core';
-import { BACKLOG_PATH, CONFIG_FILENAME, emptyDocsTree } from '@boardown/core';
+import type { ParseProblem } from '@boardown/core';
+import { BACKLOG_PATH, CONFIG_FILENAME, createGuardedFs, emptyDocsTree } from '@boardown/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBoardStore } from './store';
 
@@ -161,6 +162,7 @@ const setup = (snapshot: BoardSnapshot): { fs: MemFs } => {
     selectedReleaseFilename: null,
     docPopupPath: null,
     repoFilePopupPath: null,
+    unwritableFile: null,
     selectedDocPath: null,
     dialogStack: [],
   });
@@ -1592,5 +1594,118 @@ describe('repo file popup', () => {
 
     expect(state().repoFilePopupPath).toBeNull();
     expect(state().conflictOpen).toBe(true);
+  });
+});
+
+describe('a file the parser could not fully read', () => {
+  const guarded = (inner: MemFs, problems: ParseProblem[]): GuardedFs =>
+    createGuardedFs(inner, {
+      versions: {},
+      problems,
+      onConflict: () => state().openConflict(),
+      onUnreadable: (path, matching) => state().openUnwritable(path, matching),
+    });
+
+  const brokenTask = (file: string): ParseProblem => ({
+    level: 'error',
+    scope: 'task',
+    file,
+    taskIndex: 1,
+    message: 'Invalid task frontmatter YAML: bad indentation',
+  });
+
+  it('refuses the write, opens the modal and rolls the change back', async () => {
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])] }),
+    );
+    const problem = brokenTask('releases/1.0.md');
+    useBoardStore.setState({ fs: guarded(fs, [problem]), selectedTaskId: 'BD-1' });
+
+    // Rethrown like any write failure; the drag handler swallows it.
+    await expect(state().moveTask('BD-1', 'in-progress', null)).rejects.toThrow();
+
+    expect(fs.writes).toEqual([]);
+    expect(current().releases[0]!.tasks[0]!.frontmatter.status).toBe('todo');
+    expect(state().unwritableFile).toEqual({
+      path: 'releases/1.0.md',
+      problems: [problem],
+    });
+    // The refusal closes whatever was on screen, like the conflict does.
+    expect(state().selectedTaskId).toBeNull();
+  });
+
+  it('refuses a move between two containers whole when the destination is broken', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [
+          release('1.0', 'current', [task('BD-1')]),
+          release('2.0', 'future', [task('BD-2')]),
+        ],
+      }),
+    );
+    useBoardStore.setState({ fs: guarded(fs, [brokenTask('releases/2.0.md')]) });
+
+    await expect(state().moveTaskToRelease('BD-1', 'releases/2.0.md')).rejects.toThrow();
+
+    // Neither end is written: the source must not lose the task to a destination
+    // that never gets it.
+    expect(fs.writes).toEqual([]);
+    expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
+  });
+
+  const openModal = (): void => {
+    useBoardStore.setState({
+      unwritableFile: { path: 'releases/1.0.md', problems: [brokenTask('releases/1.0.md')] },
+    });
+  };
+
+  it('clears the modal when the board is reloaded', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+    openModal();
+
+    await state().reload();
+
+    expect(state().status).toBe('ready');
+    expect(state().unwritableFile).toBeNull();
+  });
+
+  it('clears the modal when the watcher reloads the board silently', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+    openModal();
+
+    await state().reloadSilent();
+
+    expect(state().status).toBe('ready');
+    expect(state().unwritableFile).toBeNull();
+  });
+
+  it('does not put the release dialog back on top of the modal', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+    useBoardStore.setState({
+      fs: guarded(fs, [brokenTask('releases/1.0.md')]),
+      selectedReleaseFilename: 'releases/1.0.md',
+    });
+
+    await expect(state().updateRelease('releases/1.0.md', { name: '1.1' })).rejects.toThrow();
+
+    expect(state().selectedReleaseFilename).toBeNull();
+    expect(state().unwritableFile?.path).toBe('releases/1.0.md');
+  });
+
+  it('still writes a container of its own that parsed cleanly', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [
+          release('1.0', 'current', [task('BD-1')]),
+          release('2.0', 'future', [task('BD-2')]),
+        ],
+      }),
+    );
+    useBoardStore.setState({ fs: guarded(fs, [brokenTask('releases/2.0.md')]) });
+
+    await state().moveTask('BD-1', 'in-progress', null);
+
+    expect(fs.writes).toEqual(['releases/1.0.md']);
+    expect(state().unwritableFile).toBeNull();
   });
 });
