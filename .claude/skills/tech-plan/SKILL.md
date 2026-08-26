@@ -104,14 +104,16 @@ this document's job. Walk the ones this product actually reaches and say what
 happens to each: empty or whitespace-only input, a task in a **finished** release
 (read-only), a cancelled modal (nothing may be written), text carrying YAML
 metacharacters, a missing or malformed file, an external change between load and
-write. Whichever the feature can hit — and only those; a list of edges it cannot
+write, a path whose shape differs between Windows and POSIX. Whichever the feature can hit — and only those; a list of edges it cannot
 reach is padding the architect has to read.
 
 ### Test plan
 
 What gets a unit test (in `core`, `ui`, `cli`) and what has to be driven in a real
 browser against `pnpm dev:sandbox` — never the repo's own `.boardown/`. Name the
-scenarios, not the assertions.
+scenarios, not the assertions. A test over paths, line endings or
+file names says which platform it assumes: it runs on Windows here and on Linux
+in CI, so it has to pass on both.
 
 ### Docs
 

@@ -66,9 +66,14 @@ it.
    (release lifecycle, finished releases read-only) live in `core`, not in a
    shell; no `any`, no unexplained non-null assertions; colors only via CSS
    variables; no compat shims pre-1.0.
-5. **Duplication of something that already exists.** Name the existing symbol and
+5. **Platform assumptions.** CI runs on Linux; the developer is on Windows. A
+   path separator, a line ending, a case-sensitivity or a `path.isAbsolute`
+   result that the code — or a test — takes for granted is a finding: name the
+   platform it breaks on. A test that hard-codes a Windows or POSIX path must
+   pick it from `process.platform`.
+6. **Duplication of something that already exists.** Name the existing symbol and
    its file.
-6. **Missing tests** for logic in `core`, `ui` or `cli` that has a real branch to
+7. **Missing tests** for logic in `core`, `ui` or `cli` that has a real branch to
    check. Not a coverage quota — only where a bug would slip through unnoticed.
 
 ## You change nothing — hard rule

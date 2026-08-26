@@ -76,6 +76,9 @@ role.** Stop and write the report with what you have.
   is wrong.
 - Styling in `ui`: CSS variables from the theme plus CSS Modules. No hard-coded
   colors, no CSS-in-JS, no Tailwind.
+- Nothing assumes one platform. Every shell runs on Windows, macOS and Linux,
+  and CI on Linux: paths go through `node:path`, never a hard-coded separator,
+  and a plan must not rest on one OS's path shape, line endings or case rules.
 - No `any`, no non-null assertions without a stated reason.
 - No premature abstraction (three similar lines are fine) and no
   backwards-compatibility shims — the project is pre-1.0.
