@@ -33,6 +33,30 @@
   gap: 4px;
 }
 
+/* Same chrome as .closeButton at the other end of the header, deliberately its
+   own class: the two sit in different groups and only look alike. */
+.copyButton {
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copyButton:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.copyButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .closeButton {
   background: none;
   border: 0;
