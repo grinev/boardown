@@ -1,8 +1,14 @@
 idPrefix: BD
-nextId: 121
+nextId: 122
 projectName: Boardown
 theme: dark
 multipleActiveReleases: true
+statuses:
+  - key: todo
+  - key: ready
+  - key: in-progress
+  - key: review
+  - key: done
 customFields:
   - key: spec
     label: Spec
