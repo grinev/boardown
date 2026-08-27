@@ -20,10 +20,10 @@ settled input, and nothing after that reopens it.
 
 **Invoke the `task-tracking` skill first and follow it**: which task you are
 working, where its `<slug>` folder is, what goes
-into its fields, the progress checklist, the log you keep as you go, the outcome
+into its fields, the progress checklist, the log you keep as you go, the status
 you end on. It runs alongside every phase below.
 
-**An empty `spec` field does not stop this command** — it is what makes phase 0
+**A task outside `ready` does not stop this command** — that is what makes phase 0
 run. The rule `task-tracking` states holds for the autonomous flows, where there
 is nobody to groom with; here the user is in the room from the first message, so
 an ungroomed task is groomed and then built in one sitting.
@@ -158,9 +158,9 @@ line marked with its source: `(expert)`, `(human)`, or unmarked for your own cal
 
 ## Phase 0 — Grooming
 
-**Skip this phase when the task's `spec` field is already filled.** It was groomed
-in a `/groom` session, that file is settled product, and re-opening it here would
-ask the user to decide twice. Say so in one line and go to phase 1.
+**Skip this phase when the task is already in `ready`.** It was groomed in a
+`/groom` session, that file is settled product, and re-opening it here would ask
+the user to decide twice. Say so in one line and go to phase 1.
 
 Otherwise the product gets decided now, with him in the room. **Read
 `.claude/commands/groom.md` and follow it** — "The order of work on a task", "What
@@ -179,7 +179,9 @@ Three of its rules this phase does not relax:
   and 4, and reaching for them early is what grooming exists to prevent;
 - **there is no `expert` in this phase.** That agent settles a fork when the user
   is out of reach; here he is answering you directly, and the answer is his;
-- **the board gets the `spec` field last**, once the forks are closed.
+- **the board gets the `spec` field and the `ready` status last**, once the forks
+  are closed. The run then moves the task on to `in-progress` as `task-tracking`
+  says — this is the one place where both happen in one sitting.
 
 The checklist `task-tracking` writes at the start of the run gets a `0. groomed,
 spec written` item ahead of the seven when this phase runs.
@@ -367,7 +369,8 @@ Then report to the user, in the language the user speaks:
   neighbouring component, a stale document. Name it plainly and leave it there:
   putting it on the board is his call, not yours.
 
-Then close the task as `task-tracking` says: last line of the log, `outcome` set,
-status left at `in-progress`.
+Then close the task as `task-tracking` says: last line of the log, then the status
+to `review`. **You never set `done`** — that one is the user's signature, and he
+gives it out of `review` once he has seen the work.
 
 Then stop. **Do not commit.**

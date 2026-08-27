@@ -22,22 +22,27 @@ The flow is invoked with either a task id (`BD-42`) or an idea in prose.
 checklist, the notes and the custom fields — `spec`, `plan`, `log`, `session`,
 `outcome`.
 
-**An empty `spec` field stops an autonomous run** — `/feature_auto` and
-`/rework_auto`. The product spec is written with the user, and a headless run that
-starts without one is inventing the product from a title. Say that the task is not
-groomed and stop; do not write a spec yourself and do not proceed on the
-description alone.
+**A task outside `ready` stops an autonomous run** — `/feature_auto` and
+`/rework_auto`. `ready` is what grooming leaves behind: the spec is written with
+the user, its field is set, and the work is cleared to start. A headless run that
+opens a `todo` task is inventing the product from a title. Say that the task is
+not groomed and stop; do not write a spec yourself, do not put the task into
+`ready` yourself, and do not proceed on the description alone.
 
 **In `/feature` it does not stop anything**: the user is in the room, and the run
-opens with its own grooming phase that writes the spec with him. A filled `spec`
-field there means the task was groomed earlier and phase 0 is skipped.
+opens with its own grooming phase that writes the spec with him and leaves the
+task in `ready`. A task already there was groomed earlier and phase 0 is skipped.
 
 Then, before reading the spec and before any code: `boardown task status BD-42
-in-progress`, the run's first log line, and the `log` field pointing at it.
+in-progress`, **`outcome` cleared** (`--field outcome=`), the run's first log line,
+and the `log` field pointing at it. The field describes where the task stands
+right now; carrying yesterday's keyword into today's run makes it describe
+nothing.
 
-**A task already `in-progress` with fields filled in is a rework, not a new run.**
-Reuse its folder, append to its log, do not overwrite the spec that is already
-there and do not start a second `<slug>`. What such a round adds of its own — a
+**A `ready` task carrying `outcome: rework` is a rework round, not a new run** —
+the acceptance session put it there when the user sent the task back, and his
+remarks are the notes on it. Reuse its folder, append to its log, do not overwrite
+the spec that is already there and do not start a second `<slug>`. What such a round adds of its own — a
 log section, checklist items, a closing note — is the last section of this skill.
 
 ## The folder, and where its name comes from
@@ -71,7 +76,7 @@ Each artifact gets its field **when it is born**, not in a batch at the end:
 | `spec` | only by a grooming session — `/groom`, or phase 0 of `/feature`; never by an implementing phase | `[[repo:.claude/specs/<slug>/product.md]]` |
 | `plan` | after the technical plan is written | `[[repo:.claude/specs/<slug>/tech.md]]` |
 | `log` | with the first line, right after the status | `[[repo:.claude/specs/<slug>/log.md]]` |
-| `outcome` | last action of the run | one of the five values below |
+| `outcome` | cleared as the run starts; written again only if the run stops short | one of the two keywords below |
 | `session` | never in an interactive run | — |
 
 ```sh
@@ -238,26 +243,38 @@ notes because it answers one of them. See the last section.
 
 ## How a run ends
 
-**You never set `done`.** The task stays `in-progress` and the user accepts it
-himself — that status is his signature, not a step in the flow.
+**You never set `done`.** That status is the user's signature, not a step in the
+flow — he accepts the task himself, out of `review`.
 
-The last action of the run is the outcome:
+The last action of a run that reached its end is the status:
 
 ```sh
-boardown task edit BD-42 --field outcome=ready-for-review
+boardown task status BD-42 review
 ```
+
+`outcome` stays empty there. `review` already says the run is whole and waiting on
+him; a keyword repeating it would be a second place to keep in step.
+
+**A run that stops short leaves the task in `in-progress` and fills `outcome`
+instead.** That field is the one thing separating a deliberate stop from a process
+that died mid-phase, and the two are answered differently — a stop goes to the
+user, a dead run is resumed.
 
 | Value | When |
 |---|---|
-| `ready-for-review` | every phase ran, gates green, waiting on the user |
 | `needs-answer` | stopped on a fork only the user can settle |
-| `rework` | his remarks are in the notes and are being worked through |
-| `blocked` | something outside the task stops it |
-| `failed` | the run broke and did not reach an outcome |
+| `blocked` | something outside the task stops it before it can start |
 
-A run that ends in silence — no outcome, no log tail — is indistinguishable from a
-run that crashed. Ending on one of these five is part of finishing, not paperwork
-after it.
+The keyword alone; the reason is a line in the log.
+
+The field holds one more keyword you never write: **`rework`**, put there by the
+acceptance session together with `ready` when the user sends a task back. That is
+what tells the next run it is a round rather than a first pass — and it is why
+your own first action clears the field.
+
+A run that ends in silence — still `in-progress`, no outcome, no log tail — reads
+from outside as crashed and will be resumed at full price. Ending on the status or
+on the keyword is part of finishing, not paperwork after it.
 
 ## A rework round on top of a finished run
 

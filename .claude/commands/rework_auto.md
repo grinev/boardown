@@ -1,6 +1,6 @@
 ---
 description: Work one round of the user's remarks on a task that is already built — cold start from the artifacts, reviewed, retested, committed, with nobody in the room.
-argument-hint: <a board task id whose outcome is rework>
+argument-hint: <a board task id in ready whose outcome is rework>
 ---
 
 Work the round of remarks standing on this task:
@@ -34,16 +34,16 @@ by stopping** — the protocol is below, and it is a real ending.
 ## The task on the board
 
 `$1` is a board task id (`BD-42`). **Invoke the `task-tracking` skill first and
-follow it**: the folder, the fields, the log, the checklist, the outcome — and the
+follow it**: the folder, the fields, the log, the checklist, the status — and the
 part of it written for a rework round, which is what you are running.
 
 Three things end the run before it starts. Each is a line in the report and an
-untouched task — no field changed, no outcome rewritten:
+untouched task — no field changed, no status rewritten:
 
-- **there is nothing to work** — the `outcome` is not `rework`, or no note has been
-  left since the last round closed. Do not assemble a round out of the tester's
-  leftovers, an old "not checked" line, or your own reading of the code: what gets
-  reworked is the user's call;
+- **there is nothing to work** — the task is not in `ready` with `outcome:
+  rework`, or no note has been left since the last round closed. Do not assemble a
+  round out of the tester's leftovers, an old "not checked" line, or your own
+  reading of the code: what gets reworked is the user's call;
 - **the `spec` field is empty** — the task was never groomed, so there is no
   product to rework against. That one is `blocked`, with the reason in the log;
 - **`$1` is not a task id** — prose is a grooming session, not this command.
@@ -161,14 +161,17 @@ A stop is an ending, so leave the task where someone else can pick it up:
    do not push on through on a hunch;
 2. **write the question into `log.md`** — the remark it came from, the readings or
    options, which way you lean and why;
-3. **set `outcome` to `needs-answer`** — the keyword alone, the reason in the log;
+3. **set `outcome` to `needs-answer` and leave the status at `in-progress`** — the
+   keyword alone, the reason in the log. `review` belongs to a round that
+   finished;
 4. **report** and end the run.
 
 **One exception, and it is the reason rounds are cheap.** A remark you cannot read
 is dropped from the round *in phase 1, before a single edit*: the rest of the
-round runs to the end and commits, the closing record names the dropped point, and
-the outcome is `needs-answer`. Remarks are independent of each other, and holding
-four finished fixes hostage to a fifth wastes the evening.
+round runs to the end and commits, and the closing record names the dropped point.
+Such a round still ends in `review` like any other — it did finish, and what he
+has to answer is in the note he reads there. Remarks are independent of each
+other, and holding four finished fixes hostage to a fifth wastes the evening.
 
 That holds only when the round was scoped without it. A question that surfaces
 mid-implementation is a plain stop, uncommitted — you no longer have a clean half
@@ -277,8 +280,8 @@ legitimately skipped, and the Definition-of-Done documents matching what the
 product now does.
 
 **Close the round on the board first, commit second.** Tick the round's checklist
-items, add the closing note, set `outcome` — all of it **before you stage
-anything**. Those writes land in `.boardown/`, which is in git: do them after the
+items, add the closing note, set the status to `review` — all of it **before you
+stage anything**. Those writes land in `.boardown/`, which is in git: do them after the
 commit and the tree is dirty again, with nothing but a second commit or an
 `--amend` to fix it.
 
@@ -305,14 +308,14 @@ git commit -m "feat(BD-42): group linked tasks by relation"   # code + .boardown
 - **stage by path, never `git add -A`**.
 
 What the board carries is in `task-tracking`: the ticked items, the closing
-record, and `outcome` — `ready-for-review` when the round is whole,
-`needs-answer` when it shipped without a point you could not read. Status stays
-`in-progress`: **you never set `done`.** The last thing the round does is the
-commit hash into `log.md`.
+record, and the status `review` — a round that reached its end leaves the task
+waiting on him, whether or not it shipped a point you could not read. `outcome`
+stays empty; it is for a round that stopped. **You never set `done`.** The last
+thing the round does is the commit hash into `log.md`.
 
 ## The report
 
-Your last output, in the language the user speaks, led by the outcome. The user
+Your last output, in the language the user speaks, led by how the round ended. The user
 is re-reading work he already looked at once, so tie every line back to what he
 said:
 

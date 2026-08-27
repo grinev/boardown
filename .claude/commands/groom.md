@@ -18,8 +18,8 @@ product spec, written here, with him in the room, and never rewritten downstream
 Grooming is the only mode in which the product is decided, and this file is what
 `/feature` builds from. It runs in two places and the procedure is the same in
 both: here, for a whole release in one session, and as phase 0 of `/feature`, for
-the single task that run is about. A task groomed here reaches `/feature` with its
-`spec` field filled and that phase is skipped.
+the single task that run is about. A task groomed here reaches `/feature` in
+`ready` and that phase is skipped.
 
 **Invoke the `product-spec` skill and follow it** for the sections, the line
 format and the rule that every line about the product is observable from outside.
@@ -218,12 +218,17 @@ request", which stay verbatim in whatever language he said them.
 
 ```sh
 boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/product.md]]"
+boardown task status BD-42 ready
 ```
 
-Never earlier: that field is what makes a task look ready, and a task that looks
-ready gets picked up. The value is a path token, never content — the board is
-public, the specs are not. **A filled `spec` field is what "ready" means**, and it
-is the only signal of readiness there is.
+Never earlier: together they are what makes a task ready, and a ready task gets
+picked up. The field value is a path token, never content — the board is public,
+the specs are not.
+
+**The status is the signal, the field is the address.** `ready` is the column the
+user reads to see whether a release can go and the only status a run starts from;
+the `spec` field is where that run finds the file. Set the field first, the status
+second, so the task is never `ready` without a spec to read.
 
 No checklist is written here. The task's checklist is the run's own progress
 through its phases, and `/feature` puts it there when the run starts.
