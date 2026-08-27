@@ -28,6 +28,12 @@ interface MarkdownContentProps {
 const urlTransform = (url: string): string =>
   url.startsWith('boardown:') ? url : defaultUrlTransform(url);
 
+// Case-insensitive: remark-gfm autolinks `HTTP://…` and keeps the casing, and an
+// href that slipped past this would top-navigate the board tab away from the app.
+const EXTERNAL_HREF = /^https?:\/\//i;
+
+const isExternalHref = (href: string): boolean => EXTERNAL_HREF.test(href);
+
 // No rehype-raw: embedded HTML renders as text rather than markup, which is the
 // product's requirement and react-markdown's default, so no sanitizer is needed.
 export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps) {
@@ -106,6 +112,16 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
             >
               {children}
             </button>
+          );
+        }
+        // An external target opens outside the app; an in-page `#anchor`, a
+        // relative path or a `mailto:` gfm made from an email keeps behaving as
+        // it does today, since a new tab would help none of them.
+        if (href !== undefined && isExternalHref(href)) {
+          return (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
           );
         }
         return <a href={href}>{children}</a>;

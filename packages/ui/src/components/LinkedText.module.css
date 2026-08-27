@@ -34,3 +34,9 @@
   outline-offset: 1px;
   border-radius: 2px;
 }
+
+/* A URL is one long unbreakable token, so without this it widens its field
+   instead of wrapping in it. */
+.externalLink {
+  overflow-wrap: anywhere;
+}

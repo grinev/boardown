@@ -175,3 +175,23 @@ describe('linkifyText — repo file refs', () => {
     ]);
   });
 });
+
+describe('linkifyText — external URLs', () => {
+  it('leaves a bare URL as text, since remark-gfm owns autolinking here', () => {
+    expect(linkifyText('see https://example.com/a first', toLink)).toEqual([
+      { type: 'text', value: 'see https://example.com/a first' },
+    ]);
+  });
+
+  it('leaves a URL alone while still linking a reference beside it', () => {
+    expect(linkifyText('https://example.com/a and [[architecture]]', toLink)).toEqual([
+      { type: 'text', value: 'https://example.com/a and ' },
+      {
+        type: 'link',
+        url: `${DOC_HREF}docs/architecture.md`,
+        title: null,
+        children: [{ type: 'text', value: 'Page architecture' }],
+      },
+    ]);
+  });
+});

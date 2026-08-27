@@ -1,13 +1,19 @@
 import { FileCode2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createLogger, projectFileName, type ProjectFileRead } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { DialogBackButton } from './DialogBackButton';
 import { MarkdownContent } from './MarkdownContent';
 import { Modal } from './Modal';
+import { splitUrls } from '../utils/urls';
 import styles from './RepoFilePopupDialog.module.css';
 
 const log = createLogger('ui.repo-file');
+
+// Which of the two panes a file gets, and so also whether the plain pane's URL
+// scan is worth running at all.
+const isMarkdownFile = (path: string): boolean =>
+  projectFileName(path).toLowerCase().endsWith('.md');
 
 const MESSAGES: Record<Exclude<ProjectFileRead['kind'], 'text'>, string> = {
   binary: 'Unsupported file format',
@@ -45,6 +51,14 @@ export function RepoFilePopupDialog() {
     };
   }, [path, projectFiles]);
 
+  // Only URLs, so the file's own task ids and `[[…]]` tokens stay literal — it is
+  // repo content, not board text. Memoised because the preview can be a megabyte,
+  // and skipped entirely for a markdown file, which renders through the other pane.
+  const plainPieces = useMemo(() => {
+    if (result?.kind !== 'text' || path === null || isMarkdownFile(path)) return [];
+    return splitUrls(result.text);
+  }, [result, path]);
+
   if (path === null) return null;
 
   const name = projectFileName(path);
@@ -79,12 +93,28 @@ export function RepoFilePopupDialog() {
           <p className={styles.message}>{MESSAGES[result.kind]}</p>
         )}
         {result?.kind === 'text' &&
-          (name.toLowerCase().endsWith('.md') ? (
+          (isMarkdownFile(path) ? (
             // No onDocRefClick: a file from the repo is not board text, so its
             // task ids and [[…]] tokens stay literal.
             <MarkdownContent source={result.text} />
           ) : (
-            <pre className={styles.plain}>{result.text}</pre>
+            <pre className={styles.plain}>
+              {plainPieces.map((piece, i) =>
+                piece.kind === 'text' ? (
+                  <Fragment key={i}>{piece.text}</Fragment>
+                ) : (
+                  <a
+                    key={i}
+                    className={styles.externalLink}
+                    href={piece.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {piece.url}
+                  </a>
+                ),
+              )}
+            </pre>
           ))}
       </div>
     </Modal>

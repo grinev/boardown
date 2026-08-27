@@ -800,9 +800,10 @@ any other text file, and one of `Unsupported file format` (not a text file),
 file` (a directory, a permission error, a path outside the project folder)
 instead of content. The popup's heading is the file name with the
 project-relative path beneath it; there is no **View in docs** button, since a
-repo file has no page in the Docs tab. **References inside a previewed file are
+repo file has no page in the Docs tab. **boardown's own references inside a previewed file are
 not linkified** — a task id in a code comment or a `[[…]]` in a CHANGELOG stays
-literal, because the file belongs to the repo, not to the board. Nothing is
+literal, because the file belongs to the repo, not to the board. An external URL is
+not a board reference and is a link in both panes (see "External links"). Nothing is
 stored, nothing is cached, and nothing is ever written: reopening the link re-reads
 the file. There is **no autocomplete** for repo file tokens — `[[` suggests doc
 pages only.
@@ -812,7 +813,7 @@ Reading a project file is the shells' one capability that reaches outside
 `FsAdapter` every board write goes through; the CLI has no part in it, printing
 raw text as it does for doc links.
 
-All three kinds render in the task's **description** and **notes** (task dialog), the
+All four kinds render in the task's **description** and **notes** (task dialog), the
 **epic's description** (epic dialog), the **release's description** (release
 dialog), a **doc page's body** (Docs tab) and a **custom field's value** (task
 dialog) — the one single-line field that renders links, since it is the natural
@@ -820,6 +821,40 @@ place to point at the task or the page this one came from. Tokens that resolve t
 nothing stay plain text, and edit mode always shows the raw source. The task
 title, checklist items and cards render no links: those texts also show on the
 task card and in the backlog row, where nothing is linkified.
+
+**External links.** An `http://` or `https://` URL written in any of those fields
+renders, in view mode, as a link labelled with the **URL exactly as typed** —
+nothing shortened, no icon, no tooltip: the scheme prefix already says the target is
+outside the app. Clicking it opens the URL **outside boardown**, in the system's
+default browser, in a new tab or window; nothing in the app navigates away and no
+confirmation is asked. Nothing is fetched, stored or cached, so a dead link is
+indistinguishable from a live one until it is clicked, and the text on disk stays
+exactly what was typed.
+
+The URL ends before a trailing `.`, `,`, `;`, `:`, `!` or `?`, and before a
+trailing `)` or `]` it never opened — so `see https://example.com/a.` links
+`https://example.com/a` and leaves the sentence's full stop as text, while a
+Wikipedia address keeps its own parentheses. A URL inside `[[…]]` is not an
+external link: the wiki token wins at that position, resolves to no doc page and
+stays plain text. In these plain-text fields `mailto:`, `ftp:`, `file:` and a bare
+`www.example.com` are **not** links — only the two schemes above are, and the
+scheme may be written in any case. A long URL wraps inside its field rather than
+widening it, breaking mid-URL.
+There is no autocomplete and no insert-link button, and no markdown is introduced
+into the plain-text fields: `[label](url)` there still shows its literal
+characters, with the URL inside it a link.
+
+In a **doc page body** and in a **previewed markdown file** a URL is linkified by
+the markdown parser as before, and now opens outside the app rather than navigating
+it away; markdown link syntax `[label](url)` works there and is unaffected, and a
+URL inside a code span or fence stays literal. Those two surfaces keep the markdown
+parser's wider rule rather than the one above: a bare `www.example.com` and an
+email address have always been rendered as links there, and still are. The `www.`
+one now opens outside the app like any other external URL; what a `mailto:` does is
+left to the shell, and the desktop app allows no scheme but `http(s)`, so there it
+does nothing. In the **plain monospaced pane** that
+previews a non-markdown file, a URL is a link too — the one place external links
+reach where nothing was linkified before.
 
 **Inserting a doc link.** In any of those fields, typing `[[` opens a suggestion
 list of doc pages, filtered by title and path as the user keeps typing. ↑/↓ move,

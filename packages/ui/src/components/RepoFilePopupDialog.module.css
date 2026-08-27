@@ -105,3 +105,21 @@
   color: var(--text-muted);
   font-size: 14px;
 }
+
+/* The pane keeps `white-space: pre`, so a URL inside it never wraps — only its
+   colour and underline set it apart from the code around it. */
+.externalLink {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.externalLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+.externalLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}

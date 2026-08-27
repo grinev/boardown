@@ -15,6 +15,7 @@ const rejoin = (segments: RefSegment[]): string =>
     .map((s) => {
       if (s.kind === 'task-ref') return s.id;
       if (s.kind === 'doc-ref' || s.kind === 'repo-ref') return s.raw;
+      if (s.kind === 'url') return s.url;
       return s.text;
     })
     .join('');
@@ -201,6 +202,82 @@ describe('splitRefs — repo file refs', () => {
 
   it('preserves the original text across segments', () => {
     const text = 'See [[repo:a/b.ts]] and [[repo:../up]] and [[repo:]]';
+    expect(rejoin(splitRefs(text))).toBe(text);
+  });
+});
+
+describe('splitRefs — external URLs', () => {
+  it('splits a URL out of the surrounding text', () => {
+    expect(splitRefs('see https://example.com/a first')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'url', url: 'https://example.com/a' },
+      { kind: 'text', text: ' first' },
+    ]);
+  });
+
+  it('leaves a trailing sentence stop out of the URL', () => {
+    expect(splitRefs('see https://example.com/a.')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'url', url: 'https://example.com/a' },
+      { kind: 'text', text: '.' },
+    ]);
+  });
+
+  it('lets the wiki token win over a URL written inside it', () => {
+    expect(splitRefs('see [[https://example.com]] here')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'doc-ref', token: 'https://example.com', raw: '[[https://example.com]]' },
+      { kind: 'text', text: ' here' },
+    ]);
+  });
+
+  it('still resolves a task id sitting next to a URL', () => {
+    expect(splitRefs('BD-7 https://example.com/a')).toEqual([
+      { kind: 'task-ref', id: 'BD-7' },
+      { kind: 'text', text: ' ' },
+      { kind: 'url', url: 'https://example.com/a' },
+    ]);
+  });
+
+  it('links a URL inside markdown link syntax and leaves the brackets as text', () => {
+    expect(splitRefs('[label](https://example.com)')).toEqual([
+      { kind: 'text', text: '[label](' },
+      { kind: 'url', url: 'https://example.com' },
+      { kind: 'text', text: ')' },
+    ]);
+  });
+
+  it('leaves a bare www and other schemes as text', () => {
+    expect(splitRefs('www.example.com and mailto:a@b.example')).toEqual([
+      { kind: 'text', text: 'www.example.com and mailto:a@b.example' },
+    ]);
+  });
+});
+
+describe('splitRefs — scheme casing does not leak to task ids', () => {
+  it('links an uppercase scheme', () => {
+    expect(splitRefs('see HTTP://example.com/a')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'url', url: 'HTTP://example.com/a' },
+    ]);
+  });
+
+  it('still refuses a lowercase task id', () => {
+    expect(splitRefs('bd-7 is not a reference')).toEqual([
+      { kind: 'text', text: 'bd-7 is not a reference' },
+    ]);
+  });
+});
+
+describe('splitRefs — brackets around a URL', () => {
+  it('keeps a balanced bracket pair the URL opened', () => {
+    expect(splitRefs('https://x.example/[[y]]')).toEqual([
+      { kind: 'url', url: 'https://x.example/[[y]]' },
+    ]);
+  });
+
+  it('preserves the original text across segments', () => {
+    const text = 'See https://a.example/p. and [[b]] and BD-1)';
     expect(rejoin(splitRefs(text))).toBe(text);
   });
 });
