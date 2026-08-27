@@ -742,6 +742,19 @@ frozen and the `…` menu's `Delete` item is disabled, as described below. An
 archived file is never rewritten, so there is nothing to fail: the operations
 `@boardown/core` would refuse are simply not reachable.
 
+**The header** carries the task's type icon and its id, and immediately right of
+the id a **copy button** that puts the subject line of the commit that would close
+this task on the clipboard: `<type>(<ID>): <title>`, e.g. `feat(BD-123): Add next
+button`. The type is spelled the way a conventional commit spells it — `feature` →
+`feat`, `bug` → `fix`, `docs` → `docs`, `tech` → `chore` — and the mapping is fixed;
+nothing configures it or the format. The id and the title are copied exactly as the
+board holds them, the title flattened to a single line. It reads the **saved** title,
+so an inline edit still being typed is not what lands on the clipboard, and it works
+on a task in a **finished** release, since copying writes nothing. A successful copy
+is confirmed the way the Settings CLI row confirms one — the icon swaps to a
+checkmark and back — and a clipboard the browser withholds makes the click do nothing
+at all. The dialog opens with focus on its close button.
+
 **Deletion.** The task dialog's header carries a `…` menu next to the close button
 with a single `Delete` action. It opens a confirmation modal on top of the dialog;
 confirming removes the task's section from its file permanently (no undo, no trash —

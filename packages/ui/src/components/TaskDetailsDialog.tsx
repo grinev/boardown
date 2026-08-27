@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import {
   useEffect,
   useMemo,
@@ -22,9 +22,11 @@ import {
   type TaskPriority,
   type TaskType,
 } from '@boardown/core';
+import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { TASK_TYPE_META } from '../task-types';
+import { taskCommitMessage } from '../utils/commit-message';
 import { pickContrastText } from '../utils/contrast-color';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
@@ -101,6 +103,11 @@ export function TaskDetailsDialog({
   // release, an epic file, the backlog, the archive — it is a value, not a control.
   const statusLocked = release?.frontmatter.status !== 'current';
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const { copied, copy, reset: resetCopied } = useCopyToClipboard();
+  // Opening another task from a link reuses this dialog rather than remounting it,
+  // so a confirmation still on screen would follow the user onto a task nothing
+  // was copied for.
+  useEffect(resetCopied, [id, resetCopied]);
 
   const config = useBoardStore((s) => s.snapshot?.config);
   // The board refuses a task entering a full In Progress column, so the controls
@@ -192,6 +199,16 @@ export function TaskDetailsDialog({
             aria-label={typeMeta.label}
           />
           <span className={styles.idText}>{id}</span>
+          <button
+            type="button"
+            className={styles.copyButton}
+            // The saved title, not the one being typed: the inline editor keeps
+            // its draft to itself, so this reads what is on disk.
+            onClick={() => copy(taskCommitMessage(id, type, task.title))}
+            aria-label={copied ? 'Commit message copied' : 'Copy commit message'}
+          >
+            {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+          </button>
           <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
@@ -201,6 +218,10 @@ export function TaskDetailsDialog({
           />
           <button
             type="button"
+            // Without this the dialog would open on the copy button — the first
+            // focusable element once it is in the header — announcing a copy
+            // action as the dialog's opening line.
+            data-autofocus
             className={styles.closeButton}
             aria-label="Close"
             onClick={onClose}
