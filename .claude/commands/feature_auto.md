@@ -1,6 +1,6 @@
 ---
 description: Run a groomed task end to end with nobody in the room — product spec to reviewed, tested, committed code — stopping instead of asking when a fork is genuinely the user's.
-argument-hint: <a board task id whose spec field is filled>
+argument-hint: <a board task id in the ready status>
 ---
 
 Take this task from its product spec to reviewed, tested, committed code:
@@ -35,15 +35,17 @@ ladder, not by how stuck you feel.
 
 `$1` is a board task id (`BD-42`). **Invoke the `task-tracking` skill first and
 follow it**: which task you are working, where its `<slug>` folder is, what goes
-into its fields, the progress checklist, the log you keep as you go, the outcome
+into its fields, the progress checklist, the log you keep as you go, the status
 you end on. It runs alongside every phase below.
 
 Two things stop the run before it starts, and both end it as `blocked` with the
 reason in the log:
 
-- **the `spec` field is empty** — the task is not groomed. The spec is written
-  with the user in `/groom`, and starting without one means inventing the product
-  from a title;
+- **the task is not in `ready`** — it was never groomed, or it is already being
+  worked. The spec is written with the user in `/groom`, which is what puts a task
+  into `ready`, and starting without one means inventing the product from a title.
+  A `ready` task carrying `outcome: rework` is not yours either: the user sent it
+  back after seeing it, and a round of his remarks is `/rework_auto`;
 - **`$1` is not a task id** — an idea in prose is a grooming session, not this
   command. You do not create the task yourself: what enters a release is the
   user's call, and an agent that can add tasks fills the board with its own
@@ -197,9 +199,11 @@ A stop is an ending, so leave the task in a state someone else can pick up:
 2. **write the question into `log.md`** — the fork, the 2–4 options, which way you
    lean and why, and the expert's reason where the question came from it. This is
    the text the user answers from, and it is the only copy;
-3. **set `outcome`** to `needs-answer` — the keyword alone; the reason lives in
-   the log, as `task-tracking` says. `blocked` is different: it means something
-   outside the task stops it, and no answer of his would unblock it;
+3. **set `outcome`** to `needs-answer` and **leave the status at `in-progress`** —
+   the keyword alone; the reason lives in the log, as `task-tracking` says.
+   `review` is for a run that finished; a stop did not. `blocked` is different
+   again: it means something outside the task stops it, and no answer of his would
+   unblock it;
 4. **report** as below and end the run. Do not start a phase you cannot finish.
 
 A stop is not a defeat, and neither is a run with no stops. What is wrong is a
@@ -396,8 +400,8 @@ final state of the behaviour. Any of them missing means the run
 is stopping, and a stop does not commit — a red commit poisons the branch for
 every task that starts after it.
 
-**Finish the board first, commit second.** The ticked checklist and `outcome` go
-in **before you stage anything** — they land in `.boardown/`, which is in git, so
+**Finish the board first, commit second.** The ticked checklist and the `review`
+status go in **before you stage anything** — they land in `.boardown/`, which is in git, so
 setting them after the commit leaves the tree dirty again with nothing but a
 second commit or an `--amend` to fix it. `--amend` is not available to you here:
 this branch is shared with every task that runs after yours.
@@ -413,8 +417,8 @@ git commit -m "feat(BD-42): export the current release to CSV"   # code + .board
 - the type follows the task's type on the board — `feat` / `fix` / `docs` /
   `chore` — and the scope is the task id;
 - the subject says what the product now does, in English, present tense;
-- **the task travels with its code.** The board fields this run filled in —
-  status, `plan`, `log`, `outcome` — are the record of this very change, and a
+- **the task travels with its code.** What this run put on the board — the status,
+  `plan`, `log` — is the record of this very change, and a
   commit that carries the code without them is a commit whose own task still
   says `todo`. Split them and neither half can be read, reverted or cherry-picked
   on its own;
@@ -431,8 +435,8 @@ Record the commit hash in the log.
 ## The report
 
 Your last output is the report — the wrapper captures it, and it is what the user
-reads in the evening. In the language the user speaks, and led by the outcome:
-what happened first, detail after.
+reads in the evening. In the language the user speaks, and led by how the run
+ended: what happened first, detail after.
 
 - what was built, in a couple of sentences;
 - the "Decided by default" calls added during this run, **each with its source** —
@@ -446,6 +450,6 @@ what happened first, detail after.
   the code ships with the defect named. Major and above gets said plainly, so the
   user or the manager can decide whether it becomes a task.
 
-Then close the task as `task-tracking` says: last line of the log, `outcome` set,
-status left at `in-progress`. **You never set `done`** — that status is the user's
-signature on work he has seen.
+Then close the task as `task-tracking` says: last line of the log, then the status
+to `review`. **You never set `done`** — that status is the user's signature on
+work he has seen, and he gives it out of `review`.
