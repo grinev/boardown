@@ -30,7 +30,11 @@ export const REPO_HREF = 'boardown:repo/';
 
 export const linkifyText = (value: string, toLink: ToRefLink): MdNode[] => {
   const segments = splitRefs(value);
-  if (segments.every((s) => s.kind === 'text')) return [{ type: 'text', value }];
+  // A URL is not this transformer's business: remark-gfm autolinks the ones it
+  // wants during parsing, so one still sitting in a text node here is one it
+  // deliberately left alone.
+  if (segments.every((s) => s.kind === 'text' || s.kind === 'url'))
+    return [{ type: 'text', value }];
 
   const out: MdNode[] = [];
   const pushText = (text: string): void => {
@@ -46,6 +50,10 @@ export const linkifyText = (value: string, toLink: ToRefLink): MdNode[] => {
   for (const segment of segments) {
     if (segment.kind === 'text') {
       pushText(segment.text);
+      continue;
+    }
+    if (segment.kind === 'url') {
+      pushText(segment.url);
       continue;
     }
     const link = toLink(segment);

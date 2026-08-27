@@ -3,6 +3,7 @@ import {
   projectFileName,
   projectFilePathFromRefToken,
 } from '@boardown/core';
+import { URL_PATTERN_SOURCE, trimUrlEnd } from './urls';
 
 export interface TextSegment {
   kind: 'text';
@@ -32,14 +33,31 @@ export interface RepoRefSegment {
   raw: string;
 }
 
-export type RefSegment = TextSegment | TaskRefSegment | DocRefSegment | RepoRefSegment;
+// An `http`/`https` URL to somewhere outside boardown. The scheme is part of the
+// pattern that produced it, so the renderer can put `url` straight into an href.
+export interface UrlSegment {
+  kind: 'url';
+  url: string;
+}
+
+export type RefSegment =
+  | TextSegment
+  | TaskRefSegment
+  | DocRefSegment
+  | RepoRefSegment
+  | UrlSegment;
 
 // One pass over both reference shapes, so `[[BD-7]]` cannot be claimed by two
 // scanners at once: the wiki token starts first at that position and wins.
 // Task ids are the id-prefix shape (2-5 uppercase letters + digits); a wiki token
 // holds anything but brackets and newlines. Whether either resolves to something
 // on the board is the caller's question.
-const REF_REGEX = /\[\[([^[\]\n]*)\]\]|(?<![\w-])[A-Z]{2,5}-\d+(?![\w-])/g;
+// The URL alternative comes last, so a `[[…]]` holding a URL is still a wiki token
+// and renders as the user typed it rather than as a link.
+const REF_REGEX = new RegExp(
+  `\\[\\[([^[\\]\\n]*)\\]\\]|(?<![\\w-])[A-Z]{2,5}-\\d+(?![\\w-])|(${URL_PATTERN_SOURCE})`,
+  'g',
+);
 
 export const splitRefs = (text: string): RefSegment[] => {
   const segments: RefSegment[] = [];
@@ -56,6 +74,19 @@ export const splitRefs = (text: string): RefSegment[] => {
     const start = match.index;
     pushText(text.slice(cursor, start));
     cursor = start + match[0].length;
+
+    const raw = match[2];
+    if (raw !== undefined) {
+      const url = trimUrlEnd(raw);
+      // Prose runs its punctuation up against the URL, so what the pattern took
+      // greedily is handed back to the text that follows.
+      if (url === '') pushText(raw);
+      else {
+        segments.push({ kind: 'url', url });
+        pushText(raw.slice(url.length));
+      }
+      continue;
+    }
 
     const wiki = match[1];
     if (wiki === undefined) {

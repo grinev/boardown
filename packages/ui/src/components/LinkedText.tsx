@@ -21,7 +21,7 @@ export function LinkedText({ text }: LinkedTextProps) {
   // The surrounding InlineEditText view is a role="button" that enters edit mode
   // on click and on Enter/Space; a link must shield both so activating it does
   // not also open the editor.
-  const stopEditTrigger = (e: KeyboardEvent<HTMLButtonElement>) => {
+  const stopEditTrigger = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
   };
 
@@ -30,6 +30,25 @@ export function LinkedText({ text }: LinkedTextProps) {
       {segments.map((segment, i) => {
         if (segment.kind === 'text') {
           return <Fragment key={i}>{segment.text}</Fragment>;
+        }
+
+        if (segment.kind === 'url') {
+          // An anchor rather than a button: it has a real target, so the browser's
+          // own link affordances work on it and each shell opens it the way it
+          // already opens Settings' "Learn more".
+          return (
+            <a
+              key={i}
+              className={`${styles.link} ${styles.externalLink}`}
+              href={segment.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={stopEditTrigger}
+            >
+              {segment.url}
+            </a>
+          );
         }
 
         if (segment.kind === 'doc-ref') {
