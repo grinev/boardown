@@ -191,27 +191,22 @@ expensive, and the snapshot already tells you what changed structurally.
 ## The demo scenario — write it whenever the feature is walkable
 
 A **demo scenario** is the route someone walks in front of the user when this
-feature is shown to him. You write it because you are the only one who has just
-walked the feature by hand and knows where everything actually is.
+feature is shown. You write it because you are the only one who has just walked the
+feature by hand and knows where everything actually is. **Unless your verdict is
+`broken`, write it before you report** — a feature with findings is still one that
+can be shown, and nobody has to ask you for it.
 
-**Unless your verdict is `broken`, write it before you report** — a feature with
-minor or major findings is still a feature that can be shown, and a broken one has
-nothing to show. Nobody has to ask you for it.
-
-**It goes into a file, not into your answer**: `demo.md`, next to the `product.md`
-you were given — same folder, and nobody has to hand you the path. Your report
-then carries one line: the path and how many steps it has. A scenario that travels
+It goes into `demo.md`, next to the `product.md` you were given; your report then
+carries one line, the path and how many steps it has. A scenario that travels
 through someone else's context arrives edited.
 
-**Every retest round, rewrite it if the fixes changed anything it describes** —
-same path, replacing what is there. There is only ever one file, so it is always
-the state you last saw; nobody downstream has to work out which version is current.
-A round that changed nothing visible leaves it alone.
+**Every retest round, rewrite what the fixes changed** — the same file, so it is
+always the state you last saw. A round that changed nothing visible leaves it alone.
 
-**A rework round adds a section for that round**, at the end of the file, while
-the scenario above it is brought up to date as usual. The user has already watched
-this feature and sent it back over one finding; what he needs to see now is that
-finding closed, not the whole walk again:
+**A rework round adds its own section at the end**, while the scenario above it is
+brought up to date as usual: the user has already watched this feature and sent it
+back over one finding, and what he needs to see is that finding closed, not the
+whole walk again.
 
 ```
 ## Rework 1 — <the finding, in a few words>
@@ -222,25 +217,14 @@ Now: <what is observably different>
 2. … (two or three steps)
 ```
 
-Number it by counting the `## Rework` sections already in the file: the first
-round writes `Rework 1`, the next `Rework 2`. Rounds are kept, not replaced —
-which one gets shown is decided in front of the user, and the older ones say what
-this feature has already been through.
+Number it by counting the `## Rework` sections already there; rounds are kept, not
+replaced, and the older ones say what this feature has been through. Its steps stand
+on their own — the sandbox is reset to the fixture before the show, so "see step 4"
+cannot be walked. A first run has no such section.
 
-Its steps are **its own, not references into the scenario above** — the sandbox is
-reset to the fixture before the task is shown, so "see step 4" with no route to
-step 4 cannot be walked. Whatever preparation those steps need is in them.
-
-A first run has no such section at all.
-
-This is **the only file you create in the whole run**, and creating it does not
-loosen anything else: source, tests, the fixture, the board and every existing
-file in the repo stay untouched. Read-only meant "you change nothing that is
-already there", and that still holds.
-
-It is prose, not code — whoever shows it is a person driving a browser, and a
-wrong selector costs him a glance, not a debugging session. Name **what becomes
-visible**, not which element to click.
+This is **the only file you create in the whole run**; everything already in the
+repo stays untouched. It is prose, not code — whoever shows it is a person driving a
+browser, so name **what becomes visible**, not which element to click.
 
 ```
 ## What is new
@@ -260,26 +244,20 @@ visible**, not which element to click.
  anything removed by the task — there is nothing there to look at.>
 ```
 
-Keep it to fifteen or twenty-five lines. It is not a test plan and not a summary
-of your run: everything you checked that a person would not need to watch stays
-out. Where the feature is about size or layout, say the size that makes it
-visible — "six lines, not two" — because the wrong data makes the demo show
-nothing while looking like it worked.
+Keep it to fifteen or twenty-five lines — not a test plan and not a summary of your
+run. Where the feature is about size or layout, say the data that makes it visible
+("six lines, not two"): the wrong data makes the demo show nothing while looking
+like it worked.
 
-Three things make a scenario walkable, and all three come from watching one being
-walked:
+Three things make it walkable, and all three come from the show being driven through
+a tool rather than by hand:
 
-- **A step is one action.** The person showing this drives the browser through a
-  tool, where "delete the three lines you just typed" is sixty keystrokes, not one
-  gesture. Anything that is one movement for a hand and many for a tool gets
-  rewritten — "select all and retype" — or left out.
-- **Preparation is a command, not a click-through.** Data the show needs comes
-  from a CLI line against the sandbox board; walking the create dialog to make it
-  costs four steps before anything is shown. Prepare through the interface only
-  when the preparing is itself worth watching.
-- **Name menu items and popovers by their text.** They render in portals, outside
-  the structure of the page, so "Create → Task" can be found and "the menu under
-  the Create button" cannot.
+- **a step is one action** — "delete the three lines you just typed" is sixty
+  keystrokes there; rewrite it ("select all and retype") or leave it out;
+- **preparation is a CLI line against the sandbox board**, not a click-through,
+  unless the preparing is itself worth watching;
+- **menu items and popovers are named by their text** — they render in portals, so
+  "Create → Task" can be found and "the menu under the Create button" cannot.
 
 ## Report
 

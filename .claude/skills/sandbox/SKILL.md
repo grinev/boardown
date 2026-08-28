@@ -17,6 +17,7 @@ your own role — the tester hunts defects, `/demo` walks a scenario with the us
 
 ```sh
 # free the port if a previous run left a server behind
+# (exits 1 when the port was already free — expected, not a failure)
 powershell -Command 'Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }'
 pnpm dev:sandbox   # run in background
 ```
@@ -150,6 +151,13 @@ node packages/cli/dist/cli.cjs --data-dir "<sandbox board>" release current --js
 - **The first browser call of a run can fail because the MCP server connects
   lazily.** Repeat it once before concluding the browser is unavailable; a second
   failure is a real one.
+- **Never call `navigator.clipboard.readText()`** — it blocks on a permission
+  prompt this session never resolves and hangs until the MCP timeout kills it.
+  `writeText` is unaffected. Read the clipboard by pasting instead: append a
+  scratch `<textarea>`, focus it, `browser_press_key` `ControlOrMeta+v`, read its
+  `value`, remove it. **The scratch element goes inside the open `<dialog>`** —
+  in `document.body` under a modal it never receives the paste, and comes back
+  empty.
 - Screenshots: do not pass a `filename` — it resolves against the repo root and
   litters the working tree. Omitted, the screenshot lands in the gitignored
   `.playwright-mcp/`.

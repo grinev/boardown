@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "playwright": {
+      "timeout": 120000,
       "command": "npx",
       "args": [
         "-y",
