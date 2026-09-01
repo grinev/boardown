@@ -5,8 +5,10 @@ import { App, useBoardStore } from '@boardown/ui';
 import { createBrowserLogSink } from './browser-log-sink';
 import { subscribeToBoardChanges } from './api/board-event-source';
 import { HttpFsAdapter } from './api/http-fs-adapter';
+import { HttpGitHistoryReader } from './api/http-git-history-reader';
 import { HttpProjectFileReader } from './api/http-project-file-reader';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
+import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
 import { resolveDevLogLevel } from './log-level';
 
@@ -37,10 +39,16 @@ const clientId = crypto.randomUUID();
 
 const fs = new HttpFsAdapter(`${prefix}/api/fs`, clientId);
 const projectFiles = new HttpProjectFileReader(`${prefix}${PROJECT_FILE_ENDPOINT}`);
+const gitHistory = new HttpGitHistoryReader(`${prefix}${GIT_COMMITS_ENDPOINT}`);
 
 createRoot(container).render(
   <StrictMode>
-    <App fs={fs} projectFiles={projectFiles} version={__BOARDOWN_VERSION__} />
+    <App
+      fs={fs}
+      projectFiles={projectFiles}
+      gitHistory={gitHistory}
+      version={__BOARDOWN_VERSION__}
+    />
   </StrictMode>,
 );
 

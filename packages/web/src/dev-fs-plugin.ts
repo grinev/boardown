@@ -7,6 +7,8 @@ import { createBoardWatchHub } from './api/board-events.js';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint.js';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint.js';
+import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint.js';
+import { handleGitCommits } from './api/git-history.js';
 import { createLogFileSink } from './log-file-sink.js';
 import { resolveDevLogLevel } from './log-level.js';
 
@@ -110,6 +112,11 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
 
         if (req.method === 'GET' && url.pathname === PROJECT_FILE_ENDPOINT) {
           await handleProjectFile(res, url.searchParams, projectRoot);
+          return;
+        }
+
+        if (req.method === 'GET' && url.pathname === GIT_COMMITS_ENDPOINT) {
+          await handleGitCommits(res, url.searchParams, projectRoot);
           return;
         }
 

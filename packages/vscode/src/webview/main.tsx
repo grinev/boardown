@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { Theme } from '@boardown/core';
 import { App, useBoardStore } from '@boardown/ui';
 import { VsCodeFsAdapter } from './VsCodeFsAdapter';
+import { VsCodeGitHistoryReader } from './VsCodeGitHistoryReader';
 import { VsCodeProjectFileReader } from './VsCodeProjectFileReader';
 import './webview.css';
 
@@ -45,6 +46,7 @@ createRoot(container).render(
     <App
       fs={new VsCodeFsAdapter(vscode)}
       projectFiles={new VsCodeProjectFileReader(vscode)}
+      gitHistory={new VsCodeGitHistoryReader(vscode)}
       defaultTheme={detectTheme()}
       version={detectVersion()}
     />

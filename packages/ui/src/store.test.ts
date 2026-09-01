@@ -822,6 +822,31 @@ describe('setBoardRelease and setMultipleActiveReleases', () => {
   });
 });
 
+describe('setGitIntegration', () => {
+  it('writes the key only once the user turns it off, since absent means on', async () => {
+    const { fs } = setup(snap());
+
+    // Already on by default, so turning it on writes nothing.
+    await state().setGitIntegration(true);
+    expect(current().config.gitIntegration).toBeUndefined();
+    expect(fs.writes).toEqual([]);
+
+    await state().setGitIntegration(false);
+    expect(current().config.gitIntegration).toBe(false);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('gitIntegration: false');
+  });
+
+  it('rolls back and reports when the write fails', async () => {
+    const { fs } = setup(snap());
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await state().setGitIntegration(false);
+
+    expect(current().config.gitIntegration).toBeUndefined();
+    expect(state().errorMessage).toMatch(/failed to save the setting/i);
+  });
+});
+
 describe('completeOnboarding', () => {
   it('seeds the new config theme from the host default theme', async () => {
     const fs = new MemFs();

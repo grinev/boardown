@@ -14,6 +14,7 @@ import {
   removeTaskLink,
   reorderTask,
   normalizeSearchQuery,
+  readTaskCommits,
   sortTasksByOrder,
   taskMatchRank,
   DEFAULT_LINK_TYPE,
@@ -29,6 +30,7 @@ import {
   type ChecklistItem,
   type DestEpic,
   type FsAdapter,
+  type GitHistoryResult,
   type LinkType,
   type NewTaskInput,
   type Note,
@@ -42,7 +44,9 @@ import {
   type TaskStatus,
   type TaskType,
 } from '@boardown/core';
+import { dirname } from 'node:path';
 import { flagBool, flagList, flagString, type ParsedArgs } from '../args';
+import { gitRunIn } from '../git-history';
 import { CliError } from '../output';
 import {
   epicMembers,
@@ -90,10 +94,12 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     case 'link':
     case 'links':
       return taskLink(args, ctx);
+    case 'commits':
+      return taskCommits(args, ctx);
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | commits.`,
         2,
       );
   }
@@ -543,6 +549,41 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     ...problemsField(problems),
   };
 }
+
+// Related commits are read from the repository around the board, never from the
+// board itself, so nothing here writes and `task get` is unaffected. The board is
+// still loaded: an ID that names no task must not come back as a plausible empty
+// result. The UI's gitIntegration setting is a display preference and is ignored.
+async function taskCommits(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[2];
+  if (id === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown task commits <id>.', 2);
+  }
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { snapshot, problems } = await loadBoardOrThrow(root);
+  if (locateTask(snapshot, id) === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+
+  const result = await readTaskCommits(id, gitRunIn(dirname(root)));
+  return {
+    data: result,
+    human: renderCommits(result),
+    ...problemsField(problems),
+  };
+}
+
+const COMMITS_EMPTY: Record<GitHistoryResult['state'], string> = {
+  ready: 'No related commits.',
+  'not-a-repository': 'Git is not initialized.',
+  'git-unavailable': 'Git is unavailable.',
+};
+
+const renderCommits = (result: GitHistoryResult): string =>
+  result.commits.length === 0
+    ? COMMITS_EMPTY[result.state]
+    : result.commits.map((c) => `${c.hash}  ${c.subject}`).join('\n');
 
 interface TaskListEntry {
   task: Task;

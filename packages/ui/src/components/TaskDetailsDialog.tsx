@@ -31,6 +31,7 @@ import { pickContrastText } from '../utils/contrast-color';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
 import { Checklist } from './Checklist';
+import { CommitsPanel } from './CommitsPanel';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { DialogBackButton } from './DialogBackButton';
 import { IconSelect, type IconSelectOption } from './IconSelect';
@@ -412,6 +413,12 @@ export function TaskDetailsDialog({
               ))}
             </dl>
           </div>
+          {/* Not mounted when the setting is off, so "no Git read" is true rather
+              than merely invisible. Absent means on. */}
+          {/* Keyed on the task: following a link reuses this dialog, and without
+              a remount the previous task's commits would paint for a frame under
+              the new task's title. */}
+          {config?.gitIntegration !== false && <CommitsPanel key={id} taskId={id} />}
         </aside>
       </div>
       {deleteOpen && (

@@ -49,6 +49,9 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.multipleActiveReleases !== undefined) {
     ordered.multipleActiveReleases = config.multipleActiveReleases;
   }
+  if (config.gitIntegration !== undefined) {
+    ordered.gitIntegration = config.gitIntegration;
+  }
   if (config.statuses !== undefined) {
     ordered.statuses = config.statuses.map((status) => {
       const entry: Record<string, unknown> = { key: status.key };

@@ -183,6 +183,7 @@ export function Root() {
             key={activeFolder}
             fs={bridge.fs}
             projectFiles={bridge.projectFiles}
+            gitHistory={bridge.gitHistory}
             forcedTheme={theme}
             defaultTheme={openThemeRef.current}
             defaultProjectName={folderName(activeFolder)}

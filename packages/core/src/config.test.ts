@@ -348,6 +348,44 @@ describe('multiple active releases', () => {
   });
 });
 
+describe('git integration', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('is absent until the user sets it, and absent means on', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('gitIntegration');
+    expect(parseConfig(out).value?.gitIntegration).toBeUndefined();
+  });
+
+  it('round-trips both values, in the slot after multipleActiveReleases', () => {
+    for (const enabled of [true, false]) {
+      const cfg: BoardConfig = {
+        ...base,
+        multipleActiveReleases: true,
+        gitIntegration: enabled,
+        customFields: [{ key: 'env', type: 'string' }],
+      };
+      const out = serializeConfig(cfg);
+      expect(out).toContain(`gitIntegration: ${String(enabled)}`);
+      expect(out.indexOf('multipleActiveReleases:')).toBeLessThan(
+        out.indexOf('gitIntegration:'),
+      );
+      expect(out.indexOf('gitIntegration:')).toBeLessThan(out.indexOf('customFields:'));
+      const back = parseConfig(out);
+      expect(back.problems).toEqual([]);
+      expect(back.value).toEqual(cfg);
+    }
+  });
+
+  it('fails the whole config on a non-boolean value rather than falling back', () => {
+    const parsed = parseConfig(
+      'idPrefix: BD\nnextId: 0\nprojectName: P\ngitIntegration: "no"\n',
+    );
+    expect(parsed.value).toBeNull();
+    expect(parsed.problems).toHaveLength(1);
+  });
+});
+
 describe('serializeConfig customFields', () => {
   it('round-trips declarations, so the nextId rewrite cannot erase them', () => {
     const cfg: BoardConfig = {

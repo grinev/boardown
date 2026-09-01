@@ -151,15 +151,27 @@ CLI inherits them rather than re-implementing them.
   `FsAdapter` implementation, folder picker / workspace acquisition, refresh
   triggers, OS dialogs.
 - All access to the **board** goes through the `FsAdapter` interface defined in
-  `packages/core`, rooted at `.boardown/` by every shell. The one thing outside
-  it is `ProjectFileReader` (also declared in `core`): a second, **read-only**
-  capability scoped to the project folder, which repo file links use to preview a
-  file from the repo. It is deliberately a separate interface rather than a method
-  on `FsAdapter` — the adapter is what the conflict guard wraps and what every
-  write goes through, and no write path may reach outside `.boardown/`. A new
-  file-touching feature belongs on `FsAdapter` unless it is read-only *and* needs
-  the project folder. Never call `fetch`, `fs`, or browser APIs from `core` or
-  `ui`.
+  `packages/core`, rooted at `.boardown/` by every shell. Two capabilities sit
+  outside it, both declared in `core` and both **read-only**: `ProjectFileReader`,
+  scoped to the project folder, which repo file links use to preview a file from
+  the repo, and `GitHistoryReader`, scoped to the Git repository around that
+  folder, which the task dialog's Commits panel reads. Each is deliberately a
+  separate interface rather than a method on `FsAdapter` — the adapter is what the
+  conflict guard wraps and what every write goes through, and no write path may
+  reach outside `.boardown/`. A new file-touching feature belongs on `FsAdapter`
+  unless it is read-only *and* needs the project folder. Never call `fetch`, `fs`,
+  or browser APIs from `core` or `ui`.
+- **A host capability whose result is a *decision* keeps that decision in `core`,
+  behind an injected primitive; the host supplies only the syscall.** Git is the
+  worked example: `readTaskCommits` in `core` owns the argv, the exit-code chain
+  that separates "no repository" from "an empty one", the output parsing and the
+  token match, and each of the four Node hosts (VS Code extension host, Electron
+  main, `web`'s shared handler, the CLI) passes it a `run` callback of about
+  fifteen lines around `execFile`. A rule spread across four hosts drifts
+  invisibly — one shell reporting Git unavailable where another reports no
+  repository is a bug nobody sees — while a copy of the spawn itself fails
+  loudly. Same split as `classifyProjectFile`, which classifies bytes each host
+  reads for itself.
 - Validate every parsed `frontmatter` and `config.yaml` through a Zod schema.
   Surface validation errors as structured problems (see "Lenient parsing"
   in PRODUCT.md), never throw away user data.

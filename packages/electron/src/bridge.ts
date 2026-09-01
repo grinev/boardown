@@ -1,4 +1,9 @@
-import type { FsAdapter, ProjectFileReader, Theme } from '@boardown/core';
+import type {
+  FsAdapter,
+  GitHistoryReader,
+  ProjectFileReader,
+  Theme,
+} from '@boardown/core';
 
 export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
 
@@ -55,6 +60,9 @@ export interface BoardownBridge {
   // repo file links. Deliberately not part of `fs`: no write path may reach
   // outside the board.
   readonly projectFiles: ProjectFileReader;
+  // Read-only access to the repository around the open project folder, for the
+  // task dialog's Commits panel. Separate from `fs` for the same reason.
+  readonly gitHistory: GitHistoryReader;
   readonly pickFolder: () => Promise<void>;
   // Pop up the native application menu at the cursor (the ☰ button). Win/Linux
   // only — macOS reaches the same menu through its system menu bar.
@@ -86,6 +94,7 @@ export const IPC = {
   bootstrap: 'boardown:bootstrap',
   fs: 'boardown:fs',
   projectFile: 'boardown:project-file',
+  gitCommits: 'boardown:git-commits',
   pickFolder: 'boardown:pick-folder',
   popupMenu: 'boardown:popup-menu',
   openRecent: 'boardown:open-recent',
