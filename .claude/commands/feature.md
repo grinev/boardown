@@ -1,11 +1,11 @@
 ---
 description: Take a board task end to end — groom it with the user into a product spec, then plan, implement, review, browser-test — stopping for him only on decisions that are genuinely his.
-argument-hint: <a board task id, groomed or not>
+argument-hint: <a board task, by id or in your own words — groomed or not>
 ---
 
 Take this task from the board to reviewed, tested code:
 
-**$1**
+**$ARGUMENTS**
 
 You are the main agent. You write the plan and the code yourself; the subagents —
 critic, architect, expert, reviewer, tester — give you independent judgement, and
@@ -16,6 +16,12 @@ phase 0 of this run or in a `/groom` session before it. From phase 1 on it is
 settled input, and nothing after that reopens it.
 
 ## Standing rules — every phase
+
+**A human runs this command and watches it run.** Keep him with you: a short line
+whenever there is something to say — starting a long step, a subagent's verdict
+landing, a gate going green or red, a change of course. One or two sentences, not a
+report; the log carries the record, these lines carry the run. What he cannot act on
+is silence.
 
 **Delegate learning, not reading.** Finding out how something works — a flow, where
 a concept lives, which surfaces exist, whether a utility already exists, what a
@@ -46,9 +52,15 @@ run. The rule `task-tracking` states holds for the autonomous flows, where there
 nobody to groom with; here the user is in the room from the first message, so an
 ungroomed task is groomed and then built in one sitting.
 
-What does stop the run is an argument that is not a task. `$1` is a board task id
-(`BD-42`); an idea in prose has no id, no folder and no field to write the spec
-into. Say so and stop — it goes on the board first.
+**The argument is prose** — an id (`BD-XX`), a bare number, a title or a sentence
+about what he wants done. Read all of it: the reference can be anywhere in it, the
+rest is context for the run.
+
+Resolve it to exactly one board task first, searching titles and descriptions
+through the `boardown` CLI when there is no id. Never work an unresolved reference —
+the spec, the log and the status need a task to write into. Several matches or none:
+one `AskUserQuestion` with the candidates. A new idea that is on the board nowhere:
+say so and stop, it goes on the board first.
 
 ## Artifacts
 
@@ -130,8 +142,8 @@ Otherwise the product gets decided now, with him in the room. **Read
 `.claude/commands/groom.md` and follow it** — "The order of work on a task", "What
 gets closed with the user" and "How to ask" carry the whole procedure, and the
 `product-spec` skill carries the shape of the file. Do not groom from memory of this
-file. What that command does across a release, you do for `$1` alone: draft the spec
-off `Explore` reports and the neighbouring specs, one batched `AskUserQuestion` for
+file. What that command does across a release, you do for this task alone: draft the
+spec off `Explore` reports and the neighbouring specs, one batched `AskUserQuestion` for
 the forks the draft could not close, `spec-critic` once, fold in his answers, set the
 `spec` field.
 

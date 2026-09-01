@@ -208,6 +208,13 @@ brought up to date as usual: the user has already watched this feature and sent 
 back over one finding, and what he needs to see is that finding closed, not the
 whole walk again.
 
+**A round is one the user sent back**, and you know it because the prompt hands you
+the remark he made at the demo. Findings of your own, fixed and retested inside this
+same run, are not rounds — they never reached him. They go into the scenario above
+and leave no section behind; a `## Rework` section written for them makes the demo
+announce a round that never happened, and he spends the show working out what he is
+supposed to have sent back.
+
 ```
 ## Rework 1 — <the finding, in a few words>
 Asked for: <the remark as it reached you>

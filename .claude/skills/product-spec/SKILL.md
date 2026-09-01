@@ -95,6 +95,21 @@ he asked for apart from what was filled in around it. A sentence he typed to
 `/groom` goes here as it is; a conversation is reduced to the two or three lines
 that actually set the task.
 
+**Current behaviour** — for a bug, right after *Source request*: the steps that
+reproduce it and what the product does instead, observable from outside like every
+other line, with the shot cited on the line the way *Look* cites one. It is
+written from the grooming session's own run of the broken product, not from the
+report — the report says what the user noticed, this section says what the product
+does. It is also the only copy: nobody downstream runs the bug again, and a bug
+spec without it is a spec written over a guess.
+
+> ## Current behaviour
+>
+> - dragging a task onto an empty release drops it back where it started
+>   [shot: `refs/empty-release.png` — the release as it is today]
+> - reproduces in the VS Code panel and in the browser alike; a release with one
+>   task takes the drop
+
 **Reach** — one line, naming every sibling surface the behaviour could plausibly
 touch, each with yes or no. A sibling nobody listed is the most expensive mistake
 this document can carry.
