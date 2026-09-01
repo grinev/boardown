@@ -289,6 +289,9 @@ export const BoardConfigSchema = z
     boardRelease: z.string().min(1).optional(),
     wipLimits: WipLimitsSchema.optional(),
     multipleActiveReleases: z.boolean().optional(),
+    // Absent means on. Hides the task dialog's Commits panel when false; the CLI
+    // ignores it, since `task commits` is not a display preference.
+    gitIntegration: z.boolean().optional(),
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),

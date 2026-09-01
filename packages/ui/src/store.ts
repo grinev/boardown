@@ -8,6 +8,7 @@ import type {
   Epic,
   EpicPatch,
   FsAdapter,
+  GitHistoryReader,
   GuardedFile,
   GuardedFs,
   LinkType,
@@ -121,6 +122,10 @@ interface BoardState {
   // Separate from `fs` on purpose: it reaches outside `.boardown/`, so no write
   // path may ever hold it.
   projectFiles: ProjectFileReader | null;
+  // The shell's read-only window onto the repository around the project folder.
+  // Parked here the way `projectFiles` is; the panel that reads it holds no
+  // result, since related commits are repository state and not board data.
+  gitHistory: GitHistoryReader | null;
   conflictOpen: boolean;
   // The file a write was refused on because the parser could not read all of it,
   // with the problems that justify the refusal. Null when nothing was refused.
@@ -155,6 +160,7 @@ interface BoardState {
   deleteDocPath: string | null;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   setProjectFiles: (reader: ProjectFileReader) => void;
+  setGitHistory: (reader: GitHistoryReader) => void;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
@@ -169,6 +175,7 @@ interface BoardState {
   // every shell opens on the same one.
   setBoardRelease: (slug: string) => Promise<void>;
   setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
+  setGitIntegration: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -566,11 +573,14 @@ export const useBoardStore = create<BoardState>(
     fs: null,
     rawFs: null,
     projectFiles: null,
+    gitHistory: null,
     conflictOpen: false,
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
 
     setProjectFiles: (reader) => set({ projectFiles: reader }),
+
+    setGitHistory: (reader) => set({ gitHistory: reader }),
 
     load: async (fs, defaultTheme) => {
       set({
@@ -784,6 +794,22 @@ export const useBoardStore = create<BoardState>(
       if (!snapshot || !fs) return;
       if ((snapshot.config.multipleActiveReleases ?? false) === enabled) return;
       const nextConfig = { ...snapshot.config, multipleActiveReleases: enabled };
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
+    setGitIntegration: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      // Absent means on, so the comparison resolves before it decides.
+      if ((snapshot.config.gitIntegration ?? true) === enabled) return;
+      const nextConfig = { ...snapshot.config, gitIntegration: enabled };
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {

@@ -40,6 +40,7 @@ Tasks:
   task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
   task notes <op>        Note: add | edit | rm (on <id>).
   task link <op>         Link to another task: add | rm (<id> <other-id> [--type T]) | ls <id>.
+  task commits <id>      Local commits whose subject mentions the task.
 
 Releases and epics:
   release get <ref>      Show one release and its tasks.

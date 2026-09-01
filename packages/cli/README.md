@@ -47,6 +47,7 @@ boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
 boardown task link <op>         Link to another task: add | rm (<id> <other-id>) | ls <id>.
+boardown task commits <id>      Local commits whose subject mentions the task.
 
 boardown release get <ref>      Show one release and its tasks.
 boardown release list           List releases with task counts.

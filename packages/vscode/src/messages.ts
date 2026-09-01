@@ -33,6 +33,23 @@ export interface ProjectFileResponseMessage {
   result: unknown;
 }
 
+// Reading the local Git history for one task's related commits. A separate
+// message for the same reason as the one above: read-only, and resolved against
+// the workspace folder rather than .boardown/.
+export interface GitCommitsRequestMessage {
+  type: 'git-commits-request';
+  id: number;
+  taskId: string;
+}
+
+export interface GitCommitsResponseMessage {
+  type: 'git-commits-response';
+  id: number;
+  // A GitHistoryResult from @boardown/core: the host ran git, core classified
+  // what came back, and this channel carries only the JSON of that decision.
+  result: unknown;
+}
+
 export interface ReadyMessage {
   type: 'ready';
 }
@@ -44,8 +61,13 @@ export interface BoardChangedMessage {
   type: 'board-changed';
 }
 
-export type WebviewToHost = FsRequestMessage | ProjectFileRequestMessage | ReadyMessage;
+export type WebviewToHost =
+  | FsRequestMessage
+  | ProjectFileRequestMessage
+  | GitCommitsRequestMessage
+  | ReadyMessage;
 export type HostToWebview =
   | FsResponseMessage
   | ProjectFileResponseMessage
+  | GitCommitsResponseMessage
   | BoardChangedMessage;

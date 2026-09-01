@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { FileStat, FsEntry, ProjectFileRead, Theme } from '@boardown/core';
+import type {
+  FileStat,
+  FsEntry,
+  GitHistoryResult,
+  ProjectFileRead,
+  Theme,
+} from '@boardown/core';
 import {
   IPC,
   type BoardownBridge,
@@ -41,6 +47,10 @@ const bridge: BoardownBridge = {
   projectFiles: {
     readFile: (filePath) =>
       ipcRenderer.invoke(IPC.projectFile, filePath) as Promise<ProjectFileRead>,
+  },
+  gitHistory: {
+    commitsForTask: (taskId) =>
+      ipcRenderer.invoke(IPC.gitCommits, taskId) as Promise<GitHistoryResult>,
   },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<void>,
   popupMenu: () => ipcRenderer.send(IPC.popupMenu),

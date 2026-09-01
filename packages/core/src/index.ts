@@ -13,4 +13,5 @@ export * from './task-match.js';
 export * from './conflicts.js';
 export * from './docs.js';
 export * from './project-file.js';
+export * from './git-history.js';
 export * from './logger.js';

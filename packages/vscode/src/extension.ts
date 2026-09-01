@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
-import { PROJECT_FILE_MAX_BYTES, classifyProjectFile, type ProjectFileRead } from '@boardown/core';
-import type { FsRequestMessage, ProjectFileRequestMessage } from './messages';
+import {
+  PROJECT_FILE_MAX_BYTES,
+  classifyProjectFile,
+  readTaskCommits,
+  type GitHistoryResult,
+  type ProjectFileRead,
+} from '@boardown/core';
+import type {
+  FsRequestMessage,
+  GitCommitsRequestMessage,
+  ProjectFileRequestMessage,
+} from './messages';
+import { gitRunIn } from './git-history';
 
 let panel: vscode.WebviewPanel | undefined;
 
@@ -69,6 +80,14 @@ export function activate(context: vscode.ExtensionContext): void {
             created.webview,
             folder.uri,
             message as ProjectFileRequestMessage,
+          );
+          return;
+        }
+        if (message.type === 'git-commits-request') {
+          void handleGitCommitsRequest(
+            created.webview,
+            folder.uri,
+            message as GitCommitsRequestMessage,
           );
         }
       });
@@ -213,6 +232,25 @@ async function handleProjectFileRequest(
   } catch (err) {
     respond(isFileNotFound(err) ? { kind: 'not-found' } : { kind: 'unreadable' });
   }
+}
+
+// The task dialog's Commits panel. Read-only and outside .boardown/, like the
+// handler above. A workspace on a virtual or remote filesystem has no local path
+// for git to run in, so it answers unavailable instead of spawning anything.
+async function handleGitCommitsRequest(
+  webview: vscode.Webview,
+  projectRootUri: vscode.Uri,
+  message: GitCommitsRequestMessage,
+): Promise<void> {
+  const respond = (result: GitHistoryResult): void => {
+    void webview.postMessage({ type: 'git-commits-response', id: message.id, result });
+  };
+
+  if (projectRootUri.scheme !== 'file') {
+    respond({ state: 'git-unavailable', commits: [] });
+    return;
+  }
+  respond(await readTaskCommits(message.taskId, gitRunIn(projectRootUri.fsPath)));
 }
 
 // Watches the board's .boardown/ directory and tells the webview to refresh when

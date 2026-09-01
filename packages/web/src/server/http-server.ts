@@ -11,6 +11,8 @@ import {
 import { createBoardWatchHub, type BoardWatchHub } from '../api/board-events.js';
 import { BOARD_EVENTS_ENDPOINT } from '../board-events-endpoint.js';
 import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
+import { GIT_COMMITS_ENDPOINT } from '../git-history-endpoint.js';
+import { handleGitCommits } from '../api/git-history.js';
 import { describeEntries } from './board-list.js';
 import { renderListPage } from './list-page.js';
 import {
@@ -153,6 +155,10 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     }
     if (req.method === 'GET' && rest === PROJECT_FILE_ENDPOINT) {
       await handleProjectFile(res, params, roots.projectRoot);
+      return;
+    }
+    if (req.method === 'GET' && rest === GIT_COMMITS_ENDPOINT) {
+      await handleGitCommits(res, params, roots.projectRoot);
       return;
     }
     // The board root comes from whichever registry entry this request resolved

@@ -1,4 +1,9 @@
-import type { FsAdapter, ProjectFileReader, Theme } from '@boardown/core';
+import type {
+  FsAdapter,
+  GitHistoryReader,
+  ProjectFileReader,
+  Theme,
+} from '@boardown/core';
 import { boardStatusKeys } from '@boardown/core';
 import { useEffect, useLayoutEffect, useMemo } from 'react';
 import './theme/theme.css';
@@ -29,6 +34,10 @@ interface AppProps {
   // Read-only access to the project folder, for repo file links. Deliberately
   // not part of `fs`: that one is board-scoped and carries every write.
   projectFiles: ProjectFileReader;
+  // Read-only access to the repository around the project folder, for the task
+  // dialog's Commits panel. A third capability for the same reason as the
+  // second: it reaches outside `.boardown/`, so no write path may hold it.
+  gitHistory: GitHistoryReader;
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
@@ -52,6 +61,7 @@ interface AppProps {
 export function App({
   fs,
   projectFiles,
+  gitHistory,
   defaultTheme,
   defaultProjectName,
   defaultIdPrefix,
@@ -96,6 +106,7 @@ export function App({
   const closeStartRelease = useBoardStore((s) => s.closeStartRelease);
   const load = useBoardStore((s) => s.load);
   const setProjectFiles = useBoardStore((s) => s.setProjectFiles);
+  const setGitHistory = useBoardStore((s) => s.setGitHistory);
   const repoFilePopupPath = useBoardStore((s) => s.repoFilePopupPath);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
@@ -115,6 +126,10 @@ export function App({
   useEffect(() => {
     setProjectFiles(projectFiles);
   }, [projectFiles, setProjectFiles]);
+
+  useEffect(() => {
+    setGitHistory(gitHistory);
+  }, [gitHistory, setGitHistory]);
 
   // useLayoutEffect so the attribute is set before the browser paints the first
   // frame — a plain effect runs after paint and flashes the light-theme default.

@@ -283,6 +283,7 @@ boardRelease: v0-8-0  # optional; slug of the active release the Board shows
 wipLimits:            # optional; absent means no limit anywhere
   in-progress: 3      # at most 3 tasks in each middle column of an active release
 multipleActiveReleases: true  # optional; absent means one release at a time
+gitIntegration: true  # optional; absent means on — the task dialog's Commits panel
 statuses:             # optional (beta); absent means todo / in-progress / done
   - key: backlog
     label: Not started  # optional; absent means the key, prettified
@@ -374,7 +375,14 @@ are shown **disabled**,
 carrying the count and a tooltip naming the rule. The limit is edited in the
 Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
-same reason: it is board configuration, not installation configuration.
+same reason: it is board configuration, not installation configuration, and the
+`gitIntegration` checkbox sits below that one.
+
+`gitIntegration` is a display preference stored with the board: absent or `true`
+shows the task dialog's Commits panel, `false` hides it and stops the Git read
+altogether. A present value that is not a boolean makes the config invalid, like
+every other key. The CLI's `task commits` ignores it — reading history is what that
+command is for.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
@@ -931,6 +939,34 @@ in the search results. Adding or removing a link rewrites two files, and the
 conflict guard checks both before writing either — an external change aborts the
 whole operation instead of leaving one side linked.
 
+**Commits.** In the task dialog's right column, directly below **Details** and at
+the same width, a bordered **Commits** panel lists the commits of the local Git
+repository whose subject mentions this task. A commit is related when its subject
+holds the task's id as a case-insensitive token, so `BD-36` matches inside
+`feat(BD-36): …` while `BD-360` and `XBD-36` do not; a merge commit counts like any
+other. Only history reachable from the current `HEAD` is considered — a feature
+branch therefore shows what it inherited from `main` — the whole nearest repository
+around the project folder is searched, and commits are not filtered by which files
+they touched.
+
+Each commit is one passive row: a monospaced short hash and the complete subject,
+which wraps rather than being clipped. There is no author, date, body, link, menu or
+hover action, nothing opens, and every match is shown — no cap, no pagination, no
+"show more". Newest first. The read is local: nothing is fetched, nothing is
+cached, and no commit data is ever written to `.boardown/`, so a task in a finished
+release shows its commits like any other. It happens once each time the dialog
+opens, so a commit made while it stays open appears after closing and reopening
+the task.
+
+While the read is in flight the panel is already in place and says `Loading…`.
+With no matching commit it says `No related commits`; outside a repository, `Git
+is not initialized`; and when Git cannot be run at all, or refuses to open the
+repository it found, `Git is unavailable` — an initialized repository with no
+commits yet is the first of those, not the second, and a repository Git declines
+to read is the third rather than the second, since calling it uninitialized would
+be false. With `gitIntegration` off the panel is absent and opening a
+task reads nothing.
+
 ### Epic editor
 
 **Creation** uses a dedicated modal dialog with:
@@ -1169,7 +1205,15 @@ without it clears **every** relation between the pair, which is what the call
 written before relations existed already meant. Changing a relation is `rm` then
 `add` — there is no subcommand for it. `ls` lists the linked tasks with the
 relation read from the side asked, flagging a link whose target is no longer on
-the board as missing. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
+the board as missing. `task commits <id>` reads the same related commits the task dialog's panel shows,
+from the local repository around the board and without touching it; `task get` is
+unchanged. Its data is `{ state, commits }`, where `state` is `ready`,
+`not-a-repository` or `git-unavailable` and the last two are **successful** results
+with an empty list rather than errors — a repository is missing, not broken. A
+commit is `{ hash, subject }` and nothing more, and every match is returned, since
+an agent-facing filter does not cap. An id that names no task is `TASK_NOT_FOUND`,
+so a typo cannot look like a task with no commits. The board's `gitIntegration`
+setting hides the UI panel and does not reach this command. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /

@@ -301,6 +301,13 @@ describe('registry mode', () => {
     ).toEqual({ kind: 'unreadable' });
   });
 
+  it('reads git commits under the prefix, against that project folder', async () => {
+    const reply = await request('/b/shop/api/git/commits?task=TS-1');
+    expect(reply.status).toBe(200);
+    // The temp project is not a repository, which is a successful read.
+    expect(JSON.parse(reply.body)).toEqual({ state: 'not-a-repository', commits: [] });
+  });
+
   it('stops serving a project once it leaves the registry', async () => {
     expect((await request('/b/shop/api/fs/read?path=config.yaml')).status).toBe(200);
     await fs.writeFile(registryPath, `projects:\n  empty: ${empty.replace(/\\/g, '/')}\n`, 'utf-8');

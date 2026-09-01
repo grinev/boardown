@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Menu, Settings } from 'lucide-react';
-import { CliHint, MultipleActiveReleasesField, WipLimitField } from '@boardown/ui';
+import {
+  CliHint,
+  GitIntegrationField,
+  MultipleActiveReleasesField,
+  WipLimitField,
+} from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
 import styles from './Sidebar.module.css';
 
@@ -148,6 +153,7 @@ export function Sidebar({
             {boardOpen && (
               <MultipleActiveReleasesField className={styles.boardSettingRow} />
             )}
+            {boardOpen && <GitIntegrationField className={styles.boardSettingRow} />}
             {/* Describes the installation rather than the board, so unlike the
                 field above it shows with no board open. */}
             <span className={styles.settingsLabel}>CLI</span>

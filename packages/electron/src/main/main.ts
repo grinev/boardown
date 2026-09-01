@@ -13,11 +13,18 @@ import {
   shell,
   type IpcMainInvokeEvent,
 } from 'electron';
-import type { ProjectFileRead, Theme } from '@boardown/core';
-import { DOCS_DIR, configureLogging, createLogger, formatLogRecord } from '@boardown/core';
+import type { GitHistoryResult, ProjectFileRead, Theme } from '@boardown/core';
+import {
+  DOCS_DIR,
+  configureLogging,
+  createLogger,
+  formatLogRecord,
+  readTaskCommits,
+} from '@boardown/core';
 import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { readProjectFile } from './project-file';
+import { gitRunIn } from './git-history';
 import { classifyNavigation } from './external-links';
 import { buildAppMenu } from './menu';
 import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
@@ -418,6 +425,13 @@ function registerIpc(): void {
     // Scoped to the project folder, not the board root — and read-only.
     if (!ctx) return { kind: 'unreadable' } satisfies ProjectFileRead;
     return readProjectFile(ctx.folder, filePath);
+  });
+
+  ipcMain.handle(IPC.gitCommits, async (event: IpcMainInvokeEvent, taskId: string) => {
+    const ctx = boards.get(event.sender.id);
+    // No board open means no project folder to run git in; the panel says so.
+    if (!ctx) return { state: 'git-unavailable', commits: [] } satisfies GitHistoryResult;
+    return readTaskCommits(taskId, gitRunIn(ctx.folder));
   });
 
   ipcMain.handle(IPC.pickFolder, async (event: IpcMainInvokeEvent) => {

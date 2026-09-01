@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { Theme } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { CliHint } from './CliHint';
+import { GitIntegrationField } from './GitIntegrationField';
 import { Modal } from './Modal';
 import { MultipleActiveReleasesField } from './MultipleActiveReleasesField';
 import { WipLimitField } from './WipLimitField';
@@ -45,6 +46,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         </label>
         <WipLimitField className={styles.field} />
         <MultipleActiveReleasesField className={styles.field} />
+        <GitIntegrationField className={styles.field} />
         <div className={styles.field}>
           <span className={styles.label}>CLI</span>
           <CliHint />

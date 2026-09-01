@@ -4,5 +4,6 @@ export { useBoardStore } from './store';
 // board-scoped control in its own settings popover.
 export { WipLimitField } from './components/WipLimitField';
 export { MultipleActiveReleasesField } from './components/MultipleActiveReleasesField';
+export { GitIntegrationField } from './components/GitIntegrationField';
 // Same reason: the desktop settings panel shows the CLI hint the dialog carries.
 export { CliHint } from './components/CliHint';

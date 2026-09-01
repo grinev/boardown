@@ -17,7 +17,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 10,
+  version: 11,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -114,6 +114,12 @@ const DESCRIPTOR = {
       usage:
         'boardown task notes (add <id> <text> | edit <id> <note> <text> | rm <id> <note>)',
       summary: 'Manage task notes (alias: note). Note ids are n1, n2, …, each with a createdAt timestamp.',
+    },
+    {
+      name: 'task commits',
+      usage: 'boardown task commits <id>',
+      summary:
+        "The task's related commits, read from the local Git repository around the board — nothing is fetched and nothing is written. A commit is related when its subject holds the task's ID as a case-insensitive token, so `BD-36` matches while `BD-360` does not; merges count like any other commit. Only history reachable from the current HEAD, newest first, with no cap. Data is { state, commits: [{ hash, subject }] } where state is 'ready' | 'not-a-repository' | 'git-unavailable'; the last two are successful results with no commits, not errors. The board's gitIntegration setting hides the UI panel and does not affect this command.",
     },
     {
       name: 'task link',
