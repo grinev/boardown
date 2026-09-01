@@ -101,18 +101,26 @@ you genuinely cannot close.
 
 ## The order of work on a task
 
-**Draft, ask, review, finish.**
+**Reproduce, draft, ask, review, finish.**
 
-1. **Draft.** Before any exploring, look for the feature this one is a sibling
+1. **Reproduce** — only when the task is a bug, and only when it is not already
+   clear from the report, a standing decision or a neighbouring spec what the
+   product does wrong. Ask `manual-tester` for the symptom exactly as he described
+   it and nothing else: no suspected cause, no file names, no fix anyone already
+   has in mind. A tester chasing a hypothesis confirms that hypothesis. What it
+   observes is what the spec states under "Current behaviour", with its shot in
+   `refs/`. Order it before anything else on the task, the way shots are ordered —
+   it runs while you draft.
+2. **Draft.** Before any exploring, look for the feature this one is a sibling
    of: `ls .claude/specs/` and the decisions under `.boardown/docs/decisions/`.
    A spec written for a neighbouring feature often already holds the model, the
    field shape or the very fork you are about to open — settled, with its
    reason, and for the price of one `cat`. Then find out — through `Explore` —
    only what you still need to state the lines you can already state, and write
    `product.md` with them. Open forks are not in it; they are your question list.
-2. **Ask.** One `AskUserQuestion` carrying the forks the draft could not close.
+3. **Ask.** One `AskUserQuestion` carrying the forks the draft could not close.
    Fold his answers in as lines.
-3. **Review.** Invoke `spec-critic` once, with the path to `product.md` and to
+4. **Review.** Invoke `spec-critic` once, with the path to `product.md` and to
    every frame in `refs/`. It reads the spec cold and reports what it does not yet
    reach — a sibling surface the reach line never named, a behaviour stated for one
    case and silent about its opposite, a line nothing can observe, a contradiction
@@ -120,7 +128,7 @@ you genuinely cannot close.
    one more batched `AskUserQuestion`; the rest you settle yourself and record
    under "Decided by default". Zero findings is the normal outcome for a spec that
    was groomed properly — take it and move on.
-4. **Finish.** Fold that in, then set the `spec` field.
+5. **Finish.** Fold that in, then set the `spec` field.
 
 **The critic runs once per task, not in a loop.** Its second reading would review
 your edits rather than the user's product, and this session's budget is the
@@ -131,6 +139,10 @@ keep across tasks — its sandbox is up — and `Explore` takes follow-ups; the 
 does not. What you buy from him is the cold read, and an instance fresh off the
 neighbouring spec stops seeing the hole here because the answer was written down
 there.
+
+The repro comes first because grooming is the only place the broken product is
+ever run: everything downstream works from the file, so a bug spec drafted over a
+guess sends the plan, the review and the fix after that guess.
 
 The draft comes before the question because it is what bounds the exploration:
 you find out enough to phrase a decision, never enough to cost its
