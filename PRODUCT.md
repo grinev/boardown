@@ -949,8 +949,10 @@ branch therefore shows what it inherited from `main` — the whole nearest repos
 around the project folder is searched, and commits are not filtered by which files
 they touched.
 
-Each commit is one passive row: a monospaced short hash and the complete subject,
-which wraps rather than being clipped. There is no author, date, body, link, menu or
+Each commit is one passive row: a monospaced short hash and, on the same line
+beside it, the complete subject, which wraps rather than being clipped — inside its
+own column, so every wrapped line starts at the subject's left edge instead of
+running back under the hash. There is no author, date, body, link, menu or
 hover action, nothing opens, and every match is shown — no cap, no pagination, no
 "show more". Newest first. The read is local: nothing is fetched, nothing is
 cached, and no commit data is ever written to `.boardown/`, so a task in a finished
