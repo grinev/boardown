@@ -567,8 +567,14 @@ async function taskCommits(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   }
 
   const result = await readTaskCommits(id, gitRunIn(dirname(root)));
+  // Projected rather than passed through: this command's published shape is
+  // { hash, subject }, so a field core grows for another surface — the panel's
+  // commit date — never reaches an agent on its own.
   return {
-    data: result,
+    data: {
+      state: result.state,
+      commits: result.commits.map(({ hash, subject }) => ({ hash, subject })),
+    },
     human: renderCommits(result),
     ...problemsField(problems),
   };

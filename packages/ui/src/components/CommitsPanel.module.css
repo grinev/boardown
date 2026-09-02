@@ -36,18 +36,20 @@
   min-width: 0;
 }
 
-.hash {
-  flex: none;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 /* Wraps rather than clips: nothing here opens to show the rest. Its own column,
-   so a wrapped line starts at the subject edge instead of under the hash. */
+   so a wrapped line starts at the subject edge instead of under the date. */
 .subject {
   flex: 1;
   font-size: 13px;
   color: var(--text-primary);
   overflow-wrap: anywhere;
+}
+
+/* A column of its own at the row's end, held to the first line's baseline: it
+   never wraps and a wrapped subject never runs under it. */
+.date {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }

@@ -1,6 +1,7 @@
 import { createLogger, type GitHistoryResult } from '@boardown/core';
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store';
+import { formatCommitDate } from '../utils/format-commit-date';
 import styles from './CommitsPanel.module.css';
 
 const log = createLogger('ui.commits-panel');
@@ -56,8 +57,8 @@ export function CommitsPanel({ taskId }: { taskId: string }) {
           <ul className={styles.list}>
             {result.commits.map((commit) => (
               <li key={commit.hash} className={styles.row}>
-                <span className={styles.hash}>{commit.hash}</span>
                 <span className={styles.subject}>{commit.subject}</span>
+                <span className={styles.date}>{formatCommitDate(commit.date)}</span>
               </li>
             ))}
           </ul>

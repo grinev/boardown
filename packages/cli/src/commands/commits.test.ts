@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { GitHistoryResult } from '@boardown/core';
+import type { GitHistoryState } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseArgs } from '../args';
 import type { CliError } from '../output';
@@ -67,13 +67,19 @@ describe('task commits', () => {
     await commit(project, 'fix ts-1 at last', 'd.txt');
 
     const out = await taskCommand(parseArgs(['task', 'commits', 'TS-1']), ctx);
-    const result = out.data as GitHistoryResult;
+    const result = out.data as {
+      state: GitHistoryState;
+      commits: { hash: string; subject: string }[];
+    };
     expect(result.state).toBe('ready');
     expect(result.commits.map((c) => c.subject)).toEqual([
       'fix ts-1 at last',
       'feat(TS-1): the first half',
     ]);
     expect(result.commits[0]?.hash).toMatch(/^[0-9a-f]{7,}$/);
+    // The published shape, and only it: the date core reads for the UI panel
+    // does not follow the commit out here.
+    expect(Object.keys(result.commits[0] ?? {}).sort()).toEqual(['hash', 'subject']);
     expect(out.human.split('\n')).toHaveLength(2);
   });
 
