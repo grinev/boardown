@@ -1,19 +1,20 @@
 ---
-name: prepare-release
-description: Prepare a boardown release locally — take the version from the current release on the board, bump it, curate the GitHub release notes, update the VS Code Marketplace docs, close the release on the board, run the gates, and land it all in a single chore(release) commit. Stops before pushing. Use when cutting a release (the human asks to prepare the next release, or names vX.Y.Z).
+description: Prepare a boardown release locally — take the version from the current release on the board, bump it, curate the GitHub release notes, update the VS Code Marketplace docs, close the release on the board, and run the gates. Nothing is committed, staged, tagged or pushed — the run ends by printing the chore(release) commit line for the human to run himself.
+argument-hint: [vX.Y.Z] (optional — the board's current release is the source of truth)
 ---
 
 # Preparing a release
 
-This skill takes a boardown release from "the code for it is merged on `main`" to
-"a single `chore(release): v<version>` commit is ready, gates green, nothing
-pushed". The human reviews and pushes; pushing is what actually triggers the
-`Release` workflow, so it is never your call.
+This command takes a boardown release from "the code for it is merged on `main`" to
+"every release file is written, the gates are green, and the one commit that closes
+it is spelled out for the human to run". **You never commit** — you prepare the
+tree and hand him the line. The commit is his signature on the release, and the
+push after it is what actually triggers the `Release` workflow.
 
-`pnpm release:prepare` deliberately **does not commit** — it only bumps the
-version and seeds a notes draft. You curate everything, then make **one** commit.
-That is the whole point: no amend dance, and the release notes plus the
-Marketplace docs all land together, reviewed, in the same commit.
+`pnpm release:prepare` deliberately **does not commit** either — it only bumps the
+version and seeds a notes draft. You curate everything else, and the whole release
+still lands as **one** commit: no amend dance, and the release notes plus the
+Marketplace docs all go in together, reviewed. The only difference is who types it.
 
 ## The flow
 
@@ -41,14 +42,15 @@ Marketplace docs all land together, reviewed, in the same commit.
    carries over. Do not start the next release; that is the human's call.
 6. **Run the gates** — `pnpm lint && pnpm typecheck && pnpm build && pnpm test`
    from the repo root. A release commit must be green.
-7. **Commit, do not push** — see "The commit" at the end.
+7. **Print the commit line, do not commit** — see "Handing over the commit" at
+   the end.
 
 ## Curating the release notes
 
 The notes are the **user-facing** description of the release: what someone who
 installed the VS Code extension, the desktop app or the CLI actually gets. They
 live one file per version at `docs/release-notes/v<version>.md`, and the
-[`Release`](../../../.github/workflows/release.yml) workflow publishes that file
+[`Release`](../../.github/workflows/release.yml) workflow publishes that file
 **verbatim** as the GitHub Release body when it is present — falling back to
 generating notes from the commit log when it is absent. So they are not a
 changelog of commits and not an internal work log; the seeded draft (commit
@@ -164,18 +166,30 @@ Match the existing wording style in each file (prose, `- **Name**: …`). No oth
 shell keeps such a document: the CLI README's command reference is updated with
 the CLI change itself, and Electron's README is architecture-only.
 
-## The commit
+## Handing over the commit
+
+**You do not commit.** No `git commit`, no `git add`, no `git tag`, no `git push`.
+You leave the working tree exactly as your edits made it and hand the human the
+line that closes the release; he copies it, runs it, and pushes when he is ready.
 
 - First confirm `git status` shows only release-related changes — the version
   bump (`package.json` + `packages/*/package.json`), the notes file, the docs you
   edited, and the closed release under `.boardown/`. If anything unrelated is in
-  the tree, stop and ask.
-- The board changes ride along in this same commit rather than a separate
+  the tree, stop and ask. This is the only git command you run here, and it reads.
+- The board changes ride along in that same commit rather than a separate
   `chore(board):` one — the release closing and the version bump are one event.
-- Stage exactly those paths and commit as **`chore(release): v<version>`**. This
+- The message is exactly **`chore(release): v<version>`** — nothing else. That
   scope is excluded from generated notes, so it never pollutes the next release.
-- **Do not push, do not tag.** Report the prepared commit and let the human push
-  when ready — the push is what triggers the release, and it is theirs to make.
+- **End your answer with a copy-pasteable block, and put nothing after it** — it
+  is the last thing on screen, one selection away:
+
+  ```
+  git add <the exact paths you verified above>
+  git commit -m "chore(release): v<version>"
+  ```
+
+  List those paths literally. Never `git add -A` or `git commit -a`: they would
+  sweep in whatever else the human happens to have in his tree.
 
 ## Definition of done
 
@@ -189,5 +203,6 @@ the CLI change itself, and Electron's README is architecture-only.
 - `packages/vscode/CHANGELOG.md` has a section for this version, and the extension
   README's Features list covers any new headline capability.
 - `pnpm lint && pnpm typecheck && pnpm build && pnpm test` pass.
-- Everything is in a single `chore(release): v<version>` commit, unpushed and
-  untagged.
+- Nothing is committed, staged, tagged or pushed — the working tree holds the
+  whole prepared release, and the answer ends with the `chore(release): v<version>`
+  command block for the human to run.

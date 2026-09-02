@@ -49,7 +49,7 @@ function resolveRepository() {
 
 // Seed a curated release-notes file for a stable version, prefilled with the
 // same auto-generated content the publish workflow would produce. This script
-// does NOT commit — the release preparer (see the prepare-release skill) curates
+// does NOT commit — the release preparer (see the /prepare-release command) curates
 // this file and the other release docs, then makes a single commit. The workflow
 // uses the file verbatim when present. RC releases keep pure CI generation.
 function seedReleaseNotes(version) {
@@ -104,7 +104,7 @@ function printUsage() {
       "  - Updates the root package.json and mirrors the version into all packages",
       "  - For a stable version, seeds docs/release-notes/v<version>.md with a draft",
       "  - Does NOT commit and does NOT tag: curate the notes and release docs, then",
-      "    commit them together as chore(release): v<version> (see prepare-release skill)",
+      "    commit them together as chore(release): v<version> (see /prepare-release)",
     ].join("\n") + "\n",
   );
 }
@@ -153,5 +153,5 @@ if (notesPath) {
 }
 process.stdout.write(
   "Next: curate the release docs and commit them together as " +
-    `chore(release): v${version} (do not push). See the prepare-release skill.\n`,
+    `chore(release): v${version} (do not push). See the /prepare-release command.\n`,
 );
