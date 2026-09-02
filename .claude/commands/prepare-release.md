@@ -48,8 +48,9 @@ Marketplace docs all go in together, reviewed. The only difference is who types 
 ## Curating the release notes
 
 The notes are the **user-facing** description of the release: what someone who
-installed the VS Code extension, the desktop app or the CLI actually gets. They
-live one file per version at `docs/release-notes/v<version>.md`, and the
+installed the VS Code extension, the desktop app, the CLI or `boardown-web`
+actually gets. They live one file per version at
+`docs/release-notes/v<version>.md`, and the
 [`Release`](../../.github/workflows/release.yml) workflow publishes that file
 **verbatim** as the GitHub Release body when it is present — falling back to
 generating notes from the commit log when it is absent. So they are not a
@@ -71,12 +72,16 @@ use?", not "which commit type was it". Group by **surface**:
 - **VS Code Extension** — extension-only: the Settings dialog row, host
   integration, activation, the `.vsix`.
 - **CLI** — `@grinev/boardown-cli`: commands, flags, the JSON envelope.
+- **Web** — `boardown-web`, the locally installed server: its command line, the
+  project list page, what a browser tab on a board can do that it could not
+  before. Nothing about the Vite dev shell belongs here — that is Technical at
+  most.
 - **Technical** — developer-facing changes with no user-visible effect but worth
   recording for someone working on boardown (e.g. dev logging). Keep it short;
   drop it entirely if there is nothing real to say.
 
 Emit only the sections that have entries. Order them Board → Desktop → VS Code
-Extension → CLI → Technical.
+Extension → CLI → Web → Technical.
 
 **A cross-shell change is listed under each surface it reaches, described the way
 it appears there.** "App version in Settings" is a Settings row in VS Code but a
