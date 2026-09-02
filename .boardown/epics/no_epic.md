@@ -91,15 +91,6 @@ order: 1800
 
 The store calls core board-ops outside the try/catch that only wraps the fs write, so a process-invariant throw (a finished release is read-only, a status only changes in the current release) becomes an unhandled promise rejection instead of reaching errorMessage. No path into it is reachable today — the UI hides the controls that would make those calls — so it is latent rather than broken. Wrap the core calls the way deleteTask already does and let the refusal's message land in the error banner.
 
-## Add skill for boardown cli
-
----
-id: BD-77
-type: docs
-status: todo
-order: 600
----
-
 ## Indexes for epics
 
 ---
