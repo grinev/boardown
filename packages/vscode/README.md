@@ -41,6 +41,9 @@ instead of overwriting.
 - **Repo file links**: write `[[repo:src/server.ts]]` in a description, a note
   or a custom field to link any text file in the project — it renders as the
   file's name and opens the file's content in a read-only popup.
+- **External links**: an `http://` or `https://` URL written in a description, a
+  note, a custom field, a doc page or a repo file preview is clickable and opens
+  in your browser.
 - **Epics** that group tasks across releases and double as the backlog's
   storage, usable as a filter dimension, with an editable colour.
 - **Task search**: a search field in the top bar finds any task by id, title or
@@ -60,6 +63,10 @@ instead of overwriting.
   section — blocks, includes, duplicates or plain relates to, each stored on
   both sides and shown from the right end in each task. Any task id mentioned in
   a description or a note renders as a link to that task.
+- **Git integration**: a **Commits** panel in the task dialog lists the commits
+  in your local repository whose subject names the task's id, and a copy button
+  next to the id puts a `feat(BD-123): Add next button` commit message on the
+  clipboard. Local history only — nothing is fetched and no remote is contacted.
 - **Drag & drop** to move tasks between statuses, releases and the backlog, and
   to reorder within a section.
 - **Delete a task** from the task dialog, with a confirmation step — git stays

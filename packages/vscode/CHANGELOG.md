@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0
+
+- **Related commits in the task dialog**: a **Commits** panel under Details lists
+  the commits in your local repository whose subject names the task's id, newest
+  first, each with its subject and the date it was made. Nothing is fetched and
+  no remote is contacted. Turn it off with the **Git integration** checkbox in
+  Settings, which is on by default.
+- **Copy commit message**: a copy button next to the task's id in the dialog
+  header puts a single line such as `feat(BD-123): Add next button` on the
+  clipboard, mapping the task's type to `feat`, `fix`, `docs` or `chore`.
+- **Clickable external links**: an `http://` or `https://` URL written in a task
+  description or note, an epic or release description, a custom field value, a
+  doc page or a repo file preview now opens in your browser — the same places doc
+  and repo links are already clickable.
+- **A file the parser could not read is never rewritten**: when a task block's
+  frontmatter is broken, the write is refused and a **File cannot be written**
+  modal names the file and lists its problems verbatim, instead of silently
+  dropping the block. Every other file on the board stays editable.
+
 ## 0.8.0
 
 - **Several active releases at once**: turn on the new Settings checkbox and you
