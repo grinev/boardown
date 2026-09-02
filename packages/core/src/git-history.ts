@@ -5,6 +5,9 @@ const log = createLogger('core.git-history');
 export interface GitCommit {
   // Git's own unique abbreviation, seven characters or more.
   hash: string;
+  // The author date, ISO 8601 with the author's own offset. Machine-readable
+  // here; a surface that shows it decides how to spell it.
+  date: string;
   // The complete first line of the commit message.
   subject: string;
 }
@@ -46,12 +49,13 @@ export interface GitHistoryReader {
 // a substring match, so it can over-match but never lose a commit — and
 // `--fixed-strings` keeps an ID from being read as a regular expression.
 //
-// One line per commit, and the first space splits it: a short hash is hex, so it
-// never holds one, and everything after it is the subject however it is spelled.
+// One line per commit, split by its first two spaces: a short hash is hex and an
+// ISO 8601 timestamp holds no space, so the rest of the line is the subject
+// however it is spelled.
 export const gitLogArgs = (taskId: string): string[] => [
   'log',
   '--abbrev=7',
-  '--format=%h %s',
+  '--format=%h %aI %s',
   '--fixed-strings',
   '--regexp-ignore-case',
   `--grep=${taskId}`,
@@ -99,12 +103,20 @@ export const subjectMentionsTask = (subject: string, taskId: string): boolean =>
 export const parseGitLog = (stdout: string, taskId: string): GitCommit[] =>
   stdout.split('\n').flatMap((raw) => {
     const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
-    const at = line.indexOf(' ');
-    // A line with no hash or no subject is not a commit we can show.
-    if (at <= 0 || at === line.length - 1) return [];
-    const subject = line.slice(at + 1);
+    const hashEnd = line.indexOf(' ');
+    if (hashEnd <= 0) return [];
+    const dateEnd = line.indexOf(' ', hashEnd + 1);
+    // A line missing any of the three fields is not a commit we can show.
+    if (dateEnd <= hashEnd + 1 || dateEnd === line.length - 1) return [];
+    const subject = line.slice(dateEnd + 1);
     return subjectMentionsTask(subject, taskId)
-      ? [{ hash: line.slice(0, at), subject }]
+      ? [
+          {
+            hash: line.slice(0, hashEnd),
+            date: line.slice(hashEnd + 1, dateEnd),
+            subject,
+          },
+        ]
       : [];
   });
 

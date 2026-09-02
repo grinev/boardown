@@ -39,26 +39,40 @@ describe('subjectMentionsTask', () => {
 });
 
 describe('parseGitLog', () => {
-  it('reads one commit per line, splitting on the first space', () => {
-    const out = 'abc1234 feat(BD-36): show related commits\n';
+  it('reads one commit per line, splitting the hash and the date off the subject', () => {
+    const out = 'abc1234 2026-09-02T09:11:49+03:00 feat(BD-36): show related commits\n';
     expect(parseGitLog(out, 'BD-36')).toEqual([
-      { hash: 'abc1234', subject: 'feat(BD-36): show related commits' },
+      {
+        hash: 'abc1234',
+        date: '2026-09-02T09:11:49+03:00',
+        subject: 'feat(BD-36): show related commits',
+      },
     ]);
   });
 
   it('keeps git order and drops the prefilter over-matches', () => {
     const out = [
-      'aaaaaaa BD-36 newest',
-      'bbbbbbb BD-360 not ours',
-      'ccccccc old BD-36',
+      'aaaaaaa 2026-09-02T09:00:00+03:00 BD-36 newest',
+      'bbbbbbb 2026-09-01T09:00:00+03:00 BD-360 not ours',
+      'ccccccc 2026-08-30T09:00:00+03:00 old BD-36',
     ].join('\n');
     expect(parseGitLog(out, 'BD-36').map((c) => c.hash)).toEqual(['aaaaaaa', 'ccccccc']);
   });
 
   it('trims a carriage return and ignores blank or malformed lines', () => {
-    const out = 'abc1234 chore: BD-36 tidy\r\n\nnohashline\ndef5678 \n';
+    const out = [
+      'abc1234 2026-09-02T09:11:49+03:00 chore: BD-36 tidy\r',
+      '',
+      'nohashline',
+      'def5678 BD-36-without-a-date',
+      'ef01234 2026-09-01T10:00:00+03:00 ',
+    ].join('\n');
     expect(parseGitLog(out, 'BD-36')).toEqual([
-      { hash: 'abc1234', subject: 'chore: BD-36 tidy' },
+      {
+        hash: 'abc1234',
+        date: '2026-09-02T09:11:49+03:00',
+        subject: 'chore: BD-36 tidy',
+      },
     ]);
   });
 
@@ -73,6 +87,7 @@ describe('gitLogArgs', () => {
     expect(args).toContain('--fixed-strings');
     expect(args).toContain('--regexp-ignore-case');
     expect(args).toContain('--grep=BD-36');
+    expect(args).toContain('--format=%h %aI %s');
     expect(args).not.toContain('--no-merges');
     expect(args).not.toContain('--first-parent');
   });
@@ -95,11 +110,22 @@ const runner = (answers: readonly GitRunResult[]): { run: GitRun; calls: string[
 describe('readTaskCommits', () => {
   it('reads the log once when git succeeds', async () => {
     const { run, calls } = runner([
-      { kind: 'exited', code: 0, stdout: 'abc1234 feat(BD-36): panel\n', stderr: '' },
+      {
+        kind: 'exited',
+        code: 0,
+        stdout: 'abc1234 2026-09-02T09:11:49+03:00 feat(BD-36): panel\n',
+        stderr: '',
+      },
     ]);
     await expect(readTaskCommits('BD-36', run)).resolves.toEqual({
       state: 'ready',
-      commits: [{ hash: 'abc1234', subject: 'feat(BD-36): panel' }],
+      commits: [
+        {
+          hash: 'abc1234',
+          date: '2026-09-02T09:11:49+03:00',
+          subject: 'feat(BD-36): panel',
+        },
+      ],
     });
     expect(calls).toHaveLength(1);
   });
