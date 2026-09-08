@@ -154,11 +154,6 @@
   outline-offset: 1px;
 }
 
-.removeSpacer {
-  width: 24px;
-  height: 24px;
-}
-
 .search {
   position: relative;
   display: flex;

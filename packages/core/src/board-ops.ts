@@ -60,10 +60,11 @@ export class BoardOpError extends Error {
   }
 }
 
-// A finished release is archived: the product treats its tasks as read-only and
-// forbids scheduling new work into it. These invariants live here so every shell
-// (UI, CLI, …) enforces them without re-implementing the rule. `status` only
-// exists on a Release frontmatter, so the `in` check narrows the union safely.
+// A finished release is archived: the product treats its task content as frozen
+// and forbids scheduling new work into it. Links are metadata and may still
+// change; every other mutation is refused here so every shell inherits the rule.
+// `status` only exists on a Release frontmatter, so the `in` check narrows the
+// union safely.
 const isFinishedRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'finished';
 
@@ -923,14 +924,6 @@ const applyLinkPair = <S extends Container, D extends Container>(
     }),
   );
 
-// A link is mirrored into both tasks, so both files must be writable: an archived
-// task is refused as the target just as much as as the source.
-const assertLinkable = (source: Container, target: Container): void => {
-  if (isFinishedRelease(source) || isFinishedRelease(target)) {
-    throw new BoardOpError('ARCHIVED', 'Cannot change the links of a task in a finished release');
-  }
-};
-
 const taskWithoutLinksTo = (task: Task, targetId: string): Task => {
   const links = task.frontmatter.links;
   if (links === undefined) return task;
@@ -955,7 +948,6 @@ const assertLinkableTasks = (
   if (sourceTaskId === targetTaskId) {
     throw new Error(`Cannot ${verb} a task to itself`);
   }
-  assertLinkable(source, target);
   findTask(source.tasks, sourceTaskId);
   findTask(target.tasks, targetTaskId);
 };
@@ -1002,9 +994,8 @@ export interface DeleteTaskResult {
 }
 
 // Deleting a task also has to clear the mirrored link records pointing at it, or
-// the surviving tasks keep dangling `links` entries. A finished release is never
-// rewritten, so a link held by an archived task is left in place — the UI hides
-// it and the CLI reports it as missing.
+// the surviving tasks keep dangling `links` entries. A live deletion walks every
+// container, finished releases included. Deleting an archived task is still refused.
 export const deleteTaskWithLinks = (
   containers: readonly Container[],
   taskId: string,
@@ -1031,7 +1022,6 @@ export const deleteTaskWithLinks = (
       const withoutTask = deleteTask(container, taskId);
       return stripLinks(withoutTask) ?? withoutTask;
     }
-    if (isFinishedRelease(container)) return container;
     const cleaned = stripLinks(container);
     if (cleaned === null) return container;
     changedFilenames.push(container.filename);

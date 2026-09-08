@@ -35,9 +35,40 @@ order: 750
 ---
 id: BD-89
 type: feature
-status: ready
-order: 1100
+status: review
+order: 2200
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 spec: "[[repo:.claude/specs/BD-89-link-into-finished-release/spec.md]]"
+plan: "[[repo:.claude/specs/BD-89-link-into-finished-release/tech.md]]"
+log: "[[repo:.claude/specs/BD-89-link-into-finished-release/log.md]]"
+session: ses_f7e435e4effedp9Igy6e590Z7J
 ---
 
 Adding a link to a task that sits in a finished release fails:

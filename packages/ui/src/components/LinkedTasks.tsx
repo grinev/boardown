@@ -22,15 +22,12 @@ import {
   LINK_TYPES_IN_GROUP_ORDER,
   collectLinkedTasks,
   groupLinkedTasks,
-  isTaskArchived,
 } from '../utils/linked-tasks';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import styles from './LinkedTasks.module.css';
 
 interface LinkedTasksProps {
   task: Task;
-  // The task lives in a finished release: links are visible but frozen.
-  readOnly: boolean;
   onTaskClick: (id: string) => void;
 }
 
@@ -41,7 +38,7 @@ const RELATION_OPTIONS: IconSelectOption[] = LINK_TYPES_IN_GROUP_ORDER.map((type
   label: LINK_TYPE_META[type].label,
 }));
 
-export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
+export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
   const config = snapshot?.config;
   const addTaskLink = useBoardStore((s) => s.addTaskLink);
@@ -86,8 +83,6 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
       .filter((t) => {
         const other = t.frontmatter.id;
         if (other === id || linked.has(other)) return false;
-        // An archived task cannot be linked: the write would touch its file.
-        if (isTaskArchived(snapshot, other)) return false;
         return (
           other.toLowerCase().includes(needle) ||
           t.title.toLowerCase().includes(needle)
@@ -207,37 +202,33 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
       <div className={styles.heading}>
         <h3 className={styles.headingText}>Linked tasks</h3>
         {rows.length > 0 && <span className={styles.count}>{rows.length}</span>}
-        {!readOnly && (
-          <button
-            ref={addButtonRef}
-            type="button"
-            className={styles.addButton}
-            aria-label="Link a task"
-            aria-expanded={searching}
-            onClick={() => {
-              setQuery('');
-              setRelation(DEFAULT_LINK_TYPE);
-              setSearching((open) => !open);
-            }}
-          >
-            <Plus size={16} aria-hidden="true" />
-          </button>
-        )}
+        <button
+          ref={addButtonRef}
+          type="button"
+          className={styles.addButton}
+          aria-label="Link a task"
+          aria-expanded={searching}
+          onClick={() => {
+            setQuery('');
+            setRelation(DEFAULT_LINK_TYPE);
+            setSearching((open) => !open);
+          }}
+        >
+          <Plus size={16} aria-hidden="true" />
+        </button>
       </div>
 
       {groups.length > 0 && (
         <div className={styles.table}>
           {groups.map((group) => (
             <Fragment key={group.type}>
-              {/* The relation is stated here rather than per row: on a frozen
-                  dialog the per-row control is not rendered, so this heading is
+              {/* The relation is stated here rather than per row: this heading is
                   the only place it appears. */}
               <h4 className={styles.groupHeading}>{LINK_TYPE_META[group.type].label}</h4>
-              {group.rows.map(({ task: linked, type, archived }) => {
+              {group.rows.map(({ task: linked, type }) => {
                 const meta = TASK_TYPE_META[linked.frontmatter.type];
                 const TypeIcon = meta.icon;
                 const linkedId = linked.frontmatter.id;
-                const frozen = readOnly || archived;
                 const label = LINK_TYPE_META[type].label;
                 return (
                   // display: contents — the cells sit directly in the grid, while
@@ -262,22 +253,18 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
                     >
                       {statusDisplayLabel(config, linked.frontmatter.status)}
                     </span>
-                    {frozen ? (
-                      <span className={styles.removeSpacer} />
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.removeButton}
-                        // Two rows can point at the same task, so the name has to
-                        // say which of them this button breaks.
-                        aria-label={`Remove "${label}" link to ${linkedId}`}
-                        onClick={() => {
-                          void removeTaskLink(id, linkedId, type);
-                        }}
-                      >
-                        <Trash2 size={14} aria-hidden="true" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className={styles.removeButton}
+                      // Two rows can point at the same task, so the name has to
+                      // say which of them this button breaks.
+                      aria-label={`Remove "${label}" link to ${linkedId}`}
+                      onClick={() => {
+                        void removeTaskLink(id, linkedId, type);
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
                   </div>
                 );
               })}
@@ -286,7 +273,7 @@ export function LinkedTasks({ task, readOnly, onTaskClick }: LinkedTasksProps) {
         </div>
       )}
 
-      {!readOnly && searching && (
+      {searching && (
         <div className={styles.search}>
           <IconSelect
             value={relation}

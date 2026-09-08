@@ -135,8 +135,8 @@ serializer, schemas) and implements `FsAdapter` over `node:fs/promises`, mapping
 CLI commands onto board operations. It is aimed at agents and scripts: output is a
 stable JSON envelope when stdout is not a TTY (or with `--json`), human-readable
 otherwise. The bin is bundled with esbuild into a single Node CJS file. Process
-invariants (release lifecycle, finished-release read-only) live in `core`, so the
-CLI inherits them rather than re-implementing them.
+invariants (release lifecycle, a finished release's content frozen) live in
+`core`, so the CLI inherits them rather than re-implementing them.
 
 ## Conventions
 

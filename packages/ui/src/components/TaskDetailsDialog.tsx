@@ -261,7 +261,6 @@ export function TaskDetailsDialog({
           />
           <LinkedTasks
             task={task}
-            readOnly={archived}
             onTaskClick={onTaskClick}
           />
           <Notes
