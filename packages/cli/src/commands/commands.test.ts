@@ -401,7 +401,7 @@ describe('cli commands (integration)', () => {
       ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
     });
 
-    it('refuses a task in a finished release, as source and as target', async () => {
+    it('links a task in a finished release, as source and as target', async () => {
       const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
       const relFile = (rel.data as { slug: string }).slug;
       await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
@@ -411,12 +411,27 @@ describe('cli commands (integration)', () => {
       await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
       await releaseCommand(parseArgs(['release', 'done', relFile]), ctx);
 
-      await expect(
-        taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx),
-      ).rejects.toMatchObject({ code: 'ARCHIVED' });
-      await expect(
-        taskCommand(parseArgs(['task', 'link', 'add', 'TS-2', 'TS-1']), ctx),
-      ).rejects.toMatchObject({ code: 'ARCHIVED' });
+      const fromLive = await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']),
+        ctx,
+      );
+      expect(fromLive.data).toEqual({ id: 'TS-1', other: 'TS-2' });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-2' },
+      ]);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
+
+      await taskCommand(parseArgs(['task', 'link', 'rm', 'TS-1', 'TS-2']), ctx);
+      const fromArchived = await taskCommand(
+        parseArgs(['task', 'link', 'add', 'TS-2', 'TS-1']),
+        ctx,
+      );
+      expect(fromArchived.data).toEqual({ id: 'TS-2', other: 'TS-1' });
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
     });
 
     it('task rm strips the mirrored record from the surviving task', async () => {
@@ -428,9 +443,7 @@ describe('cli commands (integration)', () => {
       expect(links(ls.data)).toEqual([]);
     });
 
-    // The one link a delete leaves behind: an archived file is never rewritten, so
-    // the record on a task in a finished release survives and shows up as missing.
-    it('task rm leaves an archived counterpart linked, and ls flags it as missing', async () => {
+    it('task rm strips the mirrored record from an archived counterpart', async () => {
       await taskCommand(parseArgs(['task', 'link', 'add', 'TS-1', 'TS-2']), ctx);
       const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
       const relFile = (rel.data as { slug: string }).slug;
@@ -441,12 +454,9 @@ describe('cli commands (integration)', () => {
 
       await taskCommand(parseArgs(['task', 'rm', 'TS-1']), ctx);
 
-      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
-        { type: 'relates', to: 'TS-1' },
-      ]);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toBeUndefined();
       const ls = await taskCommand(parseArgs(['task', 'link', 'ls', 'TS-2']), ctx);
-      expect(links(ls.data)).toEqual([{ type: 'relates', to: 'TS-1', missing: true }]);
-      expect(ls.human).toContain('(missing)');
+      expect(links(ls.data)).toEqual([]);
     });
 
     it('task get shows the links block', async () => {

@@ -511,12 +511,12 @@ describe('deleteTaskWithLinks', () => {
     ]);
   });
 
-  it('leaves an archived counterpart untouched', () => {
+  it('strips an archived counterpart', () => {
     const r0 = release(linked('BD-1', 'BD-2'));
     const archived = finished(linked('BD-2', 'BD-1'));
     const result = deleteTaskWithLinks([r0, archived], 'BD-1');
-    expect(result.changedFilenames).toEqual([r0.filename]);
-    expect(result.containers[1]).toBe(archived);
+    expect(result.changedFilenames).toEqual([r0.filename, archived.filename]);
+    expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
 
   it('tolerates a one-sided record', () => {
@@ -1680,14 +1680,52 @@ describe('task links', () => {
     expect(() => addTaskLink(r, b, 'BD-1', 'BD-9', 'relates')).toThrow(/BD-9/);
   });
 
-  it('rejects a finished release on either side, for add and remove', () => {
+  it('allows a finished release on either side, for add and remove', () => {
     const r = release(task('BD-1', 'todo', 100));
     const a = archived(task('BD-2', 'done', 100));
 
-    expect(() => addTaskLink(a, r, 'BD-2', 'BD-1', 'relates')).toThrow(/finished/);
-    expect(() => addTaskLink(r, a, 'BD-1', 'BD-2', 'relates')).toThrow(/finished/);
-    expect(() => removeTaskLink(a, r, 'BD-2', 'BD-1', 'relates')).toThrow(/finished/);
-    expect(() => removeTaskLink(r, a, 'BD-1', 'BD-2', 'relates')).toThrow(/finished/);
+    const addedFromLive = addTaskLink(r, a, 'BD-1', 'BD-2', 'relates');
+    expect(linksOf(addedFromLive.source, 'BD-1')).toEqual([{ type: 'relates', to: 'BD-2' }]);
+    expect(linksOf(addedFromLive.target, 'BD-2')).toEqual([{ type: 'relates', to: 'BD-1' }]);
+    expect(addedFromLive.changedFilenames).toEqual([r.filename, a.filename]);
+
+    const removed = removeTaskLink(
+      addedFromLive.source,
+      addedFromLive.target,
+      'BD-1',
+      'BD-2',
+      'relates',
+    );
+    expect(linksOf(removed.source, 'BD-1')).toBeUndefined();
+    expect(linksOf(removed.target, 'BD-2')).toBeUndefined();
+
+    const addedFromArchived = addTaskLink(a, r, 'BD-2', 'BD-1', 'relates');
+    expect(linksOf(addedFromArchived.source, 'BD-2')).toEqual([{ type: 'relates', to: 'BD-1' }]);
+    expect(linksOf(addedFromArchived.target, 'BD-1')).toEqual([{ type: 'relates', to: 'BD-2' }]);
+  });
+
+  it('allows both sides in a finished release', () => {
+    const a1 = archived(task('BD-1', 'done', 100));
+    const a2: Release = {
+      ...archived(task('BD-2', 'done', 100)),
+      filename: 'releases/other.md',
+      slug: 'other',
+    };
+
+    const result = addTaskLink(a1, a2, 'BD-1', 'BD-2', 'relates');
+
+    expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'relates', to: 'BD-2' }]);
+    expect(linksOf(result.target, 'BD-2')).toEqual([{ type: 'relates', to: 'BD-1' }]);
+  });
+
+  it('mirrors a directed relation into a finished release', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const a = archived(task('BD-2', 'done', 100));
+
+    const result = addTaskLink(r, a, 'BD-1', 'BD-2', 'blocks');
+
+    expect(linksOf(result.source, 'BD-1')).toEqual([{ type: 'blocks', to: 'BD-2' }]);
+    expect(linksOf(result.target, 'BD-2')).toEqual([{ type: 'blocked-by', to: 'BD-1' }]);
   });
 
   it('mirrors a directed relation as its inverse on the other task', () => {
@@ -1728,12 +1766,15 @@ describe('task links', () => {
   });
 
 
-  it('refuses a finished release for removeAllTaskLinks too', () => {
+  it('removeAllTaskLinks works when either side is a finished release', () => {
     const r = release(task('BD-1', 'todo', 100));
     const a = archived(task('BD-2', 'done', 100));
+    const linked = addTaskLink(r, a, 'BD-1', 'BD-2', 'relates');
 
-    expect(() => removeAllTaskLinks(r, a, 'BD-1', 'BD-2')).toThrow(/finished/);
-    expect(() => removeAllTaskLinks(a, r, 'BD-2', 'BD-1')).toThrow(/finished/);
+    const result = removeAllTaskLinks(linked.source, linked.target, 'BD-1', 'BD-2');
+
+    expect(linksOf(result.source, 'BD-1')).toBeUndefined();
+    expect(linksOf(result.target, 'BD-2')).toBeUndefined();
   });
 
   it('refuses removeAllTaskLinks on a task pointed at itself', () => {

@@ -212,7 +212,7 @@ describe('deleteTask', () => {
     expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 
-  it('leaves an archived counterpart untouched', async () => {
+  it('strips the mirrored link from an archived counterpart', async () => {
     const { fs } = setup(
       snap({
         releases: [
@@ -224,10 +224,8 @@ describe('deleteTask', () => {
 
     await state().deleteTask('BD-1');
 
-    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
-      { type: 'relates', to: 'BD-1' },
-    ]);
-    expect(fs.writes).toEqual(['releases/1.0.md']);
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
+    expect(fs.writes.sort()).toEqual(['releases/0.9.md', 'releases/1.0.md'].sort());
   });
 
   it('refuses a task in a finished release', async () => {
@@ -1140,8 +1138,8 @@ describe('task links', () => {
     expect(fs.writes).toEqual([]);
   });
 
-  it('reports an error instead of touching a finished release', async () => {
-    setup(
+  it('mirrors a link into a finished release', async () => {
+    const { fs } = setup(
       snap({
         releases: [
           release('1.0', 'current', [task('BD-1')]),
@@ -1152,8 +1150,14 @@ describe('task links', () => {
 
     await state().addTaskLink('BD-1', 'BD-2', 'relates');
 
-    expect(state().errorMessage).toMatch(/finished/);
-    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
+    expect(state().errorMessage).toBeNull();
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(current().releases[1]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(fs.writes).toEqual(['releases/1.0.md', 'releases/0.9.md']);
   });
 
   it('mirrors a directed relation as its inverse', async () => {

@@ -91,7 +91,8 @@ Release lifecycle:
 - **`current`** — actively worked on; the app calls such a release **active**.
   One at a time by default; with `multipleActiveReleases` on, several. The Board
   view shows one of them as a kanban and a switcher picks which.
-- **`finished`** — closed. Read-only. Lives in the Archive.
+- **`finished`** — closed. Task content is frozen; link metadata may still
+  change. Lives in the Archive.
 
 Transitions:
 
@@ -524,8 +525,9 @@ longer still is clipped with an ellipsis. While the field holds anything, a
 clear button sits at its right end.
 
 Clicking a row — or highlighting it with ↑/↓ and pressing Enter — opens the task
-details dialog over the current tab, read-only when the task sits in a finished
-release. Search is a direct entry point, so the dialog starts an empty back stack
+details dialog over the current tab, with its content frozen when the task sits
+in a finished release (Linked tasks stay editable). Search is a direct entry
+point, so the dialog starts an empty back stack
 and shows no back button (see "Dialog back stack"). Escape closes the dropdown
 and an outside click closes it; either way the query stays in the field, so
 closing the dialog leaves the same result set one focus away — the clear button
@@ -738,17 +740,18 @@ Custom fields appear in the task dialog only: not on
 the task card, not in the backlog row, not in the filter bar, and not in the
 creation dialog — a new task starts with none and is filled in afterwards.
 
-**A task in a finished release opens read-only**, wherever the dialog is opened
-from. Every value is still shown — and every way to change one is gone rather
-than disabled-looking: title, description, checklist item text and note text
-render as plain text; status, type, priority and release render as plain values
-instead of dropdowns; the epic renders as its badge, still clickable to navigate to the
-epic; custom field values render as text, with their links still clickable.
-Checklist checkboxes are disabled, the add-item row and the note composer
-are absent, and the per-item trash buttons do not appear. Linked tasks are
-frozen and the `…` menu's `Delete` item is disabled, as described below. An
-archived file is never rewritten, so there is nothing to fail: the operations
-`@boardown/core` would refuse are simply not reachable.
+**A task in a finished release opens with its content frozen**, wherever the
+dialog is opened from. Every value is still shown — and every way to change one
+is gone rather than disabled-looking: title, description, checklist item text and
+note text render as plain text; status, type, priority and release render as
+plain values instead of dropdowns; the epic renders as its badge, still clickable
+to navigate to the epic; custom field values render as text, with their links
+still clickable. Checklist checkboxes are disabled, the add-item row and the
+note composer are absent, and the per-item trash buttons do not appear. The
+Linked tasks section stays fully live — a link is metadata, not content — and
+the `…` menu's `Delete` item is disabled, as described below. An archived file
+is rewritten only for a link change; the content operations `@boardown/core`
+would refuse are simply not reachable.
 
 **The header** carries the task's type icon and its id, and immediately right of
 the id a **copy button** that puts the subject line of the commit that would close
@@ -768,10 +771,9 @@ with a single `Delete` action. It opens a confirmation modal on top of the dialo
 confirming removes the task's section from its file permanently (no undo, no trash —
 git is the safety net) and closes both modals. Deleting a task also strips the
 mirrored `links` records the other tasks hold pointing at it, so nothing dangling is
-left on disk — except on a task in a **finished** release, whose file is never
-rewritten: that record survives and simply resolves to nothing. A task in a finished
-release cannot be deleted at all: its menu still opens, with the `Delete` item
-disabled.
+left on disk — a record held by a task in a **finished** release is stripped too.
+A task in a finished release cannot be deleted at all: its menu still opens, with
+the `Delete` item disabled.
 
 **Task links.** Any token shaped like a task ID (2–5 uppercase letters, a dash,
 digits) that resolves to a task on the board renders, in view mode, as a link
@@ -926,18 +928,17 @@ baked into the app; `config.yaml` says nothing about it. Group order in the dial
 is fixed and independent of the file: blocks · is blocked by · includes · is part
 of · duplicates · is duplicated by · relates to, with the rows inside a group in
 file order. A sub-heading is always shown, including when every link is `relates` —
-it is the only place a row's relation is stated, and on a task in a finished release
-the trash is gone too.
+it is the only place a row's relation is stated.
 
 A link is stored on **both** tasks (mirrored). Rendering is lenient: a task shows
 the union of its own records and the records pointing at it, deduplicated, so a
 half-written link (a hand-edited file) is still visible and still removable. A
 link whose target is not on the board is hidden in the UI and never auto-removed
-from disk. Tasks in a finished release cannot be linked or unlinked (that would
-rewrite an archived file): they show their links read-only, and they do not appear
-in the search results. Adding or removing a link rewrites two files, and the
-conflict guard checks both before writing either — an external change aborts the
-whole operation instead of leaving one side linked.
+from disk. A link is metadata, not content: adding or removing one is allowed
+however many of the two tasks sit in a finished release, and a task in a finished
+release appears in the search results like any other. Adding or removing a link
+rewrites two files, and the conflict guard checks both before writing either — an
+external change aborts the whole operation instead of leaving one side linked.
 
 **Commits.** In the task dialog's right column, directly below **Details** and at
 the same width, a bordered **Commits** panel lists the commits of the local Git
@@ -1025,8 +1026,8 @@ usable in a filename — is refused with a message under the name field in the
 header, and nothing is written.
 
 Status is not editable here: it is owned by the Start / Complete release actions.
-A **finished** release opens the same dialog read-only — an archived file is
-never rewritten. Dates (`startDate` / `endDate`) are not shown or edited yet.
+A **finished** release opens the same dialog read-only — the release's own
+fields stay frozen. Dates (`startDate` / `endDate`) are not shown or edited yet.
 
 ### Dialog back stack
 
@@ -1242,7 +1243,7 @@ ceiling and its reach instead of discovering them by failing. It also reports
 `multipleActiveReleases` always, resolved to a boolean: absent from the config
 means the one-at-a-time rule is in force, so leaving it out would hide a rule an
 agent would then have to discover by being refused. `task rm <id>` deletes a task with the same rules
-as the UI (mirrored links cleaned up, archived files untouched, a task in a
+as the UI (mirrored links cleaned up, including in archived files, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at
 **agents and scripts**: output is a stable JSON envelope when stdout is not a TTY

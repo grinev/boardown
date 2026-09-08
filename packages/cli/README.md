@@ -182,9 +182,10 @@ carry no custom fields; `--full`, which returns whole tasks, does.
 
 `task link` relates two tasks. Only one link type exists — `relates`, which is
 symmetric — so it is never passed on the command line; the record is mirrored
-into both task files, and `rm` removes both halves. Tasks in a finished release
-cannot be linked or unlinked (their file is never rewritten). `task rm` also
-strips the mirrored records other tasks hold pointing at the deleted task.
+into both task files, and `rm` removes both halves. A task in a finished release
+can still be linked or unlinked: links are metadata, and the archived file is
+rewritten. `task rm` also strips the mirrored records other tasks hold pointing
+at the deleted task, archived files included.
 
 The board is located by walking up from the current directory to a `.boardown/`
 folder (like git finds `.git`). Use `--data-dir <path>` to point at a specific
