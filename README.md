@@ -248,6 +248,40 @@ of the board, which you can drag them out of; the CLI answers `USAGE` naming the
 board's own list if you try to *set* a status it does not declare, and `boardown
 schema` reports the list so an agent reads it up front.
 
+## Custom task types (beta)
+
+> **Beta.** Types are declared by hand in `config.yaml` and there is no UI for
+> managing them yet. The on-disk format may still change before 1.0 — expect to
+> edit your config when it does.
+
+A board can turn the four built-in types on and off, and add its own. Declare
+them in `.boardown/config.yaml`:
+
+```yaml
+taskTypes:            # optional; names base types and flips them on or off
+  - key: tech
+    disabled: true
+
+customTaskTypes:      # optional; the board's own types
+  - key: ops
+    label: Ops          # optional — the key is prettified when absent
+    icon: server        # optional — a lucide name; `boardown schema` lists them
+    color: '#0EA5E9'    # optional — 6-digit hex
+    commitPrefix: ops   # optional — used by Copy commit message; the key when absent
+```
+
+`taskTypes` is an override list, not a replacement: a base type it does not
+mention stays as the product shipped it (today, all four on). `customTaskTypes`
+keys follow the same rule as a custom field's, must be unique, and may not reuse
+a base type's key (`bug`, `feature`, `docs`, `tech`). At least one type must end
+up enabled. A bad declaration makes the config invalid — the app shows its
+config error screen and the CLI returns `BOARD_INVALID`.
+
+A disabled type is not offered in pickers, filters or `--type`. A task that
+already carries one still loads and still shows it. `task add` without `--type`
+uses `feature`, or the first enabled type when `feature` is off. `boardown
+schema` reports the enabled types and the accepted icon names.
+
 ## Custom task fields (beta)
 
 > **Beta.** This is the first slice of a larger customization story: only the

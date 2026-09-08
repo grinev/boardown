@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LUCIDE_ICON_NAME_SET } from './lucide-icon-names.js';
 
 export const TASK_TYPES = ['bug', 'feature', 'docs', 'tech'] as const;
 // Heaviest first: every list built by mapping over this reads top-down.
@@ -6,11 +7,32 @@ export const TASK_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 export const RELEASE_STATUSES = ['future', 'current', 'finished'] as const;
 
 // A status is whatever the board declares, so this is a plain string. The alias
-// stays because it says which strings are meant.
+// stays because it says which strings are meant. A type is the same: the board
+// may add its own, and a task written under a type the board has since dropped
+// still loads.
 export type TaskStatus = string;
-export type TaskType = (typeof TASK_TYPES)[number];
+export type BaseTaskType = (typeof TASK_TYPES)[number];
+export type TaskType = string;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
+
+export interface BaseTaskTypeMeta {
+  readonly label: string;
+  readonly icon: string;
+  readonly color: string;
+  readonly commitPrefix: string;
+}
+
+export const BASE_TASK_TYPE_META: Record<BaseTaskType, BaseTaskTypeMeta> = {
+  bug: { label: 'Bug', icon: 'bug', color: '#ef4444', commitPrefix: 'fix' },
+  feature: { label: 'Feature', icon: 'bookmark', color: '#22c55e', commitPrefix: 'feat' },
+  docs: { label: 'Docs', icon: 'file-text', color: '#3b82f6', commitPrefix: 'docs' },
+  tech: { label: 'Tech', icon: 'wrench', color: '#8b5cf6', commitPrefix: 'chore' },
+};
+
+export const DEFAULT_TASK_TYPE: BaseTaskType = 'feature';
+export const FALLBACK_TYPE_ICON = 'circle';
+export const FALLBACK_TYPE_COLOR = '#94a3b8';
 
 export const DEFAULT_TASK_PRIORITY: TaskPriority = 'medium';
 
@@ -78,7 +100,9 @@ export type TaskLink = z.infer<typeof TaskLinkSchema>;
 
 export const TaskFrontmatterSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(TASK_TYPES),
+  // Any non-empty string: a board can add types, and a task written under one
+  // the board has since dropped must still load rather than be repaired or dropped.
+  type: z.string().min(1),
   // Optional rather than defaulted: a zod default would erase the difference
   // between "absent" and "explicitly medium" at parse time, and the serializer
   // would then write the key into every task it touches.
@@ -276,6 +300,59 @@ export const WipLimitsSchema = z
   .strict();
 export type WipLimits = z.infer<typeof WipLimitsSchema>;
 
+export const BoardTaskTypeOverrideSchema = z
+  .object({
+    key: z.enum(TASK_TYPES),
+    disabled: z.boolean(),
+  })
+  .strict();
+export type BoardTaskTypeOverride = z.infer<typeof BoardTaskTypeOverrideSchema>;
+
+const TaskTypesSchema = z
+  .array(BoardTaskTypeOverrideSchema)
+  .refine((entries) => new Set(entries.map((e) => e.key)).size === entries.length, {
+    message: 'taskTypes keys must be unique',
+  });
+
+export const CustomTaskTypeSchema = z
+  .object({
+    key: z.string().regex(CONFIG_KEY_REGEX, configKeyMessage('customTaskTypes')),
+    label: z.string().min(1).optional(),
+    icon: z
+      .string()
+      .refine((name) => LUCIDE_ICON_NAME_SET.has(name), {
+        message: 'icon must be a bundled lucide name (see schema iconNames)',
+      })
+      .optional(),
+    color: z.string().regex(HEX_COLOR_REGEX, HEX_COLOR_MESSAGE).optional(),
+    commitPrefix: z
+      .string()
+      .regex(CONFIG_KEY_REGEX, 'commitPrefix must start with a letter and hold 1-40 letters, digits, "_" or "-"')
+      .optional(),
+  })
+  .strict();
+export type CustomTaskType = z.infer<typeof CustomTaskTypeSchema>;
+
+const CustomTaskTypesSchema = z
+  .array(CustomTaskTypeSchema)
+  .refine((entries) => !entries.some((e) => (TASK_TYPES as readonly string[]).includes(e.key)), {
+    message: `customTaskTypes key must not be one of: ${TASK_TYPES.join(', ')}`,
+  })
+  .refine((entries) => new Set(entries.map((e) => e.key)).size === entries.length, {
+    message: 'customTaskTypes keys must be unique',
+  });
+
+const atLeastOneTypeEnabled = (config: {
+  taskTypes?: readonly BoardTaskTypeOverride[] | undefined;
+  customTaskTypes?: readonly CustomTaskType[] | undefined;
+}): boolean => {
+  if ((config.customTaskTypes?.length ?? 0) > 0) return true;
+  return TASK_TYPES.some((key) => {
+    const override = config.taskTypes?.find((entry) => entry.key === key);
+    return override === undefined ? true : !override.disabled;
+  });
+};
+
 export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
@@ -295,8 +372,15 @@ export const BoardConfigSchema = z
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),
+    // Override list: names base types and flips enabled. Absent or empty keeps
+    // every base type on. A key that is not a base type is invalid.
+    taskTypes: TaskTypesSchema.optional(),
+    customTaskTypes: CustomTaskTypesSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(atLeastOneTypeEnabled, {
+    message: 'at least one task type must be enabled',
+  });
 export type BoardConfig = z.infer<typeof BoardConfigSchema>;
 
 export const customFieldLabel = (field: CustomField): string => field.label ?? field.key;

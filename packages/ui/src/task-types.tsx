@@ -1,15 +1,22 @@
-import { Bookmark, Bug, FileText, Wrench, type LucideIcon } from 'lucide-react';
-import type { TaskType } from '@boardown/core';
+import type { CSSProperties } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { resolveTaskType, type TypeConfig } from '@boardown/core';
+import { lucideIconFromName } from './icons/lucide-by-name';
 
-interface TaskTypeMeta {
+export interface TaskTypeDisplay {
   icon: LucideIcon;
-  colorVar: string;
   label: string;
+  style: CSSProperties;
 }
 
-export const TASK_TYPE_META: Record<TaskType, TaskTypeMeta> = {
-  bug: { icon: Bug, colorVar: 'var(--type-bug)', label: 'Bug' },
-  feature: { icon: Bookmark, colorVar: 'var(--type-feature)', label: 'Feature' },
-  docs: { icon: FileText, colorVar: 'var(--type-docs)', label: 'Docs' },
-  tech: { icon: Wrench, colorVar: 'var(--type-tech)', label: 'Tech' },
+export const taskTypeDisplay = (config: TypeConfig, type: string): TaskTypeDisplay => {
+  const resolved = resolveTaskType(config, type);
+  return {
+    icon: lucideIconFromName(resolved.icon),
+    label: resolved.label,
+    style: {
+      '--type-color': resolved.color,
+      color: 'var(--type-color)',
+    } as CSSProperties,
+  };
 };

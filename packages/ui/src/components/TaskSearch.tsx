@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useBoardStore } from '../store';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { isSearchable, searchTasks } from '../utils/search-tasks';
 import styles from './TaskSearch.module.css';
 
@@ -203,7 +203,7 @@ export function TaskSearch() {
             style={listStyle}
           >
             {results.map((task, index) => {
-              const meta = TASK_TYPE_META[task.frontmatter.type];
+              const meta = taskTypeDisplay(snapshot?.config, task.frontmatter.type);
               const TypeIcon = meta.icon;
               return (
                 <li
@@ -225,7 +225,7 @@ export function TaskSearch() {
                   <TypeIcon
                     size={14}
                     className={styles.typeIcon}
-                    style={{ color: meta.colorVar }}
+                    style={meta.style}
                     aria-label={meta.label}
                   />
                   <span className={styles.id}>{task.frontmatter.id}</span>

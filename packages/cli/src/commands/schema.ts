@@ -3,11 +3,12 @@ import {
   DEFAULT_TASK_PRIORITY,
   EPIC_NAME_MAX_LENGTH,
   LINK_TYPES,
+  LUCIDE_ICON_NAMES,
   RELEASE_STATUSES,
   TASK_PRIORITIES,
-  TASK_TYPES,
   WIP_LIMIT_KEY,
   boardStatuses,
+  enabledTaskTypes,
   middleStatusKeys,
 } from '@boardown/core';
 import { loadConfigIfAny } from '../persistence';
@@ -17,8 +18,8 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 13,
-  taskTypes: TASK_TYPES,
+  version: 14,
+  iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
   releaseStatuses: RELEASE_STATUSES,
@@ -26,7 +27,7 @@ const DESCRIPTOR = {
     id: 'string, assigned by boardown (e.g. BD-12)',
     title: 'string',
     description: 'string',
-    type: 'one of taskTypes',
+    type: 'non-empty string. Setting and filtering accept taskTypes[].key; a stored value the board no longer enables still loads.',
     priority:
       'optional, one of taskPriorities; an absent key means defaultTaskPriority. Setting it — including setting it to the default — writes the key and keeps it.',
     status: 'one of taskStatuses[].key',
@@ -43,7 +44,7 @@ const DESCRIPTOR = {
   taskSummaryFields: {
     id: 'string',
     title: 'string',
-    type: 'one of taskTypes',
+    type: 'non-empty string; may be a type the board no longer enables',
     priority: 'one of taskPriorities; always present, resolved to defaultTaskPriority when unset',
     status: 'one of taskStatuses[].key',
     epic: 'epic slug; omitted when the task has none',
@@ -226,6 +227,13 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
     // Positional: the first is the status a new task takes and the only one a new
     // task may be created with outside the current release, the last is the
     // terminal one.
+    taskTypes: enabledTaskTypes(config).map((t) => ({
+      key: t.key,
+      label: t.label,
+      icon: t.icon,
+      color: t.color,
+      commitPrefix: t.commitPrefix,
+    })),
     taskStatuses: boardStatuses(config).map((status) => ({
       key: status.key,
       ...(status.label !== undefined ? { label: status.label } : {}),

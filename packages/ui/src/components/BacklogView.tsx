@@ -18,6 +18,7 @@ import {
   activeReleases,
   effectiveTaskPriority,
   futureReleases,
+  isEnabledTaskType,
   isWipLimitReached,
   sortTasksByOrder,
   unscheduledTasks,
@@ -29,6 +30,7 @@ import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBa
 import { sectionDropId, taskDragId } from '../dnd/ids';
 import {
   ALL_STATUSES,
+  ALL_TYPES,
   BacklogFilters,
   type EpicFilter,
   type PriorityFilter,
@@ -67,7 +69,7 @@ export function BacklogView() {
   const openCreateTaskBacklog = useBoardStore((s) => s.openCreateTaskBacklog);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(ALL_STATUSES);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(ALL_TYPES);
   const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(
@@ -90,6 +92,11 @@ export function BacklogView() {
     const exists = epics.some((e) => e.slug === epicFilter);
     if (!exists) setEpicFilter('all');
   }, [epics, epicFilter]);
+
+  useEffect(() => {
+    if (typeFilter === ALL_TYPES) return;
+    if (!isEnabledTaskType(snapshot?.config, typeFilter)) setTypeFilter(ALL_TYPES);
+  }, [snapshot?.config, typeFilter]);
 
   const { sectionMetas, sourceBuckets } = useMemo(() => {
     const metas: SectionMeta[] = [];
@@ -189,13 +196,13 @@ export function BacklogView() {
 
   const filtersActive =
     statusFilter !== ALL_STATUSES ||
-    typeFilter !== 'all' ||
+    typeFilter !== ALL_TYPES ||
     epicFilter !== 'all' ||
     priorityFilter !== 'all';
 
   const matchesFilters = (task: Task): boolean => {
     if (statusFilter !== ALL_STATUSES && task.frontmatter.status !== statusFilter) return false;
-    if (typeFilter !== 'all' && task.frontmatter.type !== typeFilter) return false;
+    if (typeFilter !== ALL_TYPES && task.frontmatter.type !== typeFilter) return false;
     if (epicFilter === 'no-epic') {
       if (task.frontmatter.epic !== undefined) return false;
     } else if (epicFilter !== 'all') {

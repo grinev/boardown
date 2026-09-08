@@ -1,10 +1,16 @@
 import { X } from 'lucide-react';
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import type { Epic, Release, TaskPriority, TaskType } from '@boardown/core';
-import { DEFAULT_TASK_PRIORITY, TASK_PRIORITIES, TASK_TYPES } from '@boardown/core';
+import {
+  DEFAULT_TASK_PRIORITY,
+  TASK_PRIORITIES,
+  defaultTaskType,
+  enabledTaskTypes,
+  isEnabledTaskType,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
@@ -34,10 +40,11 @@ export function CreateTaskDialog({
   onClose,
 }: CreateTaskDialogProps) {
   const createTask = useBoardStore((s) => s.createTask);
+  const config = useBoardStore((s) => s.snapshot?.config);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<TaskType>('feature');
+  const [type, setType] = useState<TaskType>(() => defaultTaskType(config));
   const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
   // Captured beside the state they seed: a board refresh under an open dialog
   // re-renders it with fresh props, and the dirty check compares against what the
@@ -69,7 +76,7 @@ export function CreateTaskDialog({
   const dirty =
     title !== '' ||
     description !== '' ||
-    type !== 'feature' ||
+    type !== defaultTaskType(config) ||
     priority !== DEFAULT_TASK_PRIORITY ||
     epicSlug !== initialEpicSlug ||
     releaseFilename !== initialReleaseFilename;
@@ -93,24 +100,22 @@ export function CreateTaskDialog({
     return [{ value: '', label: 'No epic' }, ...sorted.map(toOption)];
   }, [epic, epics]);
 
+  useEffect(() => {
+    if (!isEnabledTaskType(config, type)) setType(defaultTaskType(config));
+  }, [config, type]);
+
   const typeOptions = useMemo<IconSelectOption[]>(
     () =>
-      TASK_TYPES.map((t) => {
-        const meta = TASK_TYPE_META[t];
+      enabledTaskTypes(config).map((t) => {
+        const meta = taskTypeDisplay(config, t.key);
         const Icon = meta.icon;
         return {
-          value: t,
+          value: t.key,
           label: meta.label,
-          icon: (
-            <Icon
-              size={14}
-              style={{ color: meta.colorVar }}
-              aria-hidden="true"
-            />
-          ),
+          icon: <Icon size={14} style={meta.style} aria-hidden="true" />,
         };
       }),
-    [],
+    [config],
   );
 
   const priorityOptions = useMemo<IconSelectOption[]>(
@@ -218,7 +223,7 @@ export function CreateTaskDialog({
           <IconSelect
             value={type}
             options={typeOptions}
-            onChange={(v) => setType(v as TaskType)}
+            onChange={setType}
             ariaLabel="Type"
           />
         </div>

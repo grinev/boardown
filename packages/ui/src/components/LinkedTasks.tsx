@@ -16,7 +16,7 @@ import {
   type Task,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import {
   LINK_TYPES_IN_GROUP_ORDER,
@@ -226,7 +226,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
                   the only place it appears. */}
               <h4 className={styles.groupHeading}>{LINK_TYPE_META[group.type].label}</h4>
               {group.rows.map(({ task: linked, type }) => {
-                const meta = TASK_TYPE_META[linked.frontmatter.type];
+                const meta = taskTypeDisplay(snapshot?.config, linked.frontmatter.type);
                 const TypeIcon = meta.icon;
                 const linkedId = linked.frontmatter.id;
                 const label = LINK_TYPE_META[type].label;
@@ -236,7 +236,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
                   <div key={`${type}:${linkedId}`} className={styles.row}>
                     <TypeIcon
                       className={styles.typeIcon}
-                      style={{ color: meta.colorVar }}
+                      style={meta.style}
                       aria-label={meta.label}
                     />
                     <span className={styles.taskId}>{linkedId}</span>

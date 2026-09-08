@@ -39,7 +39,7 @@ A single unit of work. Fields:
 | `id`          | string    | `<prefix>-<n>`, e.g. `BD-1`. Stable, never changes.             |
 | `title`       | string    | The H2 heading of the task section in the md file.              |
 | `description` | string    | Plain text body below the frontmatter.                          |
-| `type`        | string    | One of `bug`, `feature`, `docs`, `tech`. Required.              |
+| `type`        | string    | One of the board's types — `bug`, `feature`, `docs`, `tech` unless `config.yaml` declares otherwise. Required. Stored as written: any non-empty string loads, so a task written under a type the board has since dropped is shown rather than repaired. See "Task types" under Configuration. |
 | `priority`    | string?   | One of `critical`, `high`, `medium`, `low`. **Optional**: an absent key means `medium`, so a task never has to carry one. Setting a priority — including setting it back to `medium` — writes the key and keeps it; nothing ever strips it. Existing boards are not backfilled. |
 | `status`      | string    | One of the board's statuses — `todo`, `in-progress`, `done` unless `config.yaml` declares its own. Stored as written: any non-empty string loads, so a task written under a status the board has since dropped is shown rather than repaired. See "Statuses" under Configuration. |
 | `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
@@ -49,10 +49,10 @@ A single unit of work. Fields:
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
-Task types and priorities are a fixed set baked into the app: each type and each
-priority has an icon and a color used for the badge on the card and as a filter
-dimension. Statuses are the exception — a board may declare its own (see
-"Statuses" under Configuration). Priority is a **label, never a sort key** — the order of
+Priorities are a fixed set baked into the app: each has an icon and a color used
+for the badge on the card and as a filter dimension. Types and statuses are
+declared in `config.yaml` (see "Task types" and "Statuses" under Configuration).
+Priority is a **label, never a sort key** — the order of
 work stays `order` and the position of the block in the file, and nothing sorts,
 groups or gates on priority.
 
@@ -290,6 +290,15 @@ statuses:             # optional (beta); absent means todo / in-progress / done
     label: Not started  # optional; absent means the key, prettified
   - key: dev
   - key: shipped
+taskTypes:            # optional; override list for the four base types
+  - key: tech
+    disabled: true
+customTaskTypes:      # optional; the board's own types
+  - key: ops
+    label: Ops
+    icon: server
+    color: '#0EA5E9'
+    commitPrefix: ops
 ```
 
 `projectName` is required (set during onboarding) and read-only from the app's
@@ -301,6 +310,40 @@ default (e.g. the dev web shell) leave it absent, in which case it defaults to
 `"light"`. After onboarding it is owned by the in-app theme switcher — the host
 theme no longer influences it. Epic colors are user-defined per epic (see Epic
 frontmatter above).
+
+### Task types
+
+**Beta.** Two independent keys, both edited in `config.yaml` only — there is no
+management UI.
+
+`taskTypes` is an override list for the four base types (`bug`, `feature`,
+`docs`, `tech`), not a replacement set. It names a base type and sets
+`disabled`. A base type the list does not mention keeps the product's default
+for it — today, all four on. Absent or empty means every base type stays on.
+A `key` that names no base type, or a key listed twice, makes the config
+invalid. A base type's label, icon, colour and commit prefix are the product's
+and cannot be set here. `disabled: false` is legal and turns on a base type the
+product ships off.
+
+`customTaskTypes` is the board's own types. Each entry has a `key` (required;
+same shape as a `customFields` key, unique in the list, and not a base type's
+key) plus optional `label`, `icon`, `color` and `commitPrefix`. `icon` is a
+kebab-case name from the Lucide set the app bundles — `boardown schema` prints
+the accepted names as `iconNames`. `color` is a 6-digit hex with a leading `#`.
+`commitPrefix` follows the same shape as `key` and is spliced into
+`<prefix>(<ID>): <title>`. An absent `label` falls back to the key, prettified;
+an absent `icon` and an absent `color` fall back to a shared neutral default; an
+absent `commitPrefix` falls back to the key.
+
+At least one type must end up enabled. A disabled type is offered nowhere — not
+in the create dialog, not in the task dialog's Type picker, not in the CLI's
+`--type`, not in the backlog filter. A task already carrying a disabled or
+undeclared type still loads and renders: a disabled base type keeps its built-in
+icon, colour and label, and a type nothing declares shows its raw key with the
+neutral default icon and colour. Nothing on disk is repaired. Pickers list the
+base types in the product's order, then custom types in declaration order. A new
+task with no type given takes `feature`; with `feature` disabled, the first
+enabled type in that order.
 
 ### Statuses
 
@@ -659,7 +702,8 @@ Linked tasks section show no priority.
 **Creation** uses a dedicated modal dialog:
 
 - **Title** — required.
-- **Type** — required, one of `bug`, `feature`, `docs`, `tech`.
+- **Type** — required, one of the board's enabled types (see "Task types").
+  Preselected `feature`, or the first enabled type when `feature` is disabled.
 - **Priority** — one of `Critical`, `High`, `Medium`, `Low`, preselected
   `Medium`. Left at `Medium` the task is created with no `priority` key at all.
 - **Epic** — optional. Dropdown over existing epics; blank = no epic.
@@ -757,9 +801,10 @@ would refuse are simply not reachable.
 **The header** carries the task's type icon and its id, and immediately right of
 the id a **copy button** that puts the subject line of the commit that would close
 this task on the clipboard: `<type>(<ID>): <title>`, e.g. `feat(BD-123): Add next
-button`. The type is spelled the way a conventional commit spells it — `feature` →
-`feat`, `bug` → `fix`, `docs` → `docs`, `tech` → `chore` — and the mapping is fixed;
-nothing configures it or the format. The id and the title are copied exactly as the
+button`. The type is spelled as that type's commit prefix: the four base types
+map `feature` → `feat`, `bug` → `fix`, `docs` → `docs`, `tech` → `chore`, and a
+custom type uses its `commitPrefix` or, if none, its key. A type nothing
+declares uses its raw key. The format itself is not configurable. The id and the title are copied exactly as the
 board holds them, the title flattened to a single line. It reads the **saved** title,
 so an inline edit still being typed is not what lands on the clipboard, and it works
 on a task in a **finished** release, since copying writes nothing. A successful copy
@@ -1238,7 +1283,12 @@ absent rather than wrong. `schema` reports the maximum as `epicNameMaxLength`,
 always, for the same reason it reports the rules below. A status the board does not
 declare is a `USAGE` error naming the board's own list, at every site that takes one
 — `task status`, `task add --status`, `task edit --status` and `task list --status`
-— and `schema` reports `taskStatuses` so an agent reads the vocabulary up front;
+— and `schema` reports `taskStatuses` so an agent reads the vocabulary up front.
+A type the board does not enable is a `USAGE` error naming the enabled list, at
+every site that takes one — `task add --type`, `task edit --type` and
+`task list --type` — and `schema` reports `taskTypes` (key, label, icon, colour,
+commit prefix) plus `iconNames`; `task add` without `--type` uses `feature`, or
+the first enabled type when `feature` is disabled;
 `task add` without `--status` uses the board's initial status. Setting a status
 outside an active release fails with `STATUS_LOCKED`; a relocation that carries the
 status along succeeds, and one that sets it is judged by its destination. Putting one
@@ -1390,8 +1440,6 @@ Broad strokes only. The concrete backlog lives on boardown's own board in
 
 - **Richer task model** — labels with label filters, assignee, per-task
   last-updated date.
-- **Customization** — user-defined task types instead of the fixed set baked in
-  today, alongside the user-defined statuses that already ship.
 - **Fuller release management** — editing a release's dates, reordering releases
   in the Backlog, and support for multiple simultaneously active releases (e.g. a
   large release in flight plus an urgent hotfix).

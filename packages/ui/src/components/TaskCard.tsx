@@ -4,7 +4,7 @@ import type { Epic, Task } from '@boardown/core';
 import { effectiveTaskPriority } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
 import styles from './BoardView.module.css';
 
@@ -14,8 +14,9 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, epic }: TaskCardProps) {
+  const config = useBoardStore((s) => s.snapshot?.config);
   const { id, type } = task.frontmatter;
-  const typeMeta = TASK_TYPE_META[type];
+  const typeMeta = taskTypeDisplay(config, type);
   const TypeIcon = typeMeta.icon;
   const priorityMeta = TASK_PRIORITY_META[effectiveTaskPriority(task.frontmatter)];
   const PriorityIcon = priorityMeta.icon;
@@ -64,7 +65,7 @@ export function TaskCard({ task, epic }: TaskCardProps) {
       <footer className={styles.cardFooter}>
         <TypeIcon
           className={styles.typeIcon}
-          style={{ color: typeMeta.colorVar }}
+          style={typeMeta.style}
           aria-label={typeMeta.label}
         />
         <span className={styles.idText}>{id}</span>

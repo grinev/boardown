@@ -161,6 +161,10 @@ invariants (release lifecycle, a finished release's content frozen) live in
   reach outside `.boardown/`. A new file-touching feature belongs on `FsAdapter`
   unless it is read-only *and* needs the project folder. Never call `fetch`, `fs`,
   or browser APIs from `core` or `ui`.
+- Lucide icon names that `config.yaml` may use live in
+  `packages/core/src/lucide-icon-names.ts`, generated from lucide-react so core
+  never imports it. After bumping lucide-react, run
+  `node scripts/generate-lucide-icon-names.mjs` and commit the result.
 - **A host capability whose result is a *decision* keeps that decision in `core`,
   behind an injected primitive; the host supplies only the syscall.** Git is the
   worked example: `readTaskCommits` in `core` owns the argv, the exit-code chain

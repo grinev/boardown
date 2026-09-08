@@ -133,6 +133,32 @@ reports its own value.
 boardown schema --json   # taskStatuses, plus wipLimitedStatuses when a limit is set
 ```
 
+### Custom task types (beta)
+
+> **Beta.** Types are declared by hand in `.boardown/config.yaml`; the storage
+> format may still change before 1.0.
+
+A board can disable built-in types and add its own:
+
+```yaml
+taskTypes:
+  - key: tech
+    disabled: true
+customTaskTypes:
+  - key: ops
+    icon: server
+    commitPrefix: ops
+```
+
+`task add --type`, `task edit --type` and `task list --type` refuse a type the
+board does not enable with a `USAGE` error naming the enabled list. `task add`
+without `--type` uses `feature`, or the first enabled type when `feature` is
+off. A type already on disk is left alone.
+
+```bash
+boardown schema --json   # taskTypes (key, label, icon, color, commitPrefix) and iconNames
+```
+
 ### Custom fields (beta)
 
 > **Beta.** Only the `string` type exists and fields are declared by hand; the

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { Epic, TaskPriority, TaskStatus, TaskType } from '@boardown/core';
-import { TASK_PRIORITIES, TASK_TYPES, boardStatuses } from '@boardown/core';
+import type { Epic, TaskPriority, TaskStatus } from '@boardown/core';
+import { TASK_PRIORITIES, boardStatuses, enabledTaskTypes } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import styles from './BacklogFilters.module.css';
@@ -12,13 +12,15 @@ import styles from './BacklogFilters.module.css';
 // no-filter sentinel needs a shape a declared key cannot take (they start with a
 // letter), the way the Unknown column's does.
 export const ALL_STATUSES = '*all';
+export const ALL_TYPES = '*all';
 export type StatusFilter = TaskStatus;
-export type TypeFilter = TaskType | 'all';
+export type TypeFilter = string;
 export type EpicFilter = 'all' | 'no-epic' | (string & {});
 export type PriorityFilter = TaskPriority | 'all';
 
 const ALL_OPTION: IconSelectOption = { value: 'all', label: 'All' };
 const ALL_STATUSES_OPTION: IconSelectOption = { value: ALL_STATUSES, label: 'All' };
+const ALL_TYPES_OPTION: IconSelectOption = { value: ALL_TYPES, label: 'All' };
 
 interface BacklogFiltersProps {
   epics: Epic[];
@@ -64,18 +66,18 @@ export function BacklogFilters({
 
   const typeOptions = useMemo<IconSelectOption[]>(
     () => [
-      ALL_OPTION,
-      ...TASK_TYPES.map((t) => {
-        const meta = TASK_TYPE_META[t];
+      ALL_TYPES_OPTION,
+      ...enabledTaskTypes(config).map((t) => {
+        const meta = taskTypeDisplay(config, t.key);
         const Icon = meta.icon;
         return {
-          value: t,
+          value: t.key,
           label: meta.label,
-          icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
+          icon: <Icon size={14} style={meta.style} aria-hidden="true" />,
         };
       }),
     ],
-    [],
+    [config],
   );
 
   const priorityOptions = useMemo<IconSelectOption[]>(
@@ -132,7 +134,7 @@ export function BacklogFilters({
         <IconSelect
           value={typeFilter}
           options={typeOptions}
-          onChange={(v) => onTypeChange(v as TypeFilter)}
+          onChange={onTypeChange}
           ariaLabel="Filter by task type"
           triggerClassName={styles.trigger}
         />

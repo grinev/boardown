@@ -46,6 +46,10 @@ interface IconSelectProps {
   hideChevron?: boolean | undefined;
   hideTriggerIcon?: boolean | undefined;
   autoOpen?: boolean | undefined;
+  // When `value` is not in `options` — a type or status the board no longer
+  // offers — these paint the trigger so the stored value still has its glyph.
+  valueIcon?: ReactNode | undefined;
+  valueLabel?: string | undefined;
   // `returnedFocus` says whether the picker put focus back on its own trigger.
   // A caller that replaces the trigger with something else needs to know, because
   // that focus dies with the swap.
@@ -64,6 +68,8 @@ export function IconSelect({
   hideChevron = false,
   hideTriggerIcon = false,
   autoOpen = false,
+  valueIcon,
+  valueLabel,
   onClose,
 }: IconSelectProps) {
   const [open, setOpen] = useState(autoOpen);
@@ -81,7 +87,8 @@ export function IconSelect({
   const selectedOption = options.find((o) => o.value === value);
   // A value the board no longer offers still has to read on the trigger — showing
   // the raw key is what keeps the file's own word visible instead of a blank.
-  const triggerLabel = selectedOption?.label ?? value;
+  const triggerLabel = selectedOption?.label ?? valueLabel ?? value;
+  const triggerIcon = selectedOption?.icon ?? valueIcon;
   // The listbox is only in the DOM once it has been measured, and that second
   // render is what anything reaching for it has to wait on.
   const listMounted = open && position !== null;
@@ -278,9 +285,9 @@ export function IconSelect({
         onKeyDown={handleTriggerKeyDown}
       >
         <span className={styles.value}>
-          {!hideTriggerIcon && selectedOption?.icon && (
+          {!hideTriggerIcon && triggerIcon && (
             <span className={styles.icon} aria-hidden="true">
-              {selectedOption.icon}
+              {triggerIcon}
             </span>
           )}
           <span className={styles.label}>{triggerLabel}</span>

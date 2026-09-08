@@ -21,10 +21,12 @@ import {
   LINK_TYPES,
   LINK_TYPE_META,
   TASK_PRIORITIES,
-  TASK_TYPES,
   boardStatusKeys,
+  defaultTaskType,
+  enabledTaskTypeKeys,
   initialStatus,
   isDeclaredStatus,
+  isEnabledTaskType,
   type BoardConfig,
   type BoardSnapshot,
   type ChecklistItem,
@@ -105,15 +107,16 @@ export const taskCommand: CommandHandler = (args, ctx) => {
   }
 };
 
-const isTaskType = (value: string): value is TaskType =>
-  (TASK_TYPES as readonly string[]).includes(value);
-
 const isTaskPriority = (value: string): value is TaskPriority =>
   (TASK_PRIORITIES as readonly string[]).includes(value);
 
-function parseTaskType(value: string): TaskType {
-  if (!isTaskType(value)) {
-    throw new CliError('USAGE', `Invalid --type "${value}" (one of ${TASK_TYPES.join(', ')}).`, 2);
+function requireType(config: BoardConfig, value: string): TaskType {
+  if (!isEnabledTaskType(config, value)) {
+    throw new CliError(
+      'USAGE',
+      `Invalid --type "${value}" (one of ${enabledTaskTypeKeys(config).join(', ')}).`,
+      2,
+    );
   }
   return value;
 }
@@ -127,10 +130,6 @@ function parseTaskPriority(value: string): TaskPriority {
     );
   }
   return value;
-}
-
-function requireType(value: string | undefined, fallback: TaskType): TaskType {
-  return value === undefined ? fallback : parseTaskType(value);
 }
 
 function requireLinkType(value: string): LinkType {
@@ -231,7 +230,9 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
 
-  const type = requireType(flagString(args.flags, 'type'), 'feature');
+  const typeFlag = flagString(args.flags, 'type');
+  const type =
+    typeFlag === undefined ? defaultTaskType(snapshot.config) : requireType(snapshot.config, typeFlag);
   const priorityFlag = flagString(args.flags, 'priority');
   const priority = priorityFlag === undefined ? undefined : parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
@@ -411,7 +412,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const description = flagString(args.flags, 'description');
   if (description !== undefined) fields.description = description;
   const typeFlag = flagString(args.flags, 'type');
-  if (typeFlag !== undefined) fields.type = requireType(typeFlag, 'feature');
+  if (typeFlag !== undefined) fields.type = requireType(snapshot.config, typeFlag);
   const priorityFlag = flagString(args.flags, 'priority');
   if (priorityFlag !== undefined) fields.priority = parseTaskPriority(priorityFlag);
   const statusFlag = flagString(args.flags, 'status');
@@ -675,7 +676,6 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const backlogOnly = flagBool(args.flags, 'backlog');
   const textFlag = flagString(args.flags, 'text');
 
-  const type = typeFlag !== undefined ? parseTaskType(typeFlag) : undefined;
   const priority = priorityFlag !== undefined ? parseTaskPriority(priorityFlag) : undefined;
   // An empty --text has always meant "no filter", while the shared rule reads an
   // empty query as matching nothing; screen it out here rather than there.
@@ -685,6 +685,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { snapshot, problems } = await loadBoardOrThrow(root);
 
+  const type = typeFlag !== undefined ? requireType(snapshot.config, typeFlag) : undefined;
   const status =
     statusFlag !== undefined ? requireStatus(snapshot.config, statusFlag) : undefined;
 

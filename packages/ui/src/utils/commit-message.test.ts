@@ -35,4 +35,15 @@ describe('taskCommitMessage', () => {
     expect(taskCommitMessage('BD-7', 'tech', '')).toBe('chore(BD-7): ');
     expect(taskCommitMessage('BD-8', 'tech', '   \n ')).toBe('chore(BD-8): ');
   });
+
+  it('uses a custom type prefix and the raw key when nothing declares the type', () => {
+    const config = {
+      customTaskTypes: [{ key: 'ops', commitPrefix: 'ops' }],
+    };
+    expect(taskCommitMessage('BD-9', 'ops', 'Ship sitemap', config)).toBe('ops(BD-9): Ship sitemap');
+    expect(taskCommitMessage('BD-10', 'mystery', 'Unknown', config)).toBe(
+      'mystery(BD-10): Unknown',
+    );
+  });
 });
+
