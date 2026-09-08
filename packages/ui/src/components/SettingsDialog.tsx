@@ -5,6 +5,7 @@ import { CliHint } from './CliHint';
 import { GitIntegrationField } from './GitIntegrationField';
 import { Modal } from './Modal';
 import { MultipleActiveReleasesField } from './MultipleActiveReleasesField';
+import { StatusOutsideActiveReleaseField } from './StatusOutsideActiveReleaseField';
 import { WipLimitField } from './WipLimitField';
 import styles from './SettingsDialog.module.css';
 
@@ -47,6 +48,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         <WipLimitField className={styles.field} />
         <MultipleActiveReleasesField className={styles.field} />
         <GitIntegrationField className={styles.field} />
+        <StatusOutsideActiveReleaseField className={styles.field} />
         <div className={styles.field}>
           <span className={styles.label}>CLI</span>
           <CliHint />

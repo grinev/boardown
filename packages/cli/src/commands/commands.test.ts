@@ -263,6 +263,51 @@ describe('cli commands (integration)', () => {
         taskCommand(parseArgs(['task', 'edit', 'TS-9', '--title', 'X']), ctx),
       ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
     });
+
+    describe('with statusOutsideActiveRelease', () => {
+      const unlock = async (): Promise<void> => {
+        const path = join(project, '.boardown', 'config.yaml');
+        const current = await readFile(path, 'utf8');
+        await writeFile(path, `${current}statusOutsideActiveRelease: true\n`, 'utf8');
+      };
+
+      it('task status, task edit --status and task add --status succeed outside the current release', async () => {
+        const { future } = await seedLock();
+        await unlock();
+
+        await taskCommand(parseArgs(['task', 'status', 'TS-2', 'in-progress']), ctx);
+        expect((await findTask(ctx, 'TS-2')).frontmatter.status).toBe('in-progress');
+
+        await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--status', 'done']), ctx);
+        expect((await findTask(ctx, 'TS-2')).frontmatter.status).toBe('done');
+
+        await taskCommand(
+          parseArgs(['task', 'add', 'Early', '--release', future, '--status', 'in-progress']),
+          ctx,
+        );
+        expect((await findTask(ctx, 'TS-3')).frontmatter.status).toBe('in-progress');
+      });
+
+      it('a relocation that sets a status succeeds into a future release', async () => {
+        const { future } = await seedLock();
+        await unlock();
+        await taskCommand(
+          parseArgs(['task', 'edit', 'TS-2', '--release', future, '--status', 'done']),
+          ctx,
+        );
+        expect((await findTask(ctx, 'TS-2')).frontmatter.status).toBe('done');
+      });
+
+      it('a finished release still answers ARCHIVED', async () => {
+        const { current } = await seedLock();
+        await taskCommand(parseArgs(['task', 'status', 'TS-1', 'done']), ctx);
+        await releaseCommand(parseArgs(['release', 'done', current]), ctx);
+        await unlock();
+        await expect(
+          taskCommand(parseArgs(['task', 'status', 'TS-1', 'todo']), ctx),
+        ).rejects.toMatchObject({ code: 'ARCHIVED' });
+      });
+    });
   });
 
   it('checklist add → done → undone → edit → rm round-trips', async () => {

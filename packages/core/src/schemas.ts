@@ -374,6 +374,8 @@ export const BoardConfigSchema = z
     // Absent means on. Hides the task dialog's Commits panel when false; the CLI
     // ignores it, since `task commits` is not a display preference.
     gitIntegration: z.boolean().optional(),
+    // Absent means the lock is on: a status may change only in the current release.
+    statusOutsideActiveRelease: z.boolean().optional(),
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),

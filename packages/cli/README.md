@@ -120,8 +120,9 @@ statuses:
 
 Absent keeps the built-in three; present replaces the whole set (2–8 entries,
 unique keys, same key rule as a custom field). The order carries the meaning: the
-**first** status is what `task add` uses without `--status` and the only one
-`task add` may set outside an active release, the **last** is the terminal one that
+**first** status is what `task add` uses without `--status` and — unless
+`statusOutsideActiveRelease` is on — the only one `task add` may set outside an
+active release, the **last** is the terminal one that
 `release done` counts as finished, and each column **between** is capped by the
 board's single `wipLimits` number.
 
@@ -132,7 +133,7 @@ alone: a task written under a list you have since changed still loads and still
 reports its own value.
 
 ```bash
-boardown schema --json   # taskStatuses, plus wipLimitedStatuses when a limit is set
+boardown schema --json   # taskStatuses, statusOutsideActiveRelease, plus wipLimitedStatuses when a limit is set
 ```
 
 ### Custom task types (beta)

@@ -5,5 +5,6 @@ export { useBoardStore } from './store';
 export { WipLimitField } from './components/WipLimitField';
 export { MultipleActiveReleasesField } from './components/MultipleActiveReleasesField';
 export { GitIntegrationField } from './components/GitIntegrationField';
+export { StatusOutsideActiveReleaseField } from './components/StatusOutsideActiveReleaseField';
 // Same reason: the desktop settings panel shows the CLI hint the dialog carries.
 export { CliHint } from './components/CliHint';

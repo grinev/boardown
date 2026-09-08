@@ -179,6 +179,7 @@ interface BoardState {
   setBoardRelease: (slug: string) => Promise<void>;
   setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
   setGitIntegration: (enabled: boolean) => Promise<void>;
+  setStatusOutsideActiveRelease: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -898,6 +899,24 @@ export const useBoardStore = create<BoardState>(
       // Absent means on, so the comparison resolves before it decides.
       if ((snapshot.config.gitIntegration ?? true) === enabled) return;
       const nextConfig = withMinVersionStamp({ ...snapshot.config, gitIntegration: enabled });
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
+    setStatusOutsideActiveRelease: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.statusOutsideActiveRelease ?? false) === enabled) return;
+      const nextConfig = withMinVersionStamp({
+        ...snapshot.config,
+        statusOutsideActiveRelease: enabled,
+      });
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {

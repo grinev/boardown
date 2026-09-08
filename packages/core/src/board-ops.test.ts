@@ -1330,20 +1330,103 @@ describe('process invariants — a status only changes in the current release', 
     expect(result.dest.tasks[0]!.frontmatter.status).toBe('in-progress');
   });
 
-  it('moveTaskInContainer allows a pure reorder in a locked container', () => {
-    const r = withTasks(
-      futureRelease('next'),
-      task('BD-1', 'todo', 100),
-      task('BD-2', 'todo', 200),
-    );
-    const moved = moveTaskInContainer(r, config, 'BD-2', { status: 'todo', beforeTaskId: 'BD-1' });
-    const orderOf = (id: string): number =>
-      moved.tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
-    expect(orderOf('BD-2')).toBeLessThan(orderOf('BD-1'));
-    expect(() =>
-      moveTaskInContainer(r, config, 'BD-1', { status: 'done', beforeTaskId: null }),
-    ).toThrow(/can only be changed in the current release/);
-  });
+    it('moveTaskInContainer allows a pure reorder in a locked container', () => {
+      const r = withTasks(
+        futureRelease('next'),
+        task('BD-1', 'todo', 100),
+        task('BD-2', 'todo', 200),
+      );
+      const moved = moveTaskInContainer(r, config, 'BD-2', { status: 'todo', beforeTaskId: 'BD-1' });
+      const orderOf = (id: string): number =>
+        moved.tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
+      expect(orderOf('BD-2')).toBeLessThan(orderOf('BD-1'));
+      expect(() =>
+        moveTaskInContainer(r, config, 'BD-1', { status: 'done', beforeTaskId: null }),
+      ).toThrow(/can only be changed in the current release/);
+    });
+
+    describe('statusOutsideActiveRelease', () => {
+      const unlocked: BoardConfig = { ...config, statusOutsideActiveRelease: true };
+      const lockedOff: BoardConfig = { ...config, statusOutsideActiveRelease: false };
+
+      it('lets a status change in a future release, an epic and the backlog', () => {
+        const t = task('BD-1', 'todo', 100);
+        for (const container of [withTasks(futureRelease('next'), t), epic(t), backlog(t)]) {
+          const next = changeTaskStatus(container, unlocked, 'BD-1', 'done');
+          expect(next.tasks[0]!.frontmatter.status).toBe('done');
+        }
+      });
+
+      it('lets editTask, createTask and a relocation that sets a status succeed outside the current release', () => {
+        const future = withTasks(futureRelease('next'), task('BD-1', 'todo', 100));
+        expect(editTask(future, unlocked, 'BD-1', { status: 'done' }).tasks[0]!.frontmatter.status).toBe(
+          'done',
+        );
+        const created = createTask(futureRelease('next'), unlocked, {
+          title: 'x',
+          type: 'feature',
+          status: 'in-progress',
+        });
+        expect(created.task.frontmatter.status).toBe('in-progress');
+        expect(created.config.nextId).toBe(11);
+        const moved = moveTaskBetweenContainers(
+          release(task('BD-1', 'todo', 100)),
+          futureRelease('next'),
+          unlocked,
+          'BD-1',
+          { newStatus: 'done', beforeTaskId: null },
+        );
+        expect(moved.dest.tasks[0]!.frontmatter.status).toBe('done');
+        const inPlace = moveTaskInContainer(future, unlocked, 'BD-1', {
+          status: 'in-progress',
+          beforeTaskId: null,
+        });
+        expect(inPlace.tasks[0]!.frontmatter.status).toBe('in-progress');
+      });
+
+      it('still answers ARCHIVED in a finished release', () => {
+        try {
+          changeTaskStatus(finished(task('BD-1', 'todo', 100)), unlocked, 'BD-1', 'done');
+          expect.unreachable();
+        } catch (err) {
+          expect((err as BoardOpError).code).toBe('ARCHIVED');
+        }
+      });
+
+      it('still refuses a move into a full current-release middle column', () => {
+        const limited: BoardConfig = {
+          ...unlocked,
+          wipLimits: { 'in-progress': 1 },
+        };
+        const current = release(task('BD-1', 'in-progress', 100));
+        const source = backlog(task('BD-2', 'in-progress', 100));
+        try {
+          moveTaskBetweenContainers(source, current, limited, 'BD-2', {
+            newStatus: 'in-progress',
+            beforeTaskId: null,
+          });
+          expect.unreachable();
+        } catch (err) {
+          expect((err as BoardOpError).code).toBe('WIP_LIMIT');
+        }
+      });
+
+      it('does not rewrite a status already given when the key is off', () => {
+        const given = changeTaskStatus(backlog(task('BD-1', 'todo', 100)), unlocked, 'BD-1', 'done');
+        expect(given.tasks[0]!.frontmatter.status).toBe('done');
+        expect(() => changeTaskStatus(given, lockedOff, 'BD-1', 'todo')).toThrow(/current release/);
+        expect(given.tasks[0]!.frontmatter.status).toBe('done');
+        const renamed = editTask(given, lockedOff, 'BD-1', { title: 'Kept' });
+        expect(renamed.tasks[0]!.frontmatter.status).toBe('done');
+        expect(renamed.tasks[0]!.title).toBe('Kept');
+      });
+
+      it('treats explicit false like absent', () => {
+        expect(() =>
+          changeTaskStatus(backlog(task('BD-1', 'todo', 100)), lockedOff, 'BD-1', 'done'),
+        ).toThrow(/current release/);
+      });
+    });
 
   describe('WIP limit on the current release In Progress column', () => {
     const limited = (limit: number): BoardConfig => ({

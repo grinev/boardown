@@ -375,10 +375,41 @@ boardown writes its own version into config.yaml. On opening a board: a newer ap
 ---
 id: BD-112
 type: feature
-status: ready
-order: 2100
+status: review
+order: 2900
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 links:
   - type: relates
     to: BD-129
 spec: "[[repo:.claude/specs/BD-112-status-outside-active-release/spec.md]]"
+plan: "[[repo:.claude/specs/BD-112-status-outside-active-release/tech.md]]"
+log: "[[repo:.claude/specs/BD-112-status-outside-active-release/log.md]]"
+session: ses_f7ce97da5ffexKYEuaefbgRIdi
 ---

@@ -75,12 +75,15 @@ const isFinishedRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'finished';
 
 // A task's status only means something while its release is being worked on — the
-// Board shows the current release alone. So a status may only *change* there: a
-// future release, an epic file and the backlog keep whatever status a task
-// arrived with and freeze it. Moving a task around never changes its status, so
-// it is unaffected.
+// Board shows the current release alone. So a status may only *change* there,
+// unless `statusOutsideActiveRelease` lifts the lock. A finished release is
+// ARCHIVED either way. Moving a task around never changes its status, so it is
+// unaffected.
 const isCurrentRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'current';
+
+const isStatusChangeLocked = (container: Container, config: BoardConfig): boolean =>
+  !isCurrentRelease(container) && config.statusOutsideActiveRelease !== true;
 
 const describeContainer = (container: Container): string => {
   // The backlog is the one container without a slug; a release is the one whose
@@ -543,8 +546,8 @@ export const createTask = <C extends Container>(
   refuseDisabledType(config, 'a new task', input.type);
   refuseUndeclaredStatus(config, 'a new task', input.status);
   // A new task has no status to preserve, so outside the current release the only
-  // status it may start with is the board's initial one.
-  if (input.status !== initialStatus(config) && !isCurrentRelease(container)) {
+  // status it may start with is the board's initial one — unless the lock is lifted.
+  if (input.status !== initialStatus(config) && isStatusChangeLocked(container, config)) {
     throw new BoardOpError(
       'STATUS_LOCKED',
       `Cannot create a task with status "${input.status}" in ${describeContainer(container)}. ` +
@@ -607,7 +610,7 @@ export const editTask = <C extends Container>(
   if (patch.status !== undefined && patch.status !== current.frontmatter.status) {
     refuseUndeclaredStatus(config, taskId, patch.status);
   }
-  if (patch.status !== undefined && !isCurrentRelease(container)) {
+  if (patch.status !== undefined && isStatusChangeLocked(container, config)) {
     refuseStatusChange(container, taskId);
   }
   if (patch.status !== undefined) {
@@ -726,7 +729,7 @@ export const changeTaskStatus = <C extends Container>(
   if (newStatus !== previousStatus) {
     refuseUndeclaredStatus(config, taskId, newStatus);
   }
-  if (!isCurrentRelease(container)) {
+  if (isStatusChangeLocked(container, config)) {
     refuseStatusChange(container, taskId);
   }
   refuseIfWipLimitReached(container, config, taskId, newStatus, previousStatus === newStatus);
@@ -771,7 +774,7 @@ export const moveTaskInContainer = <C extends Container>(
   // one the task already has — so only an actual change is refused.
   if (args.status !== currentStatus) {
     refuseUndeclaredStatus(config, taskId, args.status);
-    if (!isCurrentRelease(container)) {
+    if (isStatusChangeLocked(container, config)) {
       refuseStatusChange(container, taskId);
     }
   }
@@ -822,7 +825,7 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   // change it, the destination is what decides — that is where the status lands.
   if (args.newStatus !== task.frontmatter.status) {
     refuseUndeclaredStatus(config, taskId, args.newStatus);
-    if (!isCurrentRelease(dest)) {
+    if (isStatusChangeLocked(dest, config)) {
       refuseStatusChange(dest, taskId);
     }
   }
