@@ -69,7 +69,10 @@ export function TabContent({ activeTab, epics, statuses }: TabContentProps) {
             onSelect={(slug) => void setBoardRelease(slug)}
           />
           {descriptionPreview && (
-            <span className={styles.releaseDescription}>
+            <span
+              className={styles.releaseDescription}
+              title={current.frontmatter.description}
+            >
               {descriptionPreview}
             </span>
           )}

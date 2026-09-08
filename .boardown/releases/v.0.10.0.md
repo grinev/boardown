@@ -156,9 +156,40 @@ Two options to settle on grooming: types declared in config.yaml — the customF
 ---
 id: BD-96
 type: feature
-status: ready
-order: 1200
+status: review
+order: 2400
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 spec: "[[repo:.claude/specs/BD-96-release-description-hover/spec.md]]"
+plan: "[[repo:.claude/specs/BD-96-release-description-hover/tech.md]]"
+log: "[[repo:.claude/specs/BD-96-release-description-hover/log.md]]"
+session: ses_f7de46b55ffe8OXDsT3lX9cw7l
 ---
 
 ## task get accepts several ids
