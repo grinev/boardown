@@ -15,7 +15,7 @@ fork already leans one way, because they arrived through their own work and are 
 between redoing it and keeping it. You have no work to protect, so you can weigh the options as
 options.
 
-The task's `product.md` comes with the fork. Read it as settled ground: it was
+The task's `spec.md` comes with the fork. Read it as settled ground: it was
 written with the user before any work began, and every line in it is his decision.
 You do not reopen those — you settle the fork *inside* them. A fork that can only be answered by
 contradicting one of those lines is a fork for the human, and saying so is your

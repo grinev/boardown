@@ -9,7 +9,7 @@ color: "#14b8a6"
 id: BD-49
 type: tech
 status: todo
-order: 400
+order: 900
 ---
 
 ## Board preview in github pages
@@ -18,5 +18,5 @@ order: 400
 id: BD-68
 type: feature
 status: todo
-order: 700
+order: 1100
 ---

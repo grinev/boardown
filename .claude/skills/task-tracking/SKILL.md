@@ -56,7 +56,7 @@ these instructions always means that whole name, id included.
 and use it, whatever it is called. Inventing a second one orphans the grooming and
 the user ends up with two folders for one task.
 
-## `product.md` is the input, not a draft
+## `spec.md` is the input, not a draft
 
 Read it whole before anything else. Every line in it is a **closed decision**
 taken with the user before the work started: apply it, never rewrite it, never put
@@ -73,14 +73,14 @@ Each artifact gets its field **when it is born**, not in a batch at the end:
 
 | Field | Set it | Value |
 |---|---|---|
-| `spec` | only by a grooming session — `/groom`, or phase 0 of `/feature`; never by an implementing phase | `[[repo:.claude/specs/<slug>/product.md]]` |
+| `spec` | only by a grooming session — `/groom`, or phase 0 of `/feature`; never by an implementing phase | `[[repo:.claude/specs/<slug>/spec.md]]` |
 | `plan` | after the technical plan is written | `[[repo:.claude/specs/<slug>/tech.md]]` |
 | `log` | with the first line, right after the status | `[[repo:.claude/specs/<slug>/log.md]]` |
 | `outcome` | cleared as the run starts; written again only if the run stops short | one of the two keywords below |
 | `session` | never in an interactive run | — |
 
 ```sh
-boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/product.md]]"
+boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/spec.md]]"
 ```
 
 **The value is a path token or a fixed keyword. Never content, never a summary,

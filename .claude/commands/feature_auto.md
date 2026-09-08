@@ -11,7 +11,7 @@ You are the main agent. You write the plan and the code yourself; the subagents 
 architect, expert, reviewer, tester — give you independent judgement, and you
 decide what to do with it. Never delegate the writing of code or of the plan.
 
-`product.md` is the input, not yours to write: it was settled with the user during
+`spec.md` is the input, not yours to write: it was settled with the user during
 grooming and it stands.
 
 This is `/feature` with nobody in the room. Same ladder, same phases, same
@@ -79,7 +79,7 @@ log:
 ## Artifacts
 
 Everything lives in `.claude/specs/<slug>/`, the folder named `<TASK-ID>-<kebab-case
-title>` as `task-tracking` fixes it. `product.md` is the input; `tech.md` is yours;
+title>` as `task-tracking` fixes it. `spec.md` is the input; `tech.md` is yours;
 `log.md` is the running protocol and, in this run, the only channel back to the
 user, so a line missing from it did not happen; `refs/` holds the frames the spec
 cites — a grooming frame shows the product as it is today and marks what must not
@@ -92,7 +92,7 @@ Take the first row that fits:
 
 | The fork | Who settles it |
 |---|---|
-| `product.md` answers it | you, applying the answer |
+| `spec.md` answers it | you, applying the answer |
 | it dies with the task — a label, wording, an icon, a separator, the order of two fields | you, under "Decided by default" |
 | **it outlives the task** — the user will see it (reach, placement, control type, interaction pattern) or the next task will copy it (layer boundaries, the shape of data, the shape of an error, when an abstraction appears) | the **`expert`** |
 | its price, read off the plan and the diff — "this means rewriting three places" | **a stop** — the expert is not told the price and cannot weigh it |
@@ -118,7 +118,7 @@ through the `boardown` CLI as `task-tracking` says.
 One fork, one call, at the end of the phase that raised it.
 
 - **hand it**: the fork, 2–4 real options, which way you lean and what constrains
-  you, `product.md`, and — when the fork turns on how the product is built —
+  you, `spec.md`, and — when the fork turns on how the product is built —
   `PRODUCT.md` and `.boardown/docs/architecture.md`. Price is a fact: "option A is
   three files, B is one";
 - **keep to yourself** everything from your working tree — the plan, the diff, file
@@ -161,7 +161,7 @@ The spec is settled product; this phase does not reopen it. It learns how the co
 stands where that product lands and closes the forks the spec does not reach —
 before a line of the plan is written, the cheapest moment there is.
 
-**Read `product.md` yourself, whole**, plus every frame in `refs/`. It was reviewed
+**Read `spec.md` yourself, whole**, plus every frame in `refs/`. It was reviewed
 cold during grooming and does not get reviewed again here.
 
 **Then send the exploring out, one `Explore` per package the reach line touches,
@@ -193,7 +193,7 @@ Output: `.claude/specs/<slug>/tech.md`, prose only, around a hundred lines.
 
 ## Phase 3 — Architecture review
 
-Invoke the `architect` agent with the paths to `tech.md`, `product.md` **and every
+Invoke the `architect` agent with the paths to `tech.md`, `spec.md` **and every
 file in `refs/`** — the spec's placement decisions come from those frames, and the
 architect checks the plan against them.
 
@@ -230,7 +230,7 @@ touched) is `blocked`, with the failing command in the log.
 
 ## Phase 5 — Code review
 
-Invoke the `code-reviewer` agent, handing it `product.md`, `tech.md`, the `<slug>`
+Invoke the `code-reviewer` agent, handing it `spec.md`, `tech.md`, the `<slug>`
 and — explicitly — **where the change is**: the uncommitted working tree, the
 commits on this branch (`git diff main...HEAD`), or both. It does not guess.
 
@@ -249,7 +249,7 @@ disagree about something the user should settle.
 If the feature touched `packages/ui`, `packages/cli`, `packages/core` or any shell,
 invoke the `manual-tester` agent and hand it exactly three things:
 
-- the path to `product.md` — every line under *Look* and *Behaviour* is observable
+- the path to `spec.md` — every line under *Look* and *Behaviour* is observable
   from outside, so the spec is both the description and what "works" means;
 - the surface it must drive: the UI in a browser, the CLI from source, or both (a
   change in `core` reaches both, and the tester tests only what you point it at);

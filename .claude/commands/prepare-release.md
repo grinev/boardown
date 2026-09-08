@@ -127,9 +127,9 @@ commits and let the board fill in the *why*, not the other way round.
 Do not paraphrase commit subjects either — they are lossy. For each real change,
 pull the accurate description from:
 
-- `.claude/specs/<slug>/product.md` — its *Look* and *Behaviour* lines are
+- `.claude/specs/<slug>/spec.md` — its *Look* and *Behaviour* lines are
   already written in user terms, one observable decision each. This is the best
-  source.
+  source. Folders groomed before the file was renamed carry it as `product.md`.
 - `git log --no-merges v<prev>..HEAD` with `--name-only` to see which package
   each commit touched, which tells you the surface.
 - `boardown release get v<version> --full` — task titles and descriptions for the

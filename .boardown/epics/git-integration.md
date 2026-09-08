@@ -9,7 +9,7 @@ color: "#78716c"
 id: BD-60
 type: feature
 status: todo
-order: 100
+order: 200
 ---
 
 Show task history from git
@@ -20,7 +20,7 @@ Show task history from git
 id: BD-32
 type: feature
 status: todo
-order: 200
+order: 600
 ---
 
 Use git or custom field??

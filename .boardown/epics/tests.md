@@ -9,7 +9,7 @@ color: "#10b981"
 id: BD-111
 type: tech
 status: todo
-order: 100
+order: 300
 links:
   - type: relates
     to: BD-100

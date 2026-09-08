@@ -32,7 +32,7 @@ The plan is prose, not code — judge the design, and never ask for code snippet
 
 - `CLAUDE.md` — the binding architectural rules and the package layout. Read the
   whole thing; the rules that get violated most are listed below.
-- The product spec (`product.md`) — the task's settled product, written with the
+- The product spec (`spec.md`) — the task's settled product, written with the
   user before the work started. One closed decision per line; the lines under
   *Look* and *Behaviour* are written to be observable, and they are what you check
   the plan's coverage against.
