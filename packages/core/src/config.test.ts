@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { parseConfig, serializeConfig } from './config.js';
+import {
+  APP_VERSION,
+  MIN_COMPATIBLE_VERSION,
+  checkMinVersion,
+  configNeedsMinVersionStamp,
+  isVersionAtLeast,
+  parseConfig,
+  serializeConfig,
+  withMinVersionStamp,
+} from './config.js';
 import type { BoardConfig } from './schemas.js';
+
+const stamped = (cfg: BoardConfig): BoardConfig => ({ ...cfg, minVersion: MIN_COMPATIBLE_VERSION });
 
 const VALID = `idPrefix: BD
 nextId: 47
@@ -124,7 +135,7 @@ describe('serializeConfig', () => {
     const out = serializeConfig(cfg);
     const second = parseConfig(out);
     expect(second.problems).toEqual([]);
-    expect(second.value).toEqual(cfg);
+    expect(second.value).toEqual(stamped(cfg));
   });
 
   it('writes keys in canonical order', () => {
@@ -136,6 +147,7 @@ describe('serializeConfig', () => {
     };
     const out = serializeConfig(cfg);
     const idx = (s: string) => out.indexOf(s);
+    expect(idx('minVersion')).toBeLessThan(idx('idPrefix'));
     expect(idx('idPrefix')).toBeLessThan(idx('nextId'));
     expect(idx('nextId')).toBeLessThan(idx('projectName'));
     expect(idx('projectName')).toBeLessThan(idx('theme'));
@@ -161,7 +173,7 @@ describe('serializeConfig', () => {
     expect(out).toContain('projectName');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 
   it('round-trips theme when set', () => {
@@ -175,7 +187,7 @@ describe('serializeConfig', () => {
     expect(out).toContain('theme: dark');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 });
 
@@ -194,7 +206,7 @@ describe('wipLimits', () => {
     expect(out.indexOf('wipLimits:')).toBeLessThan(out.indexOf('customFields:'));
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 
   it('writes no key when there is no limit, and drops an empty map', () => {
@@ -241,7 +253,7 @@ describe('statuses', () => {
     expect(out.indexOf('statuses:')).toBeLessThan(out.indexOf('customFields:'));
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 
   // The promise this feature makes to every board already on disk: a config that
@@ -313,7 +325,7 @@ describe('multiple active releases', () => {
     expect(out.indexOf('multipleActiveReleases:')).toBeLessThan(out.indexOf('customFields:'));
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 
   it('writes neither key when the user set neither', () => {
@@ -373,7 +385,7 @@ describe('git integration', () => {
       expect(out.indexOf('gitIntegration:')).toBeLessThan(out.indexOf('customFields:'));
       const back = parseConfig(out);
       expect(back.problems).toEqual([]);
-      expect(back.value).toEqual(cfg);
+      expect(back.value).toEqual(stamped(cfg));
     }
   });
 
@@ -412,7 +424,7 @@ describe('task types', () => {
     expect(out).toContain('customTaskTypes:');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
   });
 
   it('writes no key when the board declares none', () => {
@@ -444,6 +456,56 @@ describe('serializeConfig customFields', () => {
     expect(out).toContain('customFields');
     const back = parseConfig(out);
     expect(back.problems).toEqual([]);
-    expect(back.value).toEqual(cfg);
+    expect(back.value).toEqual(stamped(cfg));
+  });
+});
+
+describe('minVersion', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('is absent on parse when the file does not name it', () => {
+    expect(parseConfig(VALID).value?.minVersion).toBeUndefined();
+  });
+
+  it('always emits the constant, even when the config object has no key', () => {
+    const out = serializeConfig(base);
+    expect(out).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+    expect(parseConfig(out).value).toEqual(stamped(base));
+  });
+
+  it('treats a recorded value below the constant as behind, and equal as current', () => {
+    expect(configNeedsMinVersionStamp(base)).toBe(true);
+    expect(configNeedsMinVersionStamp(withMinVersionStamp(base))).toBe(false);
+    expect(configNeedsMinVersionStamp({ ...base, minVersion: '0.0.1' })).toBe(true);
+  });
+
+  it('compares major, then minor, then patch, and ignores a suffix', () => {
+    expect(isVersionAtLeast('0.11.0', '0.11.0')).toBe(true);
+    expect(isVersionAtLeast('0.11.1', '0.11.0')).toBe(true);
+    expect(isVersionAtLeast('0.11.0', '0.11.1')).toBe(false);
+    expect(isVersionAtLeast('0.11.0-rc.1', '0.11.0')).toBe(true);
+    expect(isVersionAtLeast('0.10.9', '0.11.0')).toBe(false);
+    expect(isVersionAtLeast('1.0.0', '0.99.99')).toBe(true);
+  });
+
+  it('passes when the key is absent or satisfied, and refuses when it is not', () => {
+    expect(checkMinVersion(VALID).kind).toBe('pass');
+    expect(checkMinVersion(`${VALID}minVersion: 0.0.1\n`).kind).toBe('pass');
+    expect(checkMinVersion(`${VALID}minVersion: 99.0.0\n`)).toEqual({
+      kind: 'too-old',
+      required: '99.0.0',
+      running: APP_VERSION,
+    });
+  });
+
+  it('leaves malformed values and invalid YAML to parseConfig', () => {
+    expect(checkMinVersion(`${VALID}minVersion: 1.2\n`).kind).toBe('pass');
+    expect(checkMinVersion(': : :').kind).toBe('pass');
+    expect(parseConfig(`${VALID}minVersion: 1.2\n`).value).toBeNull();
+  });
+
+  it('peeks an unquoted scalar that YAML keeps as a string', () => {
+    expect(checkMinVersion(`${VALID}minVersion: 0.9.0\n`).kind).toBe('pass');
+    expect(checkMinVersion(`${VALID}minVersion: 99.0.0\n`).kind).toBe('too-old');
   });
 });

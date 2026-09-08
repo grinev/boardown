@@ -1,5 +1,8 @@
 import {
+  APP_VERSION,
   CONFIG_FILENAME,
+  checkMinVersion,
+  configNeedsMinVersionStamp,
   createGuardedFs,
   loadBoard,
   parseConfig,
@@ -7,11 +10,13 @@ import {
   serializeConfig,
   serializeEpic,
   serializeRelease,
+  withMinVersionStamp,
   type Backlog,
   type BoardConfig,
   type BoardSnapshot,
   type Epic,
   type FsAdapter,
+  type GuardedFile,
   type GuardedFs,
   type ParseProblem,
   type Release,
@@ -64,6 +69,10 @@ export async function loadConfigIfAny(
   } catch {
     return null;
   }
+  const gate = checkMinVersion(text);
+  if (gate.kind === 'too-old') {
+    throw versionTooOldError(gate.required, gate.running);
+  }
   const parsed = parseConfig(text);
   if (parsed.value === null) {
     throw new CliError('BOARD_INVALID', 'Board config failed to load.', 1, parsed.problems);
@@ -79,6 +88,9 @@ export async function loadBoardOrThrow(root: string): Promise<LoadedBoard> {
   }
   if (result.kind === 'failed') {
     throw new CliError('BOARD_INVALID', 'Board failed to load.', 1, result.problems);
+  }
+  if (result.kind === 'version-too-old') {
+    throw versionTooOldError(result.required, result.running);
   }
   // Same external-change guard the other shells use: refuse to clobber a file
   // that moved on disk since load. In a CLI there's no Reload modal, so a
@@ -153,17 +165,58 @@ export function serializeContainer(ref: ContainerRef): string {
   }
 }
 
-export async function writeContainer(fs: FsAdapter, ref: ContainerRef): Promise<void> {
-  await fs.write(ref.container.filename, serializeContainer(ref));
+const INSTALL_COMMAND = 'npm i -g @grinev/boardown-cli';
+
+export function versionTooOldError(required: string, running: string = APP_VERSION): CliError {
+  return new CliError(
+    'VERSION_TOO_OLD',
+    `This board requires boardown ${required} (this build is ${running}). Update with ${INSTALL_COMMAND}`,
+    1,
+  );
+}
+
+const stampFiles = (config: BoardConfig, files: GuardedFile[]): GuardedFile[] => {
+  if (!configNeedsMinVersionStamp(config)) return files;
+  const next = withMinVersionStamp(config);
+  if (files.some((file) => file.path === CONFIG_FILENAME)) {
+    return files.map((file) =>
+      file.path === CONFIG_FILENAME ? { path: file.path, content: serializeConfig(next) } : file,
+    );
+  }
+  return [...files, { path: CONFIG_FILENAME, content: serializeConfig(next) }];
+};
+
+export async function writeContainer(
+  fs: GuardedFs,
+  ref: ContainerRef,
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  const files = stampFiles(config, [
+    { path: ref.container.filename, content: serializeContainer(ref) },
+  ]);
+  if (files.length === 1) {
+    const only = files[0]!;
+    await fs.write(only.path, only.content);
+  } else {
+    await fs.writeAll(files);
+  }
+  return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }
 
 // Containers that must land together (a link mirrored into two tasks): the guard
 // checks every target before writing any of them, so an external change aborts the
 // whole operation instead of half-applying it.
-export async function writeContainers(fs: GuardedFs, refs: ContainerRef[]): Promise<void> {
-  await fs.writeAll(
+export async function writeContainers(
+  fs: GuardedFs,
+  refs: ContainerRef[],
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  const files = stampFiles(
+    config,
     refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
   );
+  await fs.writeAll(files);
+  return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }
 
 // A rename, e.g. a release renamed to a new slug.
@@ -171,10 +224,40 @@ export async function moveContainer(
   fs: GuardedFs,
   ref: ContainerRef,
   fromFilename: string,
-): Promise<void> {
-  await fs.moveFile(fromFilename, ref.container.filename, serializeContainer(ref));
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  const content = serializeContainer(ref);
+  if (!configNeedsMinVersionStamp(config)) {
+    await fs.moveFile(fromFilename, ref.container.filename, content);
+    return config;
+  }
+  const next = withMinVersionStamp(config);
+  const previousText = await fs.read(CONFIG_FILENAME);
+  await fs.write(CONFIG_FILENAME, serializeConfig(next));
+  try {
+    await fs.moveFile(fromFilename, ref.container.filename, content);
+  } catch (err) {
+    await fs.write(CONFIG_FILENAME, previousText);
+    throw err;
+  }
+  return next;
 }
 
-export async function writeConfig(fs: FsAdapter, config: BoardConfig): Promise<void> {
-  await fs.write(CONFIG_FILENAME, serializeConfig(config));
+export async function writeConfig(fs: FsAdapter, config: BoardConfig): Promise<BoardConfig> {
+  const next = withMinVersionStamp(config);
+  await fs.write(CONFIG_FILENAME, serializeConfig(next));
+  return next;
+}
+
+export async function writeContainerAndConfig(
+  fs: GuardedFs,
+  ref: ContainerRef,
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  const next = withMinVersionStamp(config);
+  await fs.writeAll([
+    { path: ref.container.filename, content: serializeContainer(ref) },
+    { path: CONFIG_FILENAME, content: serializeConfig(next) },
+  ]);
+  return next;
 }

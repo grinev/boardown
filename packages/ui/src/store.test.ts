@@ -12,7 +12,14 @@ import type {
   Task,
 } from '@boardown/core';
 import type { ParseProblem } from '@boardown/core';
-import { BACKLOG_PATH, CONFIG_FILENAME, createGuardedFs, emptyDocsTree } from '@boardown/core';
+import {
+  APP_VERSION,
+  BACKLOG_PATH,
+  CONFIG_FILENAME,
+  MIN_COMPATIBLE_VERSION,
+  createGuardedFs,
+  emptyDocsTree,
+} from '@boardown/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useBoardStore } from './store';
 
@@ -22,11 +29,13 @@ class MemFs implements GuardedFs {
   files = new Map<string, { content: string; lastModified: number }>();
   dirs = new Set<string>();
   writes: string[] = [];
+  writeAllCalls: string[][] = [];
   removes: string[] = [];
   // When set, any write whose path includes this substring throws.
   failWritesMatching: string | null = null;
 
   async writeAll(files: readonly GuardedFile[]): Promise<void> {
+    this.writeAllCalls.push(files.map((file) => file.path));
     for (const file of files) await this.write(file.path, file.content);
   }
 
@@ -1736,5 +1745,82 @@ describe('a file the parser could not fully read', () => {
 
     expect(fs.writes).toEqual(['releases/1.0.md']);
     expect(state().unwritableFile).toBeNull();
+  });
+});
+
+describe('minVersion', () => {
+  it('refuses a board whose minVersion is above this build', async () => {
+    const fs = new MemFs();
+    await fs.write(
+      CONFIG_FILENAME,
+      `idPrefix: BD\nnextId: 1\nprojectName: P\nminVersion: 99.0.0\n`,
+    );
+    fs.writes = [];
+    await state().load(fs);
+    expect(state().status).toBe('error');
+    expect(state().snapshot).toBeNull();
+    expect(state().errorMessage).toContain('99.0.0');
+    expect(state().errorMessage).toContain(APP_VERSION);
+    expect(state().errorMessage).toMatch(/update boardown/i);
+    expect(fs.writes).toEqual([]);
+  });
+
+  it('stamps minVersion on a config write of a board that had none', async () => {
+    const fs = await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    await state().setTheme('dark');
+    expect(current().config.minVersion).toBe(MIN_COMPATIBLE_VERSION);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain(
+      `minVersion: ${MIN_COMPATIBLE_VERSION}`,
+    );
+  });
+
+  it('pairs a board write with config while the recorded value is behind', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+    fs.writes = [];
+    await state().updateTask('BD-1', { title: 'Renamed' });
+    expect(fs.writes.sort()).toEqual([CONFIG_FILENAME, 'releases/1.0.md'].sort());
+    expect(current().config.minVersion).toBe(MIN_COMPATIBLE_VERSION);
+    fs.writes = [];
+    await state().updateTask('BD-1', { title: 'Again' });
+    expect(fs.writes).toEqual(['releases/1.0.md']);
+  });
+
+  it('replaces a loaded board when a silent reload finds it too new', async () => {
+    const fs = await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    expect(state().status).toBe('ready');
+    fs.files.set(CONFIG_FILENAME, {
+      content: `${CONFIG_MD}minVersion: 99.0.0\n`,
+      lastModified: Date.now() + 1,
+    });
+    await state().reloadSilent();
+    expect(state().status).toBe('error');
+    expect(state().snapshot).toBeNull();
+    expect(state().errorMessage).toContain('99.0.0');
+  });
+
+  it('creates a task in one writeAll of the container and config', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'New',
+      type: 'feature',
+    });
+    expect(fs.writeAllCalls).toEqual([['releases/1.0.md', CONFIG_FILENAME]]);
+  });
+
+  it('does not rename a release when the stamp write fails', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await expect(state().updateRelease('releases/1.0.md', { name: '1.1' })).rejects.toThrow();
+    expect(fs.files.has('releases/1.0.md')).toBe(true);
+    expect([...fs.files.keys()].some((path) => path.startsWith('releases/1') && path !== 'releases/1.0.md')).toBe(
+      false,
+    );
   });
 });

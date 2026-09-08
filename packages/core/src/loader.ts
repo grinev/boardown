@@ -1,5 +1,11 @@
 import { BACKLOG_BASENAME, BACKLOG_PATH, DOCS_DIR, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
-import { CONFIG_FILENAME, parseConfig, serializeConfig } from './config.js';
+import {
+  CONFIG_FILENAME,
+  checkMinVersion,
+  parseConfig,
+  serializeConfig,
+  withMinVersionStamp,
+} from './config.js';
 import { type DocFolder, sortDocsTree } from './docs.js';
 import type { FsAdapter, FsEntry } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
@@ -24,7 +30,8 @@ export type LoadBoardResult =
       fileVersions: Record<string, number>;
     }
   | { kind: 'missing-config' }
-  | { kind: 'failed'; problems: ParseProblem[] };
+  | { kind: 'failed'; problems: ParseProblem[] }
+  | { kind: 'version-too-old'; required: string; running: string };
 
 const safeList = async (fs: FsAdapter, dir: string): Promise<FsEntry[]> => {
   try {
@@ -70,6 +77,11 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
       kind: 'failed',
       problems: [fileProblem(CONFIG_FILENAME, `Cannot read config: ${message}`)],
     };
+  }
+
+  const gate = checkMinVersion(configText);
+  if (gate.kind === 'too-old') {
+    return { kind: 'version-too-old', required: gate.required, running: gate.running };
   }
 
   const configResult = parseConfig(configText);
@@ -171,11 +183,13 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
 
   const verified = verifyNextId(config, collectTasks(releases, epics, backlog));
   if (verified.bumped) {
-    config = verified.config;
+    const next = withMinVersionStamp(verified.config);
     try {
-      await fs.write(CONFIG_FILENAME, serializeConfig(config));
+      await fs.write(CONFIG_FILENAME, serializeConfig(next));
+      config = next;
       await recordVersion(CONFIG_FILENAME);
     } catch (err) {
+      config = verified.config;
       const message = err instanceof Error ? err.message : String(err);
       problems.push(
         fileProblem(

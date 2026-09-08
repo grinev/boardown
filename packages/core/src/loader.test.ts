@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
+import { MIN_COMPATIBLE_VERSION } from './config.js';
 import { loadBoard } from './loader.js';
 
 class InMemoryFs implements FsAdapter {
@@ -169,8 +170,27 @@ projectName: Project
     expect(result.kind).toBe('loaded');
     if (result.kind !== 'loaded') throw new Error('expected loaded');
     expect(result.snapshot.config.nextId).toBe(43);
+    expect(result.snapshot.config.minVersion).toBe(MIN_COMPATIBLE_VERSION);
     const persisted = await fs.read('config.yaml');
     expect(persisted).toContain('nextId: 43');
+    expect(persisted).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+  });
+
+  it('does not mark the snapshot current when the nextId write fails', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    const releaseWithHigherId = RELEASE_OK.replace('id: BD-1', 'id: BD-42');
+    await fs.write('releases/1.10.md', releaseWithHigherId);
+    const origWrite = fs.write.bind(fs);
+    fs.write = async (path, content) => {
+      if (path === 'config.yaml') throw new Error('EACCES');
+      return origWrite(path, content);
+    };
+    const result = await loadBoard(fs);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.config.nextId).toBe(43);
+    expect(result.snapshot.config.minVersion).toBeUndefined();
   });
 
   it('does not rewrite the config when nextId is already ahead', async () => {
@@ -300,6 +320,27 @@ body
     expect(result.problems.some((p) => p.file === 'docs/bad.md')).toBe(true);
     // Unreadable, but its name is still taken — a new page must not clobber it.
     expect(result.snapshot.docs.otherEntries).toEqual(['bad.md']);
+  });
+
+  it('returns version-too-old and writes nothing when minVersion is above this build', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', `${CONFIG}minVersion: 99.0.0\n`);
+    await fs.write('releases/1.10.md', RELEASE_OK);
+    const result = await loadBoard(fs);
+    expect(result.kind).toBe('version-too-old');
+    if (result.kind !== 'version-too-old') throw new Error('expected version-too-old');
+    expect(result.required).toBe('99.0.0');
+    expect(fs.files.get('config.yaml')).toBe(`${CONFIG}minVersion: 99.0.0\n`);
+    expect([...fs.files.keys()]).toEqual(['config.yaml', 'releases/1.10.md']);
+  });
+
+  it('loads a board whose minVersion this build meets', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', `${CONFIG}minVersion: 0.0.1\n`);
+    const result = await loadBoard(fs);
+    expect(result.kind).toBe('loaded');
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.config.minVersion).toBe('0.0.1');
   });
 
   it('lists an empty folder the user created', async () => {

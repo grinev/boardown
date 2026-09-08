@@ -71,4 +71,16 @@ describe('describeEntry', () => {
       reason: 'config.yaml is invalid',
     });
   });
+
+  it('reports a board that needs a newer boardown', async () => {
+    const folder = await tempProject();
+    await writeConfig(
+      folder,
+      'idPrefix: SH\nnextId: 1\nprojectName: Shop\nminVersion: 99.0.0\n',
+    );
+    expect(await describeEntry(entryFor(folder))).toMatchObject({
+      name: null,
+      reason: 'needs a newer boardown',
+    });
+  });
 });

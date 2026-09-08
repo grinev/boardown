@@ -73,7 +73,7 @@ describe('custom task types (cli)', () => {
       taskTypes: { key: string; icon: string; color: string; commitPrefix: string }[];
       iconNames: string[];
     };
-    expect(data.version).toBe(15);
+    expect(data.version).toBe(16);
     expect(data.taskTypes.map((t) => t.key)).toEqual(['bug', 'feature', 'docs', 'ops']);
     expect(data.taskTypes.find((t) => t.key === 'ops')).toMatchObject({
       icon: 'server',

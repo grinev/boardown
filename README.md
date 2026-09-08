@@ -619,10 +619,13 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    pnpm release:rc                # cut a 0.3.0-rc.1 prerelease
    ```
 
-   This updates the root version and mirrors it into every package. For a
-   **stable** version it also seeds `docs/release-notes/vX.Y.Z.md` with a draft
-   (the same notes the workflow would auto-generate). It does **not** commit and
-   does **not** tag.
+    This updates the root version and mirrors it into every package, including
+    `minCompatibleVersion`. If the on-disk format files
+    (`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts`, `loader.ts`)
+    changed since the previous release tag, it moves `minCompatibleVersion` to
+    the version being released. For a **stable** version it also seeds
+    `docs/release-notes/vX.Y.Z.md` with a draft (the same notes the workflow
+    would auto-generate). It does **not** commit and does **not** tag.
 
 2. Curate the release docs, then commit them together:
 

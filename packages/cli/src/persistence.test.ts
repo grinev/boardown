@@ -1,6 +1,8 @@
 import {
+  MIN_COMPATIBLE_VERSION,
   createGuardedFs,
   emptyBacklog,
+  type BoardConfig,
   type FileStat,
   type FsAdapter,
   type FsEntry,
@@ -49,6 +51,13 @@ const guard = (inner: FsAdapter, problems: ParseProblem[]): GuardedFs =>
 
 const backlogRef = (): ContainerRef => ({ kind: 'backlog', container: emptyBacklog() });
 
+const currentConfig = (): BoardConfig => ({
+  idPrefix: 'BD',
+  nextId: 1,
+  projectName: 'P',
+  minVersion: MIN_COMPATIBLE_VERSION,
+});
+
 const errorOn = (file: string): ParseProblem => ({
   level: 'error',
   scope: 'task',
@@ -61,14 +70,14 @@ describe('writeContainer', () => {
   it('writes normally when there are no problems for the file', async () => {
     const inner = new InMemoryFs();
     const ref = backlogRef();
-    await writeContainer(guard(inner, []), ref);
+    await writeContainer(guard(inner, []), ref, currentConfig());
     expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
   it('writes normally when problems exist for a different file', async () => {
     const inner = new InMemoryFs();
     const ref = backlogRef();
-    await writeContainer(guard(inner, [errorOn('releases/other.md')]), ref);
+    await writeContainer(guard(inner, [errorOn('releases/other.md')]), ref, currentConfig());
     expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
@@ -77,7 +86,7 @@ describe('writeContainer', () => {
     const ref = backlogRef();
     const fs = guard(inner, [errorOn(ref.container.filename)]);
 
-    await expect(writeContainer(fs, ref)).rejects.toMatchObject({
+    await expect(writeContainer(fs, ref, currentConfig())).rejects.toMatchObject({
       code: 'UNREADABLE_FRONTMATTER',
     });
     expect(inner.files.has(ref.container.filename)).toBe(false);
@@ -89,7 +98,7 @@ describe('writeContainer', () => {
     const problems: ParseProblem[] = [
       { level: 'warning', scope: 'file', file: ref.container.filename, message: 'heads up' },
     ];
-    await writeContainer(guard(inner, problems), ref);
+    await writeContainer(guard(inner, problems), ref, currentConfig());
     expect(inner.files.has(ref.container.filename)).toBe(true);
   });
 
@@ -99,7 +108,7 @@ describe('writeContainer', () => {
     const problem = errorOn(ref.container.filename);
 
     try {
-      await writeContainer(guard(inner, [problem]), ref);
+      await writeContainer(guard(inner, [problem]), ref, currentConfig());
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(CliError);
@@ -118,7 +127,7 @@ describe('writeContainers', () => {
     };
     const fs = guard(inner, [errorOn(broken.container.filename)]);
 
-    await expect(writeContainers(fs, [ok, broken])).rejects.toMatchObject({
+    await expect(writeContainers(fs, [ok, broken], currentConfig())).rejects.toMatchObject({
       code: 'UNREADABLE_FRONTMATTER',
     });
     expect(inner.files.size).toBe(0);

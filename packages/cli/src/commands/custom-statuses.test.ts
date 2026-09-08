@@ -94,7 +94,7 @@ describe('custom statuses (cli)', () => {
     );
     const out = await schemaCommand(parseArgs(['schema']), ctx);
     expect(out.data).toMatchObject({
-      version: 15,
+      version: 16,
       taskStatuses: [{ key: 'backlog', label: 'Not started' }, { key: 'dev' }, { key: 'shipped' }],
       wipLimits: { 'in-progress': 2 },
       wipLimitedStatuses: ['dev'],

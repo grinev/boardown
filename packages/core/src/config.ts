@@ -1,8 +1,76 @@
 import yaml from 'js-yaml';
+import packageJson from '../package.json' with { type: 'json' };
 import { fileProblem, type ParseResult } from './problems.js';
-import { type BoardConfig, BoardConfigSchema } from './schemas.js';
+import { type BoardConfig, BoardConfigSchema, MIN_VERSION_REGEX } from './schemas.js';
 
 export const CONFIG_FILENAME = 'config.yaml';
+
+export const APP_VERSION: string = packageJson.version;
+export const MIN_COMPATIBLE_VERSION: string = packageJson.minCompatibleVersion;
+
+export type MinVersionGate =
+  | { kind: 'pass' }
+  | { kind: 'too-old'; required: string; running: string };
+
+const versionParts = (value: string): [number, number, number] | null => {
+  const match = MIN_VERSION_REGEX.exec(value);
+  if (!match) return null;
+  const [major, minor, patch] = match[0].split('.').map(Number);
+  if (major === undefined || minor === undefined || patch === undefined) return null;
+  if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) return null;
+  return [major, minor, patch];
+};
+
+export const isVersionAtLeast = (running: string, required: string): boolean => {
+  const left = versionParts(running);
+  const right = versionParts(required);
+  if (left === null || right === null) return false;
+  for (let i = 0; i < 3; i++) {
+    const a = left[i]!;
+    const b = right[i]!;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return true;
+};
+
+const coerceMinVersion = (value: unknown): string | null => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
+};
+
+export const checkMinVersion = (
+  yamlText: string,
+  runningVersion: string = APP_VERSION,
+): MinVersionGate => {
+  let raw: unknown;
+  try {
+    raw = yaml.load(yamlText);
+  } catch {
+    return { kind: 'pass' };
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { kind: 'pass' };
+  }
+  const value = (raw as Record<string, unknown>)['minVersion'];
+  if (value === undefined) return { kind: 'pass' };
+  const text = coerceMinVersion(value);
+  if (text === null || versionParts(text) === null) return { kind: 'pass' };
+  if (isVersionAtLeast(runningVersion, text)) return { kind: 'pass' };
+  return { kind: 'too-old', required: text, running: runningVersion };
+};
+
+export const configNeedsMinVersionStamp = (config: BoardConfig): boolean => {
+  const recorded = config.minVersion;
+  if (recorded === undefined) return true;
+  return !isVersionAtLeast(recorded, MIN_COMPATIBLE_VERSION);
+};
+
+export const withMinVersionStamp = (config: BoardConfig): BoardConfig => ({
+  ...config,
+  minVersion: MIN_COMPATIBLE_VERSION,
+});
 
 export const parseConfig = (text: string, filename = CONFIG_FILENAME): ParseResult<BoardConfig> => {
   let raw: unknown;
@@ -32,6 +100,7 @@ export const parseConfig = (text: string, filename = CONFIG_FILENAME): ParseResu
 
 export const serializeConfig = (config: BoardConfig): string => {
   const ordered: Record<string, unknown> = {
+    minVersion: MIN_COMPATIBLE_VERSION,
     idPrefix: config.idPrefix,
     nextId: config.nextId,
     projectName: config.projectName,

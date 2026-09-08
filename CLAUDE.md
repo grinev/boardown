@@ -281,8 +281,11 @@ invariants (release lifecycle, a finished release's content frozen) live in
 - Versioning is **lockstep**: every `package.json` carries the same version,
   with the **root `package.json` as the single source of truth**. Never bump a
   package version by hand — use `pnpm release:prepare` (which mirrors the root
-  version into all packages via `scripts/sync-versions.mjs`, and for a stable
-  version seeds a draft `docs/release-notes/v<version>.md`). It does **not**
+  `version` and `minCompatibleVersion` into all packages via
+  `scripts/sync-versions.mjs`, moves `minCompatibleVersion` to the version being
+  released when `packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts` or
+  `loader.ts` changed since the previous release tag, and for a stable version
+  seeds a draft `docs/release-notes/v<version>.md`). It does **not**
   commit: curate the notes and the VS Code Marketplace docs, then land the bump
   and those docs in a single `chore(release): v<version>` commit. The workflow
   publishes the notes file verbatim when present, else generates from the commit
