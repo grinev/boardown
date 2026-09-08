@@ -37,7 +37,7 @@ Tasks:
   task status <id> <s>   Change a task status (one of the board's statuses).
   task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
   task rm <id>           Delete a task.
-  task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
+  task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
   task notes <op>        Note: add | edit | rm (on <id>).
   task link <op>         Link to another task: add | rm (<id> <other-id> [--type T]) | ls <id>.
   task commits <id>      Local commits whose subject mentions the task.

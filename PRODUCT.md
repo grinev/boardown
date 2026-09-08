@@ -1187,7 +1187,10 @@ task. `priority` in a summary is always populated: a task with no key on disk
 reports the default, so a caller never has to know about the unset case.
 A single `--full` flag takes any listing command one level deeper. Mutating
 commands do not echo the entity back: they acknowledge with the identifier of
-what changed. **Priority** rides on the commands that already exist: `task add`
+what changed. `task checklist add` takes one or more texts and `done` /
+`undone` / `rm` take one or more item ids, acknowledging `{ id, items }` in the
+order given; `edit` stays one item and `{ id, item }`. `task add` takes a
+repeatable `--checklist` so a task and its items land in one call. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
 resolved value, so `--priority medium` also returns tasks with no key), and
 `schema` reports the vocabulary and the default so an agent reads them instead of

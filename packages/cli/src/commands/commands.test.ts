@@ -268,13 +268,13 @@ describe('cli commands (integration)', () => {
     await taskCommand(parseArgs(['task', 'add', 'Has checklist']), ctx);
 
     const add = await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'First item']), ctx);
-    expect(add.data).toEqual({ id: 'TS-1', item: 'c1' });
+    expect(add.data).toEqual({ id: 'TS-1', items: ['c1'] });
     expect((await findTask(ctx, 'TS-1')).frontmatter.checklist).toHaveLength(1);
 
     await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'Second item']), ctx);
 
     const checkedDone = await taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1']), ctx);
-    expect(checkedDone.data).toEqual({ id: 'TS-1', item: 'c1' });
+    expect(checkedDone.data).toEqual({ id: 'TS-1', items: ['c1'] });
     expect(
       (await findTask(ctx, 'TS-1')).frontmatter.checklist?.find((i) => i.id === 'c1')?.done,
     ).toBe(true);
@@ -287,7 +287,7 @@ describe('cli commands (integration)', () => {
 
     await taskCommand(parseArgs(['task', 'checklist', 'edit', 'TS-1', 'c1', 'Renamed item']), ctx);
     const removed = await taskCommand(parseArgs(['task', 'checklist', 'rm', 'TS-1', 'c2']), ctx);
-    expect(removed.data).toEqual({ id: 'TS-1', item: 'c2' });
+    expect(removed.data).toEqual({ id: 'TS-1', items: ['c2'] });
     const afterRm = await findTask(ctx, 'TS-1');
     expect(afterRm.frontmatter.checklist).toHaveLength(1);
     expect(afterRm.frontmatter.checklist?.[0]?.id).toBe('c1');
@@ -323,6 +323,201 @@ describe('cli commands (integration)', () => {
     await expect(
       taskCommand(parseArgs(['task', 'notes', 'rm', 'TS-1', 'n9']), ctx),
     ).rejects.toMatchObject({ code: 'ITEM_NOT_FOUND' });
+  });
+
+  describe('batch checklist', () => {
+    const backlogFile = (): string => join(project, '.boardown', 'epics', 'no_epic.md');
+
+    it('adds several texts in one call, including a duplicate', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      const out = await taskCommand(
+        parseArgs(['task', 'checklist', 'add', 'TS-1', 'one', 'two', 'one']),
+        ctx,
+      );
+      expect(out.data).toEqual({ id: 'TS-1', items: ['c1', 'c2', 'c3'] });
+      expect(out.human).toBe('Added 3 checklist items to TS-1 (c1, c2, c3).');
+      expect((await findTask(ctx, 'TS-1')).frontmatter.checklist).toEqual([
+        { id: 'c1', text: 'one', done: false },
+        { id: 'c2', text: 'two', done: false },
+        { id: 'c3', text: 'one', done: false },
+      ]);
+    });
+
+    it('marks several ids done, applying a duplicate once', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'a', 'b', 'c']), ctx);
+      const out = await taskCommand(
+        parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1', 'c3', 'c1']),
+        ctx,
+      );
+      expect(out.data).toEqual({ id: 'TS-1', items: ['c1', 'c3'] });
+      expect(out.human).toBe('c1, c3 on TS-1 → done.');
+      const items = (await findTask(ctx, 'TS-1')).frontmatter.checklist;
+      expect(items?.find((i) => i.id === 'c1')?.done).toBe(true);
+      expect(items?.find((i) => i.id === 'c2')?.done).toBe(false);
+      expect(items?.find((i) => i.id === 'c3')?.done).toBe(true);
+    });
+
+    it('undone and rm take several ids', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'a', 'b', 'c']), ctx);
+      await taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1', 'c2', 'c3']), ctx);
+      const undone = await taskCommand(
+        parseArgs(['task', 'checklist', 'undone', 'TS-1', 'c1', 'c2']),
+        ctx,
+      );
+      expect(undone.data).toEqual({ id: 'TS-1', items: ['c1', 'c2'] });
+      expect(undone.human).toBe('c1, c2 on TS-1 → not done.');
+      const removed = await taskCommand(
+        parseArgs(['task', 'checklist', 'rm', 'TS-1', 'c2', 'c3']),
+        ctx,
+      );
+      expect(removed.data).toEqual({ id: 'TS-1', items: ['c2', 'c3'] });
+      expect(removed.human).toBe('Removed 2 checklist items from TS-1 (c2, c3).');
+      expect((await findTask(ctx, 'TS-1')).frontmatter.checklist).toEqual([
+        { id: 'c1', text: 'a', done: false },
+      ]);
+    });
+
+    it('fails fast on the first unknown id and writes nothing', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'a', 'b']), ctx);
+      const before = await readFile(backlogFile(), 'utf8');
+      await expect(
+        taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1', 'c9', 'c2']), ctx),
+      ).rejects.toMatchObject({
+        code: 'ITEM_NOT_FOUND',
+        message: 'No checklist item "c9" on TS-1.',
+      });
+      expect(await readFile(backlogFile(), 'utf8')).toBe(before);
+    });
+
+    it('empty or missing texts and ids are USAGE', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      await expect(
+        taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'ok', '  ']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'checklist', 'rm', 'TS-1', '']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+    });
+
+    it('a one-item call keeps singular TTY and writes the same markdown as before batching', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(
+        parseArgs(['task', 'add', 'Write me', '--description', 'body']),
+        ctx,
+      );
+      const file = backlogFile();
+      const added = await taskCommand(
+        parseArgs(['task', 'checklist', 'add', 'TS-1', 'step one']),
+        ctx,
+      );
+      expect(added.data).toEqual({ id: 'TS-1', items: ['c1'] });
+      expect(added.human).toBe('Added checklist item c1 to TS-1.');
+      const afterAdd = [
+        '---',
+        '{}',
+        '---',
+        '',
+        '## Write me',
+        '',
+        '---',
+        'id: TS-1',
+        'type: feature',
+        'status: todo',
+        'order: 100',
+        'checklist:',
+        '  - id: c1',
+        '    text: step one',
+        '    done: false',
+        '---',
+        '',
+        'body',
+        '',
+      ].join('\n');
+      expect(await readFile(file, 'utf8')).toBe(afterAdd);
+
+      const done = await taskCommand(parseArgs(['task', 'checklist', 'done', 'TS-1', 'c1']), ctx);
+      expect(done.human).toBe('c1 on TS-1 → done.');
+      expect(await readFile(file, 'utf8')).toBe(afterAdd.replace('done: false', 'done: true'));
+
+      const undone = await taskCommand(
+        parseArgs(['task', 'checklist', 'undone', 'TS-1', 'c1']),
+        ctx,
+      );
+      expect(undone.human).toBe('c1 on TS-1 → not done.');
+      expect(await readFile(file, 'utf8')).toBe(afterAdd);
+
+      const removed = await taskCommand(parseArgs(['task', 'checklist', 'rm', 'TS-1', 'c1']), ctx);
+      expect(removed.human).toBe('Removed checklist item c1 from TS-1.');
+      expect(await readFile(file, 'utf8')).toBe(
+        [
+          '---',
+          '{}',
+          '---',
+          '',
+          '## Write me',
+          '',
+          '---',
+          'id: TS-1',
+          'type: feature',
+          'status: todo',
+          'order: 100',
+          '---',
+          '',
+          'body',
+          '',
+        ].join('\n'),
+      );
+    });
+
+    it('task add --checklist creates the items in flag order', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      const out = await taskCommand(
+        parseArgs(['task', 'add', 'T', '--checklist', 'one', '--checklist', 'two']),
+        ctx,
+      );
+      expect(out.data).toEqual({ id: 'TS-1' });
+      expect((await findTask(ctx, 'TS-1')).frontmatter.checklist).toEqual([
+        { id: 'c1', text: 'one', done: false },
+        { id: 'c2', text: 'two', done: false },
+      ]);
+    });
+
+    it('task add without --checklist writes no checklist key', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await taskCommand(parseArgs(['task', 'add', 'T']), ctx);
+      expect('checklist' in (await findTask(ctx, 'TS-1')).frontmatter).toBe(false);
+    });
+
+    it('an empty --checklist value is USAGE and creates nothing', async () => {
+      await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'T', '--checklist=']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'T', '--checklist']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'T', '--checklist', 'first', '--checklist']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'T', '--checklist', '--checklist', 'second']), ctx),
+      ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      await expect(allTasks(ctx)).resolves.toEqual([]);
+    });
   });
 
   it('task get human output lists checklist and notes with ids', async () => {

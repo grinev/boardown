@@ -117,6 +117,41 @@ describe('createTask', () => {
     });
     expect(result.task.frontmatter.order).toBe(100);
   });
+
+  it('writes a checklist the input carries', () => {
+    const result = createTask(release(), config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+      checklist: [
+        { id: 'c1', text: 'First', done: false },
+        { id: 'c2', text: 'Second', done: false },
+      ],
+    });
+    expect(result.task.frontmatter.checklist).toEqual([
+      { id: 'c1', text: 'First', done: false },
+      { id: 'c2', text: 'Second', done: false },
+    ]);
+  });
+
+  it('writes no checklist key when the input carries none', () => {
+    const result = createTask(release(), config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+    });
+    expect('checklist' in result.task.frontmatter).toBe(false);
+  });
+
+  it('writes no checklist key when the input carries an empty list', () => {
+    const result = createTask(release(), config, {
+      title: 'New',
+      type: 'feature',
+      status: 'todo',
+      checklist: [],
+    });
+    expect('checklist' in result.task.frontmatter).toBe(false);
+  });
 });
 
 describe('editTask', () => {

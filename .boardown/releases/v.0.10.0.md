@@ -8,13 +8,44 @@ name: v.0.10.0
 ---
 id: BD-92
 type: feature
-status: ready
+status: review
 epic: cli
-order: 1000
+order: 2300
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 links:
   - type: relates
     to: BD-108
 spec: "[[repo:.claude/specs/BD-92-cli-batch-checklist/spec.md]]"
+plan: "[[repo:.claude/specs/BD-92-cli-batch-checklist/tech.md]]"
+log: "[[repo:.claude/specs/BD-92-cli-batch-checklist/log.md]]"
+session: ses_f7e114347ffeQGGkmwablwsEZB
 ---
 
 task checklist add|done|undone|rm take one item per call, so filling a six-item acceptance list is six invocations and six rewrites of the release file. Agents work in batches: accept several texts in one add, and several item ids in one done/undone/rm.

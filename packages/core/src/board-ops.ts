@@ -497,6 +497,7 @@ export interface NewTaskInput {
   description?: string;
   epic?: string;
   custom?: Record<string, string>;
+  checklist?: ChecklistItem[];
 }
 
 // Rebuilds the bag in the config's declaration order, so the on-disk key order
@@ -538,6 +539,8 @@ export const createTask = <C extends Container>(
   const { id, config: nextConfig } = nextTaskId(config);
   const order = lastOrderInContainer(container.tasks) + ORDER_STEP;
   const custom = applyCustomValues(undefined, input.custom, config.customFields ?? []);
+  const checklist =
+    input.checklist !== undefined && input.checklist.length > 0 ? input.checklist : undefined;
   const task: Task = {
     title: input.title,
     description: input.description ?? '',
@@ -549,6 +552,7 @@ export const createTask = <C extends Container>(
       ...(input.epic !== undefined ? { epic: input.epic } : {}),
       order,
       ...(custom !== undefined ? { custom } : {}),
+      ...(checklist !== undefined ? { checklist } : {}),
     },
   };
   return {

@@ -190,15 +190,7 @@ It is written **first, as the run starts**, and it is the run's phases in their
 order, plus the two rework rounds that can follow a witness:
 
 ```sh
-boardown task checklist add BD-42 "1. spec read, code explored, open calls settled"
-boardown task checklist add BD-42 "2. tech plan written"
-boardown task checklist add BD-42 "3. architecture review closed"
-boardown task checklist add BD-42 "4. implemented, gates green"
-boardown task checklist add BD-42 "5. code review closed"
-boardown task checklist add BD-42 "5r. review findings fixed"
-boardown task checklist add BD-42 "6. manual test passed"
-boardown task checklist add BD-42 "6r. test findings fixed"
-boardown task checklist add BD-42 "7. committed"
+boardown task checklist add BD-42 "1. spec read, code explored, open calls settled" "2. tech plan written" "3. architecture review closed" "4. implemented, gates green" "5. code review closed" "5r. review findings fixed" "6. manual test passed" "6r. test findings fixed" "7. committed"
 ```
 
 Tick each one as its phase closes. This is what the user reads off the board in
@@ -304,11 +296,7 @@ Same rules as every other line: one line per moment, stamp read off the machine.
 **The checklist gets the round's phases, prefixed with its run:**
 
 ```sh
-boardown task checklist add BD-42 "r2. round scoped, remarks triaged"
-boardown task checklist add BD-42 "r2. implemented, gates green"
-boardown task checklist add BD-42 "r2. code review closed"
-boardown task checklist add BD-42 "r2. affected scenarios retested"
-boardown task checklist add BD-42 "r2. committed"
+boardown task checklist add BD-42 "r2. round scoped, remarks triaged" "r2. implemented, gates green" "r2. code review closed" "r2. affected scenarios retested" "r2. committed"
 ```
 
 Items of earlier runs are **never unticked, edited or removed.** A ticked `4.
