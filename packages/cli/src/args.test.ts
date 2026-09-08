@@ -73,6 +73,13 @@ describe('parseArgs', () => {
     expect(flagString(flags, 'type')).toBe('tech');
   });
 
+  it('keeps a missing value on a repeated flag as an empty string, not "true"', () => {
+    const { flags } = parseArgs(['x', '--checklist', 'first', '--checklist']);
+    expect(flagList(flags, 'checklist')).toEqual(['first', '']);
+    const leading = parseArgs(['x', '--checklist', '--checklist', 'second']);
+    expect(flagList(leading.flags, 'checklist')).toEqual(['', 'second']);
+  });
+
   it('keeps a repeated boolean flag a plain true, not an array', () => {
     const { flags } = parseArgs(['backlog', '--full', '--full', '--json', '--json']);
     expect(flags.full).toBe(true);

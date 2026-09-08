@@ -39,12 +39,12 @@ boardown archive                Finished releases.
 
 boardown task get <id>          Show one task in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field).
+boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
 boardown task rm <id>           Delete a task.
-boardown task checklist <op>    Checklist item: add | done | undone | edit | rm (on <id>).
+boardown task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
 boardown task link <op>         Link to another task: add | rm (<id> <other-id>) | ls <id>.
 boardown task commits <id>      Local commits whose subject mentions the task.
@@ -87,7 +87,8 @@ and checklist item texts come from `task get`.
 
 Mutating commands do not echo the entity back — they return the identifier of
 what changed (`{ "id": "BD-42" }`, or `{ "slug": "1-11" }` for a release or
-epic), plus the id of a checklist item or note they created.
+epic). `task checklist add|done|undone|rm` acknowledge `{ id, items }`; `edit`
+keeps `{ id, item }`; a new note still returns its id.
 
 `task list` filters combine with AND; with no filters it prints every task.
 `--epic <slug>` matches both tasks stored in the epic file and tasks living in a
@@ -156,6 +157,16 @@ as plain top-level keys in the task's frontmatter, after the built-in ones.
 boardown task edit BD-1 --field reporter=alice --field env=staging
 boardown task edit BD-1 --field reporter=          # clear it
 boardown task add "Fix login" --type bug --priority critical --field env=prod
+```
+
+`task add` also takes a repeatable `--checklist <text>`, so a task and its items
+land in one call. `task checklist add` takes one or more texts; `done`,
+`undone` and `rm` take one or more item ids; `edit` stays one item.
+
+```bash
+boardown task add "Ship CSV" --checklist "spec" --checklist "tests"
+boardown task checklist add BD-42 "1. plan" "2. implement" "3. review"
+boardown task checklist done BD-42 c1 c2
 ```
 
 ### Priority

@@ -193,6 +193,20 @@ function parseCustomFields(
   return values;
 }
 
+function parseChecklistTexts(args: ParsedArgs, usage: string): ChecklistItem[] | undefined {
+  const value = args.flags['checklist'];
+  if (value === undefined) return undefined;
+  if (value === true) {
+    throw new CliError('USAGE', usage, 2);
+  }
+  const items: ChecklistItem[] = [];
+  for (const raw of flagList(args.flags, 'checklist')) {
+    const text = requireText(raw, usage);
+    items.push({ id: nextChecklistItemId(items), text, done: false });
+  }
+  return items;
+}
+
 // Run a core board-op, mapping a process-guard rejection (a finished release is
 // read-only; a status only changes in the current release) onto the matching
 // structured code. Anything else keeps the generic fallback rather than being
@@ -208,12 +222,10 @@ function applyOp<T>(fn: () => T): T {
 
 async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const title = args.positionals[2];
+  const addUsage =
+    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>].';
   if (title === undefined || title.length === 0) {
-    throw new CliError(
-      'USAGE',
-      'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value].',
-      2,
-    );
+    throw new CliError('USAGE', addUsage, 2);
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
@@ -257,6 +269,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   }
 
   const custom = parseCustomFields(args, snapshot.config);
+  const checklist = parseChecklistTexts(args, addUsage);
 
   const input: NewTaskInput = {
     title,
@@ -266,6 +279,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     ...(description !== undefined ? { description } : {}),
     ...(epicTag !== undefined ? { epic: epicTag } : {}),
     ...(custom !== undefined ? { custom } : {}),
+    ...(checklist !== undefined ? { checklist } : {}),
   };
 
   const result = applyOp(() => createTask(target.container, snapshot.config, input));
@@ -892,6 +906,23 @@ function requireChecklistItem(task: Task, itemId: string | undefined, usage: str
   return item;
 }
 
+function uniqueExistingItemIds(task: Task, itemIds: readonly string[], usage: string): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of itemIds) {
+    const itemId = raw.trim();
+    if (itemId.length === 0) {
+      throw new CliError('USAGE', usage, 2);
+    }
+    requireChecklistItem(task, itemId, usage);
+    if (!seen.has(itemId)) {
+      seen.add(itemId);
+      unique.push(itemId);
+    }
+  }
+  return unique;
+}
+
 function requireNote(task: Task, noteId: string | undefined, usage: string): Note {
   if (noteId === undefined) {
     throw new CliError('USAGE', usage, 2);
@@ -927,39 +958,60 @@ function taskChecklist(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   }
 }
 
-function checklistAdd(
+async function checklistAdd(
   args: ParsedArgs,
   ctx: CommandContext,
   taskId: string | undefined,
 ): Promise<CommandOutput> {
-  const usage = 'Usage: boardown task checklist add <task-id> <text>.';
-  const text = requireText(args.positionals[4], usage);
+  const usage = 'Usage: boardown task checklist add <task-id> <text>….';
+  const texts = args.positionals.slice(4).map((value) => requireText(value, usage));
+  if (texts.length === 0) {
+    throw new CliError('USAGE', usage, 2);
+  }
   return mutateTask(ctx, taskId, usage, (task) => {
-    const items = task.frontmatter.checklist ?? [];
-    const item: ChecklistItem = { id: nextChecklistItemId(items), text, done: false };
+    const items = [...(task.frontmatter.checklist ?? [])];
+    const added: string[] = [];
+    for (const text of texts) {
+      const item: ChecklistItem = { id: nextChecklistItemId(items), text, done: false };
+      items.push(item);
+      added.push(item.id);
+    }
+    const [first] = added;
     return {
-      patch: { checklist: [...items, item] },
-      human: `Added checklist item ${item.id} to ${task.frontmatter.id}.`,
-      extra: { item: item.id },
+      patch: { checklist: items },
+      human:
+        added.length === 1 && first !== undefined
+          ? `Added checklist item ${first} to ${task.frontmatter.id}.`
+          : `Added ${added.length} checklist items to ${task.frontmatter.id} (${added.join(', ')}).`,
+      extra: { items: added },
     };
   });
 }
 
-function checklistSetDone(
+async function checklistSetDone(
   args: ParsedArgs,
   ctx: CommandContext,
   taskId: string | undefined,
   done: boolean,
 ): Promise<CommandOutput> {
-  const usage = `Usage: boardown task checklist ${done ? 'done' : 'undone'} <task-id> <item-id>.`;
-  const itemId = args.positionals[4];
+  const usage = `Usage: boardown task checklist ${done ? 'done' : 'undone'} <task-id> <item-id>….`;
+  const itemIds = args.positionals.slice(4);
+  if (itemIds.length === 0) {
+    throw new CliError('USAGE', usage, 2);
+  }
   return mutateTask(ctx, taskId, usage, (task) => {
-    requireChecklistItem(task, itemId, usage);
+    const unique = uniqueExistingItemIds(task, itemIds, usage);
+    const wanted = new Set(unique);
     const items = task.frontmatter.checklist ?? [];
+    const [first] = unique;
+    const verb = done ? 'done' : 'not done';
     return {
-      patch: { checklist: items.map((it) => (it.id === itemId ? { ...it, done } : it)) },
-      human: `${itemId} on ${task.frontmatter.id} → ${done ? 'done' : 'not done'}.`,
-      extra: { item: itemId },
+      patch: { checklist: items.map((it) => (wanted.has(it.id) ? { ...it, done } : it)) },
+      human:
+        unique.length === 1 && first !== undefined
+          ? `${first} on ${task.frontmatter.id} → ${verb}.`
+          : `${unique.join(', ')} on ${task.frontmatter.id} → ${verb}.`,
+      extra: { items: unique },
     };
   });
 }
@@ -983,20 +1035,28 @@ function checklistEdit(
   });
 }
 
-function checklistRm(
+async function checklistRm(
   args: ParsedArgs,
   ctx: CommandContext,
   taskId: string | undefined,
 ): Promise<CommandOutput> {
-  const usage = 'Usage: boardown task checklist rm <task-id> <item-id>.';
-  const itemId = args.positionals[4];
+  const usage = 'Usage: boardown task checklist rm <task-id> <item-id>….';
+  const itemIds = args.positionals.slice(4);
+  if (itemIds.length === 0) {
+    throw new CliError('USAGE', usage, 2);
+  }
   return mutateTask(ctx, taskId, usage, (task) => {
-    requireChecklistItem(task, itemId, usage);
+    const unique = uniqueExistingItemIds(task, itemIds, usage);
+    const wanted = new Set(unique);
     const items = task.frontmatter.checklist ?? [];
+    const [first] = unique;
     return {
-      patch: { checklist: items.filter((it) => it.id !== itemId) },
-      human: `Removed checklist item ${itemId} from ${task.frontmatter.id}.`,
-      extra: { item: itemId },
+      patch: { checklist: items.filter((it) => !wanted.has(it.id)) },
+      human:
+        unique.length === 1 && first !== undefined
+          ? `Removed checklist item ${first} from ${task.frontmatter.id}.`
+          : `Removed ${unique.length} checklist items from ${task.frontmatter.id} (${unique.join(', ')}).`,
+      extra: { items: unique },
     };
   });
 }

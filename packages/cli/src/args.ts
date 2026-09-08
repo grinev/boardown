@@ -34,9 +34,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       flags[name] = value;
       return;
     }
+    const asEntry = (v: string | boolean): string => (v === true ? '' : String(v));
     flags[name] = [
-      ...(Array.isArray(existing) ? existing : [String(existing)]),
-      String(value),
+      ...(Array.isArray(existing) ? existing : [asEntry(existing)]),
+      asEntry(value),
     ];
   };
 

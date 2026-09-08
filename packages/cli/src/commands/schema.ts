@@ -17,7 +17,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 11,
+  version: 12,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -81,9 +81,9 @@ const DESCRIPTOR = {
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value]',
+        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>]',
       summary:
-        'Create a task in the backlog (default), an epic, or a release. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value.',
+        'Create a task in the backlog (default), an epic, or a release. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order.',
     },
     {
       name: 'task edit',
@@ -106,8 +106,9 @@ const DESCRIPTOR = {
     {
       name: 'task checklist',
       usage:
-        'boardown task checklist (add <id> <text> | done <id> <item> | undone <id> <item> | edit <id> <item> <text> | rm <id> <item>)',
-      summary: 'Manage a task checklist (alias: check). Item ids are c1, c2, …',
+        'boardown task checklist (add <id> <text>… | done <id> <item>… | undone <id> <item>… | edit <id> <item> <text> | rm <id> <item>…)',
+      summary:
+        'Manage a task checklist (alias: check). add, done, undone and rm take one or more texts or item ids; edit stays one item. Item ids are c1, c2, …',
     },
     {
       name: 'task notes',
