@@ -596,15 +596,25 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
    grouping), ordered globally by `order` across all backlog containers.
 
 A compact filter bar sits at the very top of the screen with four
-single-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`)
-above the control so the controls themselves stay narrow. The default value of
-every filter is "All" — nothing is filtered out. Because an absent `priority` key
+multi-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`)
+above the control so the controls themselves stay narrow. Each list has a
+checkbox per row and keeps the icon and label it showed as a single-select.
+The trigger reads "All" when nothing is selected, that value's icon and label
+when exactly one is, and `N selected` (no icon) when two or more are. The
+default of every filter is "All" — nothing is filtered out. Within one filter
+the values are OR; across filters they stay AND. Because an absent `priority` key
 means `medium`, filtering by `Medium` returns both the tasks that say so and the
 tasks that say nothing. There is no reset button:
-switching a filter back to "All" is the reset. When any filter is non-default,
+choosing "All" (the first row of every list) drops that filter's selection.
+The list stays open while rows are toggled and closes on Escape, a click
+outside, or the trigger. When any filter is non-default,
 each section's count pill switches from `5` to `1 of 5` (matching of total).
 The filter applies **globally** to all three sections. The `epic` filter
-additionally has a "No epic" option for tasks that live in `epics/no_epic.md`.
+additionally has a "No epic" option for tasks that live in `epics/no_epic.md`,
+and it combines with real epics the same way any two values do. A selected
+value that stops being offered — an epic deleted, a status dropped from
+`config.yaml`, a type disabled — is dropped from the selection and the rest
+stays.
 
 Drag and drop:
 
@@ -734,18 +744,27 @@ when "—" is chosen, epic-to-release); the "—" option only appears when
 the task has an epic to fall back to. A **finished** release is never
 offered as a destination — the same exclusion the creation dialog applies.
 
-**Every one of these pickers is fully keyboard-driven**, and they all behave the
-same — the five in the task dialog, the three in the create-task dialog, the four
-in the backlog's filter bar and the relation selector of the add-link row. Enter,
-Space or an arrow key on the closed control opens it with the **current value
-highlighted**; ↑ and ↓ move the highlight by one option and wrap at either end,
-scrolling it into view in a list too long to show at once; Home and End jump to
-the first and last; an option the board refuses is stepped over and cannot be
-picked. Enter commits the highlighted option and Escape closes the list without
-committing — leaving the dialog around it open — and both put focus back on the
-control. Tab closes the list without committing and moves focus on. Hovering an
-option moves the same highlight, so Enter always takes what is lit. Typing a
-letter does nothing: these lists have no type-ahead.
+**Every one of these pickers is fully keyboard-driven.** The five in the task
+dialog, the three in the create-task dialog and the relation selector of the
+add-link row are confirm-and-close: Enter, Space or an arrow key on the closed
+control opens it with the **current value highlighted**; ↑ and ↓ move the
+highlight by one option and wrap at either end, scrolling it into view in a
+list too long to show at once; Home and End jump to the first and last; an
+option the board refuses is stepped over and cannot be picked. Enter commits
+the highlighted option and Escape closes the list without committing — leaving
+the dialog around it open — and both put focus back on the control. Tab closes
+the list without committing and moves focus on. Hovering an option moves the
+same highlight, so Enter always takes what is lit. Typing a letter does
+nothing: these lists have no type-ahead.
+
+The four backlog filters share the arrows, Home, End and Tab, but they are a
+multi-select: the list stays open while rows toggle. Enter and Space **toggle**
+the highlighted row instead of committing and closing. Escape, a click outside
+or the trigger closes the list and **keeps** the selection already toggled.
+"All" is the first row, checked precisely when nothing else is; choosing it
+clears that filter. On open the highlight is "All" when nothing is selected,
+the selected row when exactly one is, and the first selected row in list order
+when several are.
 
 **A status only changes in an active release.** Outside one — a **future**
 release, an epic file, the backlog — the status renders as the archived task's
@@ -1242,7 +1261,9 @@ what changed. `task checklist add` takes one or more texts and `done` /
 order given; `edit` stays one item and `{ id, item }`. `task add` takes a
 repeatable `--checklist` so a task and its items land in one call. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
-resolved value, so `--priority medium` also returns tasks with no key), and
+resolved value, so `--priority medium` also returns tasks with no key; `--status`,
+`--type`, `--priority` and `--epic` each take one or more values, space-separated
+or repeated, OR within a flag and AND across flags), and
 `schema` reports the vocabulary and the default so an agent reads them instead of
 guessing. `task list --text <substr>` is the CLI's **search**: the same
 case-insensitive substring the app's search field uses, shared from

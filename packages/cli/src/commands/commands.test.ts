@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { completeRelease, emptyBacklog, type Task } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { parseArgv } from '../app';
 import { parseArgs } from '../args';
 import type { CliError } from '../output';
 import { loadBoardOrThrow, writeContainers, type ContainerRef } from '../persistence';
@@ -1147,6 +1148,101 @@ describe('cli commands (integration)', () => {
       await expect(
         taskCommand(parseArgs(['task', 'list', '--release', 'ghost']), ctx),
       ).rejects.toMatchObject({ code: 'RELEASE_NOT_FOUND' });
+    });
+
+    it('ORs several values after one flag', async () => {
+      await seed();
+      expect(
+        listIds(
+          (await taskCommand(parseArgv(['task', 'list', '--type', 'bug', 'tech']), ctx)).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+    });
+
+    it('ORs values after --flag=value the same way', async () => {
+      await seed();
+      expect(
+        listIds(
+          (await taskCommand(parseArgv(['task', 'list', '--type=bug', 'tech']), ctx)).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+    });
+
+    it('ORs repeated flags the same way', async () => {
+      await seed();
+      expect(
+        listIds(
+          (
+            await taskCommand(parseArgv(['task', 'list', '--type', 'bug', '--type', 'tech']), ctx)
+          ).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+    });
+
+    it('ANDs a multi-value flag with another flag', async () => {
+      await seed();
+      expect(
+        listIds(
+          (
+            await taskCommand(
+              parseArgv(['task', 'list', '--type', 'bug', 'tech', '--status', 'todo']),
+              ctx,
+            )
+          ).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
+      expect(
+        listIds(
+          (
+            await taskCommand(
+              parseArgv(['task', 'list', '--type', 'bug', 'feature', '--status', 'done']),
+              ctx,
+            )
+          ).data,
+        ),
+      ).toEqual(['TS-2']);
+    });
+
+    it('stops at the first bad value and names only it', async () => {
+      await seed();
+      await expect(
+        taskCommand(parseArgv(['task', 'list', '--type', 'bug', 'nope', 'docs']), ctx),
+      ).rejects.toMatchObject({
+        code: 'USAGE',
+        exitCode: 2,
+        message: 'Invalid --type "nope" (one of bug, feature, docs, tech).',
+      });
+      await expect(
+        taskCommand(parseArgv(['task', 'list', '--status', 'todo', 'ghost']), ctx),
+      ).rejects.toMatchObject({
+        code: 'USAGE',
+        exitCode: 2,
+        message: 'Invalid status "ghost" (one of todo, in-progress, done).',
+      });
+      await expect(
+        taskCommand(parseArgv(['task', 'list', '--priority', 'high', 'urgent']), ctx),
+      ).rejects.toMatchObject({
+        code: 'USAGE',
+        exitCode: 2,
+        message: 'Invalid --priority "urgent" (one of critical, high, medium, low).',
+      });
+      await expect(
+        taskCommand(parseArgv(['task', 'list', '--epic', 'bug-audit', 'ghost']), ctx),
+      ).rejects.toMatchObject({
+        code: 'EPIC_NOT_FOUND',
+        message: 'No epic "ghost".',
+      });
+    });
+
+    it('ORs several --epic slugs', async () => {
+      await seed();
+      await epicCommand(parseArgs(['epic', 'add', 'Other']), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--epic', 'other']), ctx);
+      expect(
+        listIds(
+          (await taskCommand(parseArgv(['task', 'list', '--epic', 'bug-audit', 'other']), ctx)).data,
+        ),
+      ).toEqual(['TS-1', 'TS-3', 'TS-4']);
     });
   });
 });

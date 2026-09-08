@@ -154,7 +154,7 @@ describe('custom fields (cli)', () => {
     const outside = await mkdtemp(join(tmpdir(), 'bd-cli-nb-'));
     try {
       const out = await schemaCommand(parseArgs(['schema']), { cwd: outside, json: true });
-      expect(out.data).toMatchObject({ version: 14 });
+      expect(out.data).toMatchObject({ version: 15 });
       expect((out.data as { customFields?: unknown }).customFields).toBeUndefined();
     } finally {
       await rm(outside, { recursive: true, force: true });

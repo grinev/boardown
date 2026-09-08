@@ -90,9 +90,11 @@ what changed (`{ "id": "BD-42" }`, or `{ "slug": "1-11" }` for a release or
 epic). `task checklist add|done|undone|rm` acknowledge `{ id, items }`; `edit`
 keeps `{ id, item }`; a new note still returns its id.
 
-`task list` filters combine with AND; with no filters it prints every task.
-`--epic <slug>` matches both tasks stored in the epic file and tasks living in a
-release that carry that epic tag. `--release <ref>` takes a slug or filename,
+`task list` filters combine with AND across flags and OR within a flag;
+`--status`, `--type`, `--priority` and `--epic` each take one or more values
+(`--type bug docs` or `--type bug --type docs`). With no filters it prints every
+task. `--epic <slug>…` matches both tasks stored in the epic file and tasks living
+in a release that carry that epic tag. `--release <ref>` takes a slug or filename,
 `--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
 substring match on a task's title and description. It searches nothing else —
 not notes, checklist items or custom field values, and not the **id**, since
@@ -203,9 +205,10 @@ boardown task checklist done BD-42 c1 c2
 task reads as `medium`. Setting it explicitly — including setting it to `medium` —
 writes the key and keeps it.
 
-`task list --priority <level>` filters on the **resolved** value, so
+`task list --priority <level>…` filters on the **resolved** value, so
 `--priority medium` returns tasks that say `medium` *and* tasks that carry no
-`priority` key at all. `boardown schema` reports the vocabulary and the default.
+`priority` key at all. Several levels are OR. `boardown schema` reports the
+vocabulary and the default.
 
 ```bash
 boardown task add "Prod is down" --priority critical

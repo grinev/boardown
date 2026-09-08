@@ -1,5 +1,5 @@
 import { version as VERSION } from '../package.json';
-import { parseArgs } from './args';
+import { parseArgs, type ParsedArgs } from './args';
 import { archiveCommand } from './commands/archive';
 import { backlogCommand } from './commands/backlog';
 import { epicCommand } from './commands/epic';
@@ -67,8 +67,29 @@ export interface RunOptions {
   cwd?: string;
 }
 
+const TASK_LIST_MULTI_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  'status',
+  'type',
+  'priority',
+  'epic',
+]);
+
+// Two-pass: the first parse names the command, and only `task list` then
+// re-parses so its four filters swallow consecutive values. Other commands
+// still consume one token per flag.
+export function parseArgv(argv: readonly string[]): ParsedArgs {
+  const first = parseArgs(argv);
+  if (
+    first.positionals[0] === 'task' &&
+    (first.positionals[1] === 'list' || first.positionals[1] === 'ls')
+  ) {
+    return parseArgs(argv, { multiValueFlags: TASK_LIST_MULTI_VALUE_FLAGS });
+  }
+  return first;
+}
+
 export async function run(argv: readonly string[], opts: RunOptions = {}): Promise<number> {
-  const args = parseArgs(argv);
+  const args = parseArgv(argv);
   const command = args.positionals[0];
   const json = args.flags.json === true || process.stdout.isTTY !== true;
 

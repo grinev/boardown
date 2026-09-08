@@ -86,4 +86,39 @@ describe('parseArgs', () => {
     expect(flags.json).toBe(true);
     expect(flagBool(flags, 'full')).toBe(true);
   });
+
+  it('swallows consecutive values only for opted-in flags', () => {
+    const multi = new Set(['type']);
+    const { flags, positionals } = parseArgs(
+      ['task', 'list', '--type', 'bug', 'docs', '--status', 'todo', 'done'],
+      { multiValueFlags: multi },
+    );
+    expect(flagList(flags, 'type')).toEqual(['bug', 'docs']);
+    expect(flags.status).toBe('todo');
+    expect(positionals).toEqual(['task', 'list', 'done']);
+  });
+
+  it('leaves the next token positional when the flag is not opted in', () => {
+    const { flags, positionals } = parseArgs(['task', 'add', '--type', 'bug', 'Title']);
+    expect(flags.type).toBe('bug');
+    expect(positionals).toEqual(['task', 'add', 'Title']);
+  });
+
+  it('swallows after an attached --flag=value too', () => {
+    const { flags, positionals } = parseArgs(
+      ['task', 'list', '--type=bug', 'docs'],
+      { multiValueFlags: new Set(['type']) },
+    );
+    expect(flagList(flags, 'type')).toEqual(['bug', 'docs']);
+    expect(positionals).toEqual(['task', 'list']);
+  });
+
+  it('stops swallowing at the next flag', () => {
+    const { flags } = parseArgs(
+      ['task', 'list', '--type', 'bug', 'docs', '--priority', 'high'],
+      { multiValueFlags: new Set(['type', 'priority']) },
+    );
+    expect(flagList(flags, 'type')).toEqual(['bug', 'docs']);
+    expect(flags.priority).toBe('high');
+  });
 });
