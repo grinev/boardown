@@ -31,7 +31,7 @@ A behaviour that contradicts the spec is a finding even if the code "meant" it.
 
 Nobody hands you a test plan. Build one:
 
-1. Read the feature spec — `product.md`, one closed decision per line, written
+1. Read the feature spec — `spec.md`, one closed decision per line, written
    with the user before the work started. Every line under *Look* and *Behaviour*
    is observable from outside, so each is a scenario you can execute as it stands;
    those are your baseline. Then the prompt's implementation notes, for the
@@ -196,7 +196,7 @@ feature by hand and knows where everything actually is. **Unless your verdict is
 `broken`, write it before you report** — a feature with findings is still one that
 can be shown, and nobody has to ask you for it.
 
-It goes into `demo.md`, next to the `product.md` you were given; your report then
+It goes into `demo.md`, next to the `spec.md` you were given; your report then
 carries one line, the path and how many steps it has. A scenario that travels
 through someone else's context arrives edited.
 

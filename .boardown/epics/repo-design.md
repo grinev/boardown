@@ -9,7 +9,7 @@ color: "#a855f7"
 id: BD-27
 type: tech
 status: todo
-order: 900
+order: 1300
 ---
 
 Commits should have scope: feat(core), fix(vscode), fix(desktop)
@@ -20,7 +20,7 @@ Commits should have scope: feat(core), fix(vscode), fix(desktop)
 id: BD-39
 type: docs
 status: todo
-order: 300
+order: 800
 ---
 
 ## Restructure README around a 3-step quick start
@@ -29,7 +29,7 @@ order: 300
 id: BD-103
 type: docs
 status: todo
-order: 1000
+order: 1400
 ---
 
 The README lists three install channels as equals and then runs into dev and release docs. Lead with the VS Code extension as the main path in numbered steps, note that the CLI is a separate optional install, and move the alternatives and the dev/release sections into docs/.

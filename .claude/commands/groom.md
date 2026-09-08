@@ -13,7 +13,7 @@ on. Do not guess a scope.
 ## What grooming is
 
 A task is groomed when **every fork that would otherwise stop the work has been
-closed by the user in advance**. The artifact is one `product.md` per task — the
+closed by the user in advance**. The artifact is one `spec.md` per task — the
 product spec, written here, with him in the room, and never rewritten downstream.
 Grooming is the only mode in which the product is decided, and this file is what
 `/feature` builds from. It runs in two places and the procedure is the same in
@@ -63,7 +63,7 @@ fifty lines is usually two tasks.
   This session has to last the whole release, and it is your own reading, not
   the subagents' answers, that ends it early.
 - **Nothing is implemented here.** No source changes, no `tech.md`, no code, no
-  commits. You write `product.md` files and board entries.
+  commits. You write `spec.md` files and board entries.
 - **There is no `expert` in this session.** That agent exists to settle a fork
   when the user is not reachable; here he is sitting in front of you, so every
   fork above the line below goes to him directly and the answer is his.
@@ -117,10 +117,10 @@ you genuinely cannot close.
    field shape or the very fork you are about to open — settled, with its
    reason, and for the price of one `cat`. Then find out — through `Explore` —
    only what you still need to state the lines you can already state, and write
-   `product.md` with them. Open forks are not in it; they are your question list.
+   `spec.md` with them. Open forks are not in it; they are your question list.
 3. **Ask.** One `AskUserQuestion` carrying the forks the draft could not close.
    Fold his answers in as lines.
-4. **Review.** Invoke `spec-critic` once, with the path to `product.md` and to
+4. **Review.** Invoke `spec-critic` once, with the path to `spec.md` and to
    every frame in `refs/`. It reads the spec cold and reports what it does not yet
    reach — a sibling surface the reach line never named, a behaviour stated for one
    case and silent about its opposite, a line nothing can observe, a contradiction
@@ -213,7 +213,7 @@ nothing tells them apart.
 
 ## Where the file goes
 
-`.claude/specs/<slug>/product.md`. The folder is named **`<TASK-ID>-<kebab-case
+`.claude/specs/<slug>/spec.md`. The folder is named **`<TASK-ID>-<kebab-case
 title>`** — `BD-42-csv-export` — so that a directory listing reads the way the
 board does; `<slug>` throughout these instructions means that whole name, id
 included. It is chosen here, and **the implementation reuses it**: it reads the
@@ -229,7 +229,7 @@ request", which stay verbatim in whatever language he said them.
 **Last, and only once the forks are closed:**
 
 ```sh
-boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/product.md]]"
+boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/spec.md]]"
 boardown task status BD-42 ready
 ```
 
@@ -247,7 +247,7 @@ through its phases, and `/feature` puts it there when the run starts.
 
 **No notes either.** A note carries what the **user** said — a remark after a
 demo, an answer given between sessions — and never what an agent worked out. What
-this session concludes goes into `product.md`; a neighbouring task it collides
+this session concludes goes into `spec.md`; a neighbouring task it collides
 with is `task link` plus a line under "Overlaps", which the next session reads
 from the spec. Fill the board with agent findings and the one remark that mattered
 is buried under them.

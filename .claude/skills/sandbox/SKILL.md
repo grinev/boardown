@@ -19,8 +19,28 @@ your own role — the tester hunts defects, `/demo` walks a scenario with the us
 # free the port if a previous run left a server behind
 # (exits 1 when the port was already free — expected, not a failure)
 powershell -Command 'Get-NetTCPConnection -LocalPort 5199 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }'
-pnpm dev:sandbox   # run in background
 ```
+
+**Start the server so your shell comes back immediately.** It runs until you stop
+it, so a shell left waiting on it hangs the whole run until the tool times out —
+from outside that is indistinguishable from a dead run. How you detach depends on
+the harness:
+
+- **Claude Code** — `pnpm dev:sandbox` as a background Bash task;
+- **opencode** — a hidden PowerShell that redirects the output itself:
+
+```powershell
+Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','pnpm dev:sandbox *> logs\stand.log' -WindowStyle Hidden
+```
+
+  The redirect has to happen **inside** the started process. `Start-Process
+  -RedirectStandardOutput` and `cmd /c start /b >file` both hand the child a pipe
+  from your shell, and your shell then waits on that pipe for as long as the
+  server lives — which is the hang this rule exists to prevent.
+
+Detached, the startup lines go to `logs\stand.log` and not to your shell. Give the
+server a few seconds, then read the file with `Get-Content` (it is UTF-16, so a
+`cat` from a POSIX shell shows spaced-out garbage). Delete it at teardown.
 
 The script prints two lines you need:
 
@@ -117,8 +137,10 @@ node packages/cli/dist/cli.cjs --data-dir "<sandbox board>" release current --js
   human-readable branch is only reachable from a real terminal.
 - **Check the exit code after every command** (`$LASTEXITCODE` in PowerShell,
   `echo $?` in bash): `0` success, `1` operation failed, `2` usage error.
-- The envelope is the contract: `{ "ok": true, "command": …, "data": … }` or
-  `{ "ok": false, "command": …, "error": { "code": …, "message": … } }`.
+- The envelope is the contract: `{ "ok": true, "data": … }` or
+  `{ "ok": false, "error": { "code": …, "message": … } }`, either of them carrying
+  `problems` when a file gave the parser trouble. There is no `command` field —
+  it was removed with the rest of the output rework, and its absence is not a bug.
 - `boardown schema --json` prints the machine-readable command/enum contract.
 - **`init` is the one command that creates a board**, at `--data-dir` if given and
   otherwise at `<cwd>/.boardown` — so run it against a fresh empty temp directory,

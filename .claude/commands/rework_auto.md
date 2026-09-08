@@ -68,7 +68,7 @@ record.
 
 ## What you work from
 
-- `product.md` — settled product, and the round does not reopen it;
+- `spec.md` — settled product, and the round does not reopen it;
 - `tech.md` — how it was built. Not rewritten either: a round changes execution,
   not intent;
 - `log.md` — the previous run's protocol. Read its tail: what it decided, what the
@@ -137,7 +137,7 @@ Take the first row that fits:
 | The fork | Who settles it |
 |---|---|
 | the remark itself answers it | you, applying it |
-| `product.md` answers it | you, applying it |
+| `spec.md` answers it | you, applying it |
 | **you cannot tell what the remark asks for** — two readings, two different products | **a stop**. The expert did not hear him either |
 | it dies with the task — wording, an icon, a separator, the order of two fields | you, under "Decided by default" |
 | **it outlives the task** — reach, placement, control type, layer boundaries, the shape of data or of an error | the **`expert`** |
@@ -149,7 +149,7 @@ everything else under `.boardown/docs/`. A principle that looks wrong is a line 
 the report, never a diff.
 
 **Calling the expert**: one fork, one call, at the end of the phase that raised it.
-Hand it the fork, 2–4 real options, which way you lean, `product.md`, and the
+Hand it the fork, 2–4 real options, which way you lean, `spec.md`, and the
 user's remark verbatim. Keep your working tree out of it. Record the answer in the
 log and under "Decided by default" marked `(expert)`.
 
@@ -189,7 +189,7 @@ the exploring and not once you know what you will change:
 echo "- $(date '+%Y-%m-%d %H:%M:%S') · round opened — 2 remarks from note n1" >> .claude/specs/<slug>/log.md
 ```
 
-Then read, in this order: the notes in full, `product.md`, the tail of `log.md`,
+Then read, in this order: the notes in full, `spec.md`, the tail of `log.md`,
 `tech.md`, `git show <hash> --stat`. Then send out one `Explore` per remark whose
 landing place you do not already know, all at once.
 
@@ -234,7 +234,7 @@ the failing command in the log.
 
 ## Phase 3 — Code review
 
-Invoke the `code-reviewer` agent and hand it `product.md`, the `<slug>`, **the
+Invoke the `code-reviewer` agent and hand it `spec.md`, the `<slug>`, **the
 user's remarks verbatim**, and — explicitly — where the change is: the uncommitted
 working tree is this round; `git show <hash>` is the feature it sits on, for
 context only. Ask it to judge the round, not to re-review the feature.
@@ -254,7 +254,7 @@ you and the reviewer disagree about something the user should settle: stop.
 If the round changed anything observable, invoke the `manual-tester` agent with
 four things:
 
-- the path to `product.md` — it is still what "works" means;
+- the path to `spec.md` — it is still what "works" means;
 - the surface to drive: the UI in a browser, the CLI from source, or both;
 - **what this round changed**, in your words, and the remark it came from;
 - **which scenarios to run**: the one each remark names, plus the scenarios the

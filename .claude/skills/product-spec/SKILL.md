@@ -1,12 +1,12 @@
 ---
 name: product-spec
-description: The format of a boardown product spec — the `product.md` a grooming session writes with the user, one closed decision per line. Use when writing or extending a spec during /groom, and when reading one at the start of /feature. Fixes the sections, the line format, and the rule that every line about the product must be observable from outside.
+description: The format of a boardown product spec — the `spec.md` a grooming session writes with the user, one closed decision per line. Use when writing or extending a spec during /groom, and when reading one at the start of /feature. Fixes the sections, the line format, and the rule that every line about the product must be observable from outside.
 ---
 
 # Writing a product spec
 
 The spec is written **before the work starts**: a grooming session with the user
-closes the forks, and `product.md` is what that session leaves behind. Everything
+closes the forks, and `spec.md` is what that session leaves behind. Everything
 downstream reads it — the technical plan answers it, the `architect` checks the
 plan against it, the `expert` settles forks inside it, the `manual-tester` derives
 its scenarios from it. Whoever implements the task does not write it and does not
