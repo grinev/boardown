@@ -4,6 +4,7 @@ import {
   CliHint,
   GitIntegrationField,
   MultipleActiveReleasesField,
+  StatusOutsideActiveReleaseField,
   WipLimitField,
 } from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
@@ -154,6 +155,9 @@ export function Sidebar({
               <MultipleActiveReleasesField className={styles.boardSettingRow} />
             )}
             {boardOpen && <GitIntegrationField className={styles.boardSettingRow} />}
+            {boardOpen && (
+              <StatusOutsideActiveReleaseField className={styles.boardSettingRow} />
+            )}
             {/* Describes the installation rather than the board, so unlike the
                 field above it shows with no board open. */}
             <span className={styles.settingsLabel}>CLI</span>

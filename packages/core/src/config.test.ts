@@ -398,6 +398,35 @@ describe('git integration', () => {
   });
 });
 
+describe('status outside an active release', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('is absent until the user sets it, and absent means the lock is on', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('statusOutsideActiveRelease');
+    expect(parseConfig(out).value?.statusOutsideActiveRelease).toBeUndefined();
+  });
+
+  it('round-trips both values', () => {
+    for (const enabled of [true, false]) {
+      const cfg: BoardConfig = { ...base, statusOutsideActiveRelease: enabled };
+      const out = serializeConfig(cfg);
+      expect(out).toContain(`statusOutsideActiveRelease: ${String(enabled)}`);
+      const back = parseConfig(out);
+      expect(back.problems).toEqual([]);
+      expect(back.value).toEqual(stamped(cfg));
+    }
+  });
+
+  it('fails the whole config on a non-boolean value rather than falling back', () => {
+    const parsed = parseConfig(
+      'idPrefix: BD\nnextId: 0\nprojectName: P\nstatusOutsideActiveRelease: "yes"\n',
+    );
+    expect(parsed.value).toBeNull();
+    expect(parsed.problems).toHaveLength(1);
+  });
+});
+
 describe('task types', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 

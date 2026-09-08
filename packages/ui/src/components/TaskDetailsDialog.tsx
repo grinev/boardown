@@ -92,9 +92,12 @@ export function TaskDetailsDialog({
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
   const customFields = useBoardStore((s) => s.snapshot?.config.customFields ?? EMPTY_FIELDS);
   const archived = release?.frontmatter.status === 'finished';
-  // A status only changes in the current release, so everywhere else — a future
-  // release, an epic file, the backlog, the archive — it is a value, not a control.
-  const statusLocked = release?.frontmatter.status !== 'current';
+  // A finished release is always a pill. Everywhere else the dropdown appears
+  // when the task sits in the current release, or when the board lifts the lock.
+  const statusLocked =
+    archived ||
+    (release?.frontmatter.status !== 'current' &&
+      config?.statusOutsideActiveRelease !== true);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { copied, copy, reset: resetCopied } = useCopyToClipboard();
   // Opening another task from a link reuses this dialog rather than remounting it,

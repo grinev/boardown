@@ -286,6 +286,7 @@ wipLimits:            # optional; absent means no limit anywhere
   in-progress: 3      # at most 3 tasks in each middle column of an active release
 multipleActiveReleases: true  # optional; absent means one release at a time
 gitIntegration: true  # optional; absent means on — the task dialog's Commits panel
+statusOutsideActiveRelease: true  # optional; absent means a status may change only in the current release
 statuses:             # optional (beta); absent means todo / in-progress / done
   - key: backlog
     label: Not started  # optional; absent means the key, prettified
@@ -377,9 +378,10 @@ today. Like `customFields`, it is edited in `config.yaml` only; there is no
 management UI.
 
 The meaning of a status is **positional**, with no flags and no reserved keys.
-The **first** is the initial one: the status a new task takes, and the only status
-a task may be *created* with outside an active release. (A task relocated out of one
-keeps whatever status it had — nothing is rewritten.) The **last** is the terminal one: a
+The **first** is the initial one: the status a new task takes, and — unless
+`statusOutsideActiveRelease` is on — the only status a task may be *created* with
+outside an active release. (A task relocated out of one keeps whatever status it
+had — nothing is rewritten.) The **last** is the terminal one: a
 link to a task in it renders struck through, and completing a release counts
 everything that is not in it as unfinished. Everything between is a **middle**
 column, which is what the WIP limit caps.
@@ -427,7 +429,8 @@ always allowed.
 The rule lives in `@boardown/core` beside the `ARCHIVED` and `STATUS_LOCKED`
 refusals, so every shell inherits it. Both of those take precedence: a task in a
 finished release reports `ARCHIVED`, and one outside an active release reports
-`STATUS_LOCKED`, before the limit is ever consulted.
+`STATUS_LOCKED` unless `statusOutsideActiveRelease` is on, before the limit is
+ever consulted.
 
 On screen the rule is expressed by **prevention, not by complaint** — no toast,
 no banner. Each middle column header shows `count / limit` and takes a warning tone
@@ -440,13 +443,23 @@ carrying the count and a tooltip naming the rule. The limit is edited in the
 Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
 same reason: it is board configuration, not installation configuration, and the
-`gitIntegration` checkbox sits below that one.
+`gitIntegration` checkbox sits below that one, with `statusOutsideActiveRelease`
+below that.
 
 `gitIntegration` is a display preference stored with the board: absent or `true`
 shows the task dialog's Commits panel, `false` hides it and stops the Git read
 altogether. A present value that is not a boolean makes the config invalid, like
 every other key. The CLI's `task commits` ignores it — reading history is what that
 command is for.
+
+`statusOutsideActiveRelease` lifts the rule that a task's status may change only
+in the current release. Absent or `false` keeps the lock: the task dialog of a
+task in the backlog, an epic or a future release shows a static pill, and every
+shell refuses a status write there with `STATUS_LOCKED`. `true` lets the status
+be set wherever the task sits — the same dropdown, the same CLI commands — except
+in a finished release, which still answers `ARCHIVED`. Setting the key back does
+not rewrite statuses already given. A present value that is not a boolean makes
+the config invalid, like every other key.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
@@ -787,11 +800,14 @@ clears that filter. On open the highlight is "All" when nothing is selected,
 the selected row when exactly one is, and the first selected row in list order
 when several are.
 
-**A status only changes in an active release.** Outside one — a **future**
-release, an epic file, the backlog — the status renders as the archived task's
-static pill, with a tooltip saying so, and nothing else about the task becomes
-read-only. Relocation carries the status along and never rewrites it to the initial
-one, so a task that was `in-progress` freezes as `in-progress` wherever it lands.
+**A status only changes in an active release**, unless `statusOutsideActiveRelease`
+is on. Outside one — a **future** release, an epic file, the backlog — the status
+renders as the archived task's static pill, with a tooltip saying so, and nothing
+else about the task becomes read-only. With the key on, that dialog shows the same
+status dropdown a current-release task has. A task in a finished release stays a
+static pill with no tooltip either way. Relocation carries the status along and
+never rewrites it to the initial one, so a task that was `in-progress` freezes as
+`in-progress` wherever it lands.
 
 **Every multi-line field is as tall as the text inside it.** It starts at its own
 minimum — four rows for a description, two for the "Add a note" composer — and
@@ -1332,17 +1348,20 @@ every site that takes one — `task add --type`, `task edit --type` and
 commit prefix) plus `iconNames`; `task add` without `--type` uses `feature`, or
 the first enabled type when `feature` is disabled;
 `task add` without `--status` uses the board's initial status. Setting a status
-outside an active release fails with `STATUS_LOCKED`; a relocation that carries the
-status along succeeds, and one that sets it is judged by its destination. Putting one
+outside an active release fails with `STATUS_LOCKED` unless
+`statusOutsideActiveRelease` is on; a relocation that carries the status along
+succeeds, and one that sets it is judged by its destination. A finished release
+still answers `ARCHIVED` either way. Putting one
 more task into a full middle column fails with `WIP_LIMIT` — whether by
 `task status`, `task edit --status`, `task add --status`, or a `task edit --release`
 that pulls a task already in that column into a full active release — and `schema`
 reports the board's `wipLimits` exactly as the config file holds it, plus
 `wipLimitedStatuses` naming the columns that number caps, so an agent reads the
 ceiling and its reach instead of discovering them by failing. It also reports
-`multipleActiveReleases` always, resolved to a boolean: absent from the config
-means the one-at-a-time rule is in force, so leaving it out would hide a rule an
-agent would then have to discover by being refused. `task rm <id>` deletes a task with the same rules
+`multipleActiveReleases` and `statusOutsideActiveRelease` always, each resolved to
+a boolean: absent from the config means the restrictive default is in force, so
+leaving either out would hide a rule an agent would then have to discover by being
+refused. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, including in archived files, a task in a
 finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at

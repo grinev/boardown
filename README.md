@@ -235,7 +235,8 @@ set. Between 2 and 8 entries; `key` follows the same rule as a custom field's �
 must be unique.
 
 The meaning is **positional**. The **first** status is the one a new task takes,
-and the only one a task may be created with outside an active release. The **last** is the
+and — unless `statusOutsideActiveRelease` is on — the only one a task may be
+created with outside an active release. The **last** is the
 terminal one: a link to a task in it is struck through, and completing a release
 counts everything else as unfinished. The columns **between** are what the WIP
 limit caps — one number in `wipLimits`, applied to each of them independently.

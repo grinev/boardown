@@ -220,9 +220,9 @@ const DESCRIPTOR = {
 // The declarations and the WIP limit are board-specific, so they ride along only
 // when a board actually has them; otherwise the command prints the static
 // contract unchanged — a board without either sees no new output.
-// `multipleActiveReleases` and `taskStatuses` are the exceptions: both have a
-// meaning when the config says nothing, so leaving them out would hide a rule an
-// agent would then have to discover by being refused.
+// `multipleActiveReleases`, `statusOutsideActiveRelease` and `taskStatuses` are
+// the exceptions: each has a meaning when the config says nothing, so leaving
+// them out would hide a rule an agent would then have to discover by being refused.
 //
 // `wipLimits` is echoed exactly as the file holds it — the key is literally
 // `in-progress` whatever the board's statuses are called — and the statuses it
@@ -234,9 +234,10 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const data = {
     ...DESCRIPTOR,
     multipleActiveReleases: config?.multipleActiveReleases ?? false,
-    // Positional: the first is the status a new task takes and the only one a new
-    // task may be created with outside the current release, the last is the
-    // terminal one.
+    statusOutsideActiveRelease: config?.statusOutsideActiveRelease ?? false,
+    // Positional: the first is the status a new task takes (and, with the lock
+    // on, the only one a new task may be created with outside the current
+    // release); the last is the terminal one.
     taskTypes: enabledTaskTypes(config).map((t) => ({
       key: t.key,
       label: t.label,
