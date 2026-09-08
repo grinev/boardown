@@ -30,7 +30,7 @@ Views — what you look at first:
   archive                Finished releases.
 
 Tasks:
-  task get <id>          Show one task in full — the drill-down.
+  task get <id>…         Show one or more tasks in full — the drill-down.
   task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
   task add <title>       Create a task (--type --priority --status --epic --release --description).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.

@@ -38,9 +38,10 @@ describe('custom statuses (cli)', () => {
     await declare(FOUR);
     await taskCommand(parseArgs(['task', 'add', 'A', '--release', 'sprint']), ctx);
     const out = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
-    expect((out.data as { task: { frontmatter: { status: string } } }).task.frontmatter.status).toBe(
-      'backlog',
-    );
+    expect(
+      (out.data as { tasks: { task: { frontmatter: { status: string } } }[] }).tasks[0]?.task
+        .frontmatter.status,
+    ).toBe('backlog');
   });
 
   it('answers USAGE naming the board vocabulary at every --status site', async () => {
@@ -93,7 +94,7 @@ describe('custom statuses (cli)', () => {
     );
     const out = await schemaCommand(parseArgs(['schema']), ctx);
     expect(out.data).toMatchObject({
-      version: 12,
+      version: 13,
       taskStatuses: [{ key: 'backlog', label: 'Not started' }, { key: 'dev' }, { key: 'shipped' }],
       wipLimits: { 'in-progress': 2 },
       wipLimitedStatuses: ['dev'],
@@ -114,9 +115,10 @@ describe('custom statuses (cli)', () => {
     await taskCommand(parseArgs(['task', 'status', 'TS-1', 'in-progress']), ctx);
     await declare(FOUR);
     const out = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
-    expect((out.data as { task: { frontmatter: { status: string } } }).task.frontmatter.status).toBe(
-      'in-progress',
-    );
+    expect(
+      (out.data as { tasks: { task: { frontmatter: { status: string } } }[] }).tasks[0]?.task
+        .frontmatter.status,
+    ).toBe('in-progress');
     // And it moves forward into a declared one.
     await taskCommand(parseArgs(['task', 'status', 'TS-1', 'dev']), ctx);
   });

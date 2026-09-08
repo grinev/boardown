@@ -541,25 +541,39 @@ const renderTask = (task: Task, kind: string, file: string): string => {
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
-  const id = args.positionals[2];
-  if (id === undefined) {
-    throw new CliError('USAGE', 'Usage: boardown task get <id>.', 2);
+  const ids = args.positionals.slice(2);
+  if (ids.length === 0) {
+    throw new CliError('USAGE', 'Usage: boardown task get <id>….', 2);
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { snapshot, problems } = await loadBoardOrThrow(root);
-  const location = locateTask(snapshot, id);
-  if (location === null) {
-    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+
+  const tasks: { task: Task; in: { kind: string; file: string } }[] = [];
+  const missing: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const location = locateTask(snapshot, id);
+    const task = location?.container.tasks.find((t) => t.frontmatter.id === id);
+    if (location === null || task === undefined) {
+      missing.push(id);
+      continue;
+    }
+    tasks.push({ task, in: { kind: location.kind, file: location.container.filename } });
   }
-  const task = location.container.tasks.find((t) => t.frontmatter.id === id);
-  if (task === undefined) {
-    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+
+  const blocks = tasks.map((entry) => renderTask(entry.task, entry.in.kind, entry.in.file));
+  const missingLine = missing.length > 0 ? `missing: ${missing.join(', ')}` : '';
+  let human = blocks.join('\n\n');
+  if (missingLine.length > 0) {
+    human = human.length > 0 ? `${human}\n\n${missingLine}` : missingLine;
   }
 
   return {
-    data: { task, in: { kind: location.kind, file: location.container.filename } },
-    human: renderTask(task, location.kind, location.container.filename),
+    data: { tasks, missing },
+    human,
     ...problemsField(problems),
   };
 }

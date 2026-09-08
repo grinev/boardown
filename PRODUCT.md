@@ -1183,8 +1183,12 @@ UI tabs are three commands: `release current` is the Board, `backlog` is the
 Backlog tab (active releases, future releases, then the unscheduled tasks) and
 `archive` is the Archive. Any task appearing in a list is rendered as a **task
 summary** — the fields the task card carries (id, title, type, priority, status,
-epic, checklist `done/total`, notes count) — while `task get` returns the whole
-task. `priority` in a summary is always populated: a task with no key on disk
+epic, checklist `done/total`, notes count) — while `task get` returns whole
+tasks. It takes one or more ids and always answers `{ tasks, missing }`: each
+found id is `{ task, in }` in the order given, an unknown id is listed in
+`missing`, both arrays are always present, and the call succeeds even when none
+of the ids exist. `TASK_NOT_FOUND` is not this command's code.
+`priority` in a summary is always populated: a task with no key on disk
 reports the default, so a caller never has to know about the unset case.
 A single `--full` flag takes any listing command one level deeper. Mutating
 commands do not echo the entity back: they acknowledge with the identifier of
@@ -1200,7 +1204,7 @@ case-insensitive substring the app's search field uses, shared from
 `@boardown/core` so the two cannot drift. It differs from the field on purpose,
 though. It matches a task's **title and description only** — never the id, since
 every id carries the board's prefix and `--text bd` would return the whole board,
-and `task get <id>` is the id lookup. And being a filter rather than a picker it
+and `task get <id>…` is the id lookup. And being a filter rather than a picker it
 carries neither the field's three-character minimum nor its ten-result cap: it
 returns every task it matches, in the usual listing order. An empty `--text` is
 no filter at all. `task link ls` is a link listing rather than a task summary, and carries

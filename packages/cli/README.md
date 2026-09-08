@@ -37,7 +37,7 @@ boardown release current        The board: the active release it shows and its t
 boardown backlog                Active + future releases and the unscheduled backlog.
 boardown archive                Finished releases.
 
-boardown task get <id>          Show one task in full — the drill-down.
+boardown task get <id>…         Show one or more tasks in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
 boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
@@ -83,7 +83,7 @@ and checklist item texts come from `task get`.
 | `release list` / `epic list` | one row per release/epic with a task count | + task summaries |
 | `epic get` | epic + task summaries | tasks in full |
 | `task list` | task summaries + `count` | tasks in full |
-| `task get` | the whole task | — |
+| `task get` | `{ tasks, missing }` — whole tasks, unknown ids listed | — |
 
 Mutating commands do not echo the entity back — they return the identifier of
 what changed (`{ "id": "BD-42" }`, or `{ "slug": "1-11" }` for a release or
@@ -97,7 +97,8 @@ release that carry that epic tag. `--release <ref>` takes a slug or filename,
 substring match on a task's title and description. It searches nothing else —
 not notes, checklist items or custom field values, and not the **id**, since
 every id carries the board's prefix and `--text bd` would return the whole
-board; `task get <id>` is how you reach a task by id.
+board; `task get <id>…` is how you reach a task by id. An unknown id is listed
+in `missing` and is not an error.
 
 ### Custom statuses (beta)
 

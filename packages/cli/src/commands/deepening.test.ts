@@ -20,7 +20,9 @@ const locate = async (ctx: CommandContext, id: string): Promise<string | undefin
 
 const taskIn = async (ctx: CommandContext, id: string): Promise<Task> => {
   const out = await taskCommand(parseArgs(['task', 'get', id]), ctx);
-  return (out.data as { task: Task }).task;
+  const task = (out.data as { tasks: { task: Task }[] }).tasks[0]?.task;
+  if (task === undefined) throw new Error(`task ${id} not found`);
+  return task;
 };
 
 const releaseStatus = async (ctx: CommandContext, slug: string): Promise<string | undefined> => {
