@@ -34,7 +34,9 @@ describe('custom fields (cli)', () => {
 
   const getTask = async (id: string): Promise<Task> => {
     const out = await taskCommand(parseArgs(['task', 'get', id]), ctx);
-    return (out.data as { task: Task }).task;
+    const task = (out.data as { tasks: { task: Task }[] }).tasks[0]?.task;
+    if (task === undefined) throw new Error(`task ${id} not found`);
+    return task;
   };
 
   beforeEach(async () => {
@@ -152,7 +154,7 @@ describe('custom fields (cli)', () => {
     const outside = await mkdtemp(join(tmpdir(), 'bd-cli-nb-'));
     try {
       const out = await schemaCommand(parseArgs(['schema']), { cwd: outside, json: true });
-      expect(out.data).toMatchObject({ version: 12 });
+      expect(out.data).toMatchObject({ version: 13 });
       expect((out.data as { customFields?: unknown }).customFields).toBeUndefined();
     } finally {
       await rm(outside, { recursive: true, force: true });

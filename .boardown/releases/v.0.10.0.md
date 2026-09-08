@@ -197,13 +197,44 @@ session: ses_f7de46b55ffe8OXDsT3lX9cw7l
 ---
 id: BD-108
 type: feature
-status: ready
+status: review
 epic: cli
-order: 1500
+order: 2500
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 links:
   - type: relates
     to: BD-92
 spec: "[[repo:.claude/specs/BD-108-task-get-several-ids/spec.md]]"
+plan: "[[repo:.claude/specs/BD-108-task-get-several-ids/tech.md]]"
+log: "[[repo:.claude/specs/BD-108-task-get-several-ids/log.md]]"
+session: ses_f7dca6495ffeTXlDWeB0iAZNMH
 ---
 
 `task get` takes one id, and `task list --text` deliberately does not match ids, so reading a set of ids you already hold costs N calls. Take several at once: `task get BD-1 BD-2 BD-9`, or a repeatable `task list --id BD-1 --id BD-9` in the `--field` shape. Which of the two is a grooming decision.

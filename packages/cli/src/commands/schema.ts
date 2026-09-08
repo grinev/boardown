@@ -17,7 +17,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 12,
+  version: 13,
   taskTypes: TASK_TYPES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -51,7 +51,7 @@ const DESCRIPTOR = {
     notes: 'number of notes; omitted when the task has none',
   },
   outputModel:
-    'Listing commands return a task summary (taskSummaryFields); `task get` returns the whole task. --full takes any listing command one level deeper. Mutating commands return only the identifier of what changed.',
+    'Listing commands return a task summary (taskSummaryFields); `task get` returns { tasks: [{ task, in }], missing } — whole tasks in the order given, unknown ids in missing, both arrays always present. --full takes any listing command one level deeper. Mutating commands return only the identifier of what changed.',
   commands: [
     {
       name: 'backlog',
@@ -70,7 +70,12 @@ const DESCRIPTOR = {
       usage: 'boardown init [--id-prefix PP] [--project-name NAME]',
       summary: 'Create a .boardown/ board in the current directory.',
     },
-    { name: 'task get', usage: 'boardown task get <id>', summary: 'Show one task and where it lives.' },
+    {
+      name: 'task get',
+      usage: 'boardown task get <id>…',
+      summary:
+        'Show one or more tasks and where they live. Data is { tasks: [{ task, in: { kind, file } }], missing }; an unknown id is listed in missing, not an error. A duplicate id is returned once, at its first position.',
+    },
     {
       name: 'task list',
       usage:

@@ -533,6 +533,25 @@ describe('cli commands (integration)', () => {
     expect(get.human).toContain('Remember this');
   });
 
+  it('task get human output stacks tasks and lists missing ids', async () => {
+    await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'One']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'Two']), ctx);
+
+    const stacked = await taskCommand(parseArgs(['task', 'get', 'TS-1', 'TS-2']), ctx);
+    expect(stacked.human).toContain('One');
+    expect(stacked.human).toContain('Two');
+    expect(stacked.human).toContain('\n\nTS-2');
+    expect(stacked.human).not.toContain('missing:');
+
+    const mix = await taskCommand(parseArgs(['task', 'get', 'TS-1', 'TS-99']), ctx);
+    expect(mix.human).toContain('One');
+    expect(mix.human.endsWith('\n\nmissing: TS-99')).toBe(true);
+
+    const none = await taskCommand(parseArgs(['task', 'get', 'TS-99']), ctx);
+    expect(none.human).toBe('missing: TS-99');
+  });
+
   describe('task link', () => {
     interface LinkEntry {
       type: string;

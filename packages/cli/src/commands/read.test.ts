@@ -9,6 +9,7 @@ import { backlogCommand } from './backlog';
 import { epicCommand } from './epic';
 import { initCommand } from './init';
 import { releaseCommand } from './release';
+import { schemaCommand } from './schema';
 import { taskCommand } from './task';
 
 const backlogOrder = async (ctx: CommandContext): Promise<string[]> => {
@@ -36,12 +37,46 @@ describe('read + reorder commands', () => {
   it('task get returns the task and its location', async () => {
     await taskCommand(parseArgs(['task', 'add', 'One']), ctx);
     const got = await taskCommand(parseArgs(['task', 'get', 'TS-1']), ctx);
-    const data = got.data as { task: Task; in: { kind: string; file: string } };
-    expect(data.task.frontmatter.id).toBe('TS-1');
-    expect(data.in.kind).toBe('backlog');
-    await expect(taskCommand(parseArgs(['task', 'get', 'TS-99']), ctx)).rejects.toMatchObject({
-      code: 'TASK_NOT_FOUND',
+    const data = got.data as {
+      tasks: { task: Task; in: { kind: string; file: string } }[];
+      missing: string[];
+    };
+    expect(data.tasks).toHaveLength(1);
+    expect(data.tasks[0]?.task.frontmatter.id).toBe('TS-1');
+    expect(data.tasks[0]?.in.kind).toBe('backlog');
+    expect(data.missing).toEqual([]);
+  });
+
+  it('task get takes several ids and lists missing ones', async () => {
+    await taskCommand(parseArgs(['task', 'add', 'One']), ctx);
+    await taskCommand(parseArgs(['task', 'add', 'Two']), ctx);
+    const mix = await taskCommand(parseArgs(['task', 'get', 'TS-2', 'TS-99', 'TS-1', 'TS-2']), ctx);
+    const data = mix.data as { tasks: { task: Task }[]; missing: string[] };
+    expect(data.tasks.map((entry) => entry.task.frontmatter.id)).toEqual(['TS-2', 'TS-1']);
+    expect(data.missing).toEqual(['TS-99']);
+
+    const none = await taskCommand(parseArgs(['task', 'get', 'TS-99', 'TS-99']), ctx);
+    expect(none.data).toEqual({ tasks: [], missing: ['TS-99'] });
+
+    await expect(taskCommand(parseArgs(['task', 'get']), ctx)).rejects.toMatchObject({
+      code: 'USAGE',
+      exitCode: 2,
     });
+    await expect(
+      taskCommand(parseArgs(['task', 'status', 'TS-99', 'done']), ctx),
+    ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND' });
+  });
+
+  it('schema reports task get as variadic with tasks/missing', async () => {
+    const out = await schemaCommand(parseArgs(['schema']), ctx);
+    const data = out.data as {
+      version: number;
+      commands: { name: string; usage: string }[];
+    };
+    expect(data.version).toBe(13);
+    expect(data.commands.find((command) => command.name === 'task get')?.usage).toBe(
+      'boardown task get <id>…',
+    );
   });
 
   it('epic list and epic get report epic membership', async () => {
