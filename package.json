@@ -1,6 +1,7 @@
 {
   "name": "boardown",
   "version": "0.9.0",
+  "minCompatibleVersion": "0.9.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -23,7 +24,7 @@
     "dev": "pnpm --filter @boardown/web dev",
     "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && node --test scripts/min-compatible.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",

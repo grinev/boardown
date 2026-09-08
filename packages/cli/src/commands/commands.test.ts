@@ -51,6 +51,7 @@ describe('cli commands (integration)', () => {
     const config = await readFile(join(project, '.boardown', 'config.yaml'), 'utf8');
     expect(config).toContain('idPrefix: TS');
     expect(config).toContain('projectName: Demo');
+    expect(config).toContain('minVersion:');
   });
 
   it('add → board → edit → status → rm round-trips', async () => {
@@ -837,7 +838,9 @@ describe('cli commands (integration)', () => {
         .map((container): ContainerRef => ({ kind: 'epic', container })),
     ];
 
-    await expect(writeContainers(board.fs, refs)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(writeContainers(board.fs, refs, board.snapshot.config)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
 
     // The release is written first, so a sequence of single writes would already
     // have finished it here.

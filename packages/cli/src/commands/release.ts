@@ -187,7 +187,7 @@ async function releaseAdd(args: ParsedArgs, ctx: CommandContext): Promise<Comman
     throw new CliError('RELEASE_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await writeContainer(board.fs, { kind: 'release', container: release });
+  await writeContainer(board.fs, { kind: 'release', container: release }, board.snapshot.config);
   return {
     data: { slug: release.slug },
     human: `Created release "${releaseName(release)}" (${release.filename}).`,
@@ -235,9 +235,14 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 
   const moved = updated.filename !== release.filename;
   if (moved) {
-    await moveContainer(board.fs, { kind: 'release', container: updated }, release.filename);
+    await moveContainer(
+      board.fs,
+      { kind: 'release', container: updated },
+      release.filename,
+      board.snapshot.config,
+    );
   } else {
-    await writeContainer(board.fs, { kind: 'release', container: updated });
+    await writeContainer(board.fs, { kind: 'release', container: updated }, board.snapshot.config);
   }
 
   // The Board's stored choice is a slug, so a rename carries it. After the move,
@@ -273,7 +278,7 @@ async function releaseStart(args: ParsedArgs, ctx: CommandContext): Promise<Comm
     throw new CliError('RELEASE_CONFLICT', err instanceof Error ? err.message : String(err));
   }
 
-  await writeContainer(board.fs, { kind: 'release', container: started });
+  await writeContainer(board.fs, { kind: 'release', container: started }, board.snapshot.config);
   return {
     data: { slug: started.slug },
     human: `Started release ${releaseName(started)} (now current).`,
@@ -322,7 +327,7 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   if (result.backlog !== null && changed.has(result.backlog.filename)) {
     refs.push({ kind: 'backlog', container: result.backlog });
   }
-  await writeContainers(board.fs, refs);
+  await writeContainers(board.fs, refs, board.snapshot.config);
 
   return {
     data: { slug: result.release.slug },

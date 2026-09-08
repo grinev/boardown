@@ -61,8 +61,8 @@ boardown epic list              List epics with task counts.
 boardown epic add <name>        Create an epic (--color #rrggbb --description; name max 28 chars).
 boardown epic edit <slug>       Edit an epic (--name --description --color #rrggbb; name max 28 chars).
 
-boardown init                   Create a .boardown/ board here (--id-prefix --project-name).
-boardown schema                 Print the machine-readable command/enum contract.
+boardown init                   Create a .boardown/ board here (--id-prefix --project-name). Writes minVersion.
+boardown schema                 Print the machine-readable command/enum contract (including minCompatibleVersion).
 boardown version                Print the CLI version (also --version / -v).
 ```
 
@@ -244,9 +244,14 @@ emits a stable envelope:
 
 Parse problems from a malformed file ride alongside either shape as `problems`.
 
+A board whose `minVersion` is above this build is refused with
+`VERSION_TOO_OLD` (exit 1) on every command that reads the board, including
+`schema`. Only `boardown --version` and `boardown help` still run.
+
 Exit codes: `0` success, `1` operation failed, `2` usage error. Run
 `boardown schema --json` for the full contract (valid task types, the board's
-statuses, and command grammar) — agents can read it instead of guessing.
+statuses, `minCompatibleVersion`, and command grammar) — agents can read it
+instead of guessing.
 
 ## Develop (from the monorepo)
 

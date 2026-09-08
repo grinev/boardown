@@ -5,9 +5,14 @@
 // Does NOT create a git tag — the publish workflow does that after a build.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import {
+  decideMinCompatible,
+  formatFilesChangedSince,
+  previousReleaseTag,
+} from "./min-compatible.mjs";
 import { syncVersions } from "./sync-versions.mjs";
 
 const isWindows = process.platform === "win32";
@@ -102,6 +107,7 @@ function printUsage() {
       "",
       "Notes:",
       "  - Updates the root package.json and mirrors the version into all packages",
+      "  - Moves minCompatibleVersion when the on-disk format files changed since the last tag",
       "  - For a stable version, seeds docs/release-notes/v<version>.md with a draft",
       "  - Does NOT commit and does NOT tag: curate the notes and release docs, then",
       "    commit them together as chore(release): v<version> (see /prepare-release)",
@@ -143,6 +149,60 @@ if (semverInputPattern.test(input) && input === versionBefore) {
 }
 
 const { version } = syncVersions();
+
+function runGit(args) {
+  return spawnSync("git", args, { encoding: "utf8" });
+}
+
+const fetchTags = spawnSync("git", ["fetch", "--tags"], { stdio: "inherit" });
+if (fetchTags.error) {
+  throw fetchTags.error;
+}
+if (typeof fetchTags.status === "number" && fetchTags.status !== 0) {
+  process.exit(fetchTags.status);
+}
+
+const previousTag = previousReleaseTag(runGit);
+if (previousTag === null) {
+  process.stderr.write(
+    "No previous release tag after git fetch --tags; cannot decide minCompatibleVersion.\n",
+  );
+  process.exit(1);
+}
+
+const formatChanged = formatFilesChangedSince(previousTag, runGit);
+const rootPackage = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+const currentMin = rootPackage.minCompatibleVersion;
+if (!currentMin) {
+  process.stderr.write("Root package.json has no minCompatibleVersion field\n");
+  process.exit(1);
+}
+
+const decision = decideMinCompatible({
+  current: currentMin,
+  version,
+  formatChanged,
+});
+
+if (decision.kind === "stop") {
+  process.stderr.write(
+    `minCompatibleVersion (${decision.current}) is already higher than the version being released (${decision.version}).\n`,
+  );
+  process.exit(1);
+}
+
+if (decision.kind === "set") {
+  rootPackage.minCompatibleVersion = decision.value;
+  writeFileSync(packageJsonPath, `${JSON.stringify(rootPackage, null, 2)}\n`, "utf8");
+  syncVersions();
+  process.stdout.write(
+    `minCompatibleVersion ${currentMin} → ${decision.value} (format files changed since ${previousTag})\n`,
+  );
+} else {
+  process.stdout.write(
+    `minCompatibleVersion stays ${decision.value} (format files unchanged since ${previousTag})\n`,
+  );
+}
 
 const isStable = /^\d+\.\d+\.\d+$/.test(version);
 const notesPath = isStable ? seedReleaseNotes(version) : null;

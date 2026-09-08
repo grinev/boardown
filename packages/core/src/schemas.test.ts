@@ -397,6 +397,44 @@ describe('BoardConfigSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts minVersion with optional trailing text', () => {
+    expect(
+      BoardConfigSchema.safeParse({
+        idPrefix: 'BD',
+        nextId: 0,
+        projectName: 'P',
+        minVersion: '0.11.0',
+      }).success,
+    ).toBe(true);
+    expect(
+      BoardConfigSchema.safeParse({
+        idPrefix: 'BD',
+        nextId: 0,
+        projectName: 'P',
+        minVersion: '0.11.0-rc.1',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a malformed minVersion', () => {
+    expect(
+      BoardConfigSchema.safeParse({
+        idPrefix: 'BD',
+        nextId: 0,
+        projectName: 'P',
+        minVersion: '1.2',
+      }).success,
+    ).toBe(false);
+    expect(
+      BoardConfigSchema.safeParse({
+        idPrefix: 'BD',
+        nextId: 0,
+        projectName: 'P',
+        minVersion: 1,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('BoardConfigSchema customFields', () => {

@@ -276,6 +276,7 @@ that is expected, not damage.
 `.boardown/config.yaml`:
 
 ```yaml
+minVersion: 0.9.0     # optional; oldest boardown that reads this board. Written by the app, never by hand
 idPrefix: BD          # task id prefix, e.g. BD -> BD-1, BD-2, ...
 nextId: 47            # next id to hand out (verified against existing ids on startup)
 projectName: My Board # required, human-readable name shown in the app header
@@ -300,6 +301,25 @@ customTaskTypes:      # optional; the board's own types
     color: '#0EA5E9'
     commitPrefix: ops
 ```
+
+`minVersion` is a requirement, not a history: the oldest boardown build that
+reads this board correctly. It is absent on every board that predates the key,
+which opens as it always has. The app writes it from a constant
+(`minCompatibleVersion` in `package.json`) whenever it writes `config.yaml`, and
+on the first board write after that constant moves, paired with the content so
+both land or neither does. A plain open never writes it. `pnpm release:prepare`
+is the only thing that moves the constant: it fetches tags and, if
+`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts` or `loader.ts`
+changed since the previous release tag, sets the constant to the version being
+released.
+
+A running build older than `minVersion` does not open the board. The GUI shows
+the same unloadable-board screen it shows for an invalid config, naming the
+required version and the running one and saying to update boardown. The CLI
+refuses every command that reads the board with `VERSION_TOO_OLD` (exit 1),
+naming both versions and the install command; only `--version` and `help` still
+run. `boardown-web`'s registry list says the row needs a newer boardown, in the
+same place a broken board says its config is invalid. Nothing is written.
 
 `projectName` is required (set during onboarding) and read-only from the app's
 point of view — it is shown in the header and edited by changing `config.yaml`
@@ -532,7 +552,8 @@ seed a config or a starter release and do not fall back to defaults; they only
 provide a working `FsAdapter` (the web dev shell additionally ensures the board
 root directory exists). An invalid `config.yaml` (present but not parseable or
 not matching the schema) shows a dedicated error screen — no silent fallback, no
-auto-rewrite.
+auto-rewrite. A board whose `minVersion` this build does not meet uses that same
+screen, with an update message instead of a validation error.
 
 After onboarding the board starts empty (no releases), opened on the Backlog
 tab; the user creates the first release themselves. `epics/no_epic.md` is
@@ -1333,6 +1354,10 @@ already exist: `task add` and `task edit` take a repeatable
 `USAGE` error), `task get` returns the task's values, and `schema` lists the
 board's declarations so an agent learns which keys it may write. Run outside a
 board, `schema` prints its static contract without that list rather than failing.
+A board present but newer than this build is `VERSION_TOO_OLD`, the same code
+every other command uses — `schema` is not an exception. `schema` also reports
+`minCompatibleVersion` (the version this build requires of a board), documents
+the `minVersion` config key, and lists `VERSION_TOO_OLD`.
 Task summaries carry no custom fields — they mirror the task card, which shows
 none — while `--full`, which returns whole tasks, carries them like every other
 field. Because every change is a plain-markdown git
@@ -1397,8 +1422,8 @@ value is an absolute path to the **project** folder, whose board is the
 `.boardown/` inside it. Each project's display name on the list page comes from
 its own `config.yaml`; a project whose board cannot be read keeps its row and
 carries the reason instead — `no board yet`, `config.yaml is invalid`,
-`folder not found`, `could not be read` — so one bad entry never costs the
-others. A file that does not parse, has no `projects` key, or carries an id that
+`needs a newer boardown`, `folder not found`, `could not be read` — so one bad
+entry never costs the others. A file that does not parse, has no `projects` key, or carries an id that
 is not a URL segment is invalid configuration and refuses the start, naming the
 reason and the path. The file is
 re-read when it changes: a project added to it appears without a restart, and one

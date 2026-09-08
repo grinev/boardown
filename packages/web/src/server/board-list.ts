@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { CONFIG_FILENAME, parseConfig } from '../../../core/src/config';
+import { CONFIG_FILENAME, checkMinVersion, parseConfig } from '../../../core/src/config';
 import type { RegistryEntry } from './registry.js';
 
 // What the list page shows for one registered project. The name comes from the
@@ -41,6 +41,10 @@ export const describeEntry = async (entry: RegistryEntry): Promise<BoardListRow>
     };
   }
 
+  const gate = checkMinVersion(text);
+  if (gate.kind === 'too-old') {
+    return { ...row, name: null, reason: 'needs a newer boardown' };
+  }
   const config = parseConfig(text);
   if (config.value === null) {
     return { ...row, name: null, reason: `${CONFIG_FILENAME} is invalid` };

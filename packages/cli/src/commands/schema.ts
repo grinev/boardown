@@ -4,6 +4,7 @@ import {
   EPIC_NAME_MAX_LENGTH,
   LINK_TYPES,
   LUCIDE_ICON_NAMES,
+  MIN_COMPATIBLE_VERSION,
   RELEASE_STATUSES,
   TASK_PRIORITIES,
   WIP_LIMIT_KEY,
@@ -18,7 +19,8 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 15,
+  version: 16,
+  minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -205,6 +207,14 @@ const DESCRIPTOR = {
     '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
   epicNameMaxLength: EPIC_NAME_MAX_LENGTH,
+  configFields: {
+    minVersion:
+      'optional; the oldest boardown build that reads this board. Written by boardown, never by hand. Absent means no requirement.',
+  },
+  errorCodes: {
+    VERSION_TOO_OLD:
+      'the running build is older than config minVersion; no command that reads the board runs. --version and help still work.',
+  },
 } as const;
 
 // The declarations and the WIP limit are board-specific, so they ride along only

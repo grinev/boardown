@@ -213,6 +213,10 @@ export type Theme = z.infer<typeof ThemeSchema>;
 export const ID_PREFIX_REGEX = /^[A-Z]{2,5}$/;
 export const ID_PREFIX_MESSAGE = 'idPrefix must be 2-5 uppercase letters (A-Z)';
 
+export const MIN_VERSION_REGEX = /^\d+\.\d+\.\d+/;
+export const MIN_VERSION_MESSAGE =
+  'minVersion must be <major>.<minor>.<patch> with optional trailing text';
+
 export const CUSTOM_FIELD_TYPES = ['string'] as const;
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
 
@@ -358,6 +362,7 @@ export const BoardConfigSchema = z
     idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
     nextId: z.number().int().nonnegative(),
     projectName: z.string().min(1),
+    minVersion: z.string().regex(MIN_VERSION_REGEX, MIN_VERSION_MESSAGE).optional(),
     theme: ThemeSchema.optional(),
     // The slug of the active release the Board shows. Not checked against the
     // releases on disk: a slug that stopped being active resolves away at read

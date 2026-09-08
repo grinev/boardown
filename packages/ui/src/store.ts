@@ -1,5 +1,6 @@
 import type {
   Backlog,
+  BoardConfig,
   BoardSnapshot,
   Container,
   DeleteTaskResult,
@@ -26,6 +27,8 @@ import type {
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
+  configNeedsMinVersionStamp,
+  withMinVersionStamp,
   addTaskLink as addTaskLinkInBoard,
   removeTaskLink as removeTaskLinkInBoard,
   completeRelease as completeReleaseInBoard,
@@ -300,6 +303,63 @@ const serializeContainer = (
 // Turns the filenames a board op reports as changed into the files to write.
 // An unknown filename throws rather than being skipped: the op declared that
 // container changed, so dropping it would lose the write silently.
+const versionTooOldMessage = (required: string, running: string): string =>
+  `This board requires boardown ${required} (this build is ${running}). Update boardown.`;
+
+const wrapMinVersionWrites = (
+  fs: GuardedFs,
+  readConfig: () => BoardConfig | null,
+  commitConfig: (config: BoardConfig) => void,
+): GuardedFs => {
+  const addStamp = (files: GuardedFile[]): GuardedFile[] => {
+    const config = readConfig();
+    if (config === null || !configNeedsMinVersionStamp(config)) return files;
+    const next = withMinVersionStamp(config);
+    commitConfig(next);
+    if (files.some((file) => file.path === CONFIG_FILENAME)) {
+      return files.map((file) =>
+        file.path === CONFIG_FILENAME
+          ? { path: file.path, content: serializeConfig(next) }
+          : file,
+      );
+    }
+    return [...files, { path: CONFIG_FILENAME, content: serializeConfig(next) }];
+  };
+
+  return {
+    ...fs,
+    async write(path, content) {
+      const files = addStamp([{ path, content }]);
+      if (files.length === 1) {
+        const only = files[0]!;
+        await fs.write(only.path, only.content);
+        return;
+      }
+      await fs.writeAll(files);
+    },
+    async writeAll(files) {
+      await fs.writeAll(addStamp([...files]));
+    },
+    async moveFile(from, to, content) {
+      const config = readConfig();
+      if (config === null || !configNeedsMinVersionStamp(config)) {
+        await fs.moveFile(from, to, content);
+        return;
+      }
+      const next = withMinVersionStamp(config);
+      const previousText = await fs.read(CONFIG_FILENAME);
+      await fs.write(CONFIG_FILENAME, serializeConfig(next));
+      try {
+        await fs.moveFile(from, to, content);
+      } catch (err) {
+        await fs.write(CONFIG_FILENAME, previousText);
+        throw err;
+      }
+      commitConfig(next);
+    },
+  };
+};
+
 const filesFor = (snapshot: BoardSnapshot, filenames: Iterable<string>): GuardedFile[] => {
   const files: GuardedFile[] = [];
   for (const path of filenames) {
@@ -625,14 +685,31 @@ export const useBoardStore = create<BoardState>(
           });
           return;
         }
+        if (result.kind === 'version-too-old') {
+          set({
+            status: 'error',
+            snapshot: null,
+            problems: [],
+            errorMessage: versionTooOldMessage(result.required, result.running),
+          });
+          return;
+        }
         // From here on writes go through a guard that refuses to clobber files
         // changed on disk since this load, surfacing the conflict modal instead.
-        const guarded = createGuardedFs(fs, {
-          versions: result.fileVersions,
-          problems: result.problems,
-          onConflict: () => get().openConflict(),
-          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
-        });
+        const guarded = wrapMinVersionWrites(
+          createGuardedFs(fs, {
+            versions: result.fileVersions,
+            problems: result.problems,
+            onConflict: () => get().openConflict(),
+            onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+          }),
+          () => get().snapshot?.config ?? null,
+          (config) => {
+            const snapshot = get().snapshot;
+            if (!snapshot) return;
+            set({ snapshot: { ...snapshot, config } });
+          },
+        );
         set({
           status: 'ready',
           fs: guarded,
@@ -678,12 +755,20 @@ export const useBoardStore = create<BoardState>(
           await get().load(rawFs);
           return;
         }
-        const guarded = createGuardedFs(rawFs, {
-          versions: result.fileVersions,
-          problems: result.problems,
-          onConflict: () => get().openConflict(),
-          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
-        });
+        const guarded = wrapMinVersionWrites(
+          createGuardedFs(rawFs, {
+            versions: result.fileVersions,
+            problems: result.problems,
+            onConflict: () => get().openConflict(),
+            onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+          }),
+          () => get().snapshot?.config ?? null,
+          (config) => {
+            const snapshot = get().snapshot;
+            if (!snapshot) return;
+            set({ snapshot: { ...snapshot, config } });
+          },
+        );
         set({
           fs: guarded,
           snapshot: result.snapshot,
@@ -722,12 +807,12 @@ export const useBoardStore = create<BoardState>(
         throw new Error('Filesystem adapter is not initialized');
       }
       const dt = get().defaultTheme;
-      const config = {
+      const config = withMinVersionStamp({
         idPrefix: input.idPrefix,
         nextId: 1,
         projectName: input.projectName,
         ...(dt ? { theme: dt } : {}),
-      };
+      });
       await fs.write(CONFIG_FILENAME, serializeConfig(config));
       await get().load(fs);
       // A freshly created board has no releases yet, so land on the Backlog tab
@@ -743,7 +828,7 @@ export const useBoardStore = create<BoardState>(
       if (next === previous) return;
       const nextSnapshot: BoardSnapshot = {
         ...snapshot,
-        config: { ...snapshot.config, theme: next },
+        config: withMinVersionStamp({ ...snapshot.config, theme: next }),
       };
       set({ theme: next, snapshot: nextSnapshot, errorMessage: null });
       try {
@@ -758,7 +843,7 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       if ((snapshot.config.wipLimits?.['in-progress'] ?? null) === limit) return;
-      const nextConfig = { ...snapshot.config };
+      const nextConfig = withMinVersionStamp({ ...snapshot.config });
       if (limit === null) {
         delete nextConfig.wipLimits;
       } else {
@@ -778,7 +863,7 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       if (snapshot.config.boardRelease === slug) return;
-      const nextConfig = { ...snapshot.config, boardRelease: slug };
+      const nextConfig = withMinVersionStamp({ ...snapshot.config, boardRelease: slug });
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {
@@ -793,7 +878,10 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       if ((snapshot.config.multipleActiveReleases ?? false) === enabled) return;
-      const nextConfig = { ...snapshot.config, multipleActiveReleases: enabled };
+      const nextConfig = withMinVersionStamp({
+        ...snapshot.config,
+        multipleActiveReleases: enabled,
+      });
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {
@@ -809,7 +897,7 @@ export const useBoardStore = create<BoardState>(
       if (!snapshot || !fs) return;
       // Absent means on, so the comparison resolves before it decides.
       if ((snapshot.config.gitIntegration ?? true) === enabled) return;
-      const nextConfig = { ...snapshot.config, gitIntegration: enabled };
+      const nextConfig = withMinVersionStamp({ ...snapshot.config, gitIntegration: enabled });
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {
@@ -1091,8 +1179,10 @@ export const useBoardStore = create<BoardState>(
       ) => {
         set({ snapshot: nextSnapshot, errorMessage: null });
         try {
-          await fs.write(filename, content);
-          await fs.write(CONFIG_FILENAME, serializeConfig(config));
+          await fs.writeAll([
+            { path: filename, content },
+            { path: CONFIG_FILENAME, content: serializeConfig(withMinVersionStamp(config)) },
+          ]);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           set({ snapshot, errorMessage: `Failed to save task: ${message}` });
@@ -2012,7 +2102,7 @@ export const useBoardStore = create<BoardState>(
       // After the move, not with it: a stored slug that fell behind resolves to
       // the first active release, while a moved file the snapshot did not know
       // about would leave the two out of step for every later write.
-      if (moved && boardReleaseMoved) {
+      if (moved && boardReleaseMoved && !configNeedsMinVersionStamp(snapshot.config)) {
         try {
           await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
         } catch (err) {

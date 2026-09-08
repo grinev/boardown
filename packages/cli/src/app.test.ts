@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EPIC_NAME_MAX_LENGTH } from '@boardown/core';
@@ -112,7 +112,7 @@ describe('run() — routing, envelopes, exit codes', () => {
     expect(code).toBe(0);
     const env = parse(stdout);
     expect(env).toMatchObject({ ok: true });
-    expect((env.data as { version: number }).version).toBe(15);
+    expect((env.data as { version: number }).version).toBe(16);
     // The epic name rule is enforced whatever the board, so an agent must be
     // able to read it without first failing a write.
     expect(env.data).toMatchObject({ epicNameMaxLength: EPIC_NAME_MAX_LENGTH });
@@ -166,6 +166,35 @@ describe('run() — routing, envelopes, exit codes', () => {
       expect(errorCode(env)).toBe('NO_BOARD');
     } finally {
       await rm(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('a board newer than this build maps to VERSION_TOO_OLD, while --version and help still work', async () => {
+    const project = await mkdtemp(join(tmpdir(), 'bd-cli-run-ver-'));
+    try {
+      const board = join(project, '.boardown');
+      await mkdir(board);
+      await writeFile(
+        join(board, 'config.yaml'),
+        'idPrefix: TS\nnextId: 1\nprojectName: Demo\nminVersion: 99.0.0\n',
+        'utf8',
+      );
+      const tooOld = await capture(['backlog'], { cwd: project });
+      expect(tooOld.code).toBe(1);
+      expect(errorCode(parse(tooOld.stdout))).toBe('VERSION_TOO_OLD');
+      const err = parse(tooOld.stdout).error as { message: string };
+      expect(err.message).toContain('99.0.0');
+
+      const schema = await capture(['schema'], { cwd: project });
+      expect(schema.code).toBe(1);
+      expect(errorCode(parse(schema.stdout))).toBe('VERSION_TOO_OLD');
+
+      const version = await capture(['--version'], { cwd: project });
+      expect(version.code).toBe(0);
+      const help = await capture(['help'], { cwd: project });
+      expect(help.code).toBe(0);
+    } finally {
+      await rm(project, { recursive: true, force: true });
     }
   });
 

@@ -1,6 +1,7 @@
 {
   "name": "boardown",
   "version": "0.9.0",
+  "minCompatibleVersion": "0.9.0",
   "private": true,
   "publisher": "grinev",
   "displayName": "Boardown",

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-// Mirrors the root package.json version into every workspace package so the
-// whole monorepo ships under one lockstep version. Source of truth: root.
+// Mirrors the root package.json version and minCompatibleVersion into every
+// workspace package so the whole monorepo ships under one lockstep version.
+// Source of truth: root.
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
@@ -20,10 +21,17 @@ function writeJson(path, data) {
 
 export function syncVersions() {
   const rootPackagePath = join(rootDir, "package.json");
-  const version = readJson(rootPackagePath).version;
+  const root = readJson(rootPackagePath);
+  const version = root.version;
+  const minCompatibleVersion = root.minCompatibleVersion;
 
   if (!version) {
     process.stderr.write("Root package.json has no version field\n");
+    process.exit(1);
+  }
+
+  if (!minCompatibleVersion) {
+    process.stderr.write("Root package.json has no minCompatibleVersion field\n");
     process.exit(1);
   }
 
@@ -43,16 +51,19 @@ export function syncVersions() {
       continue;
     }
 
-    if (pkg.version === version) {
+    const versionChanged = pkg.version !== version;
+    const minChanged = pkg.minCompatibleVersion !== minCompatibleVersion;
+    if (!versionChanged && !minChanged) {
       continue;
     }
 
     pkg.version = version;
+    pkg.minCompatibleVersion = minCompatibleVersion;
     writeJson(packagePath, pkg);
     updated.push(`packages/${entry.name}`);
   }
 
-  return { version, updated };
+  return { version, minCompatibleVersion, updated };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
