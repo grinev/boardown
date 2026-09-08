@@ -1978,3 +1978,38 @@ describe('custom field values', () => {
     expect(() => editTask(r, withFields, 'BD-1', { custom: { env: 'x' } })).toThrow(/finished/);
   });
 });
+
+describe('custom task types', () => {
+  const withTypes: BoardConfig = {
+    ...config,
+    taskTypes: [{ key: 'tech', disabled: true }],
+    customTaskTypes: [{ key: 'ops' }],
+  };
+
+  it('refuses a disabled type on create and on edit, with UNKNOWN_TYPE', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    try {
+      createTask(r, withTypes, { title: 'N', type: 'tech', status: 'todo' });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(BoardOpError);
+      expect((err as BoardOpError).code).toBe('UNKNOWN_TYPE');
+      expect((err as BoardOpError).message).toContain('bug, feature, docs, ops');
+    }
+    expect(() => editTask(r, withTypes, 'BD-1', { type: 'tech' })).toThrow(/this board enables/);
+  });
+
+  it('creates a custom type and leaves an existing disabled type untouched', () => {
+    const created = createTask(release(), withTypes, {
+      title: 'N',
+      type: 'ops',
+      status: 'todo',
+    });
+    expect(created.task.frontmatter.type).toBe('ops');
+    const carrying = release({
+      ...task('BD-1', 'todo', 100),
+      frontmatter: { id: 'BD-1', type: 'tech', status: 'todo', order: 100 },
+    });
+    expect(() => editTask(carrying, withTypes, 'BD-1', { title: 'Kept' })).not.toThrow();
+  });
+});

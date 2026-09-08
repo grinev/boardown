@@ -6,6 +6,7 @@ import {
   LINK_TYPES,
   LINK_TYPE_META,
   ReleaseFrontmatterSchema,
+  TASK_TYPES,
   TaskFrontmatterSchema,
   type TaskFrontmatter,
 } from './schemas.js';
@@ -69,10 +70,20 @@ describe('TaskFrontmatterSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects an unknown type', () => {
+  it('takes a type the board does not declare', () => {
     const result = TaskFrontmatterSchema.safeParse({
       id: 'BD-1',
-      type: 'epic',
+      type: 'ops',
+      status: 'todo',
+      order: 100,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty type', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: '',
       status: 'todo',
       order: 100,
     });
@@ -452,6 +463,78 @@ describe('BoardConfigSchema customFields', () => {
   it('rejects a declaration with no type', () => {
     const result = BoardConfigSchema.safeParse(withFields([{ key: 'due' }]));
     expect(result.success).toBe(false);
+  });
+});
+
+describe('BoardConfigSchema task types', () => {
+  const base = { idPrefix: 'BD', nextId: 0, projectName: 'P' };
+
+  it('accepts an override that disables a base type', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      taskTypes: [{ key: 'tech', disabled: true }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a custom type with only a key', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      customTaskTypes: [{ key: 'ops' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a taskTypes key that is not a base type', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      taskTypes: [{ key: 'ops', disabled: true }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a duplicate taskTypes key', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      taskTypes: [
+        { key: 'tech', disabled: true },
+        { key: 'tech', disabled: false },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a custom key that matches a base type', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      customTaskTypes: [{ key: 'bug' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown icon name', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      customTaskTypes: [{ key: 'ops', icon: 'not-an-icon' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects disabling every base type with no custom type', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      taskTypes: TASK_TYPES.map((key) => ({ key, disabled: true })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts every base type disabled when a custom type is declared', () => {
+    const result = BoardConfigSchema.safeParse({
+      ...base,
+      taskTypes: TASK_TYPES.map((key) => ({ key, disabled: true })),
+      customTaskTypes: [{ key: 'ops' }],
+    });
+    expect(result.success).toBe(true);
   });
 });
 

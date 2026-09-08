@@ -7,7 +7,7 @@ import {
   type Task,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { DialogBackButton } from './DialogBackButton';
 import { EpicColorSwatches } from './EpicColorSwatches';
@@ -190,13 +190,13 @@ export function EpicDetailsDialog({
               </div>
               {tasks.map((task) => {
                 const { id, type, status } = task.frontmatter;
-                const typeMeta = TASK_TYPE_META[type];
+                const typeMeta = taskTypeDisplay(config, type);
                 const TypeIcon = typeMeta.icon;
                 return (
                   <Fragment key={id}>
                     <TypeIcon
                       className={styles.taskTypeIcon}
-                      style={{ color: typeMeta.colorVar }}
+                      style={typeMeta.style}
                       aria-label={typeMeta.label}
                     />
                     <span className={styles.taskId}>{id}</span>

@@ -59,15 +59,31 @@ export const serializeConfig = (config: BoardConfig): string => {
       return entry;
     });
   }
-  if (config.customFields !== undefined) {
-    ordered.customFields = config.customFields.map((field) => {
-      const entry: Record<string, unknown> = { key: field.key };
-      if (field.label !== undefined) entry.label = field.label;
-      entry.type = field.type;
-      return entry;
-    });
-  }
-  return yaml.dump(ordered, {
+    if (config.customFields !== undefined) {
+      ordered.customFields = config.customFields.map((field) => {
+        const entry: Record<string, unknown> = { key: field.key };
+        if (field.label !== undefined) entry.label = field.label;
+        entry.type = field.type;
+        return entry;
+      });
+    }
+    if (config.taskTypes !== undefined) {
+      ordered.taskTypes = config.taskTypes.map((entry) => ({
+        key: entry.key,
+        disabled: entry.disabled,
+      }));
+    }
+    if (config.customTaskTypes !== undefined) {
+      ordered.customTaskTypes = config.customTaskTypes.map((entry) => {
+        const out: Record<string, unknown> = { key: entry.key };
+        if (entry.label !== undefined) out.label = entry.label;
+        if (entry.icon !== undefined) out.icon = entry.icon;
+        if (entry.color !== undefined) out.color = entry.color;
+        if (entry.commitPrefix !== undefined) out.commitPrefix = entry.commitPrefix;
+        return out;
+      });
+    }
+    return yaml.dump(ordered, {
     lineWidth: -1,
     noRefs: true,
     sortKeys: false,

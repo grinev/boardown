@@ -7,6 +7,7 @@ import {
   isMiddleStatus,
   terminalStatus,
 } from './statuses.js';
+import { enabledTaskTypeKeys, isEnabledTaskType } from './task-types.js';
 import type {
   Backlog,
   BoardConfig,
@@ -47,7 +48,12 @@ export const emptyBacklog = (): Backlog => ({
   tasks: [],
 });
 
-export type BoardOpErrorCode = 'ARCHIVED' | 'STATUS_LOCKED' | 'WIP_LIMIT' | 'UNKNOWN_STATUS';
+export type BoardOpErrorCode =
+  | 'ARCHIVED'
+  | 'STATUS_LOCKED'
+  | 'WIP_LIMIT'
+  | 'UNKNOWN_STATUS'
+  | 'UNKNOWN_TYPE';
 
 // A process invariant refused a board operation. The code is what lets a shell
 // tell the rules apart — the CLI maps it straight onto its own error code.
@@ -107,6 +113,15 @@ const refuseUndeclaredStatus = (
     'UNKNOWN_STATUS',
     `Cannot set the status of ${subject} to "${status}": this board declares ` +
       `${boardStatusKeys(config).join(', ')}.`,
+  );
+};
+
+const refuseDisabledType = (config: BoardConfig, subject: string, type: TaskType): void => {
+  if (isEnabledTaskType(config, type)) return;
+  throw new BoardOpError(
+    'UNKNOWN_TYPE',
+    `Cannot set the type of ${subject} to "${type}": this board enables ` +
+      `${enabledTaskTypeKeys(config).join(', ')}.`,
   );
 };
 
@@ -525,6 +540,7 @@ export const createTask = <C extends Container>(
   if (isFinishedRelease(container)) {
     throw new BoardOpError('ARCHIVED', 'Cannot create a task in a finished release');
   }
+  refuseDisabledType(config, 'a new task', input.type);
   refuseUndeclaredStatus(config, 'a new task', input.status);
   // A new task has no status to preserve, so outside the current release the only
   // status it may start with is the board's initial one.
@@ -585,6 +601,9 @@ export const editTask = <C extends Container>(
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
   }
   const current = findTask(container.tasks, taskId);
+  if (patch.type !== undefined && patch.type !== current.frontmatter.type) {
+    refuseDisabledType(config, taskId, patch.type);
+  }
   if (patch.status !== undefined && patch.status !== current.frontmatter.status) {
     refuseUndeclaredStatus(config, taskId, patch.status);
   }

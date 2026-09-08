@@ -11,21 +11,20 @@ import {
   customFieldLabel,
   effectiveTaskPriority,
   boardStatuses,
+  enabledTaskTypes,
   statusCount,
   TASK_PRIORITIES,
-  TASK_TYPES,
   wipLimitFor,
   type CustomField,
   type Epic,
   type Release,
   type Task,
   type TaskPriority,
-  type TaskType,
 } from '@boardown/core';
 import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
-import { TASK_TYPE_META } from '../task-types';
+import { taskTypeDisplay } from '../task-types';
 import { taskCommitMessage } from '../utils/commit-message';
 import { pickContrastText } from '../utils/contrast-color';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
@@ -60,15 +59,7 @@ const EMPTY_FIELDS: CustomField[] = [];
 
 const STATUS_LOCKED_HINT = 'Status changes only in the current release.';
 
-const TYPE_OPTIONS: IconSelectOption[] = TASK_TYPES.map((t) => {
-  const meta = TASK_TYPE_META[t];
-  const Icon = meta.icon;
-  return {
-    value: t,
-    label: meta.label,
-    icon: <Icon size={14} style={{ color: meta.colorVar }} aria-hidden="true" />,
-  };
-});
+
 
 const PRIORITY_OPTIONS: IconSelectOption[] = TASK_PRIORITIES.map((p) => {
   const meta = TASK_PRIORITY_META[p];
@@ -89,7 +80,8 @@ export function TaskDetailsDialog({
   onTaskClick,
 }: TaskDetailsDialogProps) {
   const { id, type, status } = task.frontmatter;
-  const typeMeta = TASK_TYPE_META[type];
+  const config = useBoardStore((s) => s.snapshot?.config);
+  const typeMeta = taskTypeDisplay(config, type);
   const TypeIcon = typeMeta.icon;
   const priority = effectiveTaskPriority(task.frontmatter);
   const priorityMeta = TASK_PRIORITY_META[priority];
@@ -110,7 +102,6 @@ export function TaskDetailsDialog({
   // was copied for.
   useEffect(resetCopied, [id, resetCopied]);
 
-  const config = useBoardStore((s) => s.snapshot?.config);
   // The board refuses a task entering a full In Progress column, so the controls
   // that would do it are shown unavailable rather than failing after the fact.
   // The limit is counted per release, so the status control asks the task's own
@@ -190,13 +181,27 @@ export function TaskDetailsDialog({
     return [{ value: NO_EPIC_VALUE, label: '—' }, ...items];
   }, [epics]);
 
+  const typeOptions = useMemo<IconSelectOption[]>(
+    () =>
+      enabledTaskTypes(config).map((t) => {
+        const meta = taskTypeDisplay(config, t.key);
+        const Icon = meta.icon;
+        return {
+          value: t.key,
+          label: meta.label,
+          icon: <Icon size={14} style={meta.style} aria-hidden="true" />,
+        };
+      }),
+    [config],
+  );
+
   return (
     <Modal open onClose={onClose} ariaLabel={`Task ${id}`}>
       <header className={styles.header}>
         <div className={styles.headerId}>
           <TypeIcon
             className={styles.headerIcon}
-            style={{ color: typeMeta.colorVar }}
+            style={typeMeta.style}
             aria-label={typeMeta.label}
           />
           <span className={styles.idText}>{id}</span>
@@ -205,7 +210,7 @@ export function TaskDetailsDialog({
             className={styles.copyButton}
             // The saved title, not the one being typed: the inline editor keeps
             // its draft to itself, so this reads what is on disk.
-            onClick={() => copy(taskCommitMessage(id, type, task.title))}
+            onClick={() => copy(taskCommitMessage(id, type, task.title, config))}
             aria-label={copied ? 'Commit message copied' : 'Copy commit message'}
           >
             {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
@@ -306,7 +311,7 @@ export function TaskDetailsDialog({
                     <span className={styles.staticValue}>
                       <TypeIcon
                         size={14}
-                        style={{ color: typeMeta.colorVar }}
+                        style={typeMeta.style}
                         aria-hidden="true"
                       />
                       {typeMeta.label}
@@ -314,12 +319,16 @@ export function TaskDetailsDialog({
                   ) : (
                     <IconSelect
                       value={type}
-                      options={TYPE_OPTIONS}
+                      options={typeOptions}
+                      valueIcon={
+                        <TypeIcon size={14} style={typeMeta.style} aria-hidden="true" />
+                      }
+                      valueLabel={typeMeta.label}
                       ariaLabel="Type"
                       hideChevron
                       triggerClassName={styles.inlineSelectTrigger}
                       onChange={(next) => {
-                        void updateTask(id, { type: next as TaskType });
+                        void updateTask(id, { type: next });
                       }}
                     />
                   )}

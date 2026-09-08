@@ -133,8 +133,36 @@ Whichever is chosen, `task link rm` and any archive-integrity checks must follow
 ---
 id: BD-52
 type: feature
-status: ready
-order: 1700
+status: review
+order: 2600
+checklist:
+  - id: c1
+    text: 1. spec read, code explored, open calls settled
+    done: true
+  - id: c2
+    text: 2. tech plan written
+    done: true
+  - id: c3
+    text: 3. architecture review closed
+    done: true
+  - id: c4
+    text: 4. implemented, gates green
+    done: true
+  - id: c5
+    text: 5. code review closed
+    done: true
+  - id: c6
+    text: 5r. review findings fixed
+    done: true
+  - id: c7
+    text: 6. manual test passed
+    done: true
+  - id: c8
+    text: 6r. test findings fixed
+    done: true
+  - id: c9
+    text: 7. committed
+    done: true
 links:
   - type: relates
     to: BD-51
@@ -145,6 +173,9 @@ links:
   - type: blocked-by
     to: BD-125
 spec: "[[repo:.claude/specs/BD-52-customizable-task-types/spec.md]]"
+plan: "[[repo:.claude/specs/BD-52-customizable-task-types/tech.md]]"
+log: "[[repo:.claude/specs/BD-52-customizable-task-types/log.md]]"
+session: ses_f7db05758ffea4asAOZ4FKu53B
 ---
 
 Four types, all of them about code: bug, feature, docs, tech. On a board that also tracks operations and marketing (submit a sitemap to Bing, find a traffic channel, measure the effect in three weeks) everything lands in tech, and tech stops meaning anything.

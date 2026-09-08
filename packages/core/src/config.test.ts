@@ -386,6 +386,49 @@ describe('git integration', () => {
   });
 });
 
+describe('task types', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips both keys including optional fields and disabled: false', () => {
+    const cfg: BoardConfig = {
+      ...base,
+      taskTypes: [
+        { key: 'tech', disabled: true },
+        { key: 'docs', disabled: false },
+      ],
+      customTaskTypes: [
+        {
+          key: 'ops',
+          label: 'Ops & "growth"',
+          icon: 'server',
+          color: '#0EA5E9',
+          commitPrefix: 'ops',
+        },
+        { key: 'growth' },
+      ],
+    };
+    const out = serializeConfig(cfg);
+    expect(out).toContain('taskTypes:');
+    expect(out).toContain('customTaskTypes:');
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(cfg);
+  });
+
+  it('writes no key when the board declares none', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('taskTypes');
+    expect(out).not.toContain('customTaskTypes');
+  });
+
+  it('rejects a malformed declaration without rewriting the file', () => {
+    const text = `${VALID}taskTypes:\n  - key: nope\n    disabled: true\n`;
+    const parsed = parseConfig(text);
+    expect(parsed.value).toBeNull();
+    expect(parsed.problems).toHaveLength(1);
+  });
+});
+
 describe('serializeConfig customFields', () => {
   it('round-trips declarations, so the nextId rewrite cannot erase them', () => {
     const cfg: BoardConfig = {
