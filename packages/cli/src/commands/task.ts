@@ -17,6 +17,7 @@ import {
   readTaskCommits,
   sortTasksByOrder,
   taskMatchRank,
+  taskMatchesFilters,
   DEFAULT_LINK_TYPE,
   LINK_TYPES,
   LINK_TYPE_META,
@@ -668,15 +669,16 @@ const renderTaskList = (config: BoardConfig, entries: readonly TaskListEntry[]):
 };
 
 async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
-  const statusFlag = flagString(args.flags, 'status');
-  const typeFlag = flagString(args.flags, 'type');
-  const priorityFlag = flagString(args.flags, 'priority');
-  const epicFlag = flagString(args.flags, 'epic');
+  const statusFlags = flagList(args.flags, 'status');
+  const typeFlags = flagList(args.flags, 'type');
+  const priorityFlags = flagList(args.flags, 'priority');
+  const epicFlags = flagList(args.flags, 'epic');
   const releaseFlag = flagString(args.flags, 'release');
   const backlogOnly = flagBool(args.flags, 'backlog');
   const textFlag = flagString(args.flags, 'text');
 
-  const priority = priorityFlag !== undefined ? parseTaskPriority(priorityFlag) : undefined;
+  const priorities =
+    priorityFlags.length > 0 ? priorityFlags.map(parseTaskPriority) : undefined;
   // An empty --text has always meant "no filter", while the shared rule reads an
   // empty query as matching nothing; screen it out here rather than there.
   const text =
@@ -685,17 +687,25 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { snapshot, problems } = await loadBoardOrThrow(root);
 
-  const type = typeFlag !== undefined ? requireType(snapshot.config, typeFlag) : undefined;
-  const status =
-    statusFlag !== undefined ? requireStatus(snapshot.config, statusFlag) : undefined;
+  const types =
+    typeFlags.length > 0 ? typeFlags.map((v) => requireType(snapshot.config, v)) : undefined;
+  const statuses =
+    statusFlags.length > 0
+      ? statusFlags.map((v) => requireStatus(snapshot.config, v))
+      : undefined;
 
   // Unknown --epic / --release is a caller mistake, not an empty result: fail
   // loud like `task get`, resolving the ref against the loaded board.
   let epicMemberIds: Set<string> | undefined;
-  if (epicFlag !== undefined) {
-    const epic = findEpic(snapshot, epicFlag);
-    if (epic === undefined) throw new CliError('EPIC_NOT_FOUND', `No epic "${epicFlag}".`);
-    epicMemberIds = new Set(epicMembers(snapshot, epic).map((t) => t.frontmatter.id));
+  if (epicFlags.length > 0) {
+    epicMemberIds = new Set();
+    for (const slug of epicFlags) {
+      const epic = findEpic(snapshot, slug);
+      if (epic === undefined) throw new CliError('EPIC_NOT_FOUND', `No epic "${slug}".`);
+      for (const member of epicMembers(snapshot, epic)) {
+        epicMemberIds.add(member.frontmatter.id);
+      }
+    }
   }
   let releaseFile: string | undefined;
   if (releaseFlag !== undefined) {
@@ -706,11 +716,18 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
   const entries = collectEntries(snapshot).filter(({ task, in: loc }) => {
     const fm = task.frontmatter;
-    if (status !== undefined && fm.status !== status) return false;
-    if (type !== undefined && fm.type !== type) return false;
-    // Resolved, not raw: --priority medium must also match tasks with no key.
-    if (priority !== undefined && effectiveTaskPriority(fm) !== priority) return false;
-    if (epicMemberIds !== undefined && !epicMemberIds.has(fm.id)) return false;
+    if (
+      !taskMatchesFilters(task, {
+        ...(statuses !== undefined ? { statuses } : {}),
+        ...(types !== undefined ? { types } : {}),
+        ...(priorities !== undefined ? { priorities } : {}),
+        ...(epicMemberIds !== undefined
+          ? { epicMatches: epicMemberIds.has(fm.id) }
+          : {}),
+      })
+    ) {
+      return false;
+    }
     if (releaseFile !== undefined && !(loc.kind === 'release' && loc.file === releaseFile)) return false;
     if (backlogOnly && loc.kind !== 'backlog') return false;
     // The same rule the UI's search field applies, minus the id: `--text` is a

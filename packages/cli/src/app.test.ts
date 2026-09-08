@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { EPIC_NAME_MAX_LENGTH } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
-import { run } from './app';
+import { parseArgv, run } from './app';
+import { flagList } from './args';
 
 interface Captured {
   code: number;
@@ -44,6 +45,32 @@ async function capture(
 const parse = (s: string): Record<string, unknown> => JSON.parse(s.trim()) as Record<string, unknown>;
 
 const errorCode = (env: Record<string, unknown>): string => (env.error as { code: string }).code;
+
+describe('parseArgv', () => {
+  it('swallows consecutive values on task list filter flags', () => {
+    const args = parseArgv(['task', 'list', '--type', 'bug', 'docs', '--status', 'todo']);
+    expect(flagList(args.flags, 'type')).toEqual(['bug', 'docs']);
+    expect(args.flags.status).toBe('todo');
+    expect(args.positionals).toEqual(['task', 'list']);
+  });
+
+  it('swallows on the ls alias too', () => {
+    const args = parseArgv(['task', 'ls', '--epic', 'one', 'two']);
+    expect(flagList(args.flags, 'epic')).toEqual(['one', 'two']);
+  });
+
+  it('swallows after --flag=value on task list', () => {
+    const args = parseArgv(['task', 'list', '--type=bug', 'docs']);
+    expect(flagList(args.flags, 'type')).toEqual(['bug', 'docs']);
+    expect(args.positionals).toEqual(['task', 'list']);
+  });
+
+  it('does not swallow on task add', () => {
+    const args = parseArgv(['task', 'add', '--type', 'bug', 'Title']);
+    expect(args.flags.type).toBe('bug');
+    expect(args.positionals).toEqual(['task', 'add', 'Title']);
+  });
+});
 
 describe('run() — routing, envelopes, exit codes', () => {
   it('no command prints a JSON help envelope when piped', async () => {
@@ -85,7 +112,7 @@ describe('run() — routing, envelopes, exit codes', () => {
     expect(code).toBe(0);
     const env = parse(stdout);
     expect(env).toMatchObject({ ok: true });
-    expect((env.data as { version: number }).version).toBe(14);
+    expect((env.data as { version: number }).version).toBe(15);
     // The epic name rule is enforced whatever the board, so an agent must be
     // able to read it without first failing a write.
     expect(env.data).toMatchObject({ epicNameMaxLength: EPIC_NAME_MAX_LENGTH });

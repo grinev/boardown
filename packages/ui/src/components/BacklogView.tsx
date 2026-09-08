@@ -15,12 +15,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Epic, Release, Task, TaskStatus } from '@boardown/core';
 import {
+  TASK_PRIORITIES,
   activeReleases,
-  effectiveTaskPriority,
+  boardStatusKeys,
   futureReleases,
   isEnabledTaskType,
   isWipLimitReached,
   sortTasksByOrder,
+  taskMatchesFilters,
   unscheduledTasks,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -28,15 +30,7 @@ import { BacklogDndContext } from '../dnd/BacklogDndContext';
 import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
 import { sectionDropId, taskDragId } from '../dnd/ids';
-import {
-  ALL_STATUSES,
-  ALL_TYPES,
-  BacklogFilters,
-  type EpicFilter,
-  type PriorityFilter,
-  type StatusFilter,
-  type TypeFilter,
-} from './BacklogFilters';
+import { BacklogFilters } from './BacklogFilters';
 import { BacklogRowView } from './BacklogRowView';
 import styles from './BacklogView.module.css';
 
@@ -68,10 +62,10 @@ export function BacklogView() {
   const openCreateTask = useBoardStore((s) => s.openCreateTask);
   const openCreateTaskBacklog = useBoardStore((s) => s.openCreateTaskBacklog);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(ALL_STATUSES);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>(ALL_TYPES);
-  const [epicFilter, setEpicFilter] = useState<EpicFilter>('all');
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [epicFilter, setEpicFilter] = useState<string[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -88,15 +82,35 @@ export function BacklogView() {
   const epics = useMemo(() => snapshot?.epics ?? [], [snapshot?.epics]);
 
   useEffect(() => {
-    if (epicFilter === 'all' || epicFilter === 'no-epic') return;
-    const exists = epics.some((e) => e.slug === epicFilter);
-    if (!exists) setEpicFilter('all');
-  }, [epics, epicFilter]);
+    const offered = new Set(['no-epic', ...epics.map((e) => e.slug)]);
+    setEpicFilter((prev) => {
+      const next = prev.filter((v) => offered.has(v));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [epics]);
 
   useEffect(() => {
-    if (typeFilter === ALL_TYPES) return;
-    if (!isEnabledTaskType(snapshot?.config, typeFilter)) setTypeFilter(ALL_TYPES);
-  }, [snapshot?.config, typeFilter]);
+    setTypeFilter((prev) => {
+      const next = prev.filter((v) => isEnabledTaskType(snapshot?.config, v));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [snapshot?.config]);
+
+  useEffect(() => {
+    const offered = new Set(boardStatusKeys(snapshot?.config));
+    setStatusFilter((prev) => {
+      const next = prev.filter((v) => offered.has(v));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [snapshot?.config]);
+
+  useEffect(() => {
+    const offered = new Set<string>(TASK_PRIORITIES);
+    setPriorityFilter((prev) => {
+      const next = prev.filter((v) => offered.has(v));
+      return next.length === prev.length ? prev : next;
+    });
+  }, []);
 
   const { sectionMetas, sourceBuckets } = useMemo(() => {
     const metas: SectionMeta[] = [];
@@ -195,24 +209,26 @@ export function BacklogView() {
   if (snapshot === null) return null;
 
   const filtersActive =
-    statusFilter !== ALL_STATUSES ||
-    typeFilter !== ALL_TYPES ||
-    epicFilter !== 'all' ||
-    priorityFilter !== 'all';
+    statusFilter.length > 0 ||
+    typeFilter.length > 0 ||
+    epicFilter.length > 0 ||
+    priorityFilter.length > 0;
 
   const matchesFilters = (task: Task): boolean => {
-    if (statusFilter !== ALL_STATUSES && task.frontmatter.status !== statusFilter) return false;
-    if (typeFilter !== ALL_TYPES && task.frontmatter.type !== typeFilter) return false;
-    if (epicFilter === 'no-epic') {
-      if (task.frontmatter.epic !== undefined) return false;
-    } else if (epicFilter !== 'all') {
-      if (task.frontmatter.epic !== epicFilter) return false;
+    let epicMatches: boolean | undefined;
+    if (epicFilter.length > 0) {
+      const noEpic = epicFilter.includes('no-epic');
+      const slugs = epicFilter.filter((v) => v !== 'no-epic');
+      const tag = task.frontmatter.epic;
+      epicMatches =
+        (noEpic && tag === undefined) || (tag !== undefined && slugs.includes(tag));
     }
-    // Resolved, not raw: filtering by Medium must also catch tasks with no key.
-    if (priorityFilter !== 'all' && effectiveTaskPriority(task.frontmatter) !== priorityFilter) {
-      return false;
-    }
-    return true;
+    return taskMatchesFilters(task, {
+      statuses: statusFilter,
+      types: typeFilter,
+      priorities: priorityFilter,
+      ...(epicMatches !== undefined ? { epicMatches } : {}),
+    });
   };
 
   return (
