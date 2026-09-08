@@ -590,8 +590,9 @@ it stops being active the Board falls back to the first active release, and the
 key is left as the user wrote it. With one active release there is no button and
 the header is exactly what it always was. When the release has a description, it follows the name on the
 same line in a muted style, clipped to a single line with an ellipsis (newlines
-collapsed to spaces). This preview is Board-only — the Backlog and Archive
-section headers show the name alone.
+collapsed to spaces). Hovering the preview shows a native tooltip of the
+description as stored, line breaks included. This preview is Board-only — the
+Backlog and Archive section headers show the name alone.
 
 If no release is active, the Board shows an empty state pointing the user to
 start one from Backlog.
