@@ -54,6 +54,8 @@ instead of overwriting.
   in-flight column; once a column is full, nothing else gets in.
 - **Custom statuses** (beta): replace `todo` / `in-progress` / `done` with your
   own columns (2–8 of them) in `.boardown/config.yaml`.
+- **Custom task types**: add your own task types — label, icon, colour and
+  commit prefix — or switch off built-in ones in `.boardown/config.yaml`.
 - **Task checklists and notes**: each task can carry a lightweight todo
   checklist (shown as a `done/total` badge) and timestamped notes (shown as a
   count badge), edited in the task dialog.
@@ -61,7 +63,8 @@ instead of overwriting.
   `.boardown/config.yaml` and edit them in the task dialog's Details card.
 - **Task links**: relate two tasks from the task dialog's **Linked tasks**
   section — blocks, includes, duplicates or plain relates to, each stored on
-  both sides and shown from the right end in each task. Any task id mentioned in
+  both sides and shown from the right end in each task, finished releases
+  included. Any task id mentioned in
   a description or a note renders as a link to that task.
 - **Git integration**: a **Commits** panel in the task dialog lists the commits
   in your local repository whose subject names the task's id, and a copy button
