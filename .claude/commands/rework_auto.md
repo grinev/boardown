@@ -246,8 +246,11 @@ After fixing, re-run the gates, then continue the **same** reviewer session with
 `SendMessage` — never a fresh one — telling it what you fixed, what you rejected
 and why, and asking it to check the fixes only.
 
-That is **one** re-check, not a loop. New blockers on the fixes themselves mean
-you and the reviewer disagree about something the user should settle: stop.
+Repeat until it comes back `clean` or with nothing left you accept: a finding you
+agree with is work, not a question for the user. **Hard cap: five review rounds,
+the first review included.** Past the fifth the fixes keep breaking what they
+touch: stop, with what the reviewer still raises, what you tried, and the state the
+tree is in.
 
 ## Phase 4 — Retest what the round touched
 

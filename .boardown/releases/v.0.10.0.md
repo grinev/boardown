@@ -413,3 +413,18 @@ plan: "[[repo:.claude/specs/BD-112-status-outside-active-release/tech.md]]"
 log: "[[repo:.claude/specs/BD-112-status-outside-active-release/log.md]]"
 session: ses_f7ce97da5ffexKYEuaefbgRIdi
 ---
+
+## Add links when creating task
+
+---
+id: BD-130
+type: feature
+status: ready
+order: 3000
+links:
+  - type: relates
+    to: BD-91
+  - type: relates
+    to: BD-107
+spec: "[[repo:.claude/specs/BD-130-links-in-create-dialog/spec.md]]"
+---

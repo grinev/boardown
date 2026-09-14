@@ -132,8 +132,9 @@ Questions the review agents raise for the user go through it the same way.
 
 ### Stopping instead of asking
 
-Three things stop the run, and nothing else does: a fork the **expert** sent up, a
-question of **price**, and a defect still alive after the third fix round. An
+Four things stop the run, and nothing else does: a fork the **expert** sent up, a
+question of **price**, a defect still alive after the third fix-and-retest round, and
+review findings still open after the fifth review round. An
 irreversible or paid step — a new dependency, a change to the on-disk format or the
 CLI's public contract, a migration, a release, anything against `CLAUDE.md` — is a
 fork like any other: put it to the expert, which will send it up. Irreversible is
@@ -240,9 +241,12 @@ the final report verbatim, so the user sees the call you made.
 
 After fixing, re-run the gates, then continue the **same** reviewer session with
 `SendMessage` (a new one would re-derive everything from cold): what you fixed, what
-you rejected and why, and check the fixes only. That is **one** re-check, not a
-loop. New blockers on the fixes themselves are a stop — you and the reviewer
-disagree about something the user should settle.
+you rejected and why, and check the fixes only. Repeat until it comes back `clean`
+or with nothing left you accept: a finding you agree with is work, not a question
+for the user. **Hard cap: five review rounds, the first review included** — past
+five the fixes keep breaking what they touch. Findings still open after the fifth
+are a stop, with what the reviewer still raises, what you tried, and the state the
+tree is in.
 
 ## Phase 6 — Manual test
 
@@ -263,7 +267,6 @@ the task's reach.
 Fix what it finds, re-run the gates, then continue the **same** tester session with
 `SendMessage`: what you fixed, and which scenarios to re-run. **Hard cap: three
 fix-and-retest rounds** — past three you are cycling on the same wrong hypothesis.
-This is the only loop in the flow; every other phase runs once.
 
 On a defect that survives the cap, put into the log and the report what you tried,
 what the tester still sees, your best diagnosis, the ways forward as you see them
