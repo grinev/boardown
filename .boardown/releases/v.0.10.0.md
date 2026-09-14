@@ -8,9 +8,9 @@ name: v.0.10.0
 ---
 id: BD-92
 type: feature
-status: review
+status: done
 epic: cli
-order: 2300
+order: 3050
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -52,22 +52,13 @@ task checklist add|done|undone|rm take one item per call, so filling a six-item 
 
 Creation has the same cost: add a repeatable `--checklist` to `task add`, the way `--field` already works, so a task and its six items land in one call.
 
-## Add skill for boardown cli
-
----
-id: BD-77
-type: docs
-status: todo
-order: 750
----
-
 ## Allow linking tasks to tasks in finished releases
 
 ---
 id: BD-89
 type: feature
-status: review
-order: 2200
+status: done
+order: 3100
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -133,8 +124,8 @@ Whichever is chosen, `task link rm` and any archive-integrity checks must follow
 ---
 id: BD-52
 type: feature
-status: review
-order: 2600
+status: done
+order: 3006
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -187,8 +178,8 @@ Two options to settle on grooming: types declared in config.yaml — the customF
 ---
 id: BD-96
 type: feature
-status: review
-order: 2400
+status: done
+order: 3025
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -228,9 +219,9 @@ session: ses_f7de46b55ffe8OXDsT3lX9cw7l
 ---
 id: BD-108
 type: feature
-status: review
+status: done
 epic: cli
-order: 2500
+order: 3012
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -275,8 +266,8 @@ session: ses_f7dca6495ffeTXlDWeB0iAZNMH
 ---
 id: BD-122
 type: feature
-status: review
-order: 2700
+status: done
+order: 3003
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -319,8 +310,8 @@ session: ses_f7d6a9e79ffedE9T7V7ogryz9n
 ---
 id: BD-125
 type: feature
-status: review
-order: 2800
+status: done
+order: 3009
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -375,8 +366,8 @@ boardown writes its own version into config.yaml. On opening a board: a newer ap
 ---
 id: BD-112
 type: feature
-status: review
-order: 2900
+status: done
+order: 3075
 checklist:
   - id: c1
     text: 1. spec read, code explored, open calls settled
@@ -412,19 +403,4 @@ spec: "[[repo:.claude/specs/BD-112-status-outside-active-release/spec.md]]"
 plan: "[[repo:.claude/specs/BD-112-status-outside-active-release/tech.md]]"
 log: "[[repo:.claude/specs/BD-112-status-outside-active-release/log.md]]"
 session: ses_f7ce97da5ffexKYEuaefbgRIdi
----
-
-## Add links when creating task
-
----
-id: BD-130
-type: feature
-status: ready
-order: 3000
-links:
-  - type: relates
-    to: BD-91
-  - type: relates
-    to: BD-107
-spec: "[[repo:.claude/specs/BD-130-links-in-create-dialog/spec.md]]"
 ---
