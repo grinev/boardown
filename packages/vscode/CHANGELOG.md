@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.10.0
+
+- **Custom task types**: a board can declare its own task types in
+  `.boardown/config.yaml` under `customTaskTypes`, each with a label, any Lucide
+  icon, a colour and a commit prefix, and switch off any of the four built-in
+  types under `taskTypes`. A task holding a type the board no longer offers still
+  loads and shows as it is.
+- **Several values in each backlog filter**: the Backlog's status, type, epic and
+  priority filters now take any number of values, matching a task that has any of
+  them. The list stays open while you tick rows, and the trigger reads
+  `2 selected` once more than one is chosen.
+- **Link to tasks in finished releases**: the Linked tasks section can now add and
+  remove a link to or from a task in a finished release, which appears in the link
+  search like any other task. Everything else about an archived task stays frozen.
+- **Status changes outside the current release**: a new **Allow status changes
+  outside the current release** checkbox in Settings lets a task's status be set
+  from its dialog wherever it sits — the backlog, an epic or a future release.
+  Finished releases stay frozen.
+- **Full release description on hover**: hovering the one-line release
+  description in the Board header shows the whole description as a tooltip, with
+  its line breaks kept.
+- **A board records the boardown version it needs**: a board saved by this
+  version notes the oldest boardown that reads it correctly, and an older build
+  shows a screen asking to update boardown instead of opening the board with parts
+  of it missing. Extension versions 0.9.0 and earlier cannot open a board once
+  0.10.0 has written to it.
+
 ## 0.9.0
 
 - **Related commits in the task dialog**: a **Commits** panel under Details lists
