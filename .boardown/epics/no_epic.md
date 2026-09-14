@@ -111,6 +111,8 @@ order: 2300
 links:
   - type: relates
     to: BD-51
+  - type: relates
+    to: BD-130
 ---
 
 Clone button near delete
@@ -193,3 +195,14 @@ type: feature
 status: todo
 order: 250
 ---
+
+## Attach files to tasks: image previews and downloadable files
+
+---
+id: BD-131
+type: feature
+status: todo
+order: 3100
+---
+
+A task can carry attachments. Images are shown as a preview right inside the task; any other file is available to download.
