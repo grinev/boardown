@@ -473,7 +473,7 @@ The repo is a pnpm workspace with six packages:
 | `pnpm dev`         | Start the web dev server against this repo's `.boardown/` (Vite, `http://localhost:5173`) |
 | `pnpm dev:sandbox` | Start the web dev server against a throwaway copy of the test fixture (`http://localhost:5199`) — see [Browser testing](#browser-testing) |
 | `pnpm build`       | Build the shells that have a `build` script (web → Vite bundle, vscode → host + webview); `core` and `ui` are source-only and skipped |
-| `pnpm test`        | Run Vitest across all packages                            |
+| `pnpm test`        | Run Vitest across all packages, plus the `minCompatibleVersion` compatibility check |
 | `pnpm typecheck`   | Run `tsc --noEmit` in every package                       |
 | `pnpm lint`        | Run ESLint over the workspace                             |
 | `pnpm format`      | Apply Prettier in-place                                   |
@@ -674,10 +674,10 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
    which publishes the same released `.vsix` to the
    [Open VSX registry](https://open-vsx.org) (`ovsx publish`) — the open
    marketplace used by VSCodium, Gitpod, Cursor and others. It needs an
-   `OVSX_PAT` repository secret (an Open VSX access token whose owner owns the
+   `OVSX_PAT` repository secret (an Open VS X access token whose owner owns the
    `grinev` namespace, created once via `ovsx create-namespace grinev`);
-   prerelease (`-rc.N`) versions and versions already on Open VSX are skipped.
-   It can likewise be re-run on its own from **Actions → Publish to Open VSX →
+   prerelease (`-rc.N`) versions and versions already on Open VS X are skipped.
+   It can likewise be re-run on its own from **Actions → Publish to Open VS X →
    Run workflow** against any tag.
 
 7. `Release` finally calls the reusable
