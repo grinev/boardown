@@ -47,6 +47,7 @@ A single unit of work. Fields:
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`; a new task can carry them from the start, picked in Create task or passed as `task add --link`. |
+| `labels`      | array?    | Optional list of label strings, stored in the order they were added. Omitted entirely when empty. Shown as a line of chips on the board card and in the task dialog's Details card, set in Create task, and managed via `boardown task label` and `task add --label`. A label written by boardown holds no whitespace, is at most 28 characters and takes the spelling of the registry entry it matches ignoring case; a hand-edited one loads and shows as it is. See "Labels" under Configuration. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
 Priorities are a fixed set baked into the app: each has an icon and a color used
@@ -308,6 +309,9 @@ statuses:             # optional (beta); absent means todo / in-progress / done
     label: Not started  # optional; absent means the key, prettified
   - key: dev
   - key: shipped
+labels:               # optional; the labels the editor suggests
+  - backend
+  - ui
 taskTypes:            # optional; override list for the four base types
   - key: tech
     disabled: true
@@ -505,7 +509,7 @@ customFields:
 `key` is 1–40 characters, starts with a letter and continues with letters,
 digits, `_` or `-`; keys must be unique and may not collide with a built-in task
 key (`id`, `type`, `priority`, `status`, `epic`, `order`, `checklist`, `notes`,
-`links`),
+`links`, `labels`),
 since values are stored flat beside them. `type` must be `string` —
 dates and lookup lists are later work, and the key exists so they can be added
 without changing the format. Any violation makes the config **invalid**, which is
@@ -519,6 +523,40 @@ declaration mentions is stripped on load like any unknown key — so **removing 
 field from `customFields` drops its stored values the next time that file is
 written**, with no warning. Git is the recovery path, as everywhere else in
 boardown.
+
+### Labels
+
+A task carries free-form **labels** — short tags such as `backend` or `важно` — and
+`config.yaml`'s optional `labels` list is the board's **registry** of them, the
+vocabulary the label editor suggests:
+
+```yaml
+labels:
+  - backend
+  - важно
+  - ui
+```
+
+A label is any run of non-whitespace characters, at most 28 long (the epic name's
+limit, which fits a board card on one line). Labels are matched **ignoring case**
+everywhere, with one spelling each: adding `Backend` where the registry holds
+`backend` stores `backend`, and a task never carries the same label twice.
+
+The registry grows by itself and shrinks only by hand. A label added through the
+UI or the CLI that the registry lacks is appended to its end **in the same write**
+as the task — if either file cannot be written, neither is. Only labels added in
+that edit get there: a label a task already carried never reaches the registry by
+the task being written back. Removing a label from its last task leaves it
+registered. Removing or renaming an entry is an edit to `config.yaml`; renaming it
+there does not touch the tasks that carry the old spelling. An entry that is empty,
+holds whitespace, is over 28 characters or repeats another ignoring case makes the
+config **invalid** — the error screen, `BOARD_INVALID` in the CLI.
+
+On a task the rules apply on write, never on read: a hand-edited label with a
+space, over 28 characters or absent from the registry loads and shows as it is,
+survives every write of its task, and is not offered as a suggestion. A task's
+`labels` that is not a list of strings is a problem on that task (see "Lenient
+parsing").
 
 ### Doc page
 
@@ -557,6 +595,10 @@ and left untouched on disk.
   outright is still allowed, since that loses nothing silently.
 - The CLI refuses the same writes, with the error code `UNREADABLE_FRONTMATTER`
   and exit code 1.
+- A task whose `labels` is not a list of strings is the one exception to a bad
+  key costing the whole block: the task loads without its labels, and the
+  error-level problem locks its file exactly as above, so the value cannot be
+  written away.
 
 ### Conflict handling
 
@@ -749,14 +791,22 @@ commands.
 ### Task card
 
 Each card shows: type icon (with type color), task ID, priority glyph (with the
-priority color, directly after the ID), title, epic badge (with the epic's color
-and name), and badges for a non-empty checklist (`done/total`) and notes (count).
+priority color, directly after the ID), title, the task's labels as a line of
+chips between the title and the epic badge (wrapping onto further lines; a card
+with no labels has no such line), epic badge (with the epic's color and name),
+and badges for a non-empty checklist (`done/total`) and notes (count).
 The status is **not** rendered on the card in Backlog/Archive — it is implicit
 from the column on Board.
 
 The Backlog and Archive rows carry the same two glyphs, but the priority one sits
 **last in the row**, after the status pill. The epic dialog's task table and the
 Linked tasks section show no priority.
+
+A **label chip** looks the same everywhere it appears: the label's text inside a
+thin neutral border, no fill colour, no icon. One wider than the space it sits in
+is clipped with `…`, its full text in the tooltip. A chip has no action of its
+own — clicking one on the card does nothing. Labels are not shown in the Backlog
+and Archive rows, the epic dialog's task list, Linked tasks, or search results.
 
 ### Task editor
 
@@ -767,6 +817,10 @@ Linked tasks section show no priority.
   Preselected `feature`, or the first enabled type when `feature` is disabled.
 - **Priority** — one of `Critical`, `High`, `Medium`, `Low`, preselected
   `Medium`. Left at `Medium` the task is created with no `priority` key at all.
+- **Labels** — optional; the same editor as the Details row (below), always in
+  edit mode, its suggestion list open while the field has focus. Escape with the
+  list open closes only the list; typing or ↓ brings it back. The labels are
+  written with the task on Create.
 - **Epic** — optional. Dropdown over existing epics; blank = no epic.
 - **Description** — plain text.
 
@@ -843,6 +897,26 @@ it exactly as it does when that text is merely rendered. Entering edit mode
 therefore moves nothing on screen. The Docs page editor is the one multi-line
 field outside this: it fills its pane and scrolls inside itself.
 
+**Labels** sit in the Details card after Priority and before Epic, as chips that
+wrap onto further lines; a task with none shows the row with an empty value, still
+clickable. A click on the row — on a chip too, since a chip has no action of its
+own — opens it in **edit mode**: the chips gain a ×, a text input follows the last
+one, and a suggestion list opens under the row with the registry's labels this
+task does not carry, alphabetically, narrowed by the typed text as a
+case-insensitive substring. Text that matches no registry label exactly (ignoring
+case) — and no label the task carries — adds a first row `<text> (New label)`,
+highlighted; otherwise an exact match comes first and is highlighted, and with the
+input empty nothing is. ↑/↓ move the highlight; Enter or a click adds the label,
+clears the input and keeps the editor open. A space adds the typed text; the input
+never holds whitespace, and pasted text becomes one label per word. The input
+stops at 28 characters. × removes a chip, Backspace in an empty input the last
+one. Changes are written when the editor loses focus — Tab included, which adds
+nothing, and text typed but not added is dropped. Escape, with the list open or
+not, leaves edit mode, restores the labels the row opened with and writes nothing.
+What is written is what the edit added and removed, applied to the task as it
+stands on disk then, so a label that arrived from outside while the row was open
+survives.
+
 Below Type / Epic / Release, the Details card lists the board's **custom
 fields** (see "Custom fields" under Configuration) — one row per declared field,
 in declaration order, labelled by the declaration's `label` or its `key`. Each is
@@ -862,8 +936,8 @@ creation dialog — a new task starts with none and is filled in afterwards.
 dialog is opened from. Every value is still shown — and every way to change one
 is gone rather than disabled-looking: title, description, checklist item text and
 note text render as plain text; status, type, priority and release render as
-plain values instead of dropdowns; the epic renders as its badge, still clickable
-to navigate to the epic; custom field values render as text, with their links
+plain values instead of dropdowns; labels render as chips with no × and no edit
+mode; the epic renders as its badge, still clickable to navigate to the epic; custom field values render as text, with their links
 still clickable. Checklist checkboxes are disabled, the add-item row and the
 note composer are absent, and the per-item trash buttons do not appear. The
 Linked tasks section stays fully live — a link is metadata, not content — and
@@ -1215,7 +1289,7 @@ one submits. Nothing on screen announces the shortcut.
 And a form with something in it is not thrown away by accident. While any field
 differs from what it held when the dialog opened — a Title or Name or Description
 with text in it, a Type, Priority, Epic, Release or colour moved off the value it
-started on, or a linked task picked in Create task — **Escape and a click on the backdrop** open a **Discard changes?**
+started on, or a label added or a linked task picked in Create task — **Escape and a click on the backdrop** open a **Discard changes?**
 confirmation over the dialog instead of closing it: one line, `What you typed will
 be lost.`, and a `Cancel` / `Discard` pair. `Cancel`, the confirmation's own ✕,
 Escape and its backdrop all return to the form with everything still typed;
@@ -1315,7 +1389,7 @@ UI tabs are three commands: `release current` is the Board, `backlog` is the
 Backlog tab (active releases, future releases, then the unscheduled tasks) and
 `archive` is the Archive. Any task appearing in a list is rendered as a **task
 summary** — the fields the task card carries (id, title, type, priority, status,
-epic, checklist `done/total`, notes count) — while `task get` returns whole
+epic, labels, checklist `done/total`, notes count) — while `task get` returns whole
 tasks. It takes one or more ids and always answers `{ tasks, missing }`: each
 found id is `{ task, in }` in the order given — `in.kind` is `release` or
 `backlog` (every task in no release) and `in.file` the file the task sits in —
@@ -1332,7 +1406,18 @@ order given; `edit` stays one item and `{ id, item }`. `task add` takes a
 repeatable `--checklist` so a task and its items land in one call, and a
 repeatable `--link [<type>=]<id>` — the new task as the subject, `relates` when no
 type is given — so its links land in the same write; on any refusal none of it is
-written, the id included. **Priority** rides on the commands that already exist: `task add`
+written, the id included. **Labels** are managed with `task label add|rm <id>
+<label>…` and set on a new task by a repeatable `--label`. Both follow the rules
+under "Labels": matched ignoring case, the registry's spelling taken, a label the
+registry lacks appended to it in the same write. A label with whitespace or over 28
+characters is a `USAGE` error naming the rule and nothing is written — `rm`
+included, so a hand-edited label outside the rule is removed in the UI or by hand.
+`add` of a label the task carries and `rm` of one it lacks are an `ok` no-op, and a
+task in a finished release is `ARCHIVED` either way. The acknowledgement is
+`{ id, added, removed }` — the labels the call put on or took off, in the spelling
+stored, both empty on a no-op. A summary carries `labels` only when the task has
+any, and `schema` reports `labelMaxLength` and, when the registry is non-empty,
+the board's `labels`. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
 resolved value, so `--priority medium` also returns tasks with no key; `--status`,
 `--type`, `--priority` and `--epic` each take one or more values, space-separated

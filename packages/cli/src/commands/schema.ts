@@ -2,6 +2,7 @@ import {
   customFieldLabel,
   DEFAULT_TASK_PRIORITY,
   EPIC_NAME_MAX_LENGTH,
+  LABEL_MAX_LENGTH,
   LINK_TYPES,
   LUCIDE_ICON_NAMES,
   MIN_COMPATIBLE_VERSION,
@@ -19,7 +20,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 18,
+  version: 19,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -39,6 +40,8 @@ const DESCRIPTOR = {
     notes: 'optional array of { id, text, createdAt }; managed via `task notes`',
     links:
       'optional array of { type, to }; `type` is one of linkTypes, read from the side holding the record; links to other tasks, mirrored onto the other one as the inverse type; managed via `task link`',
+    labels:
+      'optional array of strings, in the order they were added; managed via `task label` and `--label` on `task add`. A label written by boardown has no whitespace, at most labelMaxLength characters, and takes the spelling of the board labels registry entry it matches ignoring case; a hand-edited one loads as it is',
     custom:
       'optional map of the board customFields values, stored flat in the task frontmatter; managed via `--field key=value` on `task add`/`task edit`',
   },
@@ -50,6 +53,7 @@ const DESCRIPTOR = {
     priority: 'one of taskPriorities; always present, resolved to defaultTaskPriority when unset',
     status: 'one of taskStatuses[].key',
     epic: 'epic slug; omitted when the task has none',
+    labels: 'array of strings; omitted when the task has none',
     checklist: '{ done, total }; omitted when the task has no checklist',
     notes: 'number of notes; omitted when the task has none',
   },
@@ -89,9 +93,9 @@ const DESCRIPTOR = {
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>] [--link [<linkType>=]<id>]',
+        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>] [--label <label>] [--link [<linkType>=]<id>]',
       summary:
-        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order. --link is repeatable and links the new task to <id> with a relation read from the side of the new task (`--link blocks=BD-9`: the new task blocks BD-9), `relates` when no type is given; each record is mirrored as in `task link add`. The task, its checklist and its links land in one write: an unknown type is USAGE, an unknown <id> TASK_NOT_FOUND, and on any refusal nothing is written.',
+        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order. --label is repeatable and adds labels as `task label add` does; one with whitespace or longer than labelMaxLength is USAGE. --link is repeatable and links the new task to <id> with a relation read from the side of the new task (`--link blocks=BD-9`: the new task blocks BD-9), `relates` when no type is given; each record is mirrored as in `task link add`. The task, its checklist and its links land in one write: an unknown type is USAGE, an unknown <id> TASK_NOT_FOUND, and on any refusal nothing is written.',
     },
     {
       name: 'task edit',
@@ -123,6 +127,12 @@ const DESCRIPTOR = {
       usage:
         'boardown task notes (add <id> <text> | edit <id> <note> <text> | rm <id> <note>)',
       summary: 'Manage task notes (alias: note). Note ids are n1, n2, …, each with a createdAt timestamp.',
+    },
+    {
+      name: 'task label',
+      usage: 'boardown task label (add <id> <label>… | rm <id> <label>…)',
+      summary:
+        "Add or remove a task's labels, matched ignoring case. `add` appends in the order given and takes the spelling of the labels registry entry a label matches; a label the registry lacks is appended to it in the same write, and if either file cannot be written neither is. `rm` never touches the registry. A label with whitespace or longer than labelMaxLength is USAGE and nothing is written. `add` of a label the task carries and `rm` of one it lacks is a no-op. Data is { id, added, removed } — the labels this call put on or took off, in the spelling stored; both empty on a no-op.",
     },
     {
       name: 'task commits',
@@ -207,7 +217,10 @@ const DESCRIPTOR = {
     '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
   epicNameMaxLength: EPIC_NAME_MAX_LENGTH,
+  labelMaxLength: LABEL_MAX_LENGTH,
   configFields: {
+    labels:
+      'optional labels registry: the labels the UI suggests, appended to by boardown when a new label is added, edited by hand to remove or rename. Each entry has no whitespace and at most labelMaxLength characters, and no two match ignoring case, or the board is BOARD_INVALID. Reported as `labels` when non-empty.',
     minVersion:
       'optional; the oldest boardown build that reads this board. Written by boardown, never by hand. Absent means no requirement.',
   },
@@ -230,6 +243,7 @@ const DESCRIPTOR = {
 export const schemaCommand: CommandHandler = async (_args, ctx) => {
   const config = await loadConfigIfAny(ctx.cwd, ctx.dataDir);
   const declared = config?.customFields ?? [];
+  const labels = config?.labels ?? [];
   const wipLimits = config?.wipLimits;
   const data = {
     ...DESCRIPTOR,
@@ -258,6 +272,7 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
           })),
         }
       : {}),
+    ...(labels.length > 0 ? { labels } : {}),
     ...(wipLimits?.[WIP_LIMIT_KEY] !== undefined
       ? {
           wipLimits: { [WIP_LIMIT_KEY]: wipLimits[WIP_LIMIT_KEY] },

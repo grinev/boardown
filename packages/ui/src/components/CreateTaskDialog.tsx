@@ -16,9 +16,12 @@ import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
+import { LabelsEditor } from './LabelsEditor';
 import { LinkedTasksSection } from './LinkedTasks';
 import { Modal } from './Modal';
 import styles from './CreateTaskDialog.module.css';
+
+const EMPTY_LABELS: string[] = [];
 
 interface CreateTaskDialogProps {
   // When provided the task is bound to this release and the selector is locked.
@@ -56,6 +59,7 @@ export function CreateTaskDialog({
   const [epicSlug, setEpicSlug] = useState(initialEpicSlug);
   const [initialReleaseFilename] = useState(release?.filename ?? '');
   const [releaseFilename, setReleaseFilename] = useState(initialReleaseFilename);
+  const [labels, setLabels] = useState<string[]>([]);
   const [pickedLinks, setPickedLinks] = useState<TaskLink[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -91,6 +95,7 @@ export function CreateTaskDialog({
     priority !== DEFAULT_TASK_PRIORITY ||
     epicSlug !== initialEpicSlug ||
     releaseFilename !== initialReleaseFilename ||
+    labels.length > 0 ||
     linkRows.length > 0;
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
@@ -159,6 +164,7 @@ export function CreateTaskDialog({
         ...(priority !== DEFAULT_TASK_PRIORITY ? { priority } : {}),
         ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
         ...(epicSlug.length > 0 ? { epic: epicSlug } : {}),
+        ...(labels.length > 0 ? { labels } : {}),
         ...(linkRows.length > 0
           ? { links: linkRows.map((r) => ({ type: r.type, to: r.task.frontmatter.id })) }
           : {}),
@@ -249,6 +255,16 @@ export function CreateTaskDialog({
             options={priorityOptions}
             onChange={(v) => setPriority(v as TaskPriority)}
             ariaLabel="Priority"
+          />
+        </div>
+        <div className={styles.field}>
+          <span className={styles.label}>Labels</span>
+          <LabelsEditor
+            labels={labels}
+            registry={config?.labels ?? EMPTY_LABELS}
+            onChange={setLabels}
+            ariaLabel="Labels"
+            className={styles.labelsEditor}
           />
         </div>
         <div className={styles.field}>

@@ -39,7 +39,7 @@ boardown archive                Finished releases.
 
 boardown task get <id>…         Show one or more tasks in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --link).
+boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --label --link).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
@@ -47,6 +47,7 @@ boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
 boardown task link <op>         Link to another task: add | rm (<id> <other-id> [--type <t>]) | ls <id>.
+boardown task label <op>        Labels: add | rm (<id> <label>…).
 boardown task commits <id>      Local commits whose subject mentions the task.
 
 boardown release get <ref>      Show one release and its tasks.
@@ -69,7 +70,7 @@ boardown version                Print the CLI version (also --version / -v).
 ### Output depth
 
 A **task summary** is `id`, `title`, `type`, `priority`, `status`, plus `epic`,
-`checklist` (`{ done, total }`) and `notes` (a count) when the task has them — the
+`labels`, `checklist` (`{ done, total }`) and `notes` (a count) when the task has them — the
 fields the app's task card shows. `priority` is always present: a task with no
 `priority` key on disk reports the default (`medium`). Descriptions, note bodies
 and checklist item texts come from `task get`.
@@ -88,7 +89,8 @@ and checklist item texts come from `task get`.
 Mutating commands do not echo the entity back — they return the identifier of
 what changed (`{ "id": "BD-42" }`, or `{ "slug": "1-11" }` for a release or
 epic). `task checklist add|done|undone|rm` acknowledge `{ id, items }`; `edit`
-keeps `{ id, item }`; a new note still returns its id.
+keeps `{ id, item }`; a new note still returns its id. `task label add|rm`
+acknowledge `{ id, added, removed }`.
 
 `task list` filters combine with AND across flags and OR within a flag;
 `--status`, `--type`, `--priority` and `--epic` each take one or more values
@@ -209,6 +211,38 @@ refusal nothing is written — not even the id.
 ```bash
 boardown task add "Ship CSV" --link BD-7 --link blocks=BD-9
 ```
+
+### Labels
+
+A task carries labels — short tags with no whitespace, at most 28 characters
+(`labelMaxLength` in `boardown schema`). The board keeps a registry of them in
+`.boardown/config.yaml`, which the app's label editor suggests from:
+
+```yaml
+labels:
+  - backend
+  - ui
+```
+
+`task label add <id> <label>…` appends labels in the order given and
+`task label rm <id> <label>…` takes them off; `task add` takes a repeatable
+`--label`. Labels are matched **ignoring case**: a label the registry holds is
+stored in the registry's spelling, and one the task already carries is not added
+twice. A label the registry lacks is appended to it in the same write as the task —
+if either file cannot be written, neither is; `rm` never touches the registry.
+A label with whitespace or over the limit is a `USAGE` error and nothing is
+written. Adding a label the task carries, or removing one it lacks, is an `ok`
+no-op; a task in a finished release is `ARCHIVED` either way.
+
+```bash
+boardown task add "Fix login" --label backend --label auth
+boardown task label add BD-42 ui важно
+boardown task label rm BD-42 ui
+```
+
+The answer is `{ id, added, removed }` — the labels the call put on or took off, in
+the spelling stored, both empty on a no-op. Task summaries carry `labels` when a
+task has any, and `boardown schema` reports the board's registry as `labels`.
 
 ### Priority
 

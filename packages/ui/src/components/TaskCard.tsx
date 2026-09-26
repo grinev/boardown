@@ -6,6 +6,7 @@ import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
 import { pickContrastText } from '../utils/contrast-color';
+import { LabelChip } from './LabelChip';
 import styles from './BoardView.module.css';
 
 interface TaskCardProps {
@@ -27,6 +28,7 @@ export function TaskCard({ task, epic }: TaskCardProps) {
   const checklistDone = checklist.filter((it) => it.done).length;
   const allDone = checklist.length > 0 && checklistDone === checklist.length;
   const notes = task.frontmatter.notes ?? [];
+  const labels = task.frontmatter.labels ?? [];
 
   const epicStyle = epic
     ? ({
@@ -49,6 +51,13 @@ export function TaskCard({ task, epic }: TaskCardProps) {
           {task.title}
         </button>
       </h3>
+      {labels.length > 0 && (
+        <div className={styles.cardLabels}>
+          {labels.map((label) => (
+            <LabelChip key={label} label={label} />
+          ))}
+        </div>
+      )}
       {epic && (
         <button
           type="button"

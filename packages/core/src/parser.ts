@@ -13,6 +13,7 @@ import {
   type Task,
   type TaskFrontmatter,
   TaskFrontmatterSchema,
+  TaskLabelsSchema,
 } from './schemas.js';
 import {
   fileProblem,
@@ -195,6 +196,29 @@ const parseTasks = (
         if (value !== undefined && value !== '') custom[field.key] = value;
       }
       if (Object.keys(custom).length > 0) frontmatter.custom = custom;
+    }
+
+    // Unlike the keys above, a malformed list costs only itself: the task loads
+    // without it, and the error-level problem keeps its file from being written
+    // back without the value.
+    const rawLabels =
+      rawData !== null && typeof rawData === 'object' && 'labels' in rawData
+        ? rawData.labels
+        : undefined;
+    if (rawLabels !== undefined) {
+      const labelsResult = TaskLabelsSchema.safeParse(rawLabels);
+      if (labelsResult.success) {
+        if (labelsResult.data.length > 0) frontmatter.labels = labelsResult.data;
+      } else {
+        problems.push(
+          taskProblem(
+            filename,
+            index,
+            'Task labels failed validation: expected a list of strings.',
+            frontmatter.id,
+          ),
+        );
+      }
     }
 
     tasks.push({

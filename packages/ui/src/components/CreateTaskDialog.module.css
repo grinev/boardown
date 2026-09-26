@@ -171,3 +171,11 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* The field around it is a box the size of the inputs above; chips wrap inside. */
+.labelsEditor {
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  min-height: 37px;
+}

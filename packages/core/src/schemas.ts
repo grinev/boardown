@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sameLabel, validateLabel } from './labels.js';
 import { LUCIDE_ICON_NAME_SET } from './lucide-icon-names.js';
 
 export const TASK_TYPES = ['bug', 'feature', 'docs', 'tech'] as const;
@@ -117,9 +118,14 @@ export const TaskFrontmatterSchema = z.object({
   links: z.array(TaskLinkSchema).optional(),
 });
 
+// Parsed apart from the keys above, so a malformed value is a problem on the task
+// rather than the loss of it. No rule on the entries: those apply on write only.
+export const TaskLabelsSchema = z.array(z.string());
+
 // Custom field values live flat in the file, next to the keys above, but as a
 // named bag in memory — so this type is not part of the on-disk schema.
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema> & {
+  labels?: string[];
   custom?: Record<string, string>;
 };
 
@@ -237,6 +243,7 @@ export const RESERVED_TASK_KEYS = [
   'checklist',
   'notes',
   'links',
+  'labels',
 ] as const;
 
 export const CustomFieldSchema = z
@@ -356,6 +363,20 @@ const atLeastOneTypeEnabled = (config: {
   });
 };
 
+// The registry of labels the editor suggests. Unlike a task's own list, every entry
+// is held to the label rule: this file is where the vocabulary is declared.
+const LabelRegistrySchema = z
+  .array(
+    z.string().superRefine((label, ctx) => {
+      const invalid = validateLabel(label);
+      if (invalid !== null) ctx.addIssue({ code: 'custom', message: `labels: ${invalid}` });
+    }),
+  )
+  .refine(
+    (labels) => labels.every((label, i) => labels.findIndex((l) => sameLabel(l, label)) === i),
+    { message: 'labels must be unique, ignoring case' },
+  );
+
 export const BoardConfigSchema = z
   .object({
     idPrefix: z.string().regex(ID_PREFIX_REGEX, ID_PREFIX_MESSAGE),
@@ -378,6 +399,7 @@ export const BoardConfigSchema = z
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),
+    labels: LabelRegistrySchema.optional(),
     // Override list: names base types and flips enabled. Absent or empty keeps
     // every base type on. A key that is not a base type is invalid.
     taskTypes: TaskTypesSchema.optional(),

@@ -169,6 +169,14 @@
   border-radius: 2px;
 }
 
+/* Each chip is capped at the card's width and clipped inside it. */
+.cardLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
 .epicBadge {
   align-self: flex-start;
   /* 240px is the same cap the backlog and archive rows use, so one name is

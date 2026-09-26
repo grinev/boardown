@@ -7,3 +7,8 @@ customFields:
     type: string
   - key: env
     type: string
+labels:
+  - backend
+  - ui
+  - performance
+  - важно

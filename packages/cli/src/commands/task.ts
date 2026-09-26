@@ -1,4 +1,5 @@
 import {
+  addLabels,
   addTaskLink,
   BoardOpError,
   changeTaskStatus,
@@ -11,7 +12,10 @@ import {
   nextChecklistItemId,
   nextNoteId,
   removeAllTaskLinks,
+  removeLabels,
   removeTaskLink,
+  setTaskLabels,
+  validateLabel,
   reorderTask,
   normalizeSearchQuery,
   readTaskCommits,
@@ -100,12 +104,15 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     case 'link':
     case 'links':
       return taskLink(args, ctx);
+    case 'label':
+    case 'labels':
+      return taskLabel(args, ctx);
     case 'commits':
       return taskCommits(args, ctx);
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | commits.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | label | commits.`,
         2,
       );
   }
@@ -210,6 +217,24 @@ function parseChecklistTexts(args: ParsedArgs, usage: string): ChecklistItem[] |
   return items;
 }
 
+// The rule is checked on everything handed in, before the board is read, so an
+// agent gets `USAGE` for a label that could never be written.
+function requireLabels(labels: readonly string[], usage: string): string[] {
+  if (labels.length === 0) throw new CliError('USAGE', usage, 2);
+  for (const label of labels) {
+    const invalid = validateLabel(label);
+    if (invalid !== null) throw new CliError('USAGE', invalid, 2);
+  }
+  return [...labels];
+}
+
+function parseLabelFlags(args: ParsedArgs, usage: string): string[] | undefined {
+  const value = args.flags['label'];
+  if (value === undefined) return undefined;
+  if (value === true) throw new CliError('USAGE', usage, 2);
+  return requireLabels(flagList(args.flags, 'label'), usage);
+}
+
 // `--link [<type>=]<id>`, repeatable, read from the new task's side the way `task
 // link add` reads `<id>`'s. Only the first `=` separates; no type means `relates`.
 function parseLinkFlags(args: ParsedArgs): TaskLink[] {
@@ -247,11 +272,12 @@ function applyOp<T>(fn: () => T): T {
 async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const title = args.positionals[2];
   const addUsage =
-    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>] [--link [<type>=]<id>].';
+    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>] [--label <label>] [--link [<type>=]<id>].';
   if (title === undefined || title.length === 0) {
     throw new CliError('USAGE', addUsage, 2);
   }
   const links = parseLinkFlags(args);
+  const labels = parseLabelFlags(args, addUsage);
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
@@ -303,6 +329,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     ...(epicTag !== undefined ? { epic: epicTag } : {}),
     ...(custom !== undefined ? { custom } : {}),
     ...(checklist !== undefined ? { checklist } : {}),
+    ...(labels !== undefined ? { labels } : {}),
   };
 
   for (const link of links) {
@@ -558,8 +585,10 @@ const renderCustom = (custom: Record<string, string> | undefined): string => {
 const renderTask = (task: Task, kind: string, file: string): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
+  const labels =
+    fm.labels !== undefined && fm.labels.length > 0 ? `  labels:${fm.labels.join(',')}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${effectiveTaskPriority(fm)}/${fm.status}]${epic}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
+  return `${fm.id}  [${fm.type}/${effectiveTaskPriority(fm)}/${fm.status}]${epic}${labels}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -684,6 +713,7 @@ const renderTaskList = (config: BoardConfig, entries: readonly TaskListEntry[]):
       `[${s.type}/${s.priority}/${s.status}]`,
     ];
     if (s.epic !== undefined) parts.push(`epic:${s.epic}`);
+    if (s.labels !== undefined) parts.push(`labels:${s.labels.join(',')}`);
     if (s.checklist !== undefined) parts.push(`☑${s.checklist.done}/${s.checklist.total}`);
     if (s.notes !== undefined) parts.push(`✎${s.notes}`);
     parts.push(`(${loc.kind}: ${loc.file})`);
@@ -1286,6 +1316,78 @@ async function linkMutate(
         : kind === 'add'
           ? `Linked ${id} and ${otherId}${suffix}.`
           : `Unlinked ${id} and ${otherId}${suffix}.`,
+    ...problemsField(problems),
+  };
+}
+
+function taskLabel(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const op = args.positionals[2];
+  switch (op) {
+    case 'add':
+      return labelMutate(args, ctx, 'add');
+    case 'rm':
+    case 'remove':
+      return labelMutate(args, ctx, 'rm');
+    default:
+      throw new CliError(
+        'USAGE',
+        `Unknown label subcommand "${op ?? ''}". Use: add | rm.`,
+        2,
+      );
+  }
+}
+
+// The op runs even when the call changes nothing, so a finished release answers
+// ARCHIVED whatever the arguments; only the write is skipped.
+async function labelMutate(
+  args: ParsedArgs,
+  ctx: CommandContext,
+  kind: 'add' | 'rm',
+): Promise<CommandOutput> {
+  const usage = `Usage: boardown task label ${kind} <task-id> <label>...`;
+  const id = args.positionals[3];
+  if (id === undefined) throw new CliError('USAGE', usage, 2);
+  const labels = requireLabels(args.positionals.slice(4), usage);
+
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const location = locateTask(snapshot, id);
+  const task = location?.container.tasks.find((t) => t.frontmatter.id === id);
+  if (location === null || task === undefined) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+
+  const current = task.frontmatter.labels ?? [];
+  const next =
+    kind === 'add'
+      ? addLabels(current, labels, snapshot.config.labels)
+      : removeLabels(current, labels);
+  const result = applyOp(() => setTaskLabels(location.container, snapshot.config, id, next));
+  const stored =
+    result.container.tasks.find((t) => t.frontmatter.id === id)?.frontmatter.labels ?? [];
+  const added = stored.filter((l) => !current.includes(l));
+  const removed = current.filter((l) => !stored.includes(l));
+
+  if (added.length > 0 || removed.length > 0) {
+    const ref: ContainerRef = { kind: location.kind, container: result.container };
+    if (result.config === snapshot.config) {
+      await writeContainer(fs, ref, snapshot.config);
+    } else {
+      await writeContainersAndConfig(fs, [ref], result.config);
+    }
+  }
+
+  const human =
+    added.length > 0
+      ? `Added ${added.join(', ')} to ${id}.`
+      : removed.length > 0
+        ? `Removed ${removed.join(', ')} from ${id}.`
+        : kind === 'add'
+          ? `${id} already carries ${labels.join(', ')}.`
+          : `${id} carries none of ${labels.join(', ')}.`;
+  return {
+    data: { id, added, removed },
+    human,
     ...problemsField(problems),
   };
 }

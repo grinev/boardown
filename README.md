@@ -310,7 +310,7 @@ customFields:
 `key` is 1–40 characters, starts with a letter and continues with letters,
 digits, `_` or `-`. Keys must be unique, and may not reuse a name task
 frontmatter already has (`id`, `type`, `priority`, `status`, `epic`, `order`,
-`checklist`, `notes`, `links`). A bad declaration makes the config invalid — the app shows its
+`checklist`, `notes`, `links`, `labels`). A bad declaration makes the config invalid — the app shows its
 config error screen and the CLI returns `BOARD_INVALID`, rather than ignoring the
 line.
 

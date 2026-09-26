@@ -35,6 +35,9 @@ const orderedTaskFrontmatter = (fm: TaskFrontmatter): Record<string, unknown> =>
   if (fm.links && fm.links.length > 0) {
     out.links = fm.links.map((link) => ({ type: link.type, to: link.to }));
   }
+  if (fm.labels && fm.labels.length > 0) {
+    out.labels = [...fm.labels];
+  }
   // Custom values are flat on disk. The bag is already in declaration order —
   // board-ops owns that — so this only spreads it out.
   if (fm.custom) {

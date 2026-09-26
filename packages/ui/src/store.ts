@@ -41,6 +41,9 @@ import {
   createGuardedFs,
   createLogger,
   createTaskWithLinks as createTaskWithLinksInBoard,
+  addLabels,
+  removeLabels,
+  setTaskLabels as setTaskLabelsInBoard,
   docFilenameForTitle,
   docPagePath,
   initialStatus,
@@ -83,6 +86,7 @@ export interface CreateTaskInput {
   type: TaskType;
   priority?: TaskPriority;
   epic?: string;
+  labels?: string[];
   // Each one read from the new task's side and mirrored into its other task.
   links?: TaskLink[];
 }
@@ -229,6 +233,9 @@ interface BoardState {
   createRelease: (input: CreateReleaseInput) => Promise<void>;
   createEpic: (input: CreateEpicInput) => Promise<void>;
   updateTask: (taskId: string, patch: TaskPatch) => Promise<void>;
+  // What one edit added and removed, not the list it ended with: applied to the
+  // labels on disk now, so a change a refresh brought in meanwhile survives.
+  editTaskLabels: (taskId: string, added: string[], removed: string[]) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   moveTask: (taskId: string, status: TaskStatus, beforeTaskId: string | null) => Promise<void>;
   moveTaskToRelease: (taskId: string, targetReleaseFilename: string | null) => Promise<void>;
@@ -1189,6 +1196,7 @@ export const useBoardStore = create<BoardState>(
             status: initialStatus(snapshot.config),
             ...(input.description !== undefined ? { description: input.description } : {}),
             ...(input.epic !== undefined ? { epic: input.epic } : {}),
+            ...(input.labels !== undefined ? { labels: input.labels } : {}),
           },
           input.links ?? [],
         );
@@ -1404,6 +1412,57 @@ export const useBoardStore = create<BoardState>(
           nextContainer.filename,
           serializeContainer({ kind: sourceLoc.kind, container: nextContainer }),
         );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
+    },
+
+    editTaskLabels: async (taskId, added, removed) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+
+      const found = findTaskContainer(snapshot, taskId);
+      if (!found) {
+        set({ errorMessage: `Task not found: ${taskId}` });
+        return;
+      }
+      const { location: sourceLoc } = found;
+      const current = found.task.frontmatter.labels ?? [];
+      const labels = removeLabels(addLabels(current, added, snapshot.config.labels), removed);
+      if (labels.length === current.length && labels.every((l, i) => l === current[i])) return;
+
+      let result: { container: Container; config: BoardConfig };
+      try {
+        result = setTaskLabelsInBoard(sourceLoc.container, snapshot.config, taskId, labels);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: message });
+        throw err;
+      }
+      const registryGrew = result.config !== snapshot.config;
+      const nextSnapshot = {
+        ...withContainers(snapshot, [{ location: sourceLoc, container: result.container }]),
+        config: result.config,
+      };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+
+      try {
+        await fs.writeAll([
+          {
+            path: result.container.filename,
+            content: serializeContainer({ kind: sourceLoc.kind, container: result.container }),
+          },
+          ...(registryGrew
+            ? [
+                {
+                  path: CONFIG_FILENAME,
+                  content: serializeConfig(withMinVersionStamp(result.config)),
+                },
+              ]
+            : []),
+        ]);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save task: ${message}` });
