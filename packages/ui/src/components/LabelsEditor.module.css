@@ -1,0 +1,71 @@
+/* Chips and the input share one wrapping line box, the list hangs under it. */
+.editor {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  background: var(--surface);
+  cursor: text;
+}
+
+.editor:focus-within {
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
+}
+
+.input {
+  flex: 1 0 60px;
+  min-width: 60px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin: 4px 0 0 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+  cursor: default;
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.suggestionHighlighted {
+  background: var(--accent-bg);
+}
+
+.newHint {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}

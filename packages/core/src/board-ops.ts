@@ -1,4 +1,12 @@
 import { nextTaskId } from './id-generator.js';
+import {
+  addLabels,
+  findLabel,
+  hasLabel,
+  resolveLabel,
+  validateLabel,
+  withLabelsInRegistry,
+} from './labels.js';
 import { LINK_TYPE_META, WIP_LIMIT_KEY } from './schemas.js';
 import {
   boardStatusKeys,
@@ -520,7 +528,15 @@ export interface NewTaskInput {
   epic?: string;
   custom?: Record<string, string>;
   checklist?: ChecklistItem[];
+  labels?: string[];
 }
+
+const refuseInvalidLabels = (labels: readonly string[]): void => {
+  for (const label of labels) {
+    const invalid = validateLabel(label);
+    if (invalid !== null) throw new Error(invalid);
+  }
+};
 
 // Rebuilds the bag in the config's declaration order, so the on-disk key order
 // never depends on the order edits arrived in. An empty value clears the key,
@@ -564,6 +580,8 @@ export const createTask = <C extends Container>(
   const custom = applyCustomValues(undefined, input.custom, config.customFields ?? []);
   const checklist =
     input.checklist !== undefined && input.checklist.length > 0 ? input.checklist : undefined;
+  const labels = addLabels([], input.labels ?? [], config.labels);
+  refuseInvalidLabels(labels);
   const task: Task = {
     title: input.title,
     description: input.description ?? '',
@@ -576,11 +594,12 @@ export const createTask = <C extends Container>(
       order,
       ...(custom !== undefined ? { custom } : {}),
       ...(checklist !== undefined ? { checklist } : {}),
+      ...(labels.length > 0 ? { labels } : {}),
     },
   };
   return {
     container: replaceTasks(container, [...container.tasks, task]),
-    config: nextConfig,
+    config: withLabelsInRegistry(nextConfig, labels),
     task,
   };
 };
@@ -681,6 +700,43 @@ export const editTask = <C extends Container>(
     };
   });
   return replaceTasks(container, tasks);
+};
+
+// The whole next list, in the order it is to be stored. A label the task already
+// carries keeps its own spelling and escapes the label rule, so a hand-edited one
+// survives the write; only the labels this adds are checked, take the registry's
+// spelling, and are appended to the registry when it lacks them.
+export const setTaskLabels = <C extends Container>(
+  container: C,
+  config: BoardConfig,
+  taskId: string,
+  labels: readonly string[],
+): { container: C; config: BoardConfig } => {
+  if (isFinishedRelease(container)) {
+    throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
+  }
+  const current = findTask(container.tasks, taskId).frontmatter.labels ?? [];
+  const next: string[] = [];
+  const added: string[] = [];
+  for (const raw of labels) {
+    const carried = findLabel(current, raw);
+    const label = carried ?? resolveLabel(config.labels, raw);
+    if (hasLabel(next, label)) continue;
+    next.push(label);
+    if (carried === undefined) added.push(label);
+  }
+  refuseInvalidLabels(added);
+  const tasks = container.tasks.map((t) => {
+    if (t.frontmatter.id !== taskId) return t;
+    const frontmatter = { ...t.frontmatter };
+    if (next.length === 0) delete frontmatter.labels;
+    else frontmatter.labels = next;
+    return { ...t, frontmatter };
+  });
+  return {
+    container: replaceTasks(container, tasks),
+    config: withLabelsInRegistry(config, added),
+  };
 };
 
 export interface EpicPatch {

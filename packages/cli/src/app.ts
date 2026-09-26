@@ -32,7 +32,7 @@ Views — what you look at first:
 Tasks:
   task get <id>…         Show one or more tasks in full — the drill-down.
   task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
-  task add <title>       Create a task (--type --priority --status --epic --release --description).
+  task add <title>       Create a task (--type --priority --status --epic --release --description --label).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
   task status <id> <s>   Change a task status (one of the board's statuses).
   task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
@@ -40,6 +40,7 @@ Tasks:
   task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
   task notes <op>        Note: add | edit | rm (on <id>).
   task link <op>         Link to another task: add | rm (<id> <other-id> [--type T]) | ls <id>.
+  task label <op>        Labels: add | rm (<id> <label>…).
   task commits <id>      Local commits whose subject mentions the task.
 
 Releases and epics:

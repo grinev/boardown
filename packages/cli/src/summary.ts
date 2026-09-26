@@ -16,6 +16,7 @@ export interface TaskSummary {
   priority: string;
   status: string;
   epic?: string;
+  labels?: string[];
   checklist?: { done: number; total: number };
   notes?: number;
 }
@@ -31,7 +32,7 @@ export const statusMark = (config: StatusConfig, task: Task): string => {
 };
 
 export function taskSummary(task: Task): TaskSummary {
-  const { id, type, status, epic, checklist, notes } = task.frontmatter;
+  const { id, type, status, epic, labels, checklist, notes } = task.frontmatter;
   return {
     id,
     title: task.title,
@@ -39,6 +40,7 @@ export function taskSummary(task: Task): TaskSummary {
     priority: effectiveTaskPriority(task.frontmatter),
     status,
     ...(epic !== undefined && epic !== '' ? { epic } : {}),
+    ...(labels !== undefined && labels.length > 0 ? { labels: [...labels] } : {}),
     ...(checklist !== undefined && checklist.length > 0
       ? {
           checklist: {
@@ -63,6 +65,7 @@ export function summaryLine(config: StatusConfig, task: Task, indent = '  '): st
     `[${s.type}/${s.priority}/${s.status}]`,
   ];
   if (s.epic !== undefined) parts.push(`epic:${s.epic}`);
+  if (s.labels !== undefined) parts.push(`labels:${s.labels.join(',')}`);
   if (s.checklist !== undefined) parts.push(`☑${s.checklist.done}/${s.checklist.total}`);
   if (s.notes !== undefined) parts.push(`✎${s.notes}`);
   return parts.join('  ');

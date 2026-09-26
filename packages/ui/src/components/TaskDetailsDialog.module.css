@@ -350,3 +350,37 @@ button.epicBadge:focus-visible {
   height: 10px;
   border-radius: 3px;
 }
+
+/* Chips wrap onto further lines; an empty list still keeps a line's height so the
+   row stays clickable, as an empty custom field does. */
+.labelsView {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 1.6em;
+  /* The inline editors' own padding and border, so the chips start on the same
+     column as the values of the rows around them. */
+  padding: 2px 7px;
+  margin: -2px 0;
+  box-sizing: border-box;
+}
+
+.labelsViewTrigger {
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.labelsViewTrigger:hover {
+  background: var(--surface-muted);
+}
+
+.labelsViewTrigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.labelsEditor {
+  font-size: 13px;
+}

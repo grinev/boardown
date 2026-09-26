@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import {
+  hasLabel,
   customFieldLabel,
   effectiveTaskPriority,
   boardStatuses,
@@ -35,6 +36,8 @@ import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { DialogBackButton } from './DialogBackButton';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import { InlineEditText } from './InlineEditText';
+import { LabelChip } from './LabelChip';
+import { LabelsEditor } from './LabelsEditor';
 import { LinkedText } from './LinkedText';
 import { LinkedTasks } from './LinkedTasks';
 import { Modal } from './Modal';
@@ -56,6 +59,7 @@ const NO_RELEASE_VALUE = '__none__';
 
 // Stable identity, so the selector doesn't return a fresh array every render.
 const EMPTY_FIELDS: CustomField[] = [];
+const EMPTY_LABELS: string[] = [];
 
 const STATUS_LOCKED_HINT = 'Status changes only in the current release.';
 
@@ -91,6 +95,8 @@ export function TaskDetailsDialog({
   const epics = useBoardStore((s) => s.snapshot?.epics ?? []);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
   const customFields = useBoardStore((s) => s.snapshot?.config.customFields ?? EMPTY_FIELDS);
+  const labelRegistry = useBoardStore((s) => s.snapshot?.config.labels ?? EMPTY_LABELS);
+  const editTaskLabels = useBoardStore((s) => s.editTaskLabels);
   const archived = release?.frontmatter.status === 'finished';
   // A finished release is always a pill. Everywhere else the dropdown appears
   // when the task sits in the current release, or when the board lifts the lock.
@@ -365,6 +371,22 @@ export function TaskDetailsDialog({
                   )}
                 </dd>
               </div>
+              <div className={styles.detailRowWrapping}>
+                <dt className={styles.detailLabel}>Labels</dt>
+                <dd className={styles.detailValueWide}>
+                  <LabelsRow
+                    // A link to another task reuses this dialog; a draft must not
+                    // follow the user onto it.
+                    key={id}
+                    labels={task.frontmatter.labels ?? EMPTY_LABELS}
+                    registry={labelRegistry}
+                    readOnly={archived}
+                    onSave={(added, removed) => {
+                      void editTaskLabels(id, added, removed).catch(() => {});
+                    }}
+                  />
+                </dd>
+              </div>
               <div className={styles.detailRow}>
                 <dt className={styles.detailLabel}>Epic</dt>
                 <dd className={styles.detailValue}>
@@ -545,6 +567,94 @@ function EpicEditor({
       onKeyDown={handleViewKeyDown}
     >
       {badge}
+    </div>
+  );
+}
+
+interface LabelsRowProps {
+  labels: readonly string[];
+  registry: readonly string[];
+  readOnly: boolean;
+  onSave: (added: string[], removed: string[]) => void;
+}
+
+function LabelsRow({ labels, registry, readOnly, onSave }: LabelsRowProps) {
+  const [draft, setDraft] = useState<readonly string[] | null>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef(false);
+  // Escape unmounts the editor, and a browser that reports that as a blur must
+  // not have it read as the focus loss that writes.
+  const cancelledRef = useRef(false);
+  // What the row opened with, not the live prop: a refresh while it is open
+  // changes the prop, and diffing against that would undo the outside change.
+  const openedRef = useRef<readonly string[]>([]);
+
+  const startEdit = () => {
+    cancelledRef.current = false;
+    openedRef.current = labels;
+    setDraft(labels);
+  };
+
+  useEffect(() => {
+    if (draft !== null || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    viewRef.current?.focus();
+  }, [draft]);
+
+  const chips = labels.map((label) => <LabelChip key={label} label={label} />);
+
+  if (readOnly) {
+    return <div className={styles.labelsView}>{chips}</div>;
+  }
+
+  if (draft !== null) {
+    // The edit is handed on as what it added and removed, so a label a refresh
+    // brought in while the row was open is not written away.
+    const commit = () => {
+      if (cancelledRef.current) return;
+      const opened = openedRef.current;
+      const added = draft.filter((l) => !hasLabel(opened, l));
+      const removed = opened.filter((l) => !hasLabel(draft, l));
+      setDraft(null);
+      if (added.length > 0 || removed.length > 0) onSave(added, removed);
+    };
+    return (
+      <LabelsEditor
+        labels={draft}
+        registry={registry}
+        onChange={setDraft}
+        onBlur={commit}
+        onEscape={() => {
+          cancelledRef.current = true;
+          restoreFocusRef.current = true;
+          setDraft(null);
+        }}
+        autoFocus
+        ariaLabel="Labels"
+        className={styles.labelsEditor}
+      />
+    );
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      startEdit();
+    }
+  };
+
+  // A chip has no action of its own, so a click on one is a click on the row.
+  return (
+    <div
+      ref={viewRef}
+      role="button"
+      tabIndex={0}
+      aria-label="Edit labels"
+      className={`${styles.labelsView} ${styles.labelsViewTrigger}`}
+      onClick={startEdit}
+      onKeyDown={handleKeyDown}
+    >
+      {chips}
     </div>
   );
 }

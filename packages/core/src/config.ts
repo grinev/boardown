@@ -139,6 +139,9 @@ export const serializeConfig = (config: BoardConfig): string => {
         return entry;
       });
     }
+    if (config.labels !== undefined) {
+      ordered.labels = [...config.labels];
+    }
     if (config.taskTypes !== undefined) {
       ordered.taskTypes = config.taskTypes.map((entry) => ({
         key: entry.key,

@@ -2,6 +2,7 @@ export * from './schemas.js';
 export * from './lucide-icon-names.js';
 export * from './statuses.js';
 export * from './task-types.js';
+export * from './labels.js';
 export * from './problems.js';
 export * from './parser.js';
 export * from './serializer.js';

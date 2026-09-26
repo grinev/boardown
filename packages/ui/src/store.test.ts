@@ -469,6 +469,52 @@ describe('updateTask', () => {
   });
 });
 
+describe('editTaskLabels', () => {
+  it('applies the edit to the labels on disk and writes the file alone when the registry has them', async () => {
+    const { fs } = setup(
+      snap({
+        config: { ...config(), labels: ['ui', 'backend'] },
+        // `backend` arrived from outside while the editor was open.
+        backlog: backlog([task('BD-1', { labels: ['old', 'backend'] })]),
+      }),
+    );
+
+    await state().editTaskLabels('BD-1', ['UI'], ['old']);
+
+    expect(current().backlog!.tasks[0]!.frontmatter.labels).toEqual(['backend', 'ui']);
+    expect(fs.writeAllCalls).toEqual([[BACKLOG_PATH]]);
+  });
+
+  it('appends a new label to the registry in the same write', async () => {
+    const { fs } = setup(snap({ backlog: backlog([task('BD-1')]) }));
+
+    await state().editTaskLabels('BD-1', ['fresh'], []);
+
+    expect(current().config.labels).toEqual(['fresh']);
+    expect(fs.writeAllCalls).toEqual([[BACKLOG_PATH, CONFIG_FILENAME]]);
+    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain('labels:\n  - fresh');
+  });
+
+  it('writes nothing when the edit changes nothing on disk', async () => {
+    const { fs } = setup(snap({ backlog: backlog([task('BD-1', { labels: ['ui'] })]) }));
+
+    await state().editTaskLabels('BD-1', ['UI'], ['gone']);
+
+    expect(fs.writes).toEqual([]);
+  });
+
+  it('rolls both back when the write fails', async () => {
+    const before = snap({ backlog: backlog([task('BD-1')]) });
+    const { fs } = setup(before);
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await expect(state().editTaskLabels('BD-1', ['fresh'], [])).rejects.toThrow();
+
+    expect(current()).toBe(before);
+    expect(state().errorMessage).toMatch(/Failed to save task/);
+  });
+});
+
 describe('moveTaskToRelease', () => {
   it('moves a backlog task into a release, its epic kept', async () => {
     setup(

@@ -35,6 +35,9 @@
   --id-bg: #ececec;
   --id-fg: #606060;
 
+  --label-border: #c6c6cc;
+  --label-fg: #3a3a3a;
+
   --type-bug: #ef4444;
   --type-feature: #22c55e;
   --type-docs: #3b82f6;
@@ -127,6 +130,9 @@
 
   --id-bg: #2a2b2c;
   --id-fg: #8c8c8c;
+
+  --label-border: #4a4b4d;
+  --label-fg: #bbbebf;
 
   --type-bug: #ef4444;
   --type-feature: #22c55e;
