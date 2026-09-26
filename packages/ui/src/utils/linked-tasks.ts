@@ -1,4 +1,10 @@
-import { LINK_TYPE_META, type BoardSnapshot, type LinkType, type Task } from '@boardown/core';
+import {
+  LINK_TYPE_META,
+  type BoardSnapshot,
+  type LinkType,
+  type Task,
+  type TaskLink,
+} from '@boardown/core';
 import { findReleaseOfTask } from './find-release-of-task';
 
 export interface LinkedTaskRow {
@@ -99,4 +105,19 @@ export const collectLinkedTasks = (
   }
 
   return rows;
+};
+
+// The rows of links picked for a task that does not exist yet, resolved against the
+// board as it is now: a pick whose task has gone from the board drops out, and the
+// rest show the task as it currently reads. Picks keep the order they were made in.
+export const pickedLinkRows = (
+  snapshot: BoardSnapshot,
+  picked: readonly TaskLink[],
+): LinkedTaskRow[] => {
+  const tasks = allTasks(snapshot);
+  return picked.flatMap((link) => {
+    const other = tasks.find((t) => t.frontmatter.id === link.to);
+    if (other === undefined) return [];
+    return [{ task: other, type: link.type, archived: isTaskArchived(snapshot, link.to) }];
+  });
 };

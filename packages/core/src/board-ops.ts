@@ -995,6 +995,63 @@ export const removeAllTaskLinks = <S extends Container, D extends Container>(
   return applyPairEdit(source, target, sourceTaskId, targetTaskId, taskWithoutLinksTo);
 };
 
+export interface CreateTaskWithLinksResult {
+  // Same order as the containers handed in, so the caller can put them back.
+  containers: Container[];
+  config: BoardConfig;
+  task: Task;
+  changedFilenames: string[];
+}
+
+// A new task and its links are one write: the task lands in the container named by
+// `targetFilename`, and each link is mirrored into its other task wherever that one
+// sits. Every link target is checked before anything changes, so a refusal leaves
+// no half-made task behind for the caller to write.
+export const createTaskWithLinks = (
+  containers: readonly Container[],
+  targetFilename: string,
+  config: BoardConfig,
+  input: NewTaskInput,
+  links: readonly TaskLink[],
+): CreateTaskWithLinksResult => {
+  const targetIndex = containers.findIndex((c) => c.filename === targetFilename);
+  const target = containers[targetIndex];
+  if (target === undefined) throw new Error(`Container not found: ${targetFilename}`);
+  const indexOfTask = (list: readonly Container[], taskId: string): number =>
+    list.findIndex((c) => c.tasks.some((t) => t.frontmatter.id === taskId));
+  for (const link of links) {
+    if (indexOfTask(containers, link.to) === -1) throw new Error(`Task not found: ${link.to}`);
+  }
+
+  const created = createTask(target, config, input);
+  const id = created.task.frontmatter.id;
+  const next = [...containers];
+  next[targetIndex] = created.container;
+  const changed = new Set<string>([targetFilename]);
+
+  for (const link of links) {
+    const otherIndex = indexOfTask(next, link.to);
+    // The target was checked above, and adding a link never removes a task.
+    const result: TaskLinkResult<Container, Container> = addTaskLink(
+      next[targetIndex],
+      next[otherIndex]!,
+      id,
+      link.to,
+      link.type,
+    );
+    next[targetIndex] = result.source;
+    next[otherIndex] = result.target;
+    for (const filename of result.changedFilenames) changed.add(filename);
+  }
+
+  return {
+    containers: next,
+    config: created.config,
+    task: findTask(next[targetIndex].tasks, id),
+    changedFilenames: [...changed],
+  };
+};
+
 export interface DeleteTaskResult {
   // Same order as the containers handed in, so the caller can put them back.
   containers: Container[];

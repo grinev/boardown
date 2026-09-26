@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import type { Epic, Release, TaskPriority, TaskType } from '@boardown/core';
+import type { Epic, Release, TaskLink, TaskPriority, TaskType } from '@boardown/core';
 import {
   DEFAULT_TASK_PRIORITY,
   TASK_PRIORITIES,
@@ -11,10 +11,12 @@ import {
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
+import { pickedLinkRows } from '../utils/linked-tasks';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
+import { LinkedTasksSection } from './LinkedTasks';
 import { Modal } from './Modal';
 import styles from './CreateTaskDialog.module.css';
 
@@ -40,7 +42,8 @@ export function CreateTaskDialog({
   onClose,
 }: CreateTaskDialogProps) {
   const createTask = useBoardStore((s) => s.createTask);
-  const config = useBoardStore((s) => s.snapshot?.config);
+  const snapshot = useBoardStore((s) => s.snapshot);
+  const config = snapshot?.config;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -53,6 +56,7 @@ export function CreateTaskDialog({
   const [epicSlug, setEpicSlug] = useState(initialEpicSlug);
   const [initialReleaseFilename] = useState(release?.filename ?? '');
   const [releaseFilename, setReleaseFilename] = useState(initialReleaseFilename);
+  const [pickedLinks, setPickedLinks] = useState<TaskLink[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -64,6 +68,13 @@ export function CreateTaskDialog({
       : backlogLocked
         ? []
         : releases.filter((r) => r.frontmatter.status !== 'finished');
+
+  // Resolved against the live board, so a picked task that leaves it drops out
+  // here and from what Create writes.
+  const linkRows = useMemo(
+    () => (snapshot ? pickedLinkRows(snapshot, pickedLinks) : []),
+    [snapshot, pickedLinks],
+  );
 
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && !submitting;
@@ -79,7 +90,8 @@ export function CreateTaskDialog({
     type !== defaultTaskType(config) ||
     priority !== DEFAULT_TASK_PRIORITY ||
     epicSlug !== initialEpicSlug ||
-    releaseFilename !== initialReleaseFilename;
+    releaseFilename !== initialReleaseFilename ||
+    linkRows.length > 0;
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
     const toOption = (e: Epic): IconSelectOption => ({
@@ -147,6 +159,9 @@ export function CreateTaskDialog({
         ...(priority !== DEFAULT_TASK_PRIORITY ? { priority } : {}),
         ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
         ...(epicSlug.length > 0 ? { epic: epicSlug } : {}),
+        ...(linkRows.length > 0
+          ? { links: linkRows.map((r) => ({ type: r.type, to: r.task.frontmatter.id })) }
+          : {}),
       });
       onClose();
     } catch (err) {
@@ -262,6 +277,22 @@ export function CreateTaskDialog({
             ))}
           </select>
         </label>
+        <LinkedTasksSection
+          rows={linkRows}
+          onAdd={(to, linkType) =>
+            setPickedLinks((current) =>
+              current.some((l) => l.type === linkType && l.to === to)
+                ? current
+                : [...current, { type: linkType, to }],
+            )
+          }
+          onRemove={(to, linkType) =>
+            setPickedLinks((current) =>
+              current.filter((l) => !(l.type === linkType && l.to === to)),
+            )
+          }
+          headingClassName={`${styles.label} ${styles.sectionLabel}`}
+        />
         {submitError !== null && (
           <p className={styles.error} role="alert">
             {submitError}

@@ -270,14 +270,14 @@ export async function writeConfig(fs: GuardedFs, config: BoardConfig): Promise<B
   return next;
 }
 
-export async function writeContainerAndConfig(
+export async function writeContainersAndConfig(
   fs: GuardedFs,
-  ref: ContainerRef,
+  refs: ContainerRef[],
   config: BoardConfig,
 ): Promise<BoardConfig> {
   const next = withMinVersionStamp(config);
   await fs.writeAll([
-    { path: ref.container.filename, content: serializeContainer(ref) },
+    ...refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
     { path: CONFIG_FILENAME, content: serializeConfig(next) },
   ]);
   return next;

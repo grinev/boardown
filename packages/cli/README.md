@@ -39,14 +39,14 @@ boardown archive                Finished releases.
 
 boardown task get <id>…         Show one or more tasks in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist).
+boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --link).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
 boardown task rm <id>           Delete a task.
 boardown task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
-boardown task link <op>         Link to another task: add | rm (<id> <other-id>) | ls <id>.
+boardown task link <op>         Link to another task: add | rm (<id> <other-id> [--type <t>]) | ls <id>.
 boardown task commits <id>      Local commits whose subject mentions the task.
 
 boardown release get <ref>      Show one release and its tasks.
@@ -199,6 +199,17 @@ boardown task checklist add BD-42 "1. plan" "2. implement" "3. review"
 boardown task checklist done BD-42 c1 c2
 ```
 
+`task add` also takes a repeatable `--link [<type>=]<id>`, so a task and its links
+land in one call. The new task is the subject, as `<id>` is in `task link add`:
+`--link blocks=BD-9` means the new task blocks BD-9, and BD-9 carries `blocked-by`.
+Without a type the link is `relates`. The task, its checklist and every link are
+one write: an unknown type is `USAGE`, an unknown id `TASK_NOT_FOUND`, and on any
+refusal nothing is written — not even the id.
+
+```bash
+boardown task add "Ship CSV" --link BD-7 --link blocks=BD-9
+```
+
 ### Priority
 
 `--priority` is one of `critical`, `high`, `medium`, `low`, on both `task add` and
@@ -222,9 +233,13 @@ schema` lists the board's declarations so an agent knows what it may write —
 outside a board it prints its static contract without them. Task **summaries**
 carry no custom fields; `--full`, which returns whole tasks, does.
 
-`task link` relates two tasks. Only one link type exists — `relates`, which is
-symmetric — so it is never passed on the command line; the record is mirrored
-into both task files, and `rm` removes both halves. A task in a finished release
+`task link` relates two tasks with one of seven relations: `relates` (symmetric),
+`blocks` / `blocked-by`, `duplicates` / `duplicated-by`, `includes` / `part-of`.
+`add` and `rm` take it as `--type`, read from `<id>`'s side (`--type blocks` means
+"`<id>` blocks `<other-id>`"), and `add` defaults to `relates`. The record is
+mirrored into both task files, the other side carrying the inverse relation, and
+`rm` removes both halves; `rm` without `--type` drops every relation between the
+pair. A task in a finished release
 can still be linked or unlinked: links are metadata, and the archived file is
 rewritten. `task rm` also strips the mirrored records other tasks hold pointing
 at the deleted task, archived files included.

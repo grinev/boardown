@@ -13,6 +13,7 @@ import {
   createRelease,
   startRelease,
   createTask,
+  createTaskWithLinks,
   deleteTask,
   deleteTaskWithLinks,
   editEpic,
@@ -1999,5 +2000,108 @@ describe('custom task types', () => {
       frontmatter: { id: 'BD-1', type: 'tech', status: 'todo', order: 100 },
     });
     expect(() => editTask(carrying, withTypes, 'BD-1', { title: 'Kept' })).not.toThrow();
+  });
+});
+
+describe('createTaskWithLinks', () => {
+  const backlogWith = (...tasks: Task[]): Backlog => ({ ...emptyBacklog(), tasks });
+
+  const archived = (...tasks: Task[]): Release => ({
+    ...release(...tasks),
+    filename: 'releases/done.md',
+    slug: 'done',
+    frontmatter: { status: 'finished' },
+  });
+
+  const linksOf = (container: Release | Backlog | undefined, id: string) =>
+    container?.tasks.find((t) => t.frontmatter.id === id)?.frontmatter.links;
+
+  const input = { title: 'New', type: 'feature', status: 'todo' } as const;
+
+  it('without links is a plain create', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const b = backlogWith();
+    const result = createTaskWithLinks([r, b], b.filename, config, input, []);
+    expect(result.task.frontmatter.id).toBe('BD-10');
+    expect(result.task.frontmatter.links).toBeUndefined();
+    expect(result.config.nextId).toBe(11);
+    expect(result.containers[0]).toBe(r);
+    expect(result.containers[1]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-10']);
+    expect(result.changedFilenames).toEqual([b.filename]);
+  });
+
+  it('mirrors each link into the other task with the inverse relation', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const b = backlogWith(task('BD-2', 'todo', 100));
+    const result = createTaskWithLinks([r, b], b.filename, config, input, [
+      { type: 'blocks', to: 'BD-1' },
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(result.task.frontmatter.links).toEqual([
+      { type: 'blocks', to: 'BD-1' },
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(linksOf(result.containers[0], 'BD-1')).toEqual([{ type: 'blocked-by', to: 'BD-10' }]);
+    expect(linksOf(result.containers[1], 'BD-2')).toEqual([{ type: 'relates', to: 'BD-10' }]);
+    expect(result.changedFilenames).toEqual([b.filename, r.filename]);
+  });
+
+  it('keeps the new task last in its file and the others in place', () => {
+    const b = backlogWith(task('BD-2', 'todo', 300), task('BD-1', 'todo', 100));
+    const result = createTaskWithLinks([b], b.filename, config, input, [
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(result.containers[0]!.tasks.map((t) => t.frontmatter.id)).toEqual([
+      'BD-2',
+      'BD-1',
+      'BD-10',
+    ]);
+    expect(linksOf(result.containers[0], 'BD-1')).toEqual([{ type: 'relates', to: 'BD-10' }]);
+    expect(result.changedFilenames).toEqual([b.filename]);
+  });
+
+  it('links to a task in a finished release', () => {
+    const a = archived(task('BD-1', 'done', 100));
+    const b = backlogWith();
+    const result = createTaskWithLinks([a, b], b.filename, config, input, [
+      { type: 'part-of', to: 'BD-1' },
+    ]);
+    expect(linksOf(result.containers[0], 'BD-1')).toEqual([{ type: 'includes', to: 'BD-10' }]);
+    expect(result.changedFilenames).toEqual([b.filename, a.filename]);
+  });
+
+  it('carries several relations to one task, and a repeated pair once', () => {
+    const r = release(task('BD-1', 'todo', 100));
+    const b = backlogWith();
+    const result = createTaskWithLinks([r, b], b.filename, config, input, [
+      { type: 'relates', to: 'BD-1' },
+      { type: 'duplicates', to: 'BD-1' },
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(result.task.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-1' },
+      { type: 'duplicates', to: 'BD-1' },
+    ]);
+    expect(linksOf(result.containers[0], 'BD-1')).toEqual([
+      { type: 'relates', to: 'BD-10' },
+      { type: 'duplicated-by', to: 'BD-10' },
+    ]);
+  });
+
+  it('refuses an unknown link target before creating anything', () => {
+    const b = backlogWith(task('BD-1', 'todo', 100));
+    expect(() =>
+      createTaskWithLinks([b], b.filename, config, input, [{ type: 'relates', to: 'BD-10' }]),
+    ).toThrow(/BD-10/);
+  });
+
+  it('still refuses a finished release as the target', () => {
+    const a = archived(task('BD-1', 'done', 100));
+    try {
+      createTaskWithLinks([a], a.filename, config, input, []);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BoardOpError).code).toBe('ARCHIVED');
+    }
   });
 });

@@ -46,7 +46,7 @@ A single unit of work. Fields:
 | `order`       | integer   | Sort key, shared across statuses, local to the task's file: inside a release file, the release's order; inside `backlog.md`, the Backlog's. Step of 100 between peers; a reorder renumbers the file when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
-| `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
+| `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`; a new task can carry them from the start, picked in Create task or passed as `task add --link`. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
 Priorities are a fixed set baked into the app: each has an icon and a color used
@@ -1038,6 +1038,18 @@ unfocused it closes the dialog; a dismissed list comes back on the next keystrok
 Picking a row, or leaving the add row by Escape, puts focus back on the `+` button
 that opened it. "No matching tasks" is not a row that can be picked.
 
+**Create task** carries the same section as its last field, below Release, its
+heading in the form's own label style. It looks and behaves as above — the `+`, the
+add row with its relation selector and keyboard rules, the grouped rows with their
+trash — with two differences that follow from the task not existing yet: a row's
+title is plain text rather than a link, and nothing is written until **Create**,
+which writes the task and both records of every picked link at once (a refusal
+writes none of them). A plain Enter in the search field never submits the form;
+Cmd/Ctrl+Enter submits unless the match list is showing, which keeps it. A picked
+task that leaves the board while the dialog is open drops out of the section, and
+its status pill follows the board. With nothing picked only the heading and its `+`
+show.
+
 There are **seven relations**: `relates`, which is symmetric and is its own
 inverse, plus three directed pairs — `blocks` / "is blocked by", `duplicates` /
 "is duplicated by", `includes` / "is part of". Each side of a pair is a type of its
@@ -1203,7 +1215,7 @@ one submits. Nothing on screen announces the shortcut.
 And a form with something in it is not thrown away by accident. While any field
 differs from what it held when the dialog opened — a Title or Name or Description
 with text in it, a Type, Priority, Epic, Release or colour moved off the value it
-started on — **Escape and a click on the backdrop** open a **Discard changes?**
+started on, or a linked task picked in Create task — **Escape and a click on the backdrop** open a **Discard changes?**
 confirmation over the dialog instead of closing it: one line, `What you typed will
 be lost.`, and a `Cancel` / `Discard` pair. `Cancel`, the confirmation's own ✕,
 Escape and its backdrop all return to the form with everything still typed;
@@ -1317,7 +1329,10 @@ commands do not echo the entity back: they acknowledge with the identifier of
 what changed. `task checklist add` takes one or more texts and `done` /
 `undone` / `rm` take one or more item ids, acknowledging `{ id, items }` in the
 order given; `edit` stays one item and `{ id, item }`. `task add` takes a
-repeatable `--checklist` so a task and its items land in one call. **Priority** rides on the commands that already exist: `task add`
+repeatable `--checklist` so a task and its items land in one call, and a
+repeatable `--link [<type>=]<id>` — the new task as the subject, `relates` when no
+type is given — so its links land in the same write; on any refusal none of it is
+written, the id included. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
 resolved value, so `--priority medium` also returns tasks with no key; `--status`,
 `--type`, `--priority` and `--epic` each take one or more values, space-separated

@@ -2,7 +2,7 @@ import {
   addTaskLink,
   BoardOpError,
   changeTaskStatus,
-  createTask,
+  createTaskWithLinks,
   deleteTaskWithLinks,
   editTask,
   effectiveTaskPriority,
@@ -61,7 +61,7 @@ import {
   allContainers,
   fileOf,
   writeContainer,
-  writeContainerAndConfig,
+  writeContainersAndConfig,
   writeContainers,
   type ContainerKind,
   type ContainerRef,
@@ -210,6 +210,27 @@ function parseChecklistTexts(args: ParsedArgs, usage: string): ChecklistItem[] |
   return items;
 }
 
+// `--link [<type>=]<id>`, repeatable, read from the new task's side the way `task
+// link add` reads `<id>`'s. Only the first `=` separates; no type means `relates`.
+function parseLinkFlags(args: ParsedArgs): TaskLink[] {
+  const value = args.flags['link'];
+  if (value === undefined) return [];
+  const invalid = (entry: string): CliError =>
+    new CliError(
+      'USAGE',
+      `Invalid --link "${entry}" (expected [<type>=]<id>, type one of ${LINK_TYPES.join(', ')}).`,
+      2,
+    );
+  if (value === true) throw invalid('');
+  return flagList(args.flags, 'link').map((entry) => {
+    const eq = entry.indexOf('=');
+    const type = eq === -1 ? DEFAULT_LINK_TYPE : entry.slice(0, eq);
+    const to = eq === -1 ? entry : entry.slice(eq + 1);
+    if (type === '' || to === '') throw invalid(entry);
+    return { type: requireLinkType(type), to };
+  });
+}
+
 // Run a core board-op, mapping a process-guard rejection (a finished release is
 // read-only; a status only changes in the current release) onto the matching
 // structured code. Anything else keeps the generic fallback rather than being
@@ -226,10 +247,11 @@ function applyOp<T>(fn: () => T): T {
 async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const title = args.positionals[2];
   const addUsage =
-    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>].';
+    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>] [--link [<type>=]<id>].';
   if (title === undefined || title.length === 0) {
     throw new CliError('USAGE', addUsage, 2);
   }
+  const links = parseLinkFlags(args);
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
@@ -283,16 +305,38 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     ...(checklist !== undefined ? { checklist } : {}),
   };
 
-  const result = applyOp(() => createTask(target.container, snapshot.config, input));
-  await writeContainerAndConfig(
-    fs,
-    { kind: target.kind, container: result.container },
-    result.config,
+  for (const link of links) {
+    if (locateTask(snapshot, link.to) === null) {
+      throw new CliError('TASK_NOT_FOUND', `No task "${link.to}".`);
+    }
+  }
+
+  // A backlog.md that does not exist yet is the target's own addition.
+  const refs = allContainers(snapshot);
+  if (!refs.some((ref) => ref.container.filename === target.container.filename)) {
+    refs.push(target);
+  }
+  const result = applyOp(() =>
+    createTaskWithLinks(
+      refs.map((ref) => ref.container),
+      target.container.filename,
+      snapshot.config,
+      input,
+      links,
+    ),
   );
+  const changed = refs.flatMap((ref, i): ContainerRef[] => {
+    // Same order as handed in.
+    const container = result.containers[i]!;
+    return result.changedFilenames.includes(container.filename)
+      ? [{ kind: ref.kind, container }]
+      : [];
+  });
+  await writeContainersAndConfig(fs, changed, result.config);
 
   return {
     data: { id: result.task.frontmatter.id },
-    human: `Created ${result.task.frontmatter.id} "${result.task.title}" in ${result.container.filename}.`,
+    human: `Created ${result.task.frontmatter.id} "${result.task.title}" in ${target.container.filename}.`,
     ...problemsField(problems),
   };
 }

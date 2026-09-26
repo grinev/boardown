@@ -101,6 +101,15 @@
   white-space: nowrap;
 }
 
+.titleText {
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .titleButton:hover,
 .titleButton:focus-visible {
   text-decoration: underline;

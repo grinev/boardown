@@ -793,6 +793,83 @@ describe('cli commands (integration)', () => {
       expect((await findTask(ctx, 'TS-2')).frontmatter.links).toBeUndefined();
     });
 
+    it('task add --link links the new task, relates by default, typed from its side', async () => {
+      const out = await taskCommand(
+        parseArgs(['task', 'add', 'Three', '--link', 'TS-1', '--link', 'blocks=TS-2']),
+        ctx,
+      );
+      expect(out.data).toEqual({ id: 'TS-3' });
+      expect((await findTask(ctx, 'TS-3')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+        { type: 'blocks', to: 'TS-2' },
+      ]);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-3' },
+      ]);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'blocked-by', to: 'TS-3' },
+      ]);
+    });
+
+    it('task add --link writes a repeated pair once', async () => {
+      await taskCommand(
+        parseArgs(['task', 'add', 'Three', '--link', 'TS-1', '--link', 'relates=TS-1']),
+        ctx,
+      );
+      expect((await findTask(ctx, 'TS-3')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-1' },
+      ]);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toEqual([
+        { type: 'relates', to: 'TS-3' },
+      ]);
+    });
+
+    it('task add --link reaches a task in a finished release', async () => {
+      const rel = await releaseCommand(parseArgs(['release', 'add', 'Old']), ctx);
+      const relFile = (rel.data as { slug: string }).slug;
+      await releaseCommand(parseArgs(['release', 'start', relFile]), ctx);
+      await taskCommand(parseArgs(['task', 'edit', 'TS-2', '--release', relFile]), ctx);
+      await taskCommand(parseArgs(['task', 'status', 'TS-2', 'done']), ctx);
+      await releaseCommand(parseArgs(['release', 'done', relFile]), ctx);
+
+      await taskCommand(parseArgs(['task', 'add', 'Three', '--link', 'part-of=TS-2']), ctx);
+      expect((await findTask(ctx, 'TS-2')).frontmatter.links).toEqual([
+        { type: 'includes', to: 'TS-3' },
+      ]);
+    });
+
+    it('a malformed --link is USAGE and writes nothing, not even an id', async () => {
+      const config = () => readFile(join(project, '.boardown', 'config.yaml'), 'utf8');
+      const before = await config();
+      for (const argv of [
+        ['--link', 'supersedes=TS-1'],
+        ['--link', 'blocks='],
+        ['--link', '=TS-1'],
+        ['--link'],
+        ['--link', 'TS-1', '--link'],
+      ]) {
+        await expect(
+          taskCommand(parseArgs(['task', 'add', 'Three', ...argv]), ctx),
+        ).rejects.toMatchObject({ code: 'USAGE', exitCode: 2 });
+      }
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'Three', '--link', 'blocks=']), ctx),
+      ).rejects.toThrow(/relates, blocks, blocked-by, duplicates, duplicated-by, includes, part-of/);
+      expect(await ids(ctx)).toEqual(['TS-1', 'TS-2']);
+      expect(await config()).toBe(before);
+    });
+
+    it('a --link to a task not on the board is TASK_NOT_FOUND and writes nothing', async () => {
+      const config = () => readFile(join(project, '.boardown', 'config.yaml'), 'utf8');
+      const before = await config();
+      await expect(
+        taskCommand(parseArgs(['task', 'add', 'Three', '--link', 'TS-1', '--link', 'TS-3']), ctx),
+      ).rejects.toMatchObject({ code: 'TASK_NOT_FOUND', exitCode: 1 });
+      expect(await ids(ctx)).toEqual(['TS-1', 'TS-2']);
+      expect((await findTask(ctx, 'TS-1')).frontmatter.links).toBeUndefined();
+      expect(await config()).toBe(before);
+    });
+
     it('rejects an unknown --type with USAGE and writes nothing', async () => {
       await expect(
         taskCommand(

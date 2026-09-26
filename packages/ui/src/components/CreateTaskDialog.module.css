@@ -67,6 +67,11 @@
   letter-spacing: 0.04em;
 }
 
+/* The Linked tasks heading is an <h3>, so the label style needs its margin gone. */
+.sectionLabel {
+  margin: 0;
+}
+
 .input,
 .textarea,
 .select {
