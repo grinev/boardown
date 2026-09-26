@@ -73,7 +73,7 @@ describe('read + reorder commands', () => {
       version: number;
       commands: { name: string; usage: string }[];
     };
-    expect(data.version).toBe(17);
+    expect(data.version).toBe(18);
     expect(data.commands.find((command) => command.name === 'task get')?.usage).toBe(
       'boardown task get <id>…',
     );

@@ -5,6 +5,7 @@ import {
   LINK_TYPES_IN_GROUP_ORDER,
   collectLinkedTasks,
   groupLinkedTasks,
+  pickedLinkRows,
 } from './linked-tasks';
 
 const task = (id: string, links?: TaskLink[]): Task => ({
@@ -213,6 +214,26 @@ describe('groupLinkedTasks', () => {
       'duplicates',
       'is duplicated by',
       'relates to',
+    ]);
+  });
+});
+
+describe('pickedLinkRows', () => {
+  it('resolves picks in the order made, dropping a task no longer on the board', () => {
+    const snap = snapshot([
+      release('0.9', 'finished', [task('BD-1')]),
+      release('1.0', 'current', [task('BD-2')]),
+    ]);
+    const rows = pickedLinkRows(snap, [
+      { type: 'blocks', to: 'BD-2' },
+      { type: 'relates', to: 'BD-8' },
+      { type: 'relates', to: 'BD-1' },
+      { type: 'relates', to: 'BD-2' },
+    ]);
+    expect(rows.map((r) => [r.type, r.task.frontmatter.id, r.archived])).toEqual([
+      ['blocks', 'BD-2', false],
+      ['relates', 'BD-1', true],
+      ['relates', 'BD-2', false],
     ]);
   });
 });

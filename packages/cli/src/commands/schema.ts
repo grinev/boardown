@@ -19,7 +19,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 17,
+  version: 18,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -89,9 +89,9 @@ const DESCRIPTOR = {
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>]',
+        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>] [--link [<linkType>=]<id>]',
       summary:
-        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order.',
+        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order. --link is repeatable and links the new task to <id> with a relation read from the side of the new task (`--link blocks=BD-9`: the new task blocks BD-9), `relates` when no type is given; each record is mirrored as in `task link add`. The task, its checklist and its links land in one write: an unknown type is USAGE, an unknown <id> TASK_NOT_FOUND, and on any refusal nothing is written.',
     },
     {
       name: 'task edit',

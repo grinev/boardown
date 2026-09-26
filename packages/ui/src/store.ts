@@ -3,6 +3,7 @@ import type {
   BoardConfig,
   BoardSnapshot,
   Container,
+  CreateTaskWithLinksResult,
   DeleteTaskResult,
   DocPage,
   EpicPatch,
@@ -17,6 +18,7 @@ import type {
   Release,
   ReleasePatch,
   Task,
+  TaskLink,
   TaskLinkResult,
   TaskPatch,
   TaskPriority,
@@ -38,7 +40,7 @@ import {
   createConvertingFs,
   createGuardedFs,
   createLogger,
-  createTask as createTaskInContainer,
+  createTaskWithLinks as createTaskWithLinksInBoard,
   docFilenameForTitle,
   docPagePath,
   initialStatus,
@@ -81,6 +83,8 @@ export interface CreateTaskInput {
   type: TaskType;
   priority?: TaskPriority;
   epic?: string;
+  // Each one read from the new task's side and mirrored into its other task.
+  links?: TaskLink[];
 }
 
 export interface CreateReleaseInput {
@@ -1159,71 +1163,81 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
 
-      const baseInput = {
-        title: input.title,
-        type: input.type,
-        ...(input.priority !== undefined ? { priority: input.priority } : {}),
-        status: initialStatus(snapshot.config),
-        ...(input.description !== undefined ? { description: input.description } : {}),
-      };
-
-      const persist = async (
-        nextSnapshot: BoardSnapshot,
-        filename: string,
-        content: string,
-        config: typeof snapshot.config,
-      ) => {
-        set({ snapshot: nextSnapshot, errorMessage: null });
-        try {
-          await fs.writeAll([
-            { path: filename, content },
-            { path: CONFIG_FILENAME, content: serializeConfig(withMinVersionStamp(config)) },
-          ]);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          set({ snapshot, errorMessage: `Failed to save task: ${message}` });
-          throw err;
-        }
-      };
-
-      // Task bound to a release: the epic, if any, is kept in its `epic` key.
-      if (input.releaseFilename) {
-        const releaseIndex = snapshot.releases.findIndex(
-          (r) => r.filename === input.releaseFilename,
-        );
-        if (releaseIndex === -1) {
-          set({ errorMessage: `Release not found: ${input.releaseFilename}` });
-          return;
-        }
-        const release = snapshot.releases[releaseIndex]!;
-        const result = createTaskInContainer(release, snapshot.config, {
-          ...baseInput,
-          ...(input.epic !== undefined ? { epic: input.epic } : {}),
-        });
-        const nextReleases = [...snapshot.releases];
-        nextReleases[releaseIndex] = result.container;
-        await persist(
-          { ...snapshot, config: result.config, releases: nextReleases },
-          result.container.filename,
-          serializeRelease(result.container),
-          result.config,
-        );
+      if (
+        input.releaseFilename &&
+        !snapshot.releases.some((r) => r.filename === input.releaseFilename)
+      ) {
+        set({ errorMessage: `Release not found: ${input.releaseFilename}` });
         return;
       }
 
-      // No release: the task goes to the backlog, naming its epic in its own key.
       // backlog.md may not exist yet — it is created by the first task that lands there.
       const backlog = snapshot.backlog ?? emptyBacklog();
-      const result = createTaskInContainer(backlog, snapshot.config, {
-        ...baseInput,
-        ...(input.epic !== undefined ? { epic: input.epic } : {}),
+      const containers: Container[] = [...snapshot.releases, backlog, ...snapshot.heldBack];
+      const targetFilename = input.releaseFilename || backlog.filename;
+
+      let result: CreateTaskWithLinksResult;
+      try {
+        result = createTaskWithLinksInBoard(
+          containers,
+          targetFilename,
+          snapshot.config,
+          {
+            title: input.title,
+            type: input.type,
+            ...(input.priority !== undefined ? { priority: input.priority } : {}),
+            status: initialStatus(snapshot.config),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.epic !== undefined ? { epic: input.epic } : {}),
+          },
+          input.links ?? [],
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: message });
+        throw err;
+      }
+
+      const releaseCount = snapshot.releases.length;
+      const nextReleases = result.containers.slice(0, releaseCount) as Release[];
+      const nextBacklog = result.containers[releaseCount] as Backlog;
+      const nextHeldBack = result.containers.slice(releaseCount + 1) as Backlog[];
+      // An untouched missing backlog stays missing rather than appearing empty.
+      const backlogChanged = result.changedFilenames.includes(backlog.filename);
+
+      const files = result.changedFilenames.map((filename) => {
+        const index = result.containers.findIndex((c) => c.filename === filename);
+        // The op only reports filenames of the containers it was handed.
+        const container = result.containers[index]!;
+        return {
+          path: filename,
+          content: serializeContainer({
+            kind: index < releaseCount ? 'release' : 'backlog',
+            container,
+          }),
+        };
       });
-      await persist(
-        { ...snapshot, config: result.config, backlog: result.container },
-        result.container.filename,
-        serializeBacklog(result.container),
-        result.config,
-      );
+
+      set({
+        snapshot: {
+          ...snapshot,
+          config: result.config,
+          releases: nextReleases,
+          backlog: snapshot.backlog !== null || backlogChanged ? nextBacklog : null,
+          heldBack: nextHeldBack,
+        },
+        errorMessage: null,
+      });
+      try {
+        await fs.writeAll([
+          ...files,
+          { path: CONFIG_FILENAME, content: serializeConfig(withMinVersionStamp(result.config)) },
+        ]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save task: ${message}` });
+        throw err;
+      }
     },
 
     createRelease: async (input) => {

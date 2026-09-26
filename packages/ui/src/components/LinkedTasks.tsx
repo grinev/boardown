@@ -23,6 +23,7 @@ import {
   LINK_TYPES_IN_GROUP_ORDER,
   collectLinkedTasks,
   groupLinkedTasks,
+  type LinkedTaskRow,
 } from '../utils/linked-tasks';
 import { IconSelect, type IconSelectOption } from './IconSelect';
 import styles from './LinkedTasks.module.css';
@@ -32,6 +33,18 @@ interface LinkedTasksProps {
   onTaskClick: (id: string) => void;
 }
 
+interface LinkedTasksSectionProps {
+  rows: LinkedTaskRow[];
+  // The task the rows belong to, never offered to itself. A task still being
+  // created has no id yet.
+  selfId?: string | undefined;
+  onAdd: (otherId: string, type: LinkType) => void;
+  onRemove: (otherId: string, type: LinkType) => void;
+  // Without it a row's title is plain text.
+  onTaskClick?: ((id: string) => void) | undefined;
+  headingClassName?: string | undefined;
+}
+
 const MAX_SUGGESTIONS = 8;
 
 const RELATION_OPTIONS: IconSelectOption[] = LINK_TYPES_IN_GROUP_ORDER.map((type) => ({
@@ -39,11 +52,38 @@ const RELATION_OPTIONS: IconSelectOption[] = LINK_TYPES_IN_GROUP_ORDER.map((type
   label: LINK_TYPE_META[type].label,
 }));
 
+// The task dialog's section: the task's links as they are on disk, each pick and
+// trash written at once.
 export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
-  const config = snapshot?.config;
   const addTaskLink = useBoardStore((s) => s.addTaskLink);
   const removeTaskLink = useBoardStore((s) => s.removeTaskLink);
+  const id = task.frontmatter.id;
+  const rows = useMemo(
+    () => (snapshot ? collectLinkedTasks(snapshot, id) : []),
+    [snapshot, id],
+  );
+  return (
+    <LinkedTasksSection
+      rows={rows}
+      selfId={id}
+      onAdd={(otherId, type) => void addTaskLink(id, otherId, type)}
+      onRemove={(otherId, type) => void removeTaskLink(id, otherId, type)}
+      onTaskClick={onTaskClick}
+    />
+  );
+}
+
+export function LinkedTasksSection({
+  rows,
+  selfId,
+  onAdd,
+  onRemove,
+  onTaskClick,
+  headingClassName,
+}: LinkedTasksSectionProps) {
+  const snapshot = useBoardStore((s) => s.snapshot);
+  const config = snapshot?.config;
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [relation, setRelation] = useState<LinkType>(DEFAULT_LINK_TYPE);
@@ -58,11 +98,6 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
   const listId = useId();
   const optionIdPrefix = useId();
 
-  const id = task.frontmatter.id;
-  const rows = useMemo(
-    () => (snapshot ? collectLinkedTasks(snapshot, id) : []),
-    [snapshot, id],
-  );
   const groups = useMemo(() => groupLinkedTasks(rows), [rows]);
 
   const suggestions = useMemo(() => {
@@ -82,14 +117,14 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     return candidates
       .filter((t) => {
         const other = t.frontmatter.id;
-        if (other === id || linked.has(other)) return false;
+        if (other === selfId || linked.has(other)) return false;
         return (
           other.toLowerCase().includes(needle) ||
           t.title.toLowerCase().includes(needle)
         );
       })
       .slice(0, MAX_SUGGESTIONS);
-  }, [snapshot, query, rows, relation, id]);
+  }, [snapshot, query, rows, relation, selfId]);
 
   const listShowing = query.trim() !== '' && !dismissed;
   // A highlight left pointing past the end of a shorter list reads as nothing.
@@ -112,6 +147,13 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     addButtonRef.current?.focus();
   }, [searching]);
 
+  // The list overlays whatever sits below the search row, and at the foot of a
+  // scrolling form (Create task) that is the form's own edge: bring it into view
+  // rather than leave most of it clipped. Nothing moves when it already fits.
+  useEffect(() => {
+    if (listShowing) listRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [listShowing, suggestions.length]);
+
   useEffect(() => {
     const list = listRef.current;
     const option = activeIndex === null ? null : list?.children[activeIndex];
@@ -128,7 +170,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     returnFocusRef.current = true;
     setQuery('');
     setSearching(false);
-    void addTaskLink(id, otherId, relation);
+    onAdd(otherId, relation);
   };
 
   // Escape backs out one stage: the list first, then the search row, and only then
@@ -177,9 +219,22 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
       return;
     }
     escapeHandledRef.current = false;
+    if (e.key === 'Enter' && !listShowing) {
+      // A plain Enter here never submits a form the section sits in; the
+      // Cmd/Ctrl combo is left alone for the creation dialog's own shortcut.
+      if (!e.metaKey && !e.ctrlKey) e.preventDefault();
+      return;
+    }
     if (e.key === 'Tab') {
       // No preventDefault: the list goes and focus moves on, nothing is linked.
       setDismissed(true);
+      return;
+    }
+    if (e.key === 'Enter') {
+      // The list keeps Enter whatever the modifier, "No matching tasks" included.
+      e.preventDefault();
+      const picked = suggestions[activeIndex ?? 0];
+      if (picked) select(picked.frontmatter.id);
       return;
     }
     if (!listShowing || suggestions.length === 0) return;
@@ -190,17 +245,13 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlighted(activeIndex === null ? last : (activeIndex - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const picked = suggestions[activeIndex ?? 0];
-      if (picked) select(picked.frontmatter.id);
     }
   };
 
   return (
     <section className={styles.section} data-testid="linked-tasks">
       <div className={styles.heading}>
-        <h3 className={styles.headingText}>Linked tasks</h3>
+        <h3 className={headingClassName ?? styles.headingText}>Linked tasks</h3>
         {rows.length > 0 && <span className={styles.count}>{rows.length}</span>}
         <button
           ref={addButtonRef}
@@ -240,13 +291,17 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
                       aria-label={meta.label}
                     />
                     <span className={styles.taskId}>{linkedId}</span>
-                    <button
-                      type="button"
-                      className={styles.titleButton}
-                      onClick={() => onTaskClick(linkedId)}
-                    >
-                      {linked.title}
-                    </button>
+                    {onTaskClick ? (
+                      <button
+                        type="button"
+                        className={styles.titleButton}
+                        onClick={() => onTaskClick(linkedId)}
+                      >
+                        {linked.title}
+                      </button>
+                    ) : (
+                      <span className={styles.titleText}>{linked.title}</span>
+                    )}
                     <span
                       className={styles.statusPill}
                       style={statusColorStyle(config, linked.frontmatter.status)}
@@ -259,9 +314,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
                       // Two rows can point at the same task, so the name has to
                       // say which of them this button breaks.
                       aria-label={`Remove "${label}" link to ${linkedId}`}
-                      onClick={() => {
-                        void removeTaskLink(id, linkedId, type);
-                      }}
+                      onClick={() => onRemove(linkedId, type)}
                     >
                       <Trash2 size={14} aria-hidden="true" />
                     </button>

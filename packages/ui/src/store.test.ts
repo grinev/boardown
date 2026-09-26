@@ -348,6 +348,46 @@ describe('createTask', () => {
     expect(fs.files.has(BACKLOG_PATH)).toBe(true);
   });
 
+  it('writes the new task, every linked file and the config in one set', async () => {
+    const { fs } = setup(
+      snap({
+        releases: [release('1.0', 'current', [task('BD-1')])],
+        backlog: backlog([task('BD-2')]),
+      }),
+    );
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'Linked',
+      type: 'feature',
+      links: [
+        { type: 'blocks', to: 'BD-2' },
+        { type: 'relates', to: 'BD-1' },
+      ],
+    });
+
+    const created = current().releases[0]!.tasks[1]!;
+    expect(created.frontmatter.links).toEqual([
+      { type: 'blocks', to: 'BD-2' },
+      { type: 'relates', to: 'BD-1' },
+    ]);
+    expect(current().releases[0]!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'relates', to: 'BD-10' },
+    ]);
+    expect(current().backlog!.tasks[0]!.frontmatter.links).toEqual([
+      { type: 'blocked-by', to: 'BD-10' },
+    ]);
+    expect(fs.writeAllCalls).toEqual([['releases/1.0.md', BACKLOG_PATH, CONFIG_FILENAME]]);
+  });
+
+  it('leaves a missing backlog missing when the task goes into a release', async () => {
+    setup(snap({ releases: [release('1.0', 'current')], backlog: null }));
+
+    await state().createTask({ releaseFilename: 'releases/1.0.md', title: 'New', type: 'feature' });
+
+    expect(current().backlog).toBeNull();
+  });
+
   it('opens the create dialog bound to an epic and clears it on close', () => {
     setup(snap({ epics: [epic('parser')] }));
 
@@ -1023,6 +1063,29 @@ describe('external-change conflict', () => {
     expect(state().conflictOpen).toBe(true);
     expect(state().snapshot).toBe(before);
     expect(fs.files.get('releases/1.0.md')!.content).toBe(releaseOnDisk);
+    expect(fs.writes).toEqual([]);
+  });
+
+  it('creates no task and no link when a linked file changed on disk', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+      [BACKLOG_PATH]: BACKLOG_MD,
+    });
+    const before = current();
+    fs.files.get(BACKLOG_PATH)!.lastModified += 1000;
+
+    await expect(
+      state().createTask({
+        releaseFilename: 'releases/1.0.md',
+        title: 'Linked',
+        type: 'feature',
+        links: [{ type: 'relates', to: 'BD-7' }],
+      }),
+    ).rejects.toThrow();
+
+    expect(state().conflictOpen).toBe(true);
+    expect(state().snapshot).toBe(before);
     expect(fs.writes).toEqual([]);
   });
 
