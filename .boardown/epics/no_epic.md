@@ -9,6 +9,9 @@ id: BD-50
 type: feature
 status: todo
 order: 1500
+links:
+  - type: relates
+    to: BD-29
 ---
 
 ## Add release dates
@@ -30,6 +33,8 @@ order: 1800
 links:
   - type: blocked-by
     to: BD-125
+  - type: relates
+    to: BD-131
 ---
 
 `nextId` in `config.yaml` is a single global counter, so every task created on a
@@ -196,13 +201,16 @@ status: todo
 order: 250
 ---
 
-## Attach files to tasks: image previews and downloadable files
+## Filter the backlog by labels
 
 ---
-id: BD-131
+id: BD-134
 type: feature
 status: todo
 order: 3100
+links:
+  - type: blocked-by
+    to: BD-29
 ---
 
-A task can carry attachments. Images are shown as a preview right inside the task; any other file is available to download.
+Split from BD-29: labels shipped without filters. Filter backlog tasks by one or more labels.
