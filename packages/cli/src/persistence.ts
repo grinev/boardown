@@ -3,6 +3,7 @@ import {
   CONFIG_FILENAME,
   checkMinVersion,
   configNeedsMinVersionStamp,
+  createConvertingFs,
   createGuardedFs,
   loadBoard,
   parseConfig,
@@ -14,8 +15,8 @@ import {
   type Backlog,
   type BoardConfig,
   type BoardSnapshot,
+  type ConvertingFs,
   type Epic,
-  type FsAdapter,
   type GuardedFile,
   type GuardedFs,
   type ParseProblem,
@@ -26,17 +27,20 @@ import { findBoardRoot } from './board-root';
 import { NodeFsAdapter } from './node-fs';
 import { CliError } from './output';
 
-export type ContainerKind = 'release' | 'epic' | 'backlog';
+// `backlog` is every task in no release, whichever file holds it.
+export type ContainerKind = 'release' | 'backlog';
 
 // A container paired with its kind. The kind/container shapes always agree at
 // runtime; the cast lives only in serializeContainer (mirrors ui/store.ts).
 export interface ContainerRef {
   kind: ContainerKind;
-  container: Release | Epic | Backlog;
+  container: Release | Backlog;
 }
 
 export interface LoadedBoard {
-  fs: GuardedFs;
+  // Carries the layout conversion the load left pending into the first write, and
+  // says where a gathered task still sits until then.
+  fs: ConvertingFs;
   snapshot: BoardSnapshot;
   problems: ParseProblem[];
 }
@@ -98,7 +102,7 @@ export async function loadBoardOrThrow(root: string): Promise<LoadedBoard> {
   // The second rule the guard enforces is that a file the parser could not fully
   // read is never written back: the block it could not read is not in the model,
   // so the write would drop it.
-  const fs = createGuardedFs(inner, {
+  const guarded = createGuardedFs(inner, {
     versions: result.fileVersions,
     problems: result.problems,
     onConflict: (path) => {
@@ -116,6 +120,9 @@ export async function loadBoardOrThrow(root: string): Promise<LoadedBoard> {
       );
     },
   });
+  // A command writes once, so the loaded backlog is the current one whenever the
+  // command's own write does not carry backlog.md itself.
+  const fs = createConvertingFs(guarded, result.conversion, () => result.snapshot.backlog);
   return { fs, snapshot: result.snapshot, problems: result.problems };
 }
 
@@ -127,42 +134,44 @@ export function findEpic(snapshot: BoardSnapshot, slug: string): Epic | undefine
   return snapshot.epics.find((e) => e.slug === slug);
 }
 
-// All tasks belonging to an epic: those physically in its file, plus tasks in
-// any release that carry the epic tag (filename is authoritative for epic
-// files; the tag carries membership once a task is scheduled into a release).
+const backlogContainers = (snapshot: BoardSnapshot): Backlog[] => [
+  ...(snapshot.backlog ? [snapshot.backlog] : []),
+  ...snapshot.heldBack,
+];
+
+// Every container on the board, releases first, each with its kind.
+export function allContainers(snapshot: BoardSnapshot): ContainerRef[] {
+  return [
+    ...snapshot.releases.map((container): ContainerRef => ({ kind: 'release', container })),
+    ...backlogContainers(snapshot).map((container): ContainerRef => ({ kind: 'backlog', container })),
+  ];
+}
+
+// A task belongs to an epic by its own `epic` key, wherever it sits.
 export function epicMembers(snapshot: BoardSnapshot, epic: Epic): Task[] {
-  const tagged = snapshot.releases.flatMap((r) =>
-    r.tasks.filter((t) => t.frontmatter.epic === epic.slug),
+  return allContainers(snapshot).flatMap((ref) =>
+    ref.container.tasks.filter((t) => t.frontmatter.epic === epic.slug),
   );
-  return [...epic.tasks, ...tagged];
 }
 
 export function locateTask(snapshot: BoardSnapshot, taskId: string): ContainerRef | null {
-  for (const release of snapshot.releases) {
-    if (release.tasks.some((t) => t.frontmatter.id === taskId)) {
-      return { kind: 'release', container: release };
-    }
-  }
-  for (const epic of snapshot.epics) {
-    if (epic.tasks.some((t) => t.frontmatter.id === taskId)) {
-      return { kind: 'epic', container: epic };
-    }
-  }
-  if (snapshot.backlog?.tasks.some((t) => t.frontmatter.id === taskId)) {
-    return { kind: 'backlog', container: snapshot.backlog };
-  }
-  return null;
+  return (
+    allContainers(snapshot).find((ref) =>
+      ref.container.tasks.some((t) => t.frontmatter.id === taskId),
+    ) ?? null
+  );
+}
+
+// The file a task really sits in: the old-layout file it was gathered from until
+// the conversion lands, else its container's.
+export function fileOf(board: LoadedBoard, ref: ContainerRef, task: Task): string {
+  return board.fs.sourceOf(task) ?? ref.container.filename;
 }
 
 export function serializeContainer(ref: ContainerRef): string {
-  switch (ref.kind) {
-    case 'release':
-      return serializeRelease(ref.container as Release);
-    case 'epic':
-      return serializeEpic(ref.container as Epic);
-    case 'backlog':
-      return serializeBacklog(ref.container as Backlog);
-  }
+  return ref.kind === 'release'
+    ? serializeRelease(ref.container as Release)
+    : serializeBacklog(ref.container as Backlog);
 }
 
 const INSTALL_COMMAND = 'npm i -g @grinev/boardown-cli';
@@ -219,7 +228,8 @@ export async function writeContainers(
   return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }
 
-// A rename, e.g. a release renamed to a new slug.
+// A rename, e.g. a release renamed to a new slug: the new file, the old one's
+// removal and the stamp land together.
 export async function moveContainer(
   fs: GuardedFs,
   ref: ContainerRef,
@@ -232,18 +242,29 @@ export async function moveContainer(
     return config;
   }
   const next = withMinVersionStamp(config);
-  const previousText = await fs.read(CONFIG_FILENAME);
-  await fs.write(CONFIG_FILENAME, serializeConfig(next));
-  try {
-    await fs.moveFile(fromFilename, ref.container.filename, content);
-  } catch (err) {
-    await fs.write(CONFIG_FILENAME, previousText);
-    throw err;
-  }
+  await fs.commit({
+    writes: [
+      { path: ref.container.filename, content, createOnly: true },
+      { path: CONFIG_FILENAME, content: serializeConfig(next) },
+    ],
+    removes: [fromFilename],
+  });
   return next;
 }
 
-export async function writeConfig(fs: FsAdapter, config: BoardConfig): Promise<BoardConfig> {
+// An epic file holds no tasks, so it is written on its own rather than as a
+// container.
+export async function writeEpic(
+  fs: GuardedFs,
+  epic: Epic,
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  const files = stampFiles(config, [{ path: epic.filename, content: serializeEpic(epic) }]);
+  await fs.writeAll(files);
+  return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
+}
+
+export async function writeConfig(fs: GuardedFs, config: BoardConfig): Promise<BoardConfig> {
   const next = withMinVersionStamp(config);
   await fs.write(CONFIG_FILENAME, serializeConfig(next));
   return next;

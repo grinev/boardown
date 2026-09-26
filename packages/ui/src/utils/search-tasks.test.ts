@@ -26,6 +26,7 @@ const snapshotOf = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
   releases: [],
   epics: [],
   backlog: null,
+  heldBack: [],
   docs: emptyDocsTree(),
   problems: [],
   ...over,
@@ -89,15 +90,12 @@ describe('searchTasks', () => {
         release('1.0', 'current', [task('BD-1', 'drag one')]),
         release('0.9', 'finished', [task('BD-9', 'drag nine')]),
       ],
-      epics: [
-        {
-          filename: 'epics/ui.md',
-          slug: 'ui',
-          frontmatter: { name: 'UI', color: '#1f6feb' },
-          preamble: '',
-          tasks: [task('BD-3', 'drag three')],
-        },
-      ],
+      backlog: {
+        filename: 'backlog.md',
+        frontmatter: {},
+        preamble: '',
+        tasks: [task('BD-3', 'drag three')],
+      },
     });
     expect(ids(searchTasks(snapshot, 'drag'))).toEqual(['BD-1', 'BD-2', 'BD-3', 'BD-9']);
   });

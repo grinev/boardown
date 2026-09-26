@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseDocPage, parseEpic, parseRelease, textAboveFirstTask } from './parser.js';
 
 const RELEASE_OK = `---
 release: "1.10"
@@ -266,10 +266,10 @@ body
 `;
     const result = parseEpic(text, 'epics/ui-foundation.md', 'ui-foundation');
     expect(result.problems).toEqual([]);
-    expect(result.value!.slug).toBe('ui-foundation');
-    expect(result.value!.frontmatter.name).toBe('UI Foundation');
-    expect(result.value!.frontmatter.color).toBe('#1f6feb');
-    expect(result.value!.preamble).toBe('Notes about the epic.');
+    expect(result.value!.epic.slug).toBe('ui-foundation');
+    expect(result.value!.epic.frontmatter.name).toBe('UI Foundation');
+    expect(result.value!.epic.frontmatter.color).toBe('#1f6feb');
+    expect(result.value!.epic.preamble).toBe('Notes about the epic.');
     expect(result.value!.tasks).toHaveLength(1);
   });
 
@@ -319,13 +319,9 @@ body
   });
 });
 
-describe('parseBacklog epic normalization', () => {
-  it('drops task.epic for tasks in no_epic.md', () => {
-    const text = `---
-{}
----
-
-## Stray epic field
+describe('parseBacklog epic key', () => {
+  it('keeps a task\'s epic key, as a release file does', () => {
+    const text = `## Epic field
 
 ---
 id: BD-9
@@ -337,10 +333,68 @@ order: 100
 
 body
 `;
-    const result = parseBacklog(text, 'epics/no_epic.md');
+    const result = parseBacklog(text, 'backlog.md');
     expect(result.problems).toEqual([]);
     expect(result.value!.tasks).toHaveLength(1);
-    expect(result.value!.tasks[0]!.frontmatter.epic).toBeUndefined();
+    expect(result.value!.tasks[0]!.frontmatter.epic).toBe('ui-foundation');
+  });
+});
+
+describe('textAboveFirstTask', () => {
+  it('keeps the lines above the first task byte for byte', () => {
+    const head = `---
+color: "#1f6feb"
+name:   UI Foundation
+---
+
+Notes,  kept   as typed.`;
+    const text = `${head}
+
+
+## A task
+
+---
+id: BD-7
+type: feature
+status: todo
+order: 100
+---
+`;
+    expect(textAboveFirstTask(text)).toBe(`${head}\n`);
+  });
+
+  it('does not take a heading inside the frontmatter or one without a block for a task', () => {
+    const text = `---
+name: X
+color: "#1f6feb"
+---
+
+## Just a heading
+
+prose
+
+## A task
+
+---
+id: BD-7
+type: feature
+status: todo
+order: 100
+---
+`;
+    expect(textAboveFirstTask(text)).toBe(`---
+name: X
+color: "#1f6feb"
+---
+
+## Just a heading
+
+prose
+`);
+  });
+
+  it('is null for a file with no task section', () => {
+    expect(textAboveFirstTask('---\nname: X\ncolor: "#1f6feb"\n---\n\nprose\n')).toBeNull();
   });
 });
 

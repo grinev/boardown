@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Backlog, Epic, Release, Task } from './schemas.js';
+import type { Backlog, Release, Task } from './schemas.js';
 import type { BoardConfig } from './schemas.js';
 import {
   activeReleases,
@@ -23,16 +23,8 @@ const task = (id: string, order: number): Task => ({
   frontmatter: { id, type: 'feature', status: 'todo', order },
 });
 
-const epic = (slug: string, tasks: Task[]): Epic => ({
-  filename: `epics/${slug}.md`,
-  slug,
-  frontmatter: { name: slug, color: '#888888' },
-  preamble: '',
-  tasks,
-});
-
-const backlog = (tasks: Task[]): Backlog => ({
-  filename: 'epics/no_epic.md',
+const backlog = (tasks: Task[], filename = 'backlog.md'): Backlog => ({
+  filename,
   frontmatter: {},
   preamble: '',
   tasks,
@@ -47,21 +39,21 @@ const release = (slug: string, status: Release['frontmatter']['status']): Releas
 });
 
 describe('unscheduledTasks', () => {
-  it('merges every epic file with no_epic.md and orders globally', () => {
+  it('merges backlog.md with the files held back in the old layout and orders globally', () => {
     const snapshot = {
-      epics: [epic('alpha', [task('A-1', 300)]), epic('beta', [task('B-1', 100)])],
       backlog: backlog([task('N-1', 200)]),
+      heldBack: [backlog([task('A-1', 300)], 'epics/alpha.md'), backlog([task('B-1', 100)], 'epics/beta.md')],
     };
     expect(unscheduledTasks(snapshot).map((t) => t.frontmatter.id)).toEqual(['B-1', 'N-1', 'A-1']);
   });
 
   it('works with no backlog file at all', () => {
-    const snapshot = { epics: [epic('alpha', [task('A-1', 1)])], backlog: null };
+    const snapshot = { backlog: null, heldBack: [backlog([task('A-1', 1)], 'epics/alpha.md')] };
     expect(unscheduledTasks(snapshot).map((t) => t.frontmatter.id)).toEqual(['A-1']);
   });
 
   it('is empty when there is nothing unscheduled', () => {
-    expect(unscheduledTasks({ epics: [], backlog: null })).toEqual([]);
+    expect(unscheduledTasks({ backlog: null, heldBack: [] })).toEqual([]);
   });
 });
 

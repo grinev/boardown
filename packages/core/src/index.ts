@@ -10,6 +10,7 @@ export * from './id-generator.js';
 export * from './board-ops.js';
 export * from './config.js';
 export * from './loader.js';
+export * from './layout.js';
 export * from './ordering.js';
 export * from './task-match.js';
 export * from './task-filters.js';

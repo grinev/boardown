@@ -54,11 +54,12 @@ interface BodySplit {
   segments: RawTaskSegment[];
 }
 
-const splitBody = (body: string): BodySplit => {
-  const lines = body.split('\n');
+// A task section is a `## ` heading followed, past blank lines, by a closed
+// frontmatter block. The one rule, shared by the body splitter and by the cut
+// that keeps a file's text above its first task.
+const findTaskStarts = (lines: readonly string[], from = 0): number[] => {
   const taskStarts: number[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = from; i < lines.length; i++) {
     if (!lines[i]!.startsWith('## ')) continue;
     let j = i + 1;
     while (j < lines.length && lines[j]!.trim() === '') j++;
@@ -75,6 +76,27 @@ const splitBody = (body: string): BodySplit => {
     if (!foundClose) continue;
     taskStarts.push(i);
   }
+  return taskStarts;
+};
+
+// A container file's text above its first task section, byte for byte, without
+// the blank lines that separated it from that task. Null when the file holds no
+// task section at all.
+export const textAboveFirstTask = (text: string): string | null => {
+  const lines = text.split('\n');
+  let bodyStart = 0;
+  if (lines[0] === FRONTMATTER_FENCE) {
+    const close = lines.indexOf(FRONTMATTER_FENCE, 1);
+    if (close !== -1) bodyStart = close + 1;
+  }
+  const first = findTaskStarts(lines, bodyStart)[0];
+  if (first === undefined) return null;
+  return `${lines.slice(0, first).join('\n').replace(/\n+$/, '')}\n`;
+};
+
+const splitBody = (body: string): BodySplit => {
+  const lines = body.split('\n');
+  const taskStarts = findTaskStarts(lines);
 
   if (taskStarts.length === 0) {
     return { preamble: body, segments: [] };
@@ -235,12 +257,6 @@ export const parseRelease = (
   };
 };
 
-const stripEpicFromTask = (task: Task): Task => {
-  if (task.frontmatter.epic === undefined) return task;
-  const { epic: _omit, ...rest } = task.frontmatter;
-  return { ...task, frontmatter: rest };
-};
-
 const withEpicOnTask = (task: Task, slug: string): Task =>
   task.frontmatter.epic === slug
     ? task
@@ -284,18 +300,25 @@ export const parseBacklog = (
       filename,
       frontmatter: {},
       preamble,
-      tasks: tasks.map(stripEpicFromTask),
+      tasks,
     },
     problems,
   };
 };
+
+// An epic file: the epic itself, plus the task sections an older build stored in
+// it — each stamped with the file's slug, which was the membership rule then.
+export interface EpicFile {
+  epic: Epic;
+  tasks: Task[];
+}
 
 export const parseEpic = (
   text: string,
   filename: string,
   slug: string,
   customFields: readonly CustomField[] = [],
-): ParseResult<Epic> => {
+): ParseResult<EpicFile> => {
   const problems: ParseProblem[] = [];
   const { fileFrontmatterText, body } = splitFileFrontmatter(text);
 
@@ -330,10 +353,7 @@ export const parseEpic = (
 
   return {
     value: {
-      filename,
-      slug,
-      frontmatter: fmResult.data,
-      preamble,
+      epic: { filename, slug, frontmatter: fmResult.data, preamble },
       tasks: tasks.map((t) => withEpicOnTask(t, slug)),
     },
     problems,

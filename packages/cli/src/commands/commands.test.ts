@@ -187,7 +187,7 @@ describe('cli commands (integration)', () => {
 
     it('task status and task edit --status are refused on an unscheduled task', async () => {
       await seedLock();
-      const file = join(project, '.boardown', 'epics', 'no_epic.md');
+      const file = join(project, '.boardown', 'backlog.md');
       const before = await readFile(file, 'utf8');
 
       await expect(
@@ -373,7 +373,7 @@ describe('cli commands (integration)', () => {
   });
 
   describe('batch checklist', () => {
-    const backlogFile = (): string => join(project, '.boardown', 'epics', 'no_epic.md');
+    const backlogFile = (): string => join(project, '.boardown', 'backlog.md');
 
     it('adds several texts in one call, including a duplicate', async () => {
       await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
@@ -474,10 +474,6 @@ describe('cli commands (integration)', () => {
       expect(added.data).toEqual({ id: 'TS-1', items: ['c1'] });
       expect(added.human).toBe('Added checklist item c1 to TS-1.');
       const afterAdd = [
-        '---',
-        '{}',
-        '---',
-        '',
         '## Write me',
         '',
         '---',
@@ -511,10 +507,6 @@ describe('cli commands (integration)', () => {
       expect(removed.human).toBe('Removed checklist item c1 from TS-1.');
       expect(await readFile(file, 'utf8')).toBe(
         [
-          '---',
-          '{}',
-          '---',
-          '',
           '## Write me',
           '',
           '---',
@@ -860,27 +852,20 @@ describe('cli commands (integration)', () => {
     await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--release', slug]), ctx);
 
     const board = await loadBoardOrThrow(join(project, '.boardown'));
-    // Simulate an external edit of the epic that would receive the open task.
+    // Simulate an external edit of the backlog that would receive the open task.
     await new Promise((resolve) => setTimeout(resolve, 10));
-    await writeFile(
-      join(project, '.boardown', 'epics', 'ui.md'),
-      '---\nname: UI\ncolor: "#1f6feb"\n---\n',
-      'utf8',
-    );
+    await writeFile(join(project, '.boardown', 'backlog.md'), 'Edited elsewhere.\n', 'utf8');
 
     const release = board.snapshot.releases.find((r) => r.frontmatter.status === 'current')!;
     const result = completeRelease({
       release,
       config: board.snapshot.config,
-      epics: board.snapshot.epics,
       backlog: board.snapshot.backlog ?? emptyBacklog(),
       targetRelease: null,
     });
     const refs: ContainerRef[] = [
       { kind: 'release', container: result.release },
-      ...result.epics
-        .filter((e) => result.changedFilenames.includes(e.filename))
-        .map((container): ContainerRef => ({ kind: 'epic', container })),
+      { kind: 'backlog', container: result.backlog },
     ];
 
     await expect(writeContainers(board.fs, refs, board.snapshot.config)).rejects.toMatchObject({
@@ -900,9 +885,9 @@ describe('cli commands (integration)', () => {
     const { fs } = await loadBoardOrThrow(join(project, '.boardown'));
     // Simulate an external edit (another process, git pull) after load.
     await new Promise((resolve) => setTimeout(resolve, 10));
-    await writeFile(join(project, '.boardown', 'epics', 'no_epic.md'), '---\n{}\n---\n', 'utf8');
+    await writeFile(join(project, '.boardown', 'backlog.md'), '', 'utf8');
 
-    await expect(fs.write('epics/no_epic.md', 'whatever')).rejects.toMatchObject({
+    await expect(fs.write('backlog.md', 'whatever')).rejects.toMatchObject({
       code: 'CONFLICT',
     });
   });
@@ -953,12 +938,8 @@ describe('cli commands (integration)', () => {
     it('sorts each container by order, not by position in the file', async () => {
       await seed();
       await writeFile(
-        join(project, '.boardown', 'epics', 'no_epic.md'),
+        join(project, '.boardown', 'backlog.md'),
         [
-          '---',
-          '{}',
-          '---',
-          '',
           '## Beta feature',
           '',
           '---',
@@ -1050,7 +1031,7 @@ describe('cli commands (integration)', () => {
       ).rejects.toMatchObject({ code: 'USAGE' });
     });
 
-    it('filters by epic, catching both epic-file and release-tagged tasks', async () => {
+    it('filters by epic, catching backlog and release tasks by their key', async () => {
       await seed();
       expect(
         listIds((await taskCommand(parseArgs(['task', 'list', '--epic', 'bug-audit']), ctx)).data),
@@ -1064,11 +1045,11 @@ describe('cli commands (integration)', () => {
       ).toEqual(['TS-4']);
     });
 
-    it('filters to backlog only', async () => {
+    it('filters to backlog only: every task in no release, whatever its epic', async () => {
       await seed();
       expect(
         listIds((await taskCommand(parseArgs(['task', 'list', '--backlog']), ctx)).data),
-      ).toEqual(['TS-1', 'TS-2']);
+      ).toEqual(['TS-1', 'TS-2', 'TS-3']);
     });
 
     it('filters by case-insensitive text on title/description', async () => {

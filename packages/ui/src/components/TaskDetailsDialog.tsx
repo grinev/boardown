@@ -135,8 +135,7 @@ export function TaskDetailsDialog({
         title: wipLimitHint(count, limit, statusDisplayLabel(config, status)),
       };
     });
-    // "—" removes the release: a task with an epic falls back to its epic file,
-    // an epic-less task to the backlog (no_epic.md).
+    // "—" removes the release: the task goes to the backlog, its epic kept.
     return [{ value: NO_RELEASE_VALUE, label: '—' }, ...items];
   }, [releases, config, status, release?.filename]);
 

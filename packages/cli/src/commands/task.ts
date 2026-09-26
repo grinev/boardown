@@ -16,6 +16,7 @@ import {
   normalizeSearchQuery,
   readTaskCommits,
   sortTasksByOrder,
+  unscheduledTasks,
   taskMatchRank,
   taskMatchesFilters,
   DEFAULT_LINK_TYPE,
@@ -31,7 +32,6 @@ import {
   type BoardConfig,
   type BoardSnapshot,
   type ChecklistItem,
-  type DestEpic,
   type GuardedFs,
   type GitHistoryResult,
   type LinkType,
@@ -58,11 +58,14 @@ import {
   loadBoardOrThrow,
   locateTask,
   resolveBoardRoot,
+  allContainers,
+  fileOf,
   writeContainer,
   writeContainerAndConfig,
   writeContainers,
   type ContainerKind,
   type ContainerRef,
+  type LoadedBoard,
 } from '../persistence';
 import { isFull, statusMark, taskSummary } from '../summary';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
@@ -258,16 +261,12 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     }
     target = { kind: 'release', container: release };
     epicTag = epicSlug;
-  } else if (epicSlug !== undefined) {
-    const epic = snapshot.epics.find((e) => e.slug === epicSlug);
-    if (epic === undefined) {
+  } else {
+    if (epicSlug !== undefined && !snapshot.epics.some((e) => e.slug === epicSlug)) {
       throw new CliError('EPIC_NOT_FOUND', `No epic "${epicSlug}".`);
     }
-    target = { kind: 'epic', container: epic };
-    epicTag = epicSlug;
-  } else {
     target = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog() };
-    epicTag = undefined;
+    epicTag = epicSlug;
   }
 
   const custom = parseCustomFields(args, snapshot.config);
@@ -301,7 +300,6 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
 interface MoveDest {
   kind: ContainerRef['kind'];
   container: ContainerRef['container'];
-  destEpic: DestEpic;
 }
 
 // Resolve where a --release / --no-release edit moves the task (mirrors the UI's
@@ -310,7 +308,6 @@ function resolveReleaseMove(
   snapshot: BoardSnapshot,
   location: ContainerRef,
   edited: ContainerRef['container'],
-  taskId: string,
   releaseRef: string | undefined,
   noRelease: boolean,
 ): MoveDest | null {
@@ -320,21 +317,13 @@ function resolveReleaseMove(
       throw new CliError('RELEASE_NOT_FOUND', `No release "${releaseRef}".`);
     }
     if (edited.filename === release.filename) return null;
-    return { kind: 'release', container: release, destEpic: { kind: 'preserve' } };
+    return { kind: 'release', container: release };
   }
   if (noRelease) {
-    // Removing from a release falls back to the task's epic file, or the
-    // backlog when it has no epic. A no-op when the task isn't in a release.
+    // Removing from a release puts the task in the backlog, its `epic` key as it
+    // was. A no-op when the task isn't in a release.
     if (location.kind !== 'release') return null;
-    const epicSlug = edited.tasks.find((t) => t.frontmatter.id === taskId)?.frontmatter.epic;
-    if (epicSlug !== undefined) {
-      const epic = findEpic(snapshot, epicSlug);
-      if (epic === undefined) {
-        throw new CliError('EPIC_NOT_FOUND', `No epic "${epicSlug}".`);
-      }
-      return { kind: 'epic', container: epic, destEpic: { kind: 'set', slug: epicSlug } };
-    }
-    return { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
+    return { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog() };
   }
   return null;
 }
@@ -363,7 +352,6 @@ async function moveAndReport(
     moveTaskBetweenContainers(edited, dest.container, config, taskId, {
       newStatus: newStatus ?? movingTask.frontmatter.status,
       beforeTaskId: null,
-      destEpic: dest.destEpic,
     }),
   );
   await writeContainers(
@@ -445,7 +433,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     // a relocation carries the status into the destination, and that is the
     // container the status lock is judged against. So pulling a task into the
     // current release and starting it stays one call.
-    const dest = resolveReleaseMove(snapshot, location, location.container, id, releaseRef, noRelease);
+    const dest = resolveReleaseMove(snapshot, location, location.container, releaseRef, noRelease);
     const movedStatus = dest !== null ? fields.status : undefined;
     const patch: TaskPatch = { ...fields };
     if (movedStatus !== undefined) delete patch.status;
@@ -459,35 +447,14 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems, movedStatus);
   }
 
-  // Epic change. A task in a release carries the epic as a tag (edit in place);
-  // elsewhere membership is by file, so changing the epic relocates the task
-  // (the backlog serializer strips epic tags) — this mirrors store.updateTask.
-  const current = location.container.tasks.find((t) => t.frontmatter.id === id);
-  if (current === undefined) {
-    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
-  }
+  // A task's epic is its own `epic` key wherever it sits, so changing it is an
+  // edit in place: the block stays where it is in its file.
   const nextEpic: string | null | undefined = noEpic ? null : epicSlug;
-  const epicReallyChanges =
-    nextEpic !== undefined &&
-    ((nextEpic === null && current.frontmatter.epic !== undefined) ||
-      (typeof nextEpic === 'string' && nextEpic !== current.frontmatter.epic));
-
-  if (epicReallyChanges && location.kind !== 'release') {
-    const edited = hasFields ? applyOp(() => editTask(location.container, snapshot.config, id, fields)) : location.container;
-    let dest: MoveDest;
-    if (nextEpic === null) {
-      dest = { kind: 'backlog', container: snapshot.backlog ?? emptyBacklog(), destEpic: { kind: 'clear' } };
-    } else {
-      const epic = findEpic(snapshot, nextEpic);
-      if (epic === undefined) {
-        throw new CliError('EPIC_NOT_FOUND', `No epic "${nextEpic}".`);
-      }
-      dest = { kind: 'epic', container: epic, destEpic: { kind: 'set', slug: nextEpic } };
-    }
-    return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems);
+  if (typeof nextEpic === 'string' && findEpic(snapshot, nextEpic) === undefined) {
+    throw new CliError('EPIC_NOT_FOUND', `No epic "${nextEpic}".`);
   }
 
-  // Pure in-place edit (fields, plus epic tag when the task is in a release).
+  // In-place edit: the fields, plus the epic key.
   const patch: TaskPatch = { ...fields };
   if (nextEpic !== undefined) patch.epic = nextEpic;
   const edited = applyOp(() => editTask(location.container, snapshot.config, id, patch));
@@ -558,7 +525,8 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const board = await loadBoardOrThrow(root);
+  const { snapshot, problems } = board;
 
   const tasks: { task: Task; in: { kind: string; file: string } }[] = [];
   const missing: string[] = [];
@@ -572,7 +540,7 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
       missing.push(id);
       continue;
     }
-    tasks.push({ task, in: { kind: location.kind, file: location.container.filename } });
+    tasks.push({ task, in: { kind: location.kind, file: fileOf(board, location, task) } });
   }
 
   const blocks = tasks.map((entry) => renderTask(entry.task, entry.in.kind, entry.in.file));
@@ -635,26 +603,30 @@ interface TaskListEntry {
   in: { kind: ContainerKind; file: string };
 }
 
-// Flatten every task across the board, each paired with its physical container.
-// Order mirrors the board view (current → future releases, backlog, epics,
-// finished releases) so a filtered list reads in the same order as `board`, and
-// each container's tasks are sorted by `order` — the file's block order is
+// Flatten every task across the board, each paired with the file it sits in.
+// Order mirrors the board view (current → future releases, the Backlog, finished
+// releases) so a filtered list reads in the same order as `board`: each release's
+// tasks and the Backlog as a whole are sorted by `order` — a file's block order is
 // insertion order and says nothing about where a task sits.
-function collectEntries(snapshot: BoardSnapshot): TaskListEntry[] {
+function collectEntries(board: LoadedBoard): TaskListEntry[] {
+  const { snapshot } = board;
   const entries: TaskListEntry[] = [];
-  const push = (kind: ContainerKind, filename: string, tasks: readonly Task[]): void => {
-    for (const task of sortTasksByOrder(tasks)) {
-      entries.push({ task, in: { kind, file: filename } });
-    }
-  };
   const releasesByStatus = (status: ReleaseStatus): readonly Release[] =>
     snapshot.releases.filter((r) => r.frontmatter.status === status);
+  const pushRelease = (release: Release): void => {
+    for (const task of sortTasksByOrder(release.tasks)) {
+      entries.push({ task, in: { kind: 'release', file: release.filename } });
+    }
+  };
 
-  for (const r of releasesByStatus('current')) push('release', r.filename, r.tasks);
-  for (const r of releasesByStatus('future')) push('release', r.filename, r.tasks);
-  if (snapshot.backlog) push('backlog', snapshot.backlog.filename, snapshot.backlog.tasks);
-  for (const e of snapshot.epics) push('epic', e.filename, e.tasks);
-  for (const r of releasesByStatus('finished')) push('release', r.filename, r.tasks);
+  for (const r of releasesByStatus('current')) pushRelease(r);
+  for (const r of releasesByStatus('future')) pushRelease(r);
+  const backlogRefs = allContainers(snapshot).filter((ref) => ref.kind === 'backlog');
+  for (const task of unscheduledTasks(snapshot)) {
+    const ref = backlogRefs.find((r) => r.container.tasks.includes(task));
+    if (ref !== undefined) entries.push({ task, in: { kind: 'backlog', file: fileOf(board, ref, task) } });
+  }
+  for (const r of releasesByStatus('finished')) pushRelease(r);
   return entries;
 }
 
@@ -694,7 +666,8 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     textFlag !== undefined && normalizeSearchQuery(textFlag) !== '' ? textFlag : undefined;
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const board = await loadBoardOrThrow(root);
+  const { snapshot, problems } = board;
 
   const types =
     typeFlags.length > 0 ? typeFlags.map((v) => requireType(snapshot.config, v)) : undefined;
@@ -723,7 +696,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     releaseFile = release.filename;
   }
 
-  const entries = collectEntries(snapshot).filter(({ task, in: loc }) => {
+  const entries = collectEntries(board).filter(({ task, in: loc }) => {
     const fm = task.frontmatter;
     if (
       !taskMatchesFilters(task, {
@@ -867,13 +840,9 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
 
   // Deleting also strips the mirrored link records the other tasks hold, so the
   // op runs over every container and reports the files it actually touched.
-  const refs: ContainerRef[] = [
-    ...snapshot.releases.map((container): ContainerRef => ({ kind: 'release', container })),
-    ...snapshot.epics.map((container): ContainerRef => ({ kind: 'epic', container })),
-    ...(snapshot.backlog
-      ? [{ kind: 'backlog', container: snapshot.backlog } as ContainerRef]
-      : []),
-  ];
+  const task = location.container.tasks.find((t) => t.frontmatter.id === id);
+  const removedFrom = (task && fs.sourceOf(task)) ?? location.container.filename;
+  const refs = allContainers(snapshot);
   const result = applyOp(() =>
     deleteTaskWithLinks(
       refs.map((r) => r.container),
@@ -887,7 +856,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
 
   return {
     data: { id },
-    human: `Removed ${id} from ${location.container.filename}.`,
+    human: `Removed ${id} from ${removedFrom}.`,
     ...problemsField(problems),
   };
 }
@@ -1290,7 +1259,7 @@ interface LinkListEntry {
 // with), except a dangling target is kept and flagged: an agent cleaning up after
 // a deleted task needs to see it.
 function collectLinks(snapshot: BoardSnapshot, task: Task): LinkListEntry[] {
-  const all = collectEntries(snapshot).map((e) => e.task);
+  const all = allContainers(snapshot).flatMap((ref) => ref.container.tasks);
   const taskId = task.frontmatter.id;
   const seen = new Set<string>();
   const entries: LinkListEntry[] = [];

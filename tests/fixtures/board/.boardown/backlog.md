@@ -1,5 +1,11 @@
+## Extract config loader
+
 ---
-{}
+id: TS-3
+type: tech
+status: todo
+epic: core
+order: 100
 ---
 
 ## Write onboarding docs

@@ -384,7 +384,6 @@ describe('editEpic', () => {
     slug: 'parser',
     frontmatter: { name: 'Parser', color: '#1f6feb' },
     preamble: 'old preamble',
-    tasks: [task('BD-1', 'todo', 100)],
   });
 
   it('updates name only', () => {
@@ -394,7 +393,6 @@ describe('editEpic', () => {
     expect(e.frontmatter.color).toBe('#1f6feb');
     expect(e.slug).toBe('parser');
     expect(e.filename).toBe('epics/parser.md');
-    expect(e.tasks).toHaveLength(1);
   });
 
   it('updates preamble only', () => {
@@ -414,7 +412,6 @@ describe('editEpic', () => {
     expect(e.frontmatter.color).toBe('#22c55e');
     expect(e.frontmatter.name).toBe('Parser');
     expect(e.preamble).toBe('old preamble');
-    expect(e.tasks).toHaveLength(1);
   });
 
   it('updates color together with name and preamble', () => {
@@ -428,7 +425,6 @@ describe('editEpic', () => {
     expect(e.frontmatter.name).toBe('Parser');
     expect(e.frontmatter.color).toBe('#1f6feb');
     expect(e.preamble).toBe('old preamble');
-    expect(e.tasks).toHaveLength(1);
   });
 
   it('trims the name it is given', () => {
@@ -498,10 +494,9 @@ describe('deleteTaskWithLinks', () => {
     },
   });
 
-  const epicOf = (slug: string, ...tasks: Task[]): Epic => ({
+  const epicOf = (slug: string, ...tasks: Task[]): Backlog => ({
     filename: `epics/${slug}.md`,
-    slug,
-    frontmatter: { name: slug, color: '#fff' },
+    frontmatter: {},
     preamble: '',
     tasks,
   });
@@ -728,7 +723,6 @@ describe('createEpic', () => {
     expect(e.slug).toBe('drag-&-drop');
     expect(e.frontmatter.name).toBe('Drag & Drop');
     expect(e.frontmatter.color).toBe('#f59e0b');
-    expect(e.tasks).toEqual([]);
     expect(e.preamble).toBe('');
   });
 
@@ -781,12 +775,20 @@ describe('createEpic', () => {
     const name = 'x'.repeat(EPIC_NAME_MAX_LENGTH);
     expect(createEpic([], { name, color: '#1f6feb' }).frontmatter.name).toBe(name);
   });
+
+  it('refuses the slug an older build used for the epic-less backlog, in any case', () => {
+    expect(() => createEpic([], { name: 'no_epic', color: '#1f6feb' })).toThrow(
+      /`no_epic` is a reserved name/,
+    );
+    expect(() => createEpic([], { name: 'No_Epic', color: '#1f6feb' })).toThrow(/reserved/);
+    expect(createEpic([], { name: 'No Epic', color: '#1f6feb' }).slug).toBe('no-epic');
+  });
 });
 
 describe('emptyBacklog', () => {
-  it('returns an empty backlog at epics/no_epic.md', () => {
+  it('returns an empty backlog at backlog.md', () => {
     const b = emptyBacklog();
-    expect(b.filename).toBe('epics/no_epic.md');
+    expect(b.filename).toBe('backlog.md');
     expect(b.frontmatter).toEqual({});
     expect(b.preamble).toBe('');
     expect(b.tasks).toEqual([]);
@@ -855,149 +857,84 @@ describe('moveTaskBetweenContainers', () => {
     expect(result.dest.tasks[0]!.frontmatter.epic).toBe('parser');
   });
 
-  it('sets task.epic to dest.slug when destEpic is { kind: set }', () => {
-    const a = release(task('BD-1', 'todo', 100));
-    a.filename = 'releases/1.10.md';
-    const b: Epic = {
-      filename: 'epics/dnd.md',
-      slug: 'dnd',
-      frontmatter: { name: 'DnD', color: '#000000' },
-      preamble: '',
-      tasks: [],
-    };
-    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
+  it('keeps task.epic, even one naming no epic file, when moving into the backlog', () => {
+    const a = release({
+      ...task('BD-1', 'todo', 100),
+      frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'gone', order: 100 },
+    });
+    const result = moveTaskBetweenContainers(a, emptyBacklog(), config, 'BD-1', {
       newStatus: 'todo',
       beforeTaskId: null,
-      destEpic: { kind: 'set', slug: 'dnd' },
     });
-    expect(result.dest.tasks[0]!.frontmatter.epic).toBe('dnd');
-  });
-
-  it('clears task.epic when destEpic is { kind: clear }', () => {
-    const a: Epic = {
-      filename: 'epics/dnd.md',
-      slug: 'dnd',
-      frontmatter: { name: 'DnD', color: '#000000' },
-      preamble: '',
-      tasks: [
-        {
-          title: 'Task',
-          description: '',
-          frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'dnd', order: 100 },
-        },
-      ],
-    };
-    const b: Backlog = {
-      filename: 'epics/no_epic.md',
-      frontmatter: {},
-      preamble: '',
-      tasks: [],
-    };
-    const result = moveTaskBetweenContainers(a, b, config, 'BD-1', {
-      newStatus: 'todo',
-      beforeTaskId: null,
-      destEpic: { kind: 'clear' },
-    });
-    expect(result.dest.tasks[0]!.frontmatter.epic).toBeUndefined();
+    expect(result.dest.tasks[0]!.frontmatter.epic).toBe('gone');
   });
 });
 
-const epic = (slug: string, ...tasks: Task[]): Epic => ({
+// An old-layout file the loader held back: backlog-kind, at its real path.
+const epic = (slug: string, ...tasks: Task[]): Backlog => ({
   filename: `epics/${slug}.md`,
-  slug,
-  frontmatter: { name: slug, color: '#000000' },
+  frontmatter: {},
   preamble: '',
   tasks,
 });
 
 const backlog = (...tasks: Task[]): Backlog => ({
-  filename: 'epics/no_epic.md',
+  filename: 'backlog.md',
   frontmatter: {},
   preamble: '',
   tasks,
 });
 
 const findTaskAnywhere = (
-  result: { epics: Epic[]; backlog: Backlog | null },
+  result: { backlog: Backlog | null; heldBack: Backlog[] },
   id: string,
-): Task | undefined => {
-  for (const e of result.epics) {
-    const t = e.tasks.find((x) => x.frontmatter.id === id);
-    if (t) return t;
-  }
-  return result.backlog?.tasks.find((x) => x.frontmatter.id === id);
-};
+): Task | undefined =>
+  [...(result.backlog?.tasks ?? []), ...result.heldBack.flatMap((b) => b.tasks)].find(
+    (x) => x.frontmatter.id === id,
+  );
 
 describe('reorderTaskInBacklog', () => {
-  it('moves task within its own epic by changing order only, writes one file', () => {
-    const a = epic('a', task('BD-1', 'todo', 100), task('BD-2', 'todo', 200), task('BD-3', 'todo', 300));
-    const result = reorderTaskInBacklog({ epics: [a], backlog: null }, 'BD-3', 'BD-2');
+  it('moves a task within backlog.md by changing order only, writes one file', () => {
+    const bl = backlog(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200), task('BD-3', 'todo', 300));
+    const result = reorderTaskInBacklog({ backlog: bl, heldBack: [] }, 'BD-3', 'BD-2');
     const moved = findTaskAnywhere(result, 'BD-3')!;
     expect(moved.frontmatter.order).toBe(150);
-    expect(result.changedFilenames).toEqual(['epics/a.md']);
-    expect(result.epics[0]!.tasks).toHaveLength(3);
+    expect(result.changedFilenames).toEqual(['backlog.md']);
+    expect(result.backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1', 'BD-2', 'BD-3']);
   });
 
-  it('reorders across epics without touching task.epic or file location', () => {
-    const a = epic(
-      'a',
-      { ...task('BD-1', 'todo', 100), frontmatter: { id: 'BD-1', type: 'feature', status: 'todo', epic: 'a', order: 100 } },
-    );
-    const b = epic(
-      'b',
-      { ...task('BD-2', 'todo', 200), frontmatter: { id: 'BD-2', type: 'feature', status: 'todo', epic: 'b', order: 200 } },
-      { ...task('BD-3', 'todo', 300), frontmatter: { id: 'BD-3', type: 'feature', status: 'todo', epic: 'b', order: 300 } },
-    );
-    // Place BD-3 before BD-1 (different epic) -> BD-3 ends up first in the flat list
-    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-3', 'BD-1');
-    const moved = findTaskAnywhere(result, 'BD-3')!;
-    expect(moved.frontmatter.epic).toBe('b');
-    expect(result.epics.find((e) => e.slug === 'b')!.tasks.some((t) => t.frontmatter.id === 'BD-3')).toBe(true);
-    expect(result.epics.find((e) => e.slug === 'a')!.tasks.some((t) => t.frontmatter.id === 'BD-3')).toBe(false);
-    // BD-3 must have order < 100 (or trigger renumber landing at 100/200/300)
-    const all = [
-      ...result.epics.flatMap((e) => e.tasks),
-    ].sort((x, y) => x.frontmatter.order - y.frontmatter.order);
-    expect(all.map((t) => t.frontmatter.id)).toEqual(['BD-3', 'BD-1', 'BD-2']);
-  });
-
-  it('places task before a no_epic task while keeping it in its epic file', () => {
+  it('orders one list across backlog.md and held-back files, keeping each task in its file', () => {
     const a = epic('a', task('BD-1', 'todo', 300));
     const bl = backlog(task('BD-2', 'todo', 200));
-    // BD-1 starts at 300 (after BD-2). Drop BD-1 before BD-2 — only its order
-    // should change, and it must stay in epics/a.md.
-    const result = reorderTaskInBacklog({ epics: [a], backlog: bl }, 'BD-1', 'BD-2');
+    const result = reorderTaskInBacklog({ backlog: bl, heldBack: [a] }, 'BD-1', 'BD-2');
     expect(result.changedFilenames).toEqual(['epics/a.md']);
-    expect(result.epics[0]!.tasks[0]!.frontmatter.id).toBe('BD-1');
-    expect(result.epics[0]!.tasks[0]!.frontmatter.order).toBe(100);
+    expect(result.heldBack[0]!.tasks[0]!.frontmatter.order).toBe(100);
     expect(result.backlog!.tasks[0]!.frontmatter.id).toBe('BD-2');
   });
 
   it('places task at the end when beforeTaskId is null', () => {
-    const a = epic('a', task('BD-1', 'todo', 100));
-    const b = epic('b', task('BD-2', 'todo', 200));
-    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-1', null);
+    const bl = backlog(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
+    const result = reorderTaskInBacklog({ backlog: bl, heldBack: [] }, 'BD-1', null);
     const moved = findTaskAnywhere(result, 'BD-1')!;
     expect(moved.frontmatter.order).toBe(300);
   });
 
-  it('triggers global renumber on collision; touches all affected files', () => {
-    const a = epic('a', task('BD-1', 'todo', 100), task('BD-2', 'todo', 101));
+  it('triggers a renumber on collision; touches every affected file', () => {
+    const bl = backlog(task('BD-1', 'todo', 100), task('BD-2', 'todo', 101));
     const b = epic('b', task('BD-3', 'todo', 50));
-    // BD-1 / BD-2 are adjacent integers — no room to insert between them, must renumber.
-    const result = reorderTaskInBacklog({ epics: [a, b], backlog: null }, 'BD-3', 'BD-2');
-    const all = [...result.epics.flatMap((e) => e.tasks)].sort(
+    const result = reorderTaskInBacklog({ backlog: bl, heldBack: [b] }, 'BD-3', 'BD-2');
+    const all = [...result.backlog!.tasks, ...result.heldBack.flatMap((e) => e.tasks)].sort(
       (x, y) => x.frontmatter.order - y.frontmatter.order,
     );
     expect(all.map((t) => t.frontmatter.order)).toEqual([100, 200, 300]);
     expect(all.map((t) => t.frontmatter.id)).toEqual(['BD-1', 'BD-3', 'BD-2']);
-    expect(new Set(result.changedFilenames)).toEqual(new Set(['epics/a.md', 'epics/b.md']));
+    expect(new Set(result.changedFilenames)).toEqual(new Set(['backlog.md', 'epics/b.md']));
   });
 
   it('throws when task is not in any backlog container', () => {
-    const a = epic('a', task('BD-1', 'todo', 100));
+    const bl = backlog(task('BD-1', 'todo', 100));
     expect(() =>
-      reorderTaskInBacklog({ epics: [a], backlog: null }, 'BD-999', null),
+      reorderTaskInBacklog({ backlog: bl, heldBack: [] }, 'BD-999', null),
     ).toThrow(/Task not found in backlog/);
   });
 });
@@ -1031,8 +968,7 @@ describe('completeRelease', () => {
     const result = completeRelease({
       config,
       release: source,
-      epics: [],
-      backlog: null,
+      backlog: emptyBacklog(),
       targetRelease,
     });
 
@@ -1052,34 +988,29 @@ describe('completeRelease', () => {
     );
   });
 
-  it('moves unfinished tasks to backlog, preserving their epic', () => {
+  it('moves unfinished tasks to the backlog, each keeping its epic key', () => {
     const source = release(
       task('BD-1', 'done', 100),
       epicTask('BD-2', 'todo', 200, 'a'),
       task('BD-3', 'todo', 300),
+      epicTask('BD-4', 'todo', 400, 'gone'),
     );
-    const a = epic('a');
-    const bl = backlog();
 
     const result = completeRelease({
       config,
       release: source,
-      epics: [a],
-      backlog: bl,
+      backlog: backlog(),
       targetRelease: null,
     });
 
     expect(result.release.frontmatter.status).toBe('finished');
     expect(result.release.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
-    // BD-2 had an epic -> goes back to that epic file
-    expect(result.epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
-    expect(result.epics[0]!.tasks[0]!.frontmatter.epic).toBe('a');
-    // BD-3 had no epic -> goes to the backlog with the epic field cleared
-    expect(result.backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-3']);
-    expect(result.backlog!.tasks[0]!.frontmatter.epic).toBeUndefined();
-    expect(new Set(result.changedFilenames)).toEqual(
-      new Set(['releases/1.10.md', 'epics/a.md', 'epics/no_epic.md']),
-    );
+    expect(result.backlog.tasks.map((t) => [t.frontmatter.id, t.frontmatter.epic])).toEqual([
+      ['BD-2', 'a'],
+      ['BD-3', undefined],
+      ['BD-4', 'gone'],
+    ]);
+    expect(new Set(result.changedFilenames)).toEqual(new Set(['releases/1.10.md', 'backlog.md']));
   });
 
   it('only finishes the release when every task is done', () => {
@@ -1088,8 +1019,7 @@ describe('completeRelease', () => {
     const result = completeRelease({
       config,
       release: source,
-      epics: [],
-      backlog: null,
+      backlog: emptyBacklog(),
       targetRelease: null,
     });
 
@@ -1098,18 +1028,6 @@ describe('completeRelease', () => {
     expect(result.changedFilenames).toEqual(['releases/1.10.md']);
   });
 
-  it('throws when an unfinished task without epic has no backlog to fall back to', () => {
-    const source = release(task('BD-1', 'todo', 100));
-    expect(() =>
-      completeRelease({
-        config,
-        release: source,
-        epics: [],
-        backlog: null,
-        targetRelease: null,
-      }),
-    ).toThrow(/Backlog container is missing/);
-  });
 });
 
 const futureRelease = (slug: string): Release => ({
@@ -1172,8 +1090,7 @@ describe('process invariants — finished release is archived', () => {
       completeRelease({
         config,
         release: futureRelease('next'),
-        epics: [],
-        backlog: null,
+        backlog: emptyBacklog(),
         targetRelease: null,
       }),
     ).toThrow(/active/);
@@ -1210,21 +1127,13 @@ describe('process invariants — finished release is archived', () => {
 });
 
 describe('process invariants — a status only changes in the current release', () => {
-  const withTasks = <C extends Release | Epic | Backlog>(container: C, ...tasks: Task[]): C => ({
+  const withTasks = <C extends Release | Backlog>(container: C, ...tasks: Task[]): C => ({
     ...container,
     tasks,
   });
-  const epic = (...tasks: Task[]): Epic =>
-    withTasks<Epic>(
-      {
-        filename: 'epics/dnd.md',
-        slug: 'dnd',
-        frontmatter: { name: 'DnD', color: '#000000' },
-        preamble: '',
-        tasks: [],
-      },
-      ...tasks,
-    );
+  // An old-layout file the loader held back is still a backlog container.
+  const epic = (...tasks: Task[]): Backlog =>
+    withTasks<Backlog>({ ...emptyBacklog(), filename: 'epics/dnd.md' }, ...tasks);
   const backlog = (...tasks: Task[]): Backlog => withTasks(emptyBacklog(), ...tasks);
   const finished = (...tasks: Task[]): Release =>
     withTasks<Release>(
@@ -1258,9 +1167,8 @@ describe('process invariants — a status only changes in the current release', 
     }
   });
 
-  it('names an epic and the backlog in the refusal', () => {
+  it('names the backlog in the refusal', () => {
     const t = task('BD-1', 'todo', 100);
-    expect(() => changeTaskStatus(epic(t), config, 'BD-1', 'done')).toThrow(/the epic "DnD"/);
     expect(() => changeTaskStatus(backlog(t), config, 'BD-1', 'done')).toThrow(/the backlog/);
   });
 
@@ -1566,7 +1474,6 @@ describe('process invariants — a status only changes in the current release', 
         completeRelease({
           release: full(),
           config: limited(1),
-          epics: [],
           backlog: backlog(),
           targetRelease: null,
         }),
@@ -1665,7 +1572,6 @@ describe('process invariants — a status only changes in the current release', 
           task('BD-3', 'in-progress', 300),
         ),
         config: custom(),
-        epics: [],
         backlog: backlog(),
         targetRelease: null,
       });
@@ -1683,7 +1589,7 @@ describe('process invariants — a status only changes in the current release', 
     expect(() => reorderTask(r, 'BD-2', 'BD-1')).not.toThrow();
     const b = backlog(task('BD-3', 'done', 100), task('BD-4', 'todo', 200));
     expect(() =>
-      reorderTaskInBacklog({ epics: [], backlog: b }, 'BD-4', 'BD-3'),
+      reorderTaskInBacklog({ backlog: b, heldBack: [] }, 'BD-4', 'BD-3'),
     ).not.toThrow();
   });
 
@@ -1692,8 +1598,7 @@ describe('process invariants — a status only changes in the current release', 
     const result = completeRelease({
       config,
       release: current,
-      epics: [],
-      backlog: null,
+      backlog: emptyBacklog(),
       targetRelease: futureRelease('next'),
     });
     expect(result.release.frontmatter.status).toBe('finished');
@@ -1715,7 +1620,7 @@ describe('task links', () => {
     frontmatter: { status: 'finished' },
   });
 
-  const linksOf = (container: Release | Backlog | Epic, id: string) =>
+  const linksOf = (container: Release | Backlog, id: string) =>
     container.tasks.find((t) => t.frontmatter.id === id)?.frontmatter.links;
 
   it('mirrors the link into both containers and reports both files', () => {

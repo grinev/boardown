@@ -12,6 +12,7 @@ import {
   DEFAULT_LINK_TYPE,
   LINK_TYPE_META,
   sortTasksByOrder,
+  unscheduledTasks,
   type LinkType,
   type Task,
 } from '@boardown/core';
@@ -76,8 +77,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     // file's block order says nothing about where a task sits on the board.
     const candidates = [
       ...snapshot.releases.flatMap((r) => sortTasksByOrder(r.tasks)),
-      ...snapshot.epics.flatMap((e) => sortTasksByOrder(e.tasks)),
-      ...sortTasksByOrder(snapshot.backlog?.tasks ?? []),
+      ...unscheduledTasks(snapshot),
     ];
     return candidates
       .filter((t) => {

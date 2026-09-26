@@ -367,8 +367,8 @@ worth fixing; note it down for later.
 
 **Reshape the board on the main branch:** creating tasks (a new task bumps
 `nextId` in `config.yaml` and two branches end up with the same ID, which nothing
-detects yet), dragging cards, moving a task between the backlog, an epic and a
-release (a delete in one file and an insert in another — merged badly, the task
+detects yet), dragging cards, moving a task between the backlog and a release
+(a delete in one file and an insert in another — merged badly, the task
 lands in both), and the release lifecycle.
 
 Skim the `.boardown/` diff before merging: a duplicated task block is easy to
@@ -595,7 +595,7 @@ cleaned up on exit — the temp copy stays around so you can inspect what the UI
 actually wrote.
 
 The fixture covers the interesting states: a finished, a current and a future
-release, tasks in every status and of every type, an epic with unscheduled tasks,
+release, tasks in every status and of every type, backlog tasks with and without an epic,
 a task with a checklist and notes, and a pair of linked tasks.
 
 Board columns, task cards, backlog rows and sections carry `data-testid`
@@ -622,7 +622,8 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
 
     This updates the root version and mirrors it into every package, including
     `minCompatibleVersion`. If the on-disk format files
-    (`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts`, `loader.ts`)
+    (`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts`, `loader.ts`,
+    `layout.ts`)
     changed since the previous release tag, it moves `minCompatibleVersion` to
     the version being released. For a **stable** version it also seeds
     `docs/release-notes/vX.Y.Z.md` with a draft (the same notes the workflow

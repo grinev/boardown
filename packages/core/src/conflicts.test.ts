@@ -142,6 +142,78 @@ describe('createGuardedFs — writeAll', () => {
     expect(await inner.read('b.md')).toBe('external');
   });
 
+  it('undoes the files already written when a later one fails, and the undo is writable again', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('a.md', 'one');
+    const versions: Record<string, number> = { 'a.md': (await inner.stat('a.md'))!.lastModified };
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict: vi.fn(), onUnreadable: vi.fn() });
+    const write = inner.write.bind(inner);
+    inner.write = async (path, content) => {
+      if (path === 'c.md') throw new Error('disk full');
+      await write(path, content);
+    };
+
+    await expect(
+      fs.writeAll([
+        { path: 'a.md', content: 'two' },
+        { path: 'b.md', content: 'new' },
+        { path: 'c.md', content: 'new' },
+      ]),
+    ).rejects.toThrow('disk full');
+
+    expect(await inner.read('a.md')).toBe('one');
+    expect(await inner.stat('b.md')).toBeNull();
+    // The restored file's version follows it, so the next write is not a conflict.
+    inner.write = write;
+    await fs.write('a.md', 'three');
+    expect(await inner.read('a.md')).toBe('three');
+  });
+
+  it('commit applies writes before removals and refuses a create-only target that exists', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('old.md', 'x');
+    await inner.write('taken.md', 'y');
+    const versions: Record<string, number> = {
+      'old.md': (await inner.stat('old.md'))!.lastModified,
+      'taken.md': (await inner.stat('taken.md'))!.lastModified,
+    };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
+
+    await expect(
+      fs.commit({ writes: [{ path: 'taken.md', content: 'z', createOnly: true }], removes: ['old.md'] }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(onConflict).toHaveBeenCalledWith('taken.md');
+    expect(await inner.read('old.md')).toBe('x');
+
+    const order: string[] = [];
+    const write = inner.write.bind(inner);
+    const remove = inner.remove.bind(inner);
+    inner.write = async (path, content) => {
+      order.push(`write ${path}`);
+      await write(path, content);
+    };
+    inner.remove = async (path) => {
+      order.push(`remove ${path}`);
+      await remove(path);
+    };
+    await fs.commit({ writes: [{ path: 'new.md', content: 'x' }], removes: ['old.md'] });
+    expect(order).toEqual(['write new.md', 'remove old.md']);
+  });
+
+  it('refuses to write back a known file deleted on disk since load', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('a.md', 'one');
+    const versions: Record<string, number> = { 'a.md': (await inner.stat('a.md'))!.lastModified };
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
+    await inner.remove('a.md');
+
+    await expect(fs.write('a.md', 'two')).rejects.toBeInstanceOf(ConflictError);
+    expect(onConflict).toHaveBeenCalledWith('a.md');
+    expect(await inner.stat('a.md')).toBeNull();
+  });
+
   it('removes a known-unchanged file and forgets its version', async () => {
     const inner = new InMemoryFs();
     await inner.write('docs/a.md', 'one');

@@ -8,14 +8,7 @@ const dumpYaml = (data: object): string =>
     .dump(data, { lineWidth: -1, noRefs: true, sortKeys: false, quotingType: '"' })
     .replace(/\n+$/, '');
 
-interface TaskFmOptions {
-  omitEpic?: boolean;
-}
-
-const orderedTaskFrontmatter = (
-  fm: TaskFrontmatter,
-  options: TaskFmOptions = {},
-): Record<string, unknown> => {
+const orderedTaskFrontmatter = (fm: TaskFrontmatter): Record<string, unknown> => {
   const out: Record<string, unknown> = {
     id: fm.id,
     type: fm.type,
@@ -23,7 +16,7 @@ const orderedTaskFrontmatter = (
   // Absent stays absent — the default is never synthesised into a file.
   if (fm.priority !== undefined) out.priority = fm.priority;
   out.status = fm.status;
-  if (!options.omitEpic && fm.epic !== undefined) out.epic = fm.epic;
+  if (fm.epic !== undefined) out.epic = fm.epic;
   out.order = fm.order;
   if (fm.checklist && fm.checklist.length > 0) {
     out.checklist = fm.checklist.map((it) => ({
@@ -52,25 +45,22 @@ const orderedTaskFrontmatter = (
   return out;
 };
 
-const serializeTask = (task: Task, options: TaskFmOptions = {}): string => {
-  const fmBlock = `${FENCE}\n${dumpYaml(orderedTaskFrontmatter(task.frontmatter, options))}\n${FENCE}`;
+const serializeTask = (task: Task): string => {
+  const fmBlock = `${FENCE}\n${dumpYaml(orderedTaskFrontmatter(task.frontmatter))}\n${FENCE}`;
   const desc = task.description.trim();
   const body = desc === '' ? '' : `\n\n${desc}`;
   return `## ${task.title}\n\n${fmBlock}${body}`;
 };
 
-const buildFile = (
-  fileFrontmatter: object,
-  preamble: string,
-  tasks: Task[],
-  options: TaskFmOptions = {},
-): string => {
-  const fmBlock = `${FENCE}\n${dumpYaml(fileFrontmatter)}\n${FENCE}`;
-  const sections: string[] = [fmBlock];
+// A container file: an optional frontmatter block, the text above the first task,
+// then each task in the array's order — which is the file's block order.
+const buildFile = (fileFrontmatter: object | null, preamble: string, tasks: Task[]): string => {
+  const sections: string[] = [];
+  if (fileFrontmatter !== null) sections.push(`${FENCE}\n${dumpYaml(fileFrontmatter)}\n${FENCE}`);
   const trimmedPreamble = preamble.trim();
   if (trimmedPreamble !== '') sections.push(trimmedPreamble);
-  for (const task of tasks) sections.push(serializeTask(task, options));
-  return `${sections.join('\n\n')}\n`;
+  for (const task of tasks) sections.push(serializeTask(task));
+  return sections.length === 0 ? '' : `${sections.join('\n\n')}\n`;
 };
 
 export const serializeRelease = (release: Release): string => {
@@ -84,16 +74,15 @@ export const serializeRelease = (release: Release): string => {
   return buildFile(fm, release.preamble, release.tasks);
 };
 
-export const serializeEpic = (epic: Epic): string => {
-  const fm: Record<string, unknown> = {
-    name: epic.frontmatter.name,
-    color: epic.frontmatter.color,
-  };
-  return buildFile(fm, epic.preamble, epic.tasks, { omitEpic: true });
-};
+// An epic file is the epic's frontmatter and description. Its tasks live in the
+// backlog or a release, each naming it in its own `epic` key.
+export const serializeEpic = (epic: Epic): string =>
+  buildFile({ name: epic.frontmatter.name, color: epic.frontmatter.color }, epic.preamble, []);
 
+// `backlog.md` carries no container frontmatter, and each task keeps its `epic`
+// key exactly as in a release file.
 export const serializeBacklog = (backlog: Backlog): string =>
-  buildFile({}, backlog.preamble, backlog.tasks, { omitEpic: true });
+  buildFile(null, backlog.preamble, backlog.tasks);
 
 export const serializeDocPage = (page: DocPage): string => {
   const title = page.frontmatter.title;

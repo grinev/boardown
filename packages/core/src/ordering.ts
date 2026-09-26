@@ -1,4 +1,4 @@
-import type { Epic, Release, Task } from './schemas.js';
+import type { Release, Task } from './schemas.js';
 import type { BoardSnapshot } from './loader.js';
 
 /**
@@ -58,13 +58,13 @@ export const finishedReleases = (
     .sort((a, b) => byFilenameAsc(b, a));
 
 /**
- * The unscheduled backlog as a single flat list: every epic file's tasks merged
- * with `no_epic.md`'s, ordered by the globally shared `order` key.
+ * The Backlog as one flat list: `backlog.md`'s tasks, plus those of any old-layout
+ * file the loader had to leave in place, ordered by `order`.
  */
 export const unscheduledTasks = (
-  snapshot: Pick<BoardSnapshot, 'epics' | 'backlog'>,
+  snapshot: Pick<BoardSnapshot, 'backlog' | 'heldBack'>,
 ): Task[] =>
   sortTasksByOrder([
-    ...snapshot.epics.flatMap((e: Epic) => e.tasks),
     ...(snapshot.backlog?.tasks ?? []),
+    ...snapshot.heldBack.flatMap((b) => b.tasks),
   ]);

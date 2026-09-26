@@ -20,28 +20,28 @@ const snapshot = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
       tasks: [task('BD-1')],
     },
   ],
-  epics: [
-    {
-      filename: 'epics/parser.md',
-      slug: 'parser',
-      frontmatter: { name: 'Parser', color: '#1f6feb' },
-      preamble: '',
-      tasks: [task('BD-2')],
-    },
-  ],
+  epics: [],
   backlog: {
-    filename: 'epics/no_epic.md',
+    filename: 'backlog.md',
     frontmatter: {},
     preamble: '',
     tasks: [task('BD-3')],
   },
+  heldBack: [
+    {
+      filename: 'epics/parser.md',
+      frontmatter: {},
+      preamble: '',
+      tasks: [task('BD-2')],
+    },
+  ],
   docs: emptyDocsTree(),
   problems: [],
   ...over,
 });
 
 describe('findTaskById', () => {
-  it('finds tasks in releases, epics and the backlog', () => {
+  it('finds tasks in releases, the backlog and held-back old-layout files', () => {
     const s = snapshot();
     expect(findTaskById(s, 'BD-1')?.frontmatter.id).toBe('BD-1');
     expect(findTaskById(s, 'BD-2')?.frontmatter.id).toBe('BD-2');

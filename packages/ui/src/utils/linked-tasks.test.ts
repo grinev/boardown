@@ -36,6 +36,7 @@ const snapshot = (releases: Release[]): BoardSnapshot => ({
   releases,
   epics: [],
   backlog: null,
+  heldBack: [],
   docs: emptyDocsTree(),
   problems: [],
 });

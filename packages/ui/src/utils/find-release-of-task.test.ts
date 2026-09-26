@@ -22,6 +22,7 @@ const snapshot: BoardSnapshot = {
   ],
   epics: [],
   backlog: null,
+  heldBack: [],
   docs: emptyDocsTree(),
   problems: [],
 };
