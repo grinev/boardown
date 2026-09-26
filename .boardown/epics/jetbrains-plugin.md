@@ -1,6 +1,6 @@
 ---
 name: JetBrains Plugin
-color: "#ec4899"
+color: "#f43f5e"
 ---
 
 A JetBrains IDE shell for boardown: a Kotlin plugin hosting @boardown/ui in a JCEF browser, published to JetBrains Marketplace.

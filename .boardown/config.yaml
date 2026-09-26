@@ -1,8 +1,10 @@
+minVersion: 0.10.0
 idPrefix: BD
-nextId: 132
+nextId: 136
 projectName: Boardown
 theme: dark
 multipleActiveReleases: true
+statusOutsideActiveRelease: true
 statuses:
   - key: todo
   - key: ready
