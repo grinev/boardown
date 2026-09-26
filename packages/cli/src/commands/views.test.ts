@@ -143,16 +143,12 @@ describe('view commands (backlog / archive)', () => {
   // This feature is presentation-only: it changed what commands *return*, never
   // what they write. Guard that claim rather than trusting the diff.
   it('trimming the output did not change what a mutation writes to disk', async () => {
-    const file = join(project, '.boardown', 'epics', 'no_epic.md');
+    const file = join(project, '.boardown', 'backlog.md');
     await taskCommand(parseArgs(['task', 'add', 'Write me', '--description', 'body']), ctx);
     await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'step one']), ctx);
 
     expect(await readFile(file, 'utf8')).toBe(
       [
-        '---',
-        '{}',
-        '---',
-        '',
         '## Write me',
         '',
         '---',

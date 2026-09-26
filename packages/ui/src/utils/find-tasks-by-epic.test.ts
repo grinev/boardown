@@ -33,25 +33,36 @@ const snapshot: BoardSnapshot = {
       slug: 'parser',
       frontmatter: { name: 'Parser', color: '#1f6feb' },
       preamble: '',
-      // BD-1 has an explicit epic field, BD-3 has none — both live in the
-      // epic file, so both belong to the epic regardless of the field.
-      tasks: [task('BD-1', 'parser'), task('BD-3')],
     },
   ],
-  backlog: null,
+  backlog: {
+    filename: 'backlog.md',
+    frontmatter: {},
+    preamble: '',
+    // BD-1 names the epic in its own key; BD-3 names none.
+    tasks: [task('BD-1', 'parser'), task('BD-3')],
+  },
+  heldBack: [
+    {
+      filename: 'epics/parser.md',
+      frontmatter: {},
+      preamble: '',
+      tasks: [task('BD-7', 'parser')],
+    },
+  ],
   docs: emptyDocsTree(),
   problems: [],
 };
 
 describe('findTasksByEpic', () => {
-  it('collects tasks of an epic from releases and the epic file', () => {
+  it('collects tasks of an epic by their own key, from releases and the backlog', () => {
     const ids = findTasksByEpic(snapshot, 'parser').map((t) => t.frontmatter.id);
-    expect(ids).toEqual(['BD-1', 'BD-2', 'BD-3', 'BD-10']);
+    expect(ids).toEqual(['BD-1', 'BD-2', 'BD-7', 'BD-10']);
   });
 
-  it('collects an epic-file task even when it has no epic field', () => {
+  it('leaves out a backlog task that names no epic', () => {
     const ids = findTasksByEpic(snapshot, 'parser').map((t) => t.frontmatter.id);
-    expect(ids).toContain('BD-3');
+    expect(ids).not.toContain('BD-3');
   });
 
   it('sorts by the numeric id suffix, not lexicographically', () => {

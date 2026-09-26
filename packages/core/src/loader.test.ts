@@ -203,7 +203,7 @@ projectName: Project
     expect(after).toBe(before);
   });
 
-  it('treats missing epics/no_epic.md as null backlog without problems', async () => {
+  it('treats a board with no backlog file as a null backlog without problems', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     const result = await loadBoard(fs);
@@ -213,39 +213,71 @@ projectName: Project
     expect(result.problems).toEqual([]);
   });
 
-  it('parses epics/no_epic.md alongside epics without falsely flagging it', async () => {
+  it('treats a missing backlog.md as a null backlog, with nothing to convert', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
+    await fs.write('epics/parser.md', '---\nname: Parser\ncolor: "#8957e5"\n---\n');
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.backlog).toBeNull();
+    expect(result.conversion).toBeNull();
+  });
+
+  it('gathers an old-layout board into the backlog in memory and writes nothing', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG.replace('nextId: 5', 'nextId: 9'));
     await fs.write('epics/parser.md', EPIC_OK);
-    await fs.write(
-      'epics/no_epic.md',
-      `## Loose
+    const legacy = `---
+{}
+---
+
+## Loose
 
 ---
 id: BD-3
 type: feature
 status: todo
+epic: stale
 order: 200
 ---
 
 body
-`,
-    );
+`;
+    await fs.write('epics/no_epic.md', legacy);
+    const before = new Map(fs.files);
     const result = await loadBoard(fs);
-    expect(result.kind).toBe('loaded');
     if (result.kind !== 'loaded') throw new Error('expected loaded');
-    expect(result.snapshot.epics).toHaveLength(1);
-    expect(result.snapshot.epics[0]!.slug).toBe('parser');
-    expect(result.snapshot.backlog).not.toBeNull();
-    expect(result.snapshot.backlog!.tasks).toHaveLength(1);
     expect(result.problems).toEqual([]);
+    expect(result.snapshot.epics.map((e) => e.slug)).toEqual(['parser']);
+    expect(
+      result.snapshot.backlog!.tasks.map((t) => [t.frontmatter.id, t.frontmatter.epic]),
+    ).toEqual([
+      ['BD-2', 'parser'],
+      ['BD-3', undefined],
+    ]);
+    expect(result.snapshot.heldBack).toEqual([]);
+    expect(result.conversion!.removes).toEqual(['epics/no_epic.md']);
+    expect(result.conversion!.epicCuts.map((c) => c.path)).toEqual(['epics/parser.md']);
+    expect(fs.files).toEqual(before);
+  });
+
+  it('corrects nextId on an old-layout board without converting it', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG.replace('nextId: 5', 'nextId: 1'));
+    await fs.write('epics/parser.md', EPIC_OK);
+    const result = await loadBoard(fs);
+    if (result.kind !== 'loaded') throw new Error('expected loaded');
+    expect(result.snapshot.config.nextId).toBe(3);
+    expect(await fs.read('epics/parser.md')).toBe(EPIC_OK);
+    expect(fs.files.has('backlog.md')).toBe(false);
+    expect(result.conversion).not.toBeNull();
   });
 
   it('includes backlog tasks when bumping nextId', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     await fs.write(
-      'epics/no_epic.md',
+      'backlog.md',
       `## Big one
 
 ---

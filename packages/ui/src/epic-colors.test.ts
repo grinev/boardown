@@ -7,7 +7,6 @@ const epicWithColor = (color: string): Epic => ({
   slug: `e-${color}`,
   frontmatter: { name: color, color },
   preamble: '',
-  tasks: [],
 });
 
 describe('pickDefaultEpicColor', () => {

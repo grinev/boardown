@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { changeTaskStatus, editEpic } from './board-ops.js';
 import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
-import type { Epic } from './schemas.js';
+import type { Backlog } from './schemas.js';
 import { serializeBacklog, serializeDocPage, serializeEpic, serializeRelease } from './serializer.js';
 
 const RELEASE = `---
@@ -165,23 +165,13 @@ color: "#1f6feb"
 ---
 
 Some notes.
-
-## A task
-
----
-id: BD-9
-type: feature
-status: todo
-order: 100
----
-
-description
 `;
     const first = parseEpic(text, 'epics/ui-foundation.md', 'ui-foundation');
-    const serialized = serializeEpic(first.value!);
+    const serialized = serializeEpic(first.value!.epic);
+    expect(serialized).toBe(text);
     const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
     expect(second.problems).toEqual([]);
-    expect(serializeEpic(second.value!)).toBe(serialized);
+    expect(serializeEpic(second.value!.epic)).toBe(serialized);
   });
 
   it('never writes slug into the frontmatter', () => {
@@ -191,7 +181,7 @@ color: "#8957e5"
 ---
 `;
     const first = parseEpic(text, 'epics/parser.md', 'parser');
-    const serialized = serializeEpic(first.value!);
+    const serialized = serializeEpic(first.value!.epic);
     expect(serialized).not.toContain('slug:');
   });
 
@@ -202,7 +192,7 @@ name: Parser
 ---
 `;
     const first = parseEpic(text, 'epics/parser.md', 'parser');
-    const out = serializeEpic(first.value!);
+    const out = serializeEpic(first.value!.epic);
     const nameIdx = out.indexOf('name: ');
     const colorIdx = out.indexOf('color: ');
     expect(nameIdx).toBeLessThan(colorIdx);
@@ -215,39 +205,23 @@ color: "#8957e5"
 ---
 
 Some preamble.
-
-## Second
-
----
-id: BD-9
-type: feature
-status: todo
-order: 200
----
-
-## First
-
----
-id: BD-4
-type: bug
-status: done
-order: 100
----
 `;
     const first = parseEpic(text, 'epics/parser.md', 'parser');
-    const before = serializeEpic(first.value!);
-    const after = serializeEpic(editEpic(first.value!, { color: '#22c55e' }));
+    const before = serializeEpic(first.value!.epic);
+    const after = serializeEpic(editEpic(first.value!.epic, { color: '#22c55e' }));
     const changed = after
       .split('\n')
       .filter((line, i) => line !== before.split('\n')[i]);
     expect(changed).toEqual(['color: "#22c55e"']);
   });
 
-  it('omits task.epic in serialized output even if the model carries it', () => {
+  it('writes no task sections: an older file\'s tasks are read apart from the epic', () => {
     const text = `---
 name: Parser
 color: "#8957e5"
 ---
+
+Some preamble.
 
 ## Task
 
@@ -260,18 +234,18 @@ order: 100
 `;
     const first = parseEpic(text, 'epics/parser.md', 'parser');
     expect(first.value!.tasks[0]!.frontmatter.epic).toBe('parser');
-    const serialized = serializeEpic(first.value!);
-    expect(serialized).not.toMatch(/^epic:/m);
+    expect(serializeEpic(first.value!.epic)).toBe(`---
+name: Parser
+color: "#8957e5"
+---
+
+Some preamble.
+`);
   });
 });
 
 describe('checklist serialization', () => {
-  const withChecklist = `---
-name: UI Foundation
-color: "#1f6feb"
----
-
-## A task
+  const withChecklist = `## A task
 
 ---
 id: BD-9
@@ -291,22 +265,21 @@ description
 `;
 
   it('round-trips a task with a checklist', () => {
-    const first = parseEpic(withChecklist, 'epics/ui-foundation.md', 'ui-foundation');
+    const first = parseBacklog(withChecklist, 'backlog.md');
     expect(first.problems).toEqual([]);
     expect(first.value!.tasks[0]!.frontmatter.checklist).toEqual([
       { id: 'c1', text: 'Wire up the parser', done: true },
       { id: 'c2', text: 'Add tests', done: false },
     ]);
-    const serialized = serializeEpic(first.value!);
-    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    const serialized = serializeBacklog(first.value!);
+    const second = parseBacklog(serialized, 'backlog.md');
     expect(second.problems).toEqual([]);
-    expect(serializeEpic(second.value!)).toBe(serialized);
+    expect(serializeBacklog(second.value!)).toBe(serialized);
   });
 
   it('orders checklist after order and item keys canonically', () => {
-    const release = parseEpic(withChecklist, 'epics/ui-foundation.md', 'ui-foundation')
-      .value!;
-    const out = serializeEpic(release);
+    const backlog = parseBacklog(withChecklist, 'backlog.md').value!;
+    const out = serializeBacklog(backlog);
     const orderIdx = out.indexOf('order: ');
     const checklistIdx = out.indexOf('checklist:');
     expect(orderIdx).toBeLessThan(checklistIdx);
@@ -316,10 +289,9 @@ description
   });
 
   it('omits an empty checklist from the serialized frontmatter', () => {
-    const epic: Epic = {
-      filename: 'epics/parser.md',
-      slug: 'parser',
-      frontmatter: { name: 'Parser', color: '#8957e5' },
+    const backlog: Backlog = {
+      filename: 'backlog.md',
+      frontmatter: {},
       preamble: '',
       tasks: [
         {
@@ -329,17 +301,12 @@ description
         },
       ],
     };
-    expect(serializeEpic(epic)).not.toContain('checklist:');
+    expect(serializeBacklog(backlog)).not.toContain('checklist:');
   });
 });
 
 describe('notes serialization', () => {
-  const withNotes = `---
-name: UI Foundation
-color: "#1f6feb"
----
-
-## A task
+  const withNotes = `## A task
 
 ---
 id: BD-9
@@ -359,16 +326,16 @@ description
 `;
 
   it('round-trips a task with notes', () => {
-    const first = parseEpic(withNotes, 'epics/ui-foundation.md', 'ui-foundation');
+    const first = parseBacklog(withNotes, 'backlog.md');
     expect(first.problems).toEqual([]);
     expect(first.value!.tasks[0]!.frontmatter.notes).toEqual([
       { id: 'n1', text: 'First note', createdAt: '2026-01-01T00:00:00.000Z' },
       { id: 'n2', text: 'Second note', createdAt: '2026-01-02T12:30:00.000Z' },
     ]);
-    const serialized = serializeEpic(first.value!);
-    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    const serialized = serializeBacklog(first.value!);
+    const second = parseBacklog(serialized, 'backlog.md');
     expect(second.problems).toEqual([]);
-    expect(serializeEpic(second.value!)).toBe(serialized);
+    expect(serializeBacklog(second.value!)).toBe(serialized);
   });
 
   it('orders notes after checklist with canonical item keys', () => {
@@ -380,8 +347,8 @@ description
     done: false
 notes:`,
     );
-    const epic = parseEpic(withBoth, 'epics/ui-foundation.md', 'ui-foundation').value!;
-    const out = serializeEpic(epic);
+    const backlog = parseBacklog(withBoth, 'backlog.md').value!;
+    const out = serializeBacklog(backlog);
     expect(out.indexOf('checklist:')).toBeLessThan(out.indexOf('notes:'));
     const firstNote = out.slice(out.indexOf('- id: n1'));
     expect(firstNote.indexOf('id: n1')).toBeLessThan(firstNote.indexOf('text: '));
@@ -389,10 +356,9 @@ notes:`,
   });
 
   it('omits empty notes from the serialized frontmatter', () => {
-    const epic: Epic = {
-      filename: 'epics/parser.md',
-      slug: 'parser',
-      frontmatter: { name: 'Parser', color: '#8957e5' },
+    const backlog: Backlog = {
+      filename: 'backlog.md',
+      frontmatter: {},
       preamble: '',
       tasks: [
         {
@@ -402,15 +368,13 @@ notes:`,
         },
       ],
     };
-    expect(serializeEpic(epic)).not.toContain('notes:');
+    expect(serializeBacklog(backlog)).not.toContain('notes:');
   });
 });
 
 describe('serializeBacklog', () => {
-  it('omits task.epic field when serializing no_epic.md', () => {
-    const text = `---
-{}
----
+  it('writes no container frontmatter and keeps each task\'s epic', () => {
+    const text = `Some notes.
 
 ## Backlog task
 
@@ -418,23 +382,23 @@ describe('serializeBacklog', () => {
 id: BD-1
 type: feature
 status: todo
+epic: parser
 order: 100
 ---
 `;
-    const first = parseBacklog(text, 'epics/no_epic.md');
-    expect(first.value!.tasks[0]!.frontmatter.epic).toBeUndefined();
-    const serialized = serializeBacklog(first.value!);
-    expect(serialized).not.toMatch(/^epic:/m);
+    const first = parseBacklog(text, 'backlog.md');
+    expect(first.problems).toEqual([]);
+    expect(first.value!.tasks[0]!.frontmatter.epic).toBe('parser');
+    expect(serializeBacklog(first.value!)).toBe(text);
+  });
+
+  it('writes an empty backlog as an empty file', () => {
+    expect(serializeBacklog({ filename: 'backlog.md', frontmatter: {}, preamble: '', tasks: [] })).toBe('');
   });
 });
 
 describe('links serialization', () => {
-  const withLinks = `---
-name: UI Foundation
-color: "#1f6feb"
----
-
-## A task
+  const withLinks = `## A task
 
 ---
 id: BD-9
@@ -452,16 +416,16 @@ description
 `;
 
   it('round-trips a task with links', () => {
-    const first = parseEpic(withLinks, 'epics/ui-foundation.md', 'ui-foundation');
+    const first = parseBacklog(withLinks, 'backlog.md');
     expect(first.problems).toEqual([]);
     expect(first.value!.tasks[0]!.frontmatter.links).toEqual([
       { type: 'relates', to: 'BD-3' },
       { type: 'relates', to: 'BD-4' },
     ]);
-    const serialized = serializeEpic(first.value!);
-    const second = parseEpic(serialized, 'epics/ui-foundation.md', 'ui-foundation');
+    const serialized = serializeBacklog(first.value!);
+    const second = parseBacklog(serialized, 'backlog.md');
     expect(second.problems).toEqual([]);
-    expect(serializeEpic(second.value!)).toBe(serialized);
+    expect(serializeBacklog(second.value!)).toBe(serialized);
   });
 
   it('round-trips several relations to the same task, in file order', () => {
@@ -479,21 +443,20 @@ description
   - type: part-of
     to: BD-4`,
     );
-    const first = parseEpic(source, 'epics/ui-foundation.md', 'ui-foundation');
+    const first = parseBacklog(source, 'backlog.md');
     expect(first.problems).toEqual([]);
     expect(first.value!.tasks[0]!.frontmatter.links).toEqual([
       { type: 'blocks', to: 'BD-3' },
       { type: 'duplicated-by', to: 'BD-3' },
       { type: 'part-of', to: 'BD-4' },
     ]);
-    expect(serializeEpic(first.value!)).toBe(source);
+    expect(serializeBacklog(first.value!)).toBe(source);
   });
 
   it('omits an empty links array', () => {
-    const epic: Epic = {
-      filename: 'epics/ui.md',
-      slug: 'ui',
-      frontmatter: { name: 'UI', color: '#1f6feb' },
+    const backlog: Backlog = {
+      filename: 'backlog.md',
+      frontmatter: {},
       preamble: '',
       tasks: [
         {
@@ -503,7 +466,7 @@ description
         },
       ],
     };
-    expect(serializeEpic(epic)).not.toContain('links:');
+    expect(serializeBacklog(backlog)).not.toContain('links:');
   });
 });
 
@@ -573,12 +536,7 @@ describe('doc reference tokens in frontmatter', () => {
   const TOKEN = '[[architecture]]';
 
   it('round-trips a note whose whole text is a token', () => {
-    const source = `---
-name: UI Foundation
-color: "#1f6feb"
----
-
-## A task
+    const source = `## A task
 
 ---
 id: BD-9
@@ -593,15 +551,11 @@ notes:
 
 body
 `;
-    const first = parseEpic(source, 'epics/ui-foundation.md', 'ui-foundation');
+    const first = parseBacklog(source, 'backlog.md');
     expect(first.problems).toEqual([]);
     expect(first.value!.tasks[0]!.frontmatter.notes![0]!.text).toBe(TOKEN);
 
-    const second = parseEpic(
-      serializeEpic(first.value!),
-      'epics/ui-foundation.md',
-      'ui-foundation',
-    );
+    const second = parseBacklog(serializeBacklog(first.value!), 'backlog.md');
     expect(second.problems).toEqual([]);
     expect(second.value!.tasks[0]!.frontmatter.notes![0]!.text).toBe(TOKEN);
   });

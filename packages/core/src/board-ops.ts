@@ -31,16 +31,15 @@ export const RELEASES_DIR = 'releases';
 
 export const EPICS_DIR = 'epics';
 
-export const BACKLOG_BASENAME = 'no_epic.md';
-
-export const BACKLOG_PATH = `${EPICS_DIR}/${BACKLOG_BASENAME}`;
+// Every task in no release, whatever its epic.
+export const BACKLOG_PATH = 'backlog.md';
 
 export const DOCS_DIR = 'docs';
 
-export type Container = Release | Epic | Backlog;
+export type Container = Release | Backlog;
 
-// An empty backlog stand-in for boards that have no `epics/no_epic.md` yet.
-// The file is written lazily the first time a task lands in the backlog.
+// An empty backlog stand-in for boards that have no `backlog.md` yet. The file is
+// written lazily the first time a task lands in the backlog.
 export const emptyBacklog = (): Backlog => ({
   filename: BACKLOG_PATH,
   frontmatter: {},
@@ -86,14 +85,9 @@ const isStatusChangeLocked = (container: Container, config: BoardConfig): boolea
   !isCurrentRelease(container) && config.statusOutsideActiveRelease !== true;
 
 const describeContainer = (container: Container): string => {
-  // The backlog is the one container without a slug; a release is the one whose
-  // frontmatter carries a status.
+  // The backlog is the one container without a slug.
   if (!('slug' in container)) return 'the backlog';
-  const fm = container.frontmatter;
-  if ('status' in fm) {
-    return `the ${fm.status} release "${fm.name ?? container.slug}"`;
-  }
-  return `the epic "${fm.name}"`;
+  return `the ${container.frontmatter.status} release "${container.frontmatter.name ?? container.slug}"`;
 };
 
 const refuseStatusChange = (container: Container, taskId: string): never => {
@@ -278,6 +272,13 @@ export const validateEpicName = (name: string): string | null => {
   return null;
 };
 
+// An older build kept epic-less backlog tasks in `epics/no_epic.md`, so an epic
+// by that slug would read as that file and be converted away by the next write.
+export const RESERVED_EPIC_SLUG = 'no_epic';
+
+export const isReservedEpicSlug = (slug: string): boolean =>
+  slug.toLowerCase() === RESERVED_EPIC_SLUG;
+
 export const createEpic = (
   existing: readonly Epic[],
   input: NewEpicInput,
@@ -291,6 +292,10 @@ export const createEpic = (
     throw new Error(
       'Epic name does not contain any characters allowed in a filename',
     );
+  }
+
+  if (isReservedEpicSlug(slug)) {
+    throw new Error(`\`${RESERVED_EPIC_SLUG}\` is a reserved name.`);
   }
 
   const slugLower = slug.toLowerCase();
@@ -308,7 +313,6 @@ export const createEpic = (
       color: input.color,
     },
     preamble: description,
-    tasks: [],
   };
 };
 
@@ -782,31 +786,13 @@ export const moveTaskInContainer = <C extends Container>(
   return replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
 };
 
-export type DestEpic =
-  | { kind: 'preserve' }
-  | { kind: 'clear' }
-  | { kind: 'set'; slug: string };
-
 export interface MoveAcrossArgs {
   newStatus: TaskStatus;
   beforeTaskId: string | null;
-  destEpic?: DestEpic;
 }
 
-const applyDestEpic = (fm: Task['frontmatter'], action: DestEpic): Task['frontmatter'] => {
-  switch (action.kind) {
-    case 'preserve':
-      return fm;
-    case 'clear': {
-      if (fm.epic === undefined) return fm;
-      const { epic: _omit, ...rest } = fm;
-      return rest;
-    }
-    case 'set':
-      return fm.epic === action.slug ? fm : { ...fm, epic: action.slug };
-  }
-};
-
+// A moved task keeps its `epic` key wherever it lands: every container stores it
+// the same way, and one naming no epic file is the user's to fix, not the move's.
 export const moveTaskBetweenContainers = <S extends Container, D extends Container>(
   source: S,
   dest: D,
@@ -832,13 +818,9 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   // The task is arriving from elsewhere, so it is always entering the destination's
   // column — carrying a middle status into a full current release counts.
   refuseIfWipLimitReached(dest, config, taskId, args.newStatus, false);
-  const epicAction: DestEpic = args.destEpic ?? { kind: 'preserve' };
   const updated: Task = {
     ...task,
-    frontmatter: applyDestEpic(
-      { ...task.frontmatter, status: args.newStatus },
-      epicAction,
-    ),
+    frontmatter: { ...task.frontmatter, status: args.newStatus },
   };
   const newSource = replaceTasks(
     source,
@@ -1057,33 +1039,34 @@ export const deleteTaskWithLinks = (
   return { containers: next, changedFilenames };
 };
 
+// The Backlog as containers: `backlog.md`, plus any old-layout file the loader
+// had to leave in place. Its order is one list across them.
 export interface BacklogContainers {
-  epics: Epic[];
   backlog: Backlog | null;
+  heldBack: Backlog[];
 }
 
-export interface BacklogReorderResult {
-  epics: Epic[];
-  backlog: Backlog | null;
+export interface BacklogReorderResult extends BacklogContainers {
   changedFilenames: string[];
 }
 
 interface BacklogTaskLocation {
-  container: Epic | Backlog;
+  container: Backlog;
   task: Task;
 }
+
+const backlogContainerList = (containers: BacklogContainers): Backlog[] => [
+  ...(containers.backlog ? [containers.backlog] : []),
+  ...containers.heldBack,
+];
 
 const locateBacklogTask = (
   containers: BacklogContainers,
   taskId: string,
 ): BacklogTaskLocation | null => {
-  for (const epic of containers.epics) {
-    const task = epic.tasks.find((t) => t.frontmatter.id === taskId);
-    if (task) return { container: epic, task };
-  }
-  if (containers.backlog) {
-    const task = containers.backlog.tasks.find((t) => t.frontmatter.id === taskId);
-    if (task) return { container: containers.backlog, task };
+  for (const container of backlogContainerList(containers)) {
+    const task = container.tasks.find((t) => t.frontmatter.id === taskId);
+    if (task) return { container, task };
   }
   return null;
 };
@@ -1092,13 +1075,8 @@ type FlatBacklogEntry = { containerFilename: string; task: Task };
 
 const flattenBacklog = (containers: BacklogContainers): FlatBacklogEntry[] => {
   const flat: FlatBacklogEntry[] = [];
-  for (const epic of containers.epics) {
-    for (const task of epic.tasks) flat.push({ containerFilename: epic.filename, task });
-  }
-  if (containers.backlog) {
-    for (const task of containers.backlog.tasks) {
-      flat.push({ containerFilename: containers.backlog.filename, task });
-    }
+  for (const container of backlogContainerList(containers)) {
+    for (const task of container.tasks) flat.push({ containerFilename: container.filename, task });
   }
   return flat.sort((a, b) => a.task.frontmatter.order - b.task.frontmatter.order);
 };
@@ -1113,7 +1091,7 @@ const applyOrderMap = (
   orderById: Map<string, number>,
 ): BacklogReorderResult => {
   const changedFilenames = new Set<string>();
-  const remap = <C extends Epic | Backlog>(container: C): C => {
+  const remap = (container: Backlog): Backlog => {
     let changed = false;
     const nextTasks = container.tasks.map((t) => {
       const target = orderById.get(t.frontmatter.id);
@@ -1125,11 +1103,9 @@ const applyOrderMap = (
     changedFilenames.add(container.filename);
     return replaceTasks(container, nextTasks);
   };
-  const nextEpics = containers.epics.map(remap);
-  const nextBacklog = containers.backlog ? remap(containers.backlog) : null;
   return {
-    epics: nextEpics,
-    backlog: nextBacklog,
+    backlog: containers.backlog ? remap(containers.backlog) : null,
+    heldBack: containers.heldBack.map(remap),
     changedFilenames: [...changedFilenames],
   };
 };
@@ -1199,18 +1175,16 @@ export const reorderTaskInBacklog = (
 export interface CompleteReleaseContainers {
   release: Release;
   config: BoardConfig;
-  epics: Epic[];
-  backlog: Backlog | null;
-  // When set, all unfinished tasks move into this release; otherwise they go
-  // back to their epic (or the backlog when they have none).
+  backlog: Backlog;
+  // When set, all unfinished tasks move into this release; otherwise they go to
+  // the backlog, each with its `epic` key as it was.
   targetRelease: Release | null;
 }
 
 export interface CompleteReleaseResult {
   release: Release;
   targetRelease: Release | null;
-  epics: Epic[];
-  backlog: Backlog | null;
+  backlog: Backlog;
   changedFilenames: string[];
 }
 
@@ -1227,50 +1201,22 @@ export const completeRelease = (
 
   let release = input.release;
   let targetRelease = input.targetRelease;
-  const epics = [...input.epics];
   let backlog = input.backlog;
   const changedFilenames = new Set<string>([release.filename]);
 
   for (const task of unfinished) {
     const taskId = task.frontmatter.id;
-    const newStatus = task.frontmatter.status;
+    const args = { newStatus: task.frontmatter.status, beforeTaskId: null };
 
     if (targetRelease !== null) {
-      const moved = moveTaskBetweenContainers(release, targetRelease, input.config, taskId, {
-        newStatus,
-        beforeTaskId: null,
-        destEpic: { kind: 'preserve' },
-      });
+      const moved = moveTaskBetweenContainers(release, targetRelease, input.config, taskId, args);
       release = moved.source;
       targetRelease = moved.dest;
       changedFilenames.add(targetRelease.filename);
       continue;
     }
 
-    const epicSlug = task.frontmatter.epic;
-    const epicIdx =
-      epicSlug !== undefined ? epics.findIndex((e) => e.slug === epicSlug) : -1;
-
-    if (epicIdx !== -1) {
-      const moved = moveTaskBetweenContainers(release, epics[epicIdx]!, input.config, taskId, {
-        newStatus,
-        beforeTaskId: null,
-        destEpic: { kind: 'set', slug: epics[epicIdx]!.slug },
-      });
-      release = moved.source;
-      epics[epicIdx] = moved.dest;
-      changedFilenames.add(moved.dest.filename);
-      continue;
-    }
-
-    if (backlog === null) {
-      throw new Error('Backlog container is missing');
-    }
-    const moved = moveTaskBetweenContainers(release, backlog, input.config, taskId, {
-      newStatus,
-      beforeTaskId: null,
-      destEpic: { kind: 'clear' },
-    });
+    const moved = moveTaskBetweenContainers(release, backlog, input.config, taskId, args);
     release = moved.source;
     backlog = moved.dest;
     changedFilenames.add(backlog.filename);
@@ -1279,7 +1225,6 @@ export const completeRelease = (
   return {
     release: setReleaseStatus(release, 'finished'),
     targetRelease,
-    epics,
     backlog,
     changedFilenames: [...changedFilenames],
   };

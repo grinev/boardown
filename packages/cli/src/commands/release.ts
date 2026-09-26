@@ -304,7 +304,6 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     result = completeRelease({
       release,
       config: board.snapshot.config,
-      epics: board.snapshot.epics,
       backlog: board.snapshot.backlog ?? emptyBacklog(),
       targetRelease,
     });
@@ -321,10 +320,7 @@ async function releaseDone(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   if (result.targetRelease !== null && changed.has(result.targetRelease.filename)) {
     refs.push({ kind: 'release', container: result.targetRelease });
   }
-  for (const epic of result.epics) {
-    if (changed.has(epic.filename)) refs.push({ kind: 'epic', container: epic });
-  }
-  if (result.backlog !== null && changed.has(result.backlog.filename)) {
+  if (changed.has(result.backlog.filename)) {
     refs.push({ kind: 'backlog', container: result.backlog });
   }
   await writeContainers(board.fs, refs, board.snapshot.config);

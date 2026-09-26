@@ -93,9 +93,9 @@ keeps `{ id, item }`; a new note still returns its id.
 `task list` filters combine with AND across flags and OR within a flag;
 `--status`, `--type`, `--priority` and `--epic` each take one or more values
 (`--type bug docs` or `--type bug --type docs`). With no filters it prints every
-task. `--epic <slug>…` matches both tasks stored in the epic file and tasks living
-in a release that carry that epic tag. `--release <ref>` takes a slug or filename,
-`--backlog` restricts to unreleased tasks, and `--text` is a case-insensitive
+task. `--epic <slug>…` matches every task whose `epic` key names that epic, in the
+backlog or in a release. `--release <ref>` takes a slug or filename,
+`--backlog` restricts to tasks in no release, and `--text` is a case-insensitive
 substring match on a task's title and description. It searches nothing else —
 not notes, checklist items or custom field values, and not the **id**, since
 every id carries the board's prefix and `--text bd` would return the whole

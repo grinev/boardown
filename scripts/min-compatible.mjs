@@ -3,6 +3,7 @@ export const FORMAT_FILES = [
   "packages/core/src/serializer.ts",
   "packages/core/src/parser.ts",
   "packages/core/src/loader.ts",
+  "packages/core/src/layout.ts",
 ];
 
 export function compareSemver(left, right) {

@@ -5,6 +5,7 @@ import type {
   Epic,
   FileStat,
   FsEntry,
+  GuardedChange,
   GuardedFile,
   GuardedFs,
   Release,
@@ -37,6 +38,11 @@ class MemFs implements GuardedFs {
   async writeAll(files: readonly GuardedFile[]): Promise<void> {
     this.writeAllCalls.push(files.map((file) => file.path));
     for (const file of files) await this.write(file.path, file.content);
+  }
+
+  async commit(change: GuardedChange): Promise<void> {
+    await this.writeAll(change.writes);
+    for (const path of change.removes) await this.remove(path);
   }
 
   async removeDir(path: string): Promise<void> {
@@ -132,12 +138,11 @@ const release = (
   tasks,
 });
 
-const epic = (slug: string, tasks: Task[] = []): Epic => ({
+const epic = (slug: string): Epic => ({
   filename: `epics/${slug}.md`,
   slug,
   frontmatter: { name: slug, color: '#1f6feb' },
   preamble: '',
-  tasks,
 });
 
 const backlog = (tasks: Task[] = []): Backlog => ({
@@ -152,6 +157,7 @@ const snap = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
   releases: [],
   epics: [],
   backlog: null,
+  heldBack: [],
   docs: emptyDocsTree(),
   problems: [],
   ...over,
@@ -304,20 +310,16 @@ describe('createTask', () => {
     expect(fs.files.get('releases/1.0.md')?.content).toContain('priority: critical');
   });
 
-  it('keeps the epic on the in-memory task but omits it from the epic file', async () => {
-    const { fs } = setup(snap({ epics: [epic('parser')] }));
+  it('creates a release-less task in the backlog, naming its epic in its own key', async () => {
+    const { fs } = setup(snap({ epics: [epic('parser')], backlog: backlog([task('BD-1')]) }));
 
     await state().createTask({ title: 'In epic', type: 'tech', epic: 'parser' });
 
-    // In memory the task carries its epic so the UI shows it without a reload.
-    const tasks = current().epics[0]!.tasks;
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]!.frontmatter.epic).toBe('parser');
-
-    // On disk the epic file never stores `epic` — the link is implied by the
-    // filename and reconstructed on parse.
-    const written = fs.files.get('epics/parser.md')!.content;
-    expect(written).not.toMatch(/^epic:/m);
+    const tasks = current().backlog!.tasks;
+    expect(tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1', 'BD-10']);
+    expect(tasks[1]!.frontmatter.epic).toBe('parser');
+    expect(fs.files.get(BACKLOG_PATH)!.content).toMatch(/^epic: parser$/m);
+    expect(fs.files.has('epics/parser.md')).toBe(false);
   });
 
   it('stores the epic in frontmatter when the task goes into a release', async () => {
@@ -336,7 +338,7 @@ describe('createTask', () => {
     expect(fs.files.get('releases/1.0.md')!.content).toMatch(/^epic: parser$/m);
   });
 
-  it('lazily creates the no_epic backlog for an epic-less, release-less task', async () => {
+  it('lazily creates backlog.md for an epic-less, release-less task', async () => {
     const { fs } = setup(snap({ backlog: null }));
 
     await state().createTask({ title: 'Loose', type: 'bug' });
@@ -402,68 +404,53 @@ describe('updateTask', () => {
     expect(fs.files.get('releases/1.0.md')?.content).not.toContain('env:');
   });
 
-  it('relocates a backlog task to an epic file when its epic changes', async () => {
-    setup(snap({ epics: [epic('parser')], backlog: backlog([task('BD-1')]) }));
-
-    await state().updateTask('BD-1', { epic: 'parser' });
-
-    expect(current().backlog!.tasks).toHaveLength(0);
-    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toContain(
-      'BD-1',
+  it('changes a backlog task\'s epic in place, the block staying where it is', async () => {
+    const { fs } = setup(
+      snap({ epics: [epic('parser')], backlog: backlog([task('BD-1'), task('BD-2')]) }),
     );
-  });
-
-  // The relocation path enumerates the patch keys it still has to apply after
-  // the move; a field missing from that list is silently dropped.
-  it('applies a priority change that comes with a relocation', async () => {
-    setup(snap({ epics: [epic('parser')], backlog: backlog([task('BD-1')]) }));
 
     await state().updateTask('BD-1', { epic: 'parser', priority: 'critical' });
 
-    const moved = current().epics[0]!.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
-    expect(moved.frontmatter.priority).toBe('critical');
+    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1', 'BD-2']);
+    expect(current().backlog!.tasks[0]!.frontmatter).toMatchObject({
+      epic: 'parser',
+      priority: 'critical',
+    });
+    expect(fs.writes).toEqual([BACKLOG_PATH]);
   });
 
-  it('lazily creates the backlog when clearing an epic on a board without one', async () => {
-    const { fs } = setup(
-      snap({
-        epics: [epic('parser', [task('BD-1', { epic: 'parser' })])],
-        backlog: null,
-      }),
-    );
+  it('clears a backlog task\'s epic in place', async () => {
+    const { fs } = setup(snap({ backlog: backlog([task('BD-1', { epic: 'parser' })]) }));
 
     await state().updateTask('BD-1', { epic: null });
 
-    expect(current().epics[0]!.tasks).toHaveLength(0);
-    expect(current().backlog!.filename).toBe(BACKLOG_PATH);
-    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
-    expect(state().errorMessage).toBeNull();
-    expect(fs.files.has(BACKLOG_PATH)).toBe(true);
-    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'epics/parser.md'].sort());
+    expect(current().backlog!.tasks[0]!.frontmatter.epic).toBeUndefined();
+    expect(fs.files.get(BACKLOG_PATH)!.content).not.toMatch(/^epic:/m);
   });
 });
 
 describe('moveTaskToRelease', () => {
-  it('moves an epic task into a release', async () => {
+  it('moves a backlog task into a release, its epic kept', async () => {
     setup(
       snap({
         releases: [release('1.0', 'current')],
-        epics: [epic('parser', [task('BD-1', { epic: 'parser' })])],
+        backlog: backlog([task('BD-1', { epic: 'parser' })]),
       }),
     );
 
     await state().moveTaskToRelease('BD-1', 'releases/1.0.md');
 
-    expect(current().epics[0]!.tasks).toHaveLength(0);
-    expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toContain(
-      'BD-1',
-    );
+    expect(current().backlog!.tasks).toHaveLength(0);
+    expect(current().releases[0]!.tasks[0]!.frontmatter).toMatchObject({
+      id: 'BD-1',
+      epic: 'parser',
+    });
   });
 
-  it('falls back to the epic file when the release is removed', async () => {
-    setup(
+  it('sends the task to the backlog, its epic kept even when it names no epic file', async () => {
+    const { fs } = setup(
       snap({
-        releases: [release('1.0', 'current', [task('BD-1', { epic: 'parser' })])],
+        releases: [release('1.0', 'current', [task('BD-1', { epic: 'gone' })])],
         epics: [epic('parser')],
       }),
     );
@@ -471,9 +458,8 @@ describe('moveTaskToRelease', () => {
     await state().moveTaskToRelease('BD-1', null);
 
     expect(current().releases[0]!.tasks).toHaveLength(0);
-    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toContain(
-      'BD-1',
-    );
+    expect(current().backlog!.tasks[0]!.frontmatter.epic).toBe('gone');
+    expect(fs.files.get(BACKLOG_PATH)!.content).toMatch(/^epic: gone$/m);
   });
 });
 
@@ -538,21 +524,21 @@ describe('moveTaskOnBacklog', () => {
     expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 
-  it('writes the destination epic when it was empty before the move', async () => {
+  it('keeps the epic of a release task dropped onto the backlog', async () => {
     const { fs } = setup(
       snap({
         releases: [release('1.0', 'current', [task('BD-1', { epic: 'ui' })])],
-        epics: [epic('ui'), epic('core', [task('BD-3', { epic: 'core' })])],
+        epics: [epic('ui')],
         backlog: backlog([task('BD-2', { order: 200 })]),
       }),
     );
 
-    // Dropping at the top renumbers the whole list; BD-1 lands on 100, which is
-    // what an empty destination already gave it.
-    await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, 'BD-3');
+    await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, 'BD-2');
 
-    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
-    expect(fs.writes).toContain('epics/ui.md');
+    const moved = current().backlog!.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
+    expect(moved.frontmatter.epic).toBe('ui');
+    expect(moved.frontmatter.order).toBeLessThan(200);
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 
   it('leaves the task where it was when a write fails', async () => {
@@ -616,6 +602,7 @@ describe('release lifecycle', () => {
             task('BD-1', { status: 'todo', epic: 'ui' }),
             task('BD-2', { status: 'done', order: 200 }),
           ]),
+          release('2.0', 'future'),
         ],
         epics: [epic('ui'), epic('core')],
         backlog: backlog(),
@@ -624,10 +611,10 @@ describe('release lifecycle', () => {
 
     await state().completeRelease('releases/1.0.md', { kind: 'backlog' });
 
-    // BD-1 goes back to its epic and BD-2 stays: the untouched epic and the
-    // backlog must not be rewritten.
-    expect(current().epics[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
-    expect(fs.writes.sort()).toEqual(['epics/ui.md', 'releases/1.0.md'].sort());
+    // BD-1 goes to the backlog with its epic and BD-2 stays: no epic file and no
+    // other release is rewritten.
+    expect(current().backlog!.tasks[0]!.frontmatter.epic).toBe('ui');
+    expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 
   it('reports an error for a release that is not on the board', async () => {
@@ -941,14 +928,18 @@ order: 100
 body
 `;
 
-const EPIC_MD = `---
-name: UI
-color: "#1f6feb"
+const BACKLOG_MD = `## Parked
+
+---
+id: BD-7
+type: tech
+status: todo
+order: 100
 ---
 `;
 
-// A current release whose open task belongs to the epic above, so completing it
-// writes both files.
+// A current release whose open task belongs to an epic, so completing it writes
+// the release and the backlog.
 const RELEASE_WITH_EPIC_MD = `---
 status: current
 name: "1.0"
@@ -1016,14 +1007,14 @@ describe('external-change conflict', () => {
     const fs = await loadFrom({
       [CONFIG_FILENAME]: CONFIG_MD,
       'releases/1.0.md': RELEASE_WITH_EPIC_MD,
-      'epics/ui.md': EPIC_MD,
+      [BACKLOG_PATH]: BACKLOG_MD,
     });
     const before = current();
     const releaseOnDisk = fs.files.get('releases/1.0.md')!.content;
 
-    // The epic is written after the release, so a sequence of single writes
+    // The backlog is written after the release, so a sequence of single writes
     // would already have finished the release by the time this one is refused.
-    fs.files.get('epics/ui.md')!.lastModified += 1000;
+    fs.files.get(BACKLOG_PATH)!.lastModified += 1000;
 
     await expect(
       state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
@@ -1089,12 +1080,12 @@ describe('external-change conflict', () => {
     const fs = await loadFrom({
       [CONFIG_FILENAME]: CONFIG_MD,
       'releases/1.0.md': RELEASE_WITH_EPIC_MD,
-      'epics/ui.md': EPIC_MD,
+      [BACKLOG_PATH]: BACKLOG_MD,
     });
     state().openCompleteRelease('releases/1.0.md');
     state().openTask('BD-1');
 
-    fs.files.get('epics/ui.md')!.lastModified += 1000;
+    fs.files.get(BACKLOG_PATH)!.lastModified += 1000;
     await expect(
       state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
     ).rejects.toThrow();
@@ -1772,6 +1763,117 @@ describe('a file the parser could not fully read', () => {
   });
 });
 
+describe('the layout conversion', () => {
+  const OLD_EPIC_MD = `---
+name: UI
+color: "#1f6feb"
+---
+
+## Buttons
+
+---
+id: BD-5
+type: feature
+status: todo
+order: 200
+---
+`;
+  const OLD_NO_EPIC_MD = `---
+{}
+---
+
+## Loose
+
+---
+id: BD-3
+type: bug
+status: todo
+order: 100
+---
+`;
+
+  it('shows an old-layout board as it always was and writes nothing on load', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+      'epics/no_epic.md': OLD_NO_EPIC_MD,
+    });
+    expect(fs.writes).toEqual([]);
+    expect(current().backlog!.tasks.map((t) => [t.frontmatter.id, t.frontmatter.epic])).toEqual([
+      ['BD-3', undefined],
+      ['BD-5', 'ui'],
+    ]);
+  });
+
+  it('lands with the first write, together with the stamp, and only once', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+      'epics/no_epic.md': OLD_NO_EPIC_MD,
+    });
+
+    await state().setTheme('dark');
+
+    expect(fs.files.has('epics/no_epic.md')).toBe(false);
+    expect(fs.files.get('epics/ui.md')!.content).toBe('---\nname: UI\ncolor: "#1f6feb"\n---\n');
+    expect(fs.files.get(BACKLOG_PATH)!.content).toMatch(/^epic: ui$/m);
+    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+
+    fs.writes = [];
+    await state().setTheme('light');
+    expect(fs.writes).toEqual([CONFIG_FILENAME]);
+  });
+
+  it('lets a backlog edit on an old-layout board land as one converted file', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+    });
+
+    await state().updateTask('BD-5', { epic: null });
+
+    expect(fs.files.get('epics/ui.md')!.content).not.toContain('BD-5');
+    expect(fs.files.get(BACKLOG_PATH)!.content).toContain('id: BD-5');
+    expect(fs.files.get(BACKLOG_PATH)!.content).not.toMatch(/^epic:/m);
+  });
+
+  it('keeps stamp and conversion pending when the first write is refused', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+    });
+    fs.files.get('releases/1.0.md')!.lastModified += 1000;
+    await expect(state().updateTask('BD-1', { title: 'Renamed' })).rejects.toThrow();
+    expect(current().config.minVersion).toBeUndefined();
+    expect(fs.files.get('epics/ui.md')!.content).toBe(OLD_EPIC_MD);
+
+    await state().setTheme('dark');
+    expect(fs.files.get('epics/ui.md')!.content).not.toContain('BD-5');
+    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+  });
+
+  it('takes a fresh conversion from a silent reload, never the stale one', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+    });
+    // Someone converted the board elsewhere, and the host refreshed.
+    fs.files.set('epics/ui.md', {
+      content: '---\nname: UI\ncolor: "#1f6feb"\n---\n',
+      lastModified: Date.now() + 1,
+    });
+    fs.files.set(BACKLOG_PATH, {
+      content: '## Buttons\n\n---\nid: BD-5\ntype: feature\nstatus: todo\nepic: ui\norder: 200\n---\n',
+      lastModified: Date.now() + 1,
+    });
+    await state().reloadSilent();
+
+    await state().setTheme('dark');
+    expect(fs.files.get(BACKLOG_PATH)!.content.match(/id: BD-5/g)).toHaveLength(1);
+  });
+});
+
 describe('minVersion', () => {
   it('refuses a board whose minVersion is above this build', async () => {
     const fs = new MemFs();
@@ -1810,6 +1912,30 @@ describe('minVersion', () => {
     fs.writes = [];
     await state().updateTask('BD-1', { title: 'Again' });
     expect(fs.writes).toEqual(['releases/1.0.md']);
+  });
+
+  it('records only the stamp once a write lands, keeping a config change made meanwhile', async () => {
+    const fs = await loadFrom({
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'releases/1.0.md': RELEASE_MD,
+    });
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const write = fs.write.bind(fs);
+    fs.write = async (path, content) => {
+      if (path === 'releases/1.0.md') await held;
+      await write(path, content);
+    };
+
+    const slow = state().updateTask('BD-1', { title: 'Renamed' });
+    await state().setTheme('dark');
+    release();
+    await slow;
+
+    expect(current().config.theme).toBe('dark');
+    expect(current().config.minVersion).toBe(MIN_COMPATIBLE_VERSION);
   });
 
   it('replaces a loaded board when a silent reload finds it too new', async () => {

@@ -29,10 +29,28 @@ export interface GuardedFile {
   content: string;
 }
 
+// One file of a set that lands together. A create-only target must not exist at
+// all — the caller picked the path for a file that is not there.
+export interface GuardedWrite extends GuardedFile {
+  createOnly?: boolean;
+}
+
+// A set of writes and removals that land together or not at all. The removals are
+// rewrites — a renamed file's old path, a file whose content moved elsewhere — so
+// unlike a deliberate `remove` they are held to the unreadable rule too.
+export interface GuardedChange {
+  writes: readonly GuardedWrite[];
+  removes: readonly string[];
+}
+
 // An FsAdapter plus the multi-target operations. Shells keep implementing the
 // plain FsAdapter; these live on the guard, which is the only thing that owns
 // the version map.
 export interface GuardedFs extends FsAdapter {
+  // Every target is checked before a byte moves; writes land before removals, and a
+  // step failing part-way undoes the steps already taken, so a set of files is
+  // never left half-applied. `writeAll` and `moveFile` are its narrow forms.
+  commit(change: GuardedChange): Promise<void>;
   // Writes files that must land together (e.g. a link mirrored into two tasks):
   // every target is checked before any of them is written, so an external change
   // aborts the whole operation instead of half-applying it.
@@ -77,11 +95,12 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
 
   const check = async (path: string): Promise<void> => {
     const current = await inner.stat(path);
-    if (current === null) return;
     const known = versions[path];
-    // Known file whose mtime moved, or a file that appeared on disk without us
-    // ever loading it — both mean the on-disk state is not what we expect.
-    if (known === undefined || current.lastModified !== known) {
+    if (current === null && known === undefined) return;
+    // Known file whose mtime moved, a known file deleted since we loaded it, or a
+    // file that appeared on disk without us ever loading it — each means the
+    // on-disk state is not what we expect.
+    if (current === null || known === undefined || current.lastModified !== known) {
       onConflict(path);
       throw new ConflictError(path);
     }
@@ -100,6 +119,57 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
     delete versions[path];
   };
 
+  // What a path held before the commit touched it, so a failed step can put it back.
+  const previous = async (path: string): Promise<string | null> =>
+    (await inner.stat(path)) === null ? null : inner.read(path);
+
+  const commit = async (change: GuardedChange): Promise<void> => {
+    for (const file of change.writes) checkReadable(file.path);
+    for (const path of change.removes) checkReadable(path);
+    for (const file of change.writes) {
+      if (file.createOnly && (await inner.stat(file.path)) !== null) {
+        onConflict(file.path);
+        throw new ConflictError(file.path);
+      }
+      await check(file.path);
+    }
+    for (const path of change.removes) await check(path);
+
+    const touched: { path: string; before: string | null }[] = [];
+    try {
+      for (const file of change.writes) {
+        const before = await previous(file.path);
+        await put(file.path, file.content);
+        touched.push({ path: file.path, before });
+      }
+      for (const path of change.removes) {
+        const before = await previous(path);
+        await drop(path);
+        touched.push({ path, before });
+      }
+    } catch (err) {
+      // No shell has atomic multi-file I/O, so the steps that landed are undone in
+      // reverse. Leaving them would half-apply the change — a moved task in two
+      // files, or in none — which is worse than either outcome the guard promises.
+      try {
+        for (const step of touched.reverse()) {
+          if (step.before === null) {
+            if ((await inner.stat(step.path)) !== null) await drop(step.path);
+          } else {
+            await put(step.path, step.before);
+          }
+        }
+      } catch {
+        throw new Error(
+          `A multi-file write failed part-way and could not be undone (${touched
+            .map((t) => t.path)
+            .join(', ')}); clean up by hand`,
+        );
+      }
+      throw err;
+    }
+  };
+
   return {
     read: (path) => inner.read(path),
     list: (dir) => inner.list(dir),
@@ -112,42 +182,14 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
       await put(path, content);
     },
 
-    async writeAll(files) {
-      for (const file of files) checkReadable(file.path);
-      for (const file of files) await check(file.path);
-      for (const file of files) await put(file.path, file.content);
-    },
+    commit,
 
-    async moveFile(from, to, content) {
-      // The content being moved was parsed from `from`, so that is the path a
-      // lost block would have come from.
-      checkReadable(from);
-      await check(from);
-      // Unlike a write, the target must not exist at all: the caller picked this
-      // path for a file that is not there, so anything sitting on it is a state
-      // we never loaded and must not overwrite.
-      if ((await inner.stat(to)) !== null) {
-        onConflict(to);
-        throw new ConflictError(to);
-      }
+    writeAll: (files) => commit({ writes: files, removes: [] }),
 
-      await put(to, content);
-      try {
-        await drop(from);
-      } catch (err) {
-        // No shell has an atomic rename, so the copy has already landed. Leaving
-        // both would duplicate the release on disk — worse than either outcome
-        // the guard promises — so undo the copy and report the original failure.
-        try {
-          await drop(to);
-        } catch {
-          throw new Error(
-            `Renamed ${from} to ${to} but could not remove either one; clean up by hand`,
-          );
-        }
-        throw err;
-      }
-    },
+    // The content being moved was parsed from `from`, so the unreadable rule applies
+    // to the removal of the source; anything sitting at the target refuses it.
+    moveFile: (from, to, content) =>
+      commit({ writes: [{ path: to, content, createOnly: true }], removes: [from] }),
 
     async remove(path) {
       await check(path);

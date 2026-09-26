@@ -3,6 +3,8 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import {
   EPIC_NAME_MAX_LENGTH,
   epicFilenameForSlug,
+  isReservedEpicSlug,
+  RESERVED_EPIC_SLUG,
   sanitizeFilenameForFs,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -40,8 +42,10 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
     return existingEpics.some((e) => e.slug.toLowerCase() === slugLower);
   }, [slug, existingEpics]);
 
+  const reserved = isReservedEpicSlug(slug);
+
   const canSubmit =
-    trimmedName.length > 0 && slug.length > 0 && !duplicate && !submitting;
+    trimmedName.length > 0 && slug.length > 0 && !duplicate && !reserved && !submitting;
 
   // Anything the user could have put there, against what the dialog opened with.
   // Untrimmed: a name of spaces is still something typed.
@@ -99,6 +103,13 @@ export function CreateEpicDialog({ onClose }: CreateEpicDialogProps) {
       return (
         <span className={styles.fieldError} role="alert">
           An epic already exists at <code>{epicFilenameForSlug(slug)}</code>.
+        </span>
+      );
+    }
+    if (reserved) {
+      return (
+        <span className={styles.fieldError} role="alert">
+          <code>{RESERVED_EPIC_SLUG}</code> is a reserved name.
         </span>
       );
     }

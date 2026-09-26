@@ -7,8 +7,10 @@ Guidance for AI assistants (Claude Code, etc.) working in this repository.
 **boardown** is a small open-source task board that stores its data as markdown
 files inside the project repo. It is aimed at solo developers and follows a
 lightweight scrum flow: a Backlog plus releases with a `future → current →
-finished` lifecycle, and epics as a cross-release grouping that doubles as
-the storage container for unscheduled tasks. The product spec lives in
+finished` lifecycle, and epics as a cross-release grouping that each task names
+in its own `epic` key. Every unscheduled task lives in one `backlog.md`; a board
+written by an older build, which kept them inside the epic files, is read as it
+is and converted by the first write. The product spec lives in
 [PRODUCT.md](./PRODUCT.md) — read it before making non-trivial changes.
 
 License: MIT.
@@ -205,13 +207,16 @@ invariants (release lifecycle, a finished release's content frozen) live in
   `UNREADABLE_FRONTMATTER` and `CONFLICT`. Both modals close every other dialog, so
   no two ever stack in the top layer. Shared by all shells — a new rule about what
   may be written belongs in the guard, not in a shell. The guard also
-  exposes `writeAll`, for a set of files that must land together (e.g. a task link
-  mirrored into two tasks): it checks every target before writing any of them, so
-  an external change aborts the whole operation instead of half-applying it —
-  reach for it in any new multi-file mutation. `moveFile` is the same idea for a
-  file that changes its name (a renamed release): it checks the source and refuses
-  a target that already exists, then writes the new path and removes the old one,
-  undoing the copy if the removal fails. Deletion is guarded the same way:
+  exposes `commit`, for a set of writes and removals that must land together (e.g.
+  a task link mirrored into two tasks, the layout conversion riding a write): it
+  checks every target before touching any of them — the unreadable rule applies to
+  its removals too, since each is a rewrite (a moved file's old path) — so an
+  external change aborts the whole operation instead of half-applying it; it then
+  applies the writes before the removals, and a step failing part-way undoes the
+  steps already taken. `writeAll` (writes only) and `moveFile` (a file that
+  changes its name: a create-only target plus the removal of the source) are its
+  narrow forms — reach for one of the three in any new multi-file mutation.
+  Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
   directory before removing it, so deleting a docs folder is all-or-nothing —
   though the unreadable rule does not apply to a deletion, which is deliberate and
@@ -283,8 +288,8 @@ invariants (release lifecycle, a finished release's content frozen) live in
   package version by hand — use `pnpm release:prepare` (which mirrors the root
   `version` and `minCompatibleVersion` into all packages via
   `scripts/sync-versions.mjs`, moves `minCompatibleVersion` to the version being
-  released when `packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts` or
-  `loader.ts` changed since the previous release tag, and for a stable version
+  released when `packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts`,
+  `loader.ts` or `layout.ts` changed since the previous release tag, and for a stable version
   seeds a draft `docs/release-notes/v<version>.md`). It does **not**
   commit: curate the notes and the VS Code Marketplace docs, then land the bump
   and those docs in a single `chore(release): v<version>` commit. The workflow

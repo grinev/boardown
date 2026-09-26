@@ -42,8 +42,8 @@ export const groupLinkedTasks = (rows: readonly LinkedTaskRow[]): LinkedTaskGrou
 
 const allTasks = (snapshot: BoardSnapshot): Task[] => [
   ...snapshot.releases.flatMap((r) => r.tasks),
-  ...snapshot.epics.flatMap((e) => e.tasks),
   ...(snapshot.backlog?.tasks ?? []),
+  ...snapshot.heldBack.flatMap((b) => b.tasks),
 ];
 
 export const isTaskArchived = (snapshot: BoardSnapshot, taskId: string): boolean =>

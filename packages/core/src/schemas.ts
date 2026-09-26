@@ -176,9 +176,8 @@ export const EpicSchema = z.object({
   slug: z.string().min(1),
   frontmatter: EpicFrontmatterSchema,
   preamble: z.string(),
-  tasks: z.array(TaskSchema),
 });
-export type Epic = Omit<z.infer<typeof EpicSchema>, 'tasks'> & { tasks: Task[] };
+export type Epic = z.infer<typeof EpicSchema>;
 
 export const BacklogFrontmatterSchema = z.object({}).strict();
 export type BacklogFrontmatter = z.infer<typeof BacklogFrontmatterSchema>;

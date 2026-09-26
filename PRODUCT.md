@@ -21,8 +21,8 @@ License: MIT.
   sprint-style lifecycle (`future → current → finished`). Tasks move between
   these via drag & drop.
 - **Storage:** a `.boardown/` folder in the project root, containing a config
-  file and three subfolders (`releases/`, `epics/`, `docs/`). Everything is
-  committed to git as-is.
+  file, `backlog.md` and three subfolders (`releases/`, `epics/`, `docs/`).
+  Everything is committed to git as-is.
 - **Distribution:** a **VS Code extension** (the canonical way to use boardown),
   a standalone **Electron desktop app** (Windows / macOS / Linux), and a headless
   **CLI** for agents and scripts, published to npm. A slim browser shell exists
@@ -42,8 +42,8 @@ A single unit of work. Fields:
 | `type`        | string    | One of the board's types — `bug`, `feature`, `docs`, `tech` unless `config.yaml` declares otherwise. Required. Stored as written: any non-empty string loads, so a task written under a type the board has since dropped is shown rather than repaired. See "Task types" under Configuration. |
 | `priority`    | string?   | One of `critical`, `high`, `medium`, `low`. **Optional**: an absent key means `medium`, so a task never has to carry one. Setting a priority — including setting it back to `medium` — writes the key and keeps it; nothing ever strips it. Existing boards are not backfilled. |
 | `status`      | string    | One of the board's statuses — `todo`, `in-progress`, `done` unless `config.yaml` declares its own. Stored as written: any non-empty string loads, so a task written under a status the board has since dropped is shown rather than repaired. See "Statuses" under Configuration. |
-| `epic`        | string?   | Slug of an epic file (without `.md`), or empty.                 |
-| `order`       | integer   | Sort key, shared across statuses. Inside a release file: local to that release. Across all backlog containers (any `epics/<slug>.md` and `epics/no_epic.md`): **global** — the flat backlog list is ordered by `order` alone, independently of which file the task lives in. Step of 100 between peers; reorder renumbers all backlog files when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
+| `epic`        | string?   | Slug of an epic file (without `.md`), or empty. The only link between a task and its epic, in the backlog and in a release alike. A value naming no epic file loads and stays on disk; the task then shows no epic. |
+| `order`       | integer   | Sort key, shared across statuses, local to the task's file: inside a release file, the release's order; inside `backlog.md`, the Backlog's. Step of 100 between peers; a reorder renumbers the file when two peers collide. Sorting is stable, so tasks sharing an `order` keep the order they were read in. |
 | `checklist`   | array?    | Optional todo list of `{ id, text, done }` items. Purely informational — it never gates `status` and has no completion checks. Omitted entirely when empty. Shown as a `done/total` badge on the card and edited in the task dialog. |
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`. |
@@ -119,31 +119,18 @@ The slug lives in the filename only — there is no `release` (or `slug`)
 key in frontmatter, mirroring the way `Epic` stores its slug.
 
 ### Epic
-A markdown file under `epics/`, e.g. `epics/ui-foundation.md`. An epic groups
-related tasks that may span multiple releases. Filename slug is the stable
-identifier referenced from tasks via the `epic` field.
+A markdown file under `epics/`, e.g. `epics/ui-foundation.md`, holding the
+epic's frontmatter and description and no tasks. An epic groups related tasks
+that may span multiple releases. The filename slug is the stable identifier
+referenced from tasks via the `epic` field.
 
-Each epic file is also the **storage container for that epic's unscheduled
-tasks** — tasks that belong to the epic but are not (yet) assigned to a
-release. When a task is moved into a release, it is physically relocated to
-the release file; the `epic` field on the task preserves the link.
+A task belongs to an epic by its own `epic` key, wherever it sits — in the
+backlog or in a release — and no file lists an epic's tasks. Changing a task's
+epic rewrites that one line; the task's block stays where it is.
 
-**Source of truth for `task.epic`.** Which epic a task belongs to is
-determined by which file it physically lives in:
-
-- A task inside `epics/<slug>.md` belongs to the `<slug>` epic. The
-  `epic` field in the task's frontmatter is ignored on load and omitted on
-  save — the filename is authoritative. Code that collects or groups tasks
-  by epic must derive membership from the containing file for these tasks,
-  never by filtering on the `epic` field.
-- A task inside `epics/no_epic.md` has no epic. Any stray `epic` field is
-  stripped on load.
-- A task inside `releases/<slug>.md` keeps its epic association in the
-  `epic` field of its frontmatter; that field is the only link, since
-  release files mix tasks from different epics.
-
-Changing a task's epic on a backlog task is therefore a **file move**,
-not a frontmatter edit.
+The slug `no_epic` is refused when an epic is created: an older build kept
+epic-less tasks in `epics/no_epic.md` (see "Boards in the old layout"), so an
+epic by that name would read as that file.
 
 Epic frontmatter fields:
 
@@ -152,24 +139,53 @@ Epic frontmatter fields:
 | `name`        | string  | Human-readable name, e.g. "UI Foundation".             |
 | `color`       | string  | Hex color used for the epic badge on task cards.       |
 
-The epic's optional **description** lives in the body of the file, between
-the frontmatter and the first task — same shape as the `Release` preamble.
+The epic's optional **description** lives in the body of the file, below the
+frontmatter — same shape as the `Release` preamble.
 
 There is no separate Epics view in the UI — epics act as a filter dimension
 on the Backlog screen, and have a dedicated edit modal listing their linked
 tasks.
 
 ### Backlog
-The conceptual collection of all unscheduled tasks. It includes:
+Every task in no release, with an epic or without one. All of them live in one
+file, `.boardown/backlog.md`, next to `config.yaml`. It carries no container
+frontmatter — any text above its first task, then task sections, each naming its
+epic in its own `epic` key exactly as in a release file. It is created by the
+first task that lands in no release, never by onboarding or `boardown init`.
 
-- Tasks living in any `epics/<slug>.md` file (have an epic but no release).
-- Tasks living in `epics/no_epic.md` (have neither an epic nor a release).
+#### Boards in the old layout
 
-A single `epics/no_epic.md` file holds tasks without an epic, so that
-"uncategorized" tasks have a single home rather than polluting `epics/` with
-a synthetic placeholder. It sits next to the epic files for locality, but
-the loader treats it as a special container (no `name`/`color`, tasks render
-without an epic badge), not as an epic.
+Builds before 0.11.0 kept each epic's unscheduled tasks inside its epic file —
+the file was the membership — and the epic-less ones in `epics/no_epic.md`. Such
+a board opens and reads as it always has: the Backlog, the epic badges, the
+`epic` filter and the epic dialog show the same tasks, and the CLI reports them
+as `in.kind: "backlog"` with `in.file` naming the file they sit in. Opening
+never rewrites it, including a load that corrects `nextId`.
+
+What calls for a conversion is the layout on disk — `epics/no_epic.md` exists,
+or an epic file holds a task section — not `minVersion`. It lands with the first
+write of file content a current build makes to the board, whatever that write
+is (a task, a release, an epic, a doc page, a config change), together with that
+write and the `minVersion` stamp, or not at all:
+
+- each epic-file task is appended to `backlog.md` with `epic: <that file's
+  slug>`, each `no_epic.md` task with no `epic` key, after whatever `backlog.md`
+  already holds and in the Backlog's display order. Every other key boardown
+  reads and the description travel as they were — a key it does not know is
+  dropped, as on any write to a file — and a task id found twice is carried twice;
+- every epic file loses its task sections and nothing else — the lines above
+  its first task stay byte-identical;
+- text above `no_epic.md`'s first task goes above `backlog.md`'s first task,
+  below any text already there, and `no_epic.md` is removed.
+
+A file holding a block the parser could not read is left untouched and its tasks
+stay shown; the rest converts, and that file converts on the first write after it
+is fixed. An unreadable `backlog.md` holds every old-layout file back. An
+external change to any file the conversion touches refuses the whole write with
+the Reload modal / `CONFLICT`. Nothing on screen announces the conversion, and
+the CLI's reply to the write is the one it always gives. Deleting a doc page or
+folder and creating an empty folder carry neither the conversion nor the stamp;
+the next write of content does.
 
 ## Storage format
 
@@ -179,12 +195,12 @@ Everything lives under `.boardown/` at the project root:
 <repo root>/
 └── .boardown/
     ├── config.yaml
+    ├── backlog.md         # every task in no release
     ├── releases/
     │   ├── v0.1.md
     │   ├── 1.10.md
     │   └── 1.11.md
-    ├── epics/
-    │   ├── no_epic.md     # tasks without an epic and without a release
+    ├── epics/             # one file per epic: frontmatter and description
     │   ├── ui-foundation.md
     │   └── parser.md
     └── docs/              # the project wiki; folders nest to any depth
@@ -199,10 +215,10 @@ there.
 
 ### Markdown file structure
 
-Every release/epic/no_epic file holds an optional top-level frontmatter block
-describing the container, followed by zero or more **task sections**. Each
-task is an `## H2` heading, followed by its own frontmatter block, followed
-by the description text.
+A release file holds a top-level frontmatter block describing the container,
+followed by zero or more **task sections**; `backlog.md` is the same without the
+frontmatter block. Each task is an `## H2` heading, followed by its own
+frontmatter block, followed by the description text.
 
 Example `releases/1.10.md`:
 
@@ -310,8 +326,8 @@ which opens as it always has. The app writes it from a constant
 on the first board write after that constant moves, paired with the content so
 both land or neither does. A plain open never writes it. `pnpm release:prepare`
 is the only thing that moves the constant: it fetches tags and, if
-`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts` or `loader.ts`
-changed since the previous release tag, sets the constant to the version being
+`packages/core/src/schemas.ts`, `serializer.ts`, `parser.ts`, `loader.ts` or
+`layout.ts` changed since the previous release tag, sets the constant to the version being
 released.
 
 A running build older than `minVersion` does not open the board. The GUI shows
@@ -454,7 +470,7 @@ command is for.
 
 `statusOutsideActiveRelease` lifts the rule that a task's status may change only
 in the current release. Absent or `false` keeps the lock: the task dialog of a
-task in the backlog, an epic or a future release shows a static pill, and every
+task in the backlog or a future release shows a static pill, and every
 shell refuses a status write there with `STATUS_LOCKED`. `true` lets the status
 be set wherever the task sits — the same dropdown, the same CLI commands — except
 in a finished release, which still answers `ARCHIVED`. Setting the key back does
@@ -569,9 +585,8 @@ auto-rewrite. A board whose `minVersion` this build does not meet uses that same
 screen, with an update message instead of a validation error.
 
 After onboarding the board starts empty (no releases), opened on the Backlog
-tab; the user creates the first release themselves. `epics/no_epic.md` is
-likewise not seeded — it is created lazily on the first task that has neither an
-epic nor a release.
+tab; the user creates the first release themselves. `backlog.md` is likewise
+not seeded — it is created lazily on the first task that lands in no release.
 
 ## UI
 
@@ -625,9 +640,9 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
 2. **Future releases** — one section per `future` release. Each shows a
    "Start release" button, which is hidden while another release is active
    unless `multipleActiveReleases` is on.
-3. **Backlog** — all tasks with no release: tasks from `epics/*.md` and from
-   `epics/no_epic.md`, rendered as a flat list with epic badges (no nested
-   grouping), ordered globally by `order` across all backlog containers.
+3. **Backlog** — all tasks with no release (`backlog.md`, plus the epic files
+   and `epics/no_epic.md` of a board still in the old layout), rendered as a flat
+   list with epic badges (no nested grouping), ordered by `order`.
 
 A compact filter bar sits at the very top of the screen with four
 multi-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`)
@@ -644,8 +659,10 @@ The list stays open while rows are toggled and closes on Escape, a click
 outside, or the trigger. When any filter is non-default,
 each section's count pill switches from `5` to `1 of 5` (matching of total).
 The filter applies **globally** to all three sections. The `epic` filter
-additionally has a "No epic" option for tasks that live in `epics/no_epic.md`,
-and it combines with real epics the same way any two values do. A selected
+additionally has a "No epic" option for tasks with no `epic` key, and it
+combines with real epics the same way any two values do. A task whose `epic`
+names no epic file shows no badge, and no filter value matches it — "No epic"
+included. A selected
 value that stops being offered — an epic deleted, a status dropped from
 `config.yaml`, a type disabled — is dropped from the selection and the rest
 stays.
@@ -756,8 +773,8 @@ Linked tasks section show no priority.
 When created from a section's `+ Create`, the task is placed in that section;
 the section determines storage location. The Create menu in the top navigation
 additionally lets the user pick a release (finished releases excluded); with no
-release the task lands in the backlog — in the chosen epic's file, or
-`no_epic.md` when no epic is selected. The same dialog opens from the epic
+release the task lands in the backlog, `backlog.md`, carrying the chosen epic in
+its `epic` key. The same dialog opens from the epic
 dialog's task list (see "Epic editor"), there with the epic locked.
 
 **Editing** happens **inline inside the task details dialog** (Jira-style):
@@ -801,7 +818,7 @@ the selected row when exactly one is, and the first selected row in list order
 when several are.
 
 **A status only changes in an active release**, unless `statusOutsideActiveRelease`
-is on. Outside one — a **future** release, an epic file, the backlog — the status
+is on. Outside one — a **future** release, the backlog — the status
 renders as the archived task's static pill, with a tooltip saying so, and nothing
 else about the task becomes read-only. With the key on, that dialog shows the same
 status dropdown a current-release task has. A task in a finished release stays a
@@ -1083,6 +1100,8 @@ task reads nothing.
   refused.
 - **Slug** — auto-generated from the name (lowercase kebab-case), same
   derivation as releases. Stable thereafter (renaming is a manual file move).
+  A slug another epic already has, or `no_epic`, disables Create with a message
+  under Name.
 - **Description** — optional, plain text.
 - **Color** — required, picked from a fixed palette; used for the epic badge
   on cards.
@@ -1286,7 +1305,9 @@ Backlog tab (active releases, future releases, then the unscheduled tasks) and
 summary** — the fields the task card carries (id, title, type, priority, status,
 epic, checklist `done/total`, notes count) — while `task get` returns whole
 tasks. It takes one or more ids and always answers `{ tasks, missing }`: each
-found id is `{ task, in }` in the order given, an unknown id is listed in
+found id is `{ task, in }` in the order given — `in.kind` is `release` or
+`backlog` (every task in no release) and `in.file` the file the task sits in —
+an unknown id is listed in
 `missing`, both arrays are always present, and the call succeeds even when none
 of the ids exist. `TASK_NOT_FOUND` is not this command's code.
 `priority` in a summary is always populated: a task with no key on disk

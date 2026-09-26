@@ -1,4 +1,4 @@
-import { BACKLOG_BASENAME, BACKLOG_PATH, DOCS_DIR, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
+import { BACKLOG_PATH, DOCS_DIR, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
 import {
   CONFIG_FILENAME,
   checkMinVersion,
@@ -9,6 +9,12 @@ import {
 import { type DocFolder, sortDocsTree } from './docs.js';
 import type { FsAdapter, FsEntry } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
+import {
+  gatherLayout,
+  LEGACY_BACKLOG_PATH,
+  type LayoutConversion,
+  type LegacyEpicFile,
+} from './layout.js';
 import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
 import { fileProblem, type ParseProblem } from './problems.js';
 import type { Backlog, BoardConfig, Epic, Release, Task } from './schemas.js';
@@ -17,7 +23,11 @@ export interface BoardSnapshot {
   config: BoardConfig;
   releases: Release[];
   epics: Epic[];
+  // `backlog.md`: every task in no release, including those an older build left in
+  // epic files, gathered here until the next write moves them on disk.
   backlog: Backlog | null;
+  // Old-layout files that could not be gathered; shown, never written.
+  heldBack: Backlog[];
   docs: DocFolder;
   problems: ParseProblem[];
 }
@@ -28,6 +38,8 @@ export type LoadBoardResult =
       snapshot: BoardSnapshot;
       problems: ParseProblem[];
       fileVersions: Record<string, number>;
+      // What the next write of file content must also carry; see layout.ts.
+      conversion: LayoutConversion | null;
     }
   | { kind: 'missing-config' }
   | { kind: 'failed'; problems: ParseProblem[] }
@@ -46,12 +58,18 @@ const fileNames = (entries: FsEntry[]): string[] =>
 
 const isMarkdownFile = (name: string): boolean => name.endsWith('.md');
 
-const collectTasks = (releases: Release[], epics: Epic[], backlog: Backlog | null): Task[] => {
+const collectTasks = (releases: Release[], backlog: Backlog | null, heldBack: Backlog[]): Task[] => {
   const out: Task[] = [];
   for (const r of releases) out.push(...r.tasks);
-  for (const e of epics) out.push(...e.tasks);
   if (backlog) out.push(...backlog.tasks);
+  for (const b of heldBack) out.push(...b.tasks);
   return out;
+};
+
+const withoutEpic = (task: Task): Task => {
+  if (task.frontmatter.epic === undefined) return task;
+  const { epic: _omit, ...rest } = task.frontmatter;
+  return { ...task, frontmatter: rest };
 };
 
 export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
@@ -93,7 +111,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   const releaseFiles = fileNames(await safeList(fs, RELEASES_DIR)).filter(isMarkdownFile);
   const epicFiles = fileNames(await safeList(fs, EPICS_DIR))
     .filter(isMarkdownFile)
-    .filter((name) => name !== BACKLOG_BASENAME);
+    .filter((name) => `${EPICS_DIR}/${name}` !== LEGACY_BACKLOG_PATH);
 
   const customFields = config.customFields ?? [];
 
@@ -116,6 +134,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   }
 
   const epics: Epic[] = [];
+  const legacyEpicFiles: LegacyEpicFile[] = [];
   for (const name of epicFiles) {
     const path = `${EPICS_DIR}/${name}`;
     const slug = name.replace(/\.md$/, '');
@@ -130,19 +149,44 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     await recordVersion(path);
     const parsed = parseEpic(text, path, slug, customFields);
     problems.push(...parsed.problems);
-    if (parsed.value !== null) epics.push(parsed.value);
+    if (parsed.value !== null) {
+      epics.push(parsed.value.epic);
+      legacyEpicFiles.push({ path, text, tasks: parsed.value.tasks });
+    }
   }
 
-  let backlog: Backlog | null = null;
-  try {
-    const backlogText = await fs.read(BACKLOG_PATH);
-    await recordVersion(BACKLOG_PATH);
-    const parsed = parseBacklog(backlogText, BACKLOG_PATH, customFields);
+  // Both are optional: a board with no unscheduled task has no backlog.md, and
+  // only an older build ever wrote no_epic.md.
+  const readBacklogFile = async (path: string): Promise<Backlog | null> => {
+    if ((await fs.stat(path)) === null) return null;
+    let text: string;
+    try {
+      text = await fs.read(path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      problems.push(fileProblem(path, `Cannot read file: ${message}`));
+      return { filename: path, frontmatter: {}, preamble: '', tasks: [] };
+    }
+    await recordVersion(path);
+    const parsed = parseBacklog(text, path, customFields);
     problems.push(...parsed.problems);
-    if (parsed.value !== null) backlog = parsed.value;
-  } catch {
-    // no_epic.md is optional — missing file is the common case
-  }
+    return parsed.value;
+  };
+
+  const backlogFile = await readBacklogFile(BACKLOG_PATH);
+  const legacyBacklogFile = await readBacklogFile(LEGACY_BACKLOG_PATH);
+  const gathered = gatherLayout({
+    backlog: backlogFile,
+    epicFiles: legacyEpicFiles,
+    // The old layout's rule: a task in no_epic.md has no epic, whatever it says.
+    legacyBacklog:
+      legacyBacklogFile === null
+        ? null
+        : { ...legacyBacklogFile, tasks: legacyBacklogFile.tasks.map(withoutEpic) },
+    problems,
+  });
+  problems.push(...gathered.problems);
+  const { backlog, heldBack } = gathered;
 
   const readDocsFolder = async (path: string, name: string): Promise<DocFolder> => {
     const entries = await safeList(fs, path);
@@ -181,7 +225,9 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
 
   const docs = sortDocsTree(await readDocsFolder(DOCS_DIR, DOCS_DIR));
 
-  const verified = verifyNextId(config, collectTasks(releases, epics, backlog));
+  const verified = verifyNextId(config, collectTasks(releases, backlog, heldBack));
+  // Through the raw adapter, never a shell's write path: opening a board must not
+  // carry the layout conversion, which lands with the first write of content.
   if (verified.bumped) {
     const next = withMinVersionStamp(verified.config);
     try {
@@ -203,8 +249,9 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
 
   return {
     kind: 'loaded',
-    snapshot: { config, releases, epics, backlog, docs, problems },
+    snapshot: { config, releases, epics, backlog, heldBack, docs, problems },
     problems,
     fileVersions,
+    conversion: gathered.conversion,
   };
 };

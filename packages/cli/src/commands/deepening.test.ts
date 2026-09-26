@@ -69,7 +69,7 @@ describe('release / epic / move (deepening layer)', () => {
     await releaseCommand(parseArgs(['release', 'done', release.slug]), ctx);
     expect(await releaseStatus(ctx, release.slug)).toBe('finished');
     // The task was still open, so it returns to the backlog (it has no epic).
-    expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
+    expect(await locate(ctx, 'TS-1')).toBe('backlog.md');
   });
 
   it('only one release can be current at a time', async () => {
@@ -90,8 +90,7 @@ describe('release / epic / move (deepening layer)', () => {
     const epic = (await epicCommand(parseArgs(['epic', 'add', 'Platform', '--color', '#ff0000']), ctx))
       .data as { slug: string };
 
-    // For a backlog task, --epic relocates it into the epic's file (where the tag
-    // sticks); a task in a release would just be retagged in place.
+    // --epic sets the task's own key in place, in the backlog as in a release.
     await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--epic', epic.slug]), ctx);
     expect((await taskIn(ctx, 'TS-1')).frontmatter.epic).toBe(epic.slug);
 
@@ -115,7 +114,7 @@ describe('release / epic / move (deepening layer)', () => {
     expect((await taskIn(ctx, 'TS-1')).frontmatter.status).toBe('in-progress');
 
     await taskCommand(parseArgs(['task', 'edit', 'TS-1', '--no-release']), ctx);
-    expect(await locate(ctx, 'TS-1')).toBe('epics/no_epic.md');
+    expect(await locate(ctx, 'TS-1')).toBe('backlog.md');
   });
 
   it('release edit moves the file to the slug the new name derives', async () => {

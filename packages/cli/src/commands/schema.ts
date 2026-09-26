@@ -19,7 +19,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 16,
+  version: 17,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -77,28 +77,28 @@ const DESCRIPTOR = {
       name: 'task get',
       usage: 'boardown task get <id>…',
       summary:
-        'Show one or more tasks and where they live. Data is { tasks: [{ task, in: { kind, file } }], missing }; an unknown id is listed in missing, not an error. A duplicate id is returned once, at its first position.',
+        'Show one or more tasks and where they live. Data is { tasks: [{ task, in: { kind, file } }], missing }; in.kind is release or backlog (every task in no release), in.file the file the task sits in. An unknown id is listed in missing, not an error. A duplicate id is returned once, at its first position.',
     },
     {
       name: 'task list',
       usage:
         'boardown task list [--status STATUS…] [--type TYPE…] [--priority PRIORITY…] [--epic SLUG…] [--release REF] [--backlog] [--text SUBSTR] [--full]',
       summary:
-        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only, or a case-insensitive text match on title/description (not the id — use task get for that). --status, --type, --priority and --epic each take one or more values, space-separated after the flag or repeated; values within a flag are OR, flags combine with AND. --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
+        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only (every task in no release), or a case-insensitive text match on title/description (not the id — use task get for that). --status, --type, --priority and --epic each take one or more values, space-separated after the flag or repeated; values within a flag are OR, flags combine with AND. --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
     },
     {
       name: 'task add',
       usage:
         'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>]',
       summary:
-        'Create a task in the backlog (default), an epic, or a release. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order.',
+        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order.',
     },
     {
       name: 'task edit',
       usage:
         'boardown task edit <id> [--title T] [--description D] [--type TYPE] [--priority PRIORITY] [--status STATUS] [--epic SLUG | --no-epic] [--release REF | --no-release] [--field key=value]',
       summary:
-        'Edit a task. --release/--no-release move it in/out of a release; --epic/--no-epic reassign the epic (relocates a backlog/epic task, retags a task in a release). --field is repeatable and sets a customFields value; an empty value clears it.',
+        'Edit a task. --release/--no-release move it in/out of a release, keeping its epic; --epic/--no-epic set or clear the epic in place. --field is repeatable and sets a customFields value; an empty value clears it.',
     },
     {
       name: 'task status',
@@ -173,7 +173,7 @@ const DESCRIPTOR = {
     {
       name: 'release done',
       usage: 'boardown release done <file|slug> [--into <release>]',
-      summary: 'Finish a release; open tasks return to epics/backlog or carry into --into.',
+      summary: 'Finish a release; open tasks go to the backlog, keeping their epic, or carry into --into.',
     },
     {
       name: 'epic get',
@@ -189,7 +189,7 @@ const DESCRIPTOR = {
       name: 'epic add',
       usage: 'boardown epic add <name> [--color #rrggbb] [--description TEXT]',
       summary:
-        'Create an epic. A name longer than epicNameMaxLength is refused with EPIC_INVALID.',
+        'Create an epic. A name longer than epicNameMaxLength, or one whose slug is no_epic, is refused with EPIC_INVALID.',
     },
     {
       name: 'epic edit',

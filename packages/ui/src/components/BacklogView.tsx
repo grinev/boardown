@@ -159,13 +159,10 @@ export function BacklogView() {
       startReleaseFilename: null,
       releaseFilename: null,
     });
-    buckets.set(
-      BACKLOG_SECTION_KEY,
-      unscheduledTasks({ epics, backlog: snapshot.backlog }),
-    );
+    buckets.set(BACKLOG_SECTION_KEY, unscheduledTasks(snapshot));
 
     return { sectionMetas: metas, sourceBuckets: buckets };
-  }, [snapshot, epics]);
+  }, [snapshot]);
 
   // Dragging a task into an active release enters the column its status names, so
   // which sections are closed depends on the card being dragged — and the limit is
