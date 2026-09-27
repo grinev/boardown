@@ -3,8 +3,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { createLogger } from '../../../core/src/logger';
 import {
-  PROJECT_FILE_MAX_BYTES,
   classifyProjectFile,
+  projectFileMaxBytes,
   type ProjectFileRead,
 } from '../../../core/src/project-file';
 import { CLIENT_ID_HEADER } from '../board-events-endpoint.js';
@@ -92,8 +92,8 @@ const failTarget = (res: ServerResponse, op: string, rel: string, err: unknown):
 };
 
 // Repo file links: read-only, resolved against the project folder, and answered
-// as JSON in every case — the failure kinds are part of the payload, not HTTP
-// statuses. Nothing writes there.
+// as JSON in every case but an image — the failure kinds are part of the payload,
+// not HTTP statuses. Nothing writes there.
 const readProjectFile = async (projectRoot: string, userPath: string): Promise<ProjectFileRead> => {
   const target = resolveContained(projectRoot, userPath);
   if (!target.ok) {
@@ -102,8 +102,8 @@ const readProjectFile = async (projectRoot: string, userPath: string): Promise<P
   try {
     const stat = await fs.stat(target.abs);
     if (!stat.isFile()) return { kind: 'unreadable' };
-    if (stat.size > PROJECT_FILE_MAX_BYTES) return { kind: 'too-large' };
-    return classifyProjectFile(await fs.readFile(target.abs));
+    if (stat.size > projectFileMaxBytes(userPath)) return { kind: 'too-large' };
+    return classifyProjectFile(userPath, new Uint8Array(await fs.readFile(target.abs)));
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     return { kind: code === 'ENOENT' || code === 'ENOTDIR' ? 'not-found' : 'unreadable' };
@@ -118,6 +118,15 @@ export const handleProjectFile = async (
   const userPath = params.get('path') ?? '';
   const result = await readProjectFile(projectRoot, userPath);
   log.debug(`project-file ${userPath}: ${result.kind}`);
+  if (result.kind === 'image') {
+    // Raw, like read-bytes, and never typed as an image: this origin also serves
+    // the write endpoints, so an svg opened from this URL must not become a page.
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(result.bytes);
+    return;
+  }
   sendJson(res, 200, result);
 };
 

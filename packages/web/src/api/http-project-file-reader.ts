@@ -16,6 +16,10 @@ export class HttpProjectFileReader implements ProjectFileReader {
       return { kind: 'unreadable' };
     }
     log.debug(`project-file ${path}`);
+    // Only an image is answered with its raw bytes; every other kind is JSON.
+    if (res.headers.get('Content-Type')?.startsWith('application/octet-stream') === true) {
+      return { kind: 'image', bytes: new Uint8Array(await res.arrayBuffer()) };
+    }
     return (await res.json()) as ProjectFileRead;
   }
 }

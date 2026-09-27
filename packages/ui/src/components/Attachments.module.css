@@ -78,6 +78,15 @@
   color: var(--text-muted);
 }
 
+/* The icon's own square, so a row with a picture lines up with one without; the
+   whole picture fits inside it, uncropped. */
+.thumbnail {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
 .nameButton {
   background: none;
   border: 0;

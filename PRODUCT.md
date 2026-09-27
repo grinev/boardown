@@ -1014,9 +1014,18 @@ file. A row whose file is gone by the time it is acted on is simply dropped by
 The list is read from disk each time the dialog opens, saying `Loading…` until it
 has, so a file another tool adds or removes shows on the next open.
 
+A row whose file is an **image** shows a thumbnail in place of the file icon: the
+whole picture scaled into the icon's square, never cropped. The pictures are read
+with the list, each time the dialog opens, and the rows appear first with their
+icons, which the thumbnails then replace. A file named as an image keeps the icon
+when it is over 25 MB, when its content is text (an svg excepted, as in the popup
+below), and when the browser cannot decode it. A task in a finished release shows thumbnails like any other, and
+showing one writes nothing.
+
 **Create task** carries the same section as its **last** field, below Linked tasks.
-A row there is icon, name and size with a trash button on hover; the name is plain
-text, since nothing exists yet to preview or download. Picked files stay in the
+A row there is icon, name and size with a trash button on hover — never a
+thumbnail; the name is plain text, since nothing exists yet to preview or
+download. Picked files stay in the
 form and nothing is written until **Create**, which writes the task and its files
 together — a refused create (Reload, "File cannot be written") writes neither, and
 the suffix rule holds there too. A file over 25 MB is refused when it is picked,
@@ -1066,10 +1075,18 @@ Unlike a doc token, a repo token is **never resolved before it renders** — the
 project is not indexed — so it is always a link, and the target is inspected on
 click. Clicking one opens a read-only **popup** showing the file: rendered
 markdown for a `.md` file, plain monospaced text with the original line breaks for
-any other text file, and one of `Unsupported file format` (not a text file),
-`File not found`, `File is too large to preview` (about 1 MB) or `Could not read
-file` (a directory, a permission error, a path outside the project folder)
-instead of content. The popup's heading is the file name with the
+any other text file, the picture for an image, and one of `Unsupported file format`
+(neither text nor an image that decodes), `File not found`, `File is too large to
+preview` (about 1 MB for text, 25 MB for an image) or `Could not read file` (a
+directory, a permission error, a path outside the project folder) instead of
+content. An **image** is a file ending in `png`, `jpg`, `jpeg`, `gif`, `webp`,
+`svg`, `bmp` or `avif`, in any case. Text is still decided by content first: a
+file named as an image whose content is text opens as text — except an svg, which
+is XML by nature and always goes to the picture pane. The picture is shown whole,
+scaled down to the popup's width and never up; a tall one scrolls inside the
+popup. An animated gif plays, and a script inside an svg never runs — the svg is
+handed to the page in a form that cannot act as boardown even when opened on its
+own tab. Images inside a previewed markdown file are not rendered. The popup's heading is the file name with the
 project-relative path beneath it; there is no **View in docs** button, since a
 repo file has no page in the Docs tab. **boardown's own references inside a previewed file are
 not linkified** — a task id in a code comment or a `[[…]]` in a CHANGELOG stays

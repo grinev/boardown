@@ -101,7 +101,8 @@ shell pattern and ships installers with each release.
 `packages/web` owns one set of HTTP endpoints — `/api/fs/{read,list,stat,write,
 mkdir,remove,read-bytes,write-bytes}` scoped to a board root (the two byte
 endpoints carry raw bodies, so an attachment is never re-encoded), the read-only `/api/project-file` scoped to
-the project folder around it, and `/api/events`, the stream a browser tab holds
+the project folder around it (JSON for every answer except an image, which comes back
+as a raw `application/octet-stream` body with `nosniff`), and `/api/events`, the stream a browser tab holds
 open to hear that its board changed — and two hosts for them. The Vite
 middleware serves them for the dev shell; `boardown-web` serves them for a
 locally installed server, where they sit under `/b/<id>/` when a registry lists

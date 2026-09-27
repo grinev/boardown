@@ -20,7 +20,14 @@ export class VsCodeProjectFileReader implements ProjectFileReader {
       const resolve = this.pending.get(message.id);
       if (!resolve) return;
       this.pending.delete(message.id);
-      resolve(message.result as ProjectFileRead);
+      const result = message.result as ProjectFileRead;
+      // The channel may hand the bytes back as a bare ArrayBuffer.
+      const bytes: unknown = result.kind === 'image' ? result.bytes : null;
+      if (bytes instanceof ArrayBuffer) {
+        resolve({ kind: 'image', bytes: new Uint8Array(bytes) });
+        return;
+      }
+      resolve(result);
     });
   }
 
