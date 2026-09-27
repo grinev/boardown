@@ -1,10 +1,6 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import {
-  PROJECT_FILE_MAX_BYTES,
-  classifyProjectFile,
-  type ProjectFileRead,
-} from '@boardown/core';
+import { classifyProjectFile, projectFileMaxBytes, type ProjectFileRead } from '@boardown/core';
 
 // Join a renderer-supplied relative path onto the *project* folder — the one
 // holding .boardown/ — rejecting absolute paths and any '..' escape. The shape
@@ -34,8 +30,8 @@ export async function readProjectFile(
   try {
     const stat = await fsp.stat(target);
     if (!stat.isFile()) return { kind: 'unreadable' };
-    if (stat.size > PROJECT_FILE_MAX_BYTES) return { kind: 'too-large' };
-    return classifyProjectFile(await fsp.readFile(target));
+    if (stat.size > projectFileMaxBytes(userPath)) return { kind: 'too-large' };
+    return classifyProjectFile(userPath, new Uint8Array(await fsp.readFile(target)));
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     return { kind: code === 'ENOENT' || code === 'ENOTDIR' ? 'not-found' : 'unreadable' };

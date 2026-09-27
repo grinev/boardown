@@ -45,6 +45,7 @@ import {
   attachmentWrites,
   listAttachments,
   readAttachment,
+  readAttachmentPreviews,
   removeAttachment,
   createConvertingFs,
   createGuardedFs,
@@ -255,6 +256,9 @@ interface BoardState {
   // Attachments are read from disk each time and held by no state: the folder is
   // the only record of them.
   listTaskAttachments: (taskId: string) => Promise<Attachment[]>;
+  // The bytes of each listed file that shows as a thumbnail, by name. Never
+  // throws: a thumbnail is decoration, and a failed read leaves the file icon.
+  readTaskAttachmentPreviews: (attachments: Attachment[]) => Promise<Map<string, Uint8Array>>;
   addTaskAttachments: (taskId: string, files: NewAttachment[]) => Promise<string[]>;
   // A file already gone is not an error: there is nothing left to delete.
   removeTaskAttachment: (taskId: string, name: string) => Promise<void>;
@@ -1876,6 +1880,18 @@ export const useBoardStore = create<BoardState>(
       const { fs } = get();
       if (!fs) return [];
       return listAttachments(fs, taskId);
+    },
+
+    readTaskAttachmentPreviews: async (attachments) => {
+      const { fs } = get();
+      if (!fs) return new Map();
+      try {
+        return await readAttachmentPreviews(fs, attachments);
+      } catch (err) {
+        // Swallowed: the rows keep their icons, so the log is the only record.
+        log.error(`read attachment previews failed: ${err instanceof Error ? err.message : String(err)}`);
+        return new Map();
+      }
     },
 
     addTaskAttachments: async (taskId, files) => {

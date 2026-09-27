@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import {
-  PROJECT_FILE_MAX_BYTES,
+  projectFileMaxBytes,
   classifyProjectFile,
   readTaskCommits,
   type GitHistoryResult,
@@ -269,11 +269,14 @@ async function handleProjectFileRequest(
       respond({ kind: 'unreadable' });
       return;
     }
-    if (stat.size > PROJECT_FILE_MAX_BYTES) {
+    if (stat.size > projectFileMaxBytes(message.path)) {
       respond({ kind: 'too-large' });
       return;
     }
-    respond(classifyProjectFile(await vscode.workspace.fs.readFile(target)));
+    // A fresh Uint8Array for the same reason as readBytes above.
+    respond(
+      classifyProjectFile(message.path, new Uint8Array(await vscode.workspace.fs.readFile(target))),
+    );
   } catch (err) {
     respond(isFileNotFound(err) ? { kind: 'not-found' } : { kind: 'unreadable' });
   }
@@ -403,7 +406,7 @@ function getHtml(
     // style-src without 'unsafe-inline' blocks that and breaks drag & drop.
     `style-src ${webview.cspSource} 'unsafe-inline'`,
     `font-src ${webview.cspSource}`,
-    `img-src ${webview.cspSource} data:`,
+    `img-src ${webview.cspSource} data: blob:`,
     `script-src 'nonce-${nonce}'`,
   ].join('; ');
 

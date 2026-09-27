@@ -1,3 +1,5 @@
+import { ATTACHMENT_MAX_BYTES } from './attachments.js';
+
 // Repo file references: `[[repo:packages/cli/src/node-fs.ts]]`, a pointer at a
 // file anywhere in the project folder — the directory that holds `.boardown/`.
 // Unlike a doc reference there is nothing to resolve it against: the project is
@@ -32,8 +34,44 @@ export const projectFileName = (path: string): string =>
 // into a dialog would freeze the shell.
 export const PROJECT_FILE_MAX_BYTES = 1024 * 1024;
 
+// Recognised by name: the browser renders by type, and an attachment row has to
+// know before it reads the file.
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+};
+
+const extensionOf = (path: string): string => {
+  const name = projectFileName(path);
+  const dot = name.lastIndexOf('.');
+  return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase();
+};
+
+// Null for a name that is not an image.
+export const imageMimeType = (path: string): string | null =>
+  IMAGE_MIME_TYPES[extensionOf(path)] ?? null;
+
+export const isImageFile = (path: string): boolean => imageMimeType(path) !== null;
+
+// An svg is XML, so the content test would always call it text; it is the one
+// image format that goes to the browser on its name alone.
+export const isSvgFile = (path: string): boolean => extensionOf(path) === 'svg';
+
+// Hosts compare the file's size against this before reading it. An image may be
+// as large as an attachment, so nothing the board stores is refused a preview.
+export const projectFileMaxBytes = (path: string): number =>
+  isImageFile(path) ? ATTACHMENT_MAX_BYTES : PROJECT_FILE_MAX_BYTES;
+
 export type ProjectFileRead =
   | { kind: 'text'; text: string }
+  // Whether it actually decodes is the browser's call, made when it is shown.
+  | { kind: 'image'; bytes: Uint8Array }
   // Not a text file: the bytes hold NUL or are not valid UTF-8.
   | { kind: 'binary' }
   | { kind: 'too-large' }
@@ -41,18 +79,24 @@ export type ProjectFileRead =
   // A directory, a permission error, a path that escapes the project folder.
   | { kind: 'unreadable' };
 
-// Decided over the bytes rather than the extension, so `Dockerfile`, `LICENSE`
-// and every extension a project invents are previewable. Hosts call this: the
-// UI never sees bytes, since the VS Code webview channel carries JSON only.
-export const classifyProjectFile = (bytes: Uint8Array): ProjectFileRead => {
-  if (bytes.byteLength > PROJECT_FILE_MAX_BYTES) return { kind: 'too-large' };
-  if (bytes.includes(0)) return { kind: 'binary' };
-  let text: string;
+const decodeText = (bytes: Uint8Array): string | null => {
+  if (bytes.includes(0)) return null;
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    return { kind: 'binary' };
+    return null;
   }
+};
+
+// Decided over the bytes rather than the extension, so `Dockerfile`, `LICENSE`
+// and every extension a project invents are previewable — and a text file named
+// like an image still opens as text. Hosts call this, each around its own read.
+export const classifyProjectFile = (path: string, bytes: Uint8Array): ProjectFileRead => {
+  if (bytes.byteLength > projectFileMaxBytes(path)) return { kind: 'too-large' };
+  if (isSvgFile(path)) return { kind: 'image', bytes };
+  const text = decodeText(bytes);
+  if (text === null) return isImageFile(path) ? { kind: 'image', bytes } : { kind: 'binary' };
+  if (bytes.byteLength > PROJECT_FILE_MAX_BYTES) return { kind: 'too-large' };
   return { kind: 'text', text: text.startsWith('﻿') ? text.slice(1) : text };
 };
 

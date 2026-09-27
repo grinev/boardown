@@ -38,8 +38,8 @@ export interface ProjectFileRequestMessage {
 export interface ProjectFileResponseMessage {
   type: 'project-file-response';
   id: number;
-  // A ProjectFileRead from @boardown/core: the host classified the bytes, since
-  // this channel carries JSON and cannot carry them itself.
+  // A ProjectFileRead from @boardown/core: the host classified the bytes, and
+  // only an image's come along with the result.
   result: unknown;
 }
 

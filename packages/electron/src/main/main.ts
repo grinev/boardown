@@ -389,7 +389,7 @@ function applySecurityHeaders(): void {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'none'; img-src 'self' data:; font-src 'self'; " +
+          "default-src 'none'; img-src 'self' data: blob:; font-src 'self'; " +
             "style-src 'self' 'unsafe-inline'; script-src 'self'",
         ],
       },

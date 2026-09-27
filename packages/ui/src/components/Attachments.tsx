@@ -7,6 +7,7 @@ import {
   type Attachment,
   type NewAttachment,
 } from '@boardown/core';
+import { useImageUrl } from '../hooks/use-image-url';
 import { useBoardStore } from '../store';
 import { formatFileSize } from '../utils/file-size';
 import { AttachmentRowMenu } from './AttachmentRowMenu';
@@ -89,6 +90,36 @@ function AttachmentsHeading({ count, onPick, messages, headingClassName }: Headi
   );
 }
 
+interface ThumbnailProps {
+  name: string;
+  bytes: Uint8Array | null;
+}
+
+// The file icon, or the picture itself in the icon's square once its bytes are
+// read — and back to the icon if the browser cannot decode them.
+function AttachmentThumbnail({ name, bytes }: ThumbnailProps) {
+  const url = useImageUrl(bytes, name);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
+  if (url === null || failed) {
+    return <FileIcon className={styles.fileIcon} size={16} aria-hidden="true" />;
+  }
+  return (
+    <img
+      className={styles.thumbnail}
+      src={url}
+      alt=""
+      aria-hidden="true"
+      data-testid="attachment-thumbnail"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 interface TaskAttachmentsProps {
   taskId: string;
   readOnly: boolean;
@@ -98,27 +129,36 @@ interface TaskAttachmentsProps {
 // so the list is read each time the dialog opens and after every change it makes.
 export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
   const listTaskAttachments = useBoardStore((s) => s.listTaskAttachments);
+  const readTaskAttachmentPreviews = useBoardStore((s) => s.readTaskAttachmentPreviews);
   const addTaskAttachments = useBoardStore((s) => s.addTaskAttachments);
   const downloadTaskAttachment = useBoardStore((s) => s.downloadTaskAttachment);
   const openRepoFilePopup = useBoardStore((s) => s.openRepoFilePopup);
 
   const [attachments, setAttachments] = useState<Attachment[] | null>(null);
+  const [previews, setPreviews] = useState<Map<string, Uint8Array>>(new Map());
   const [messages, setMessages] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
   const live = useRef(true);
 
+  // The rows show as soon as the folder is listed; thumbnails replace their icons
+  // once the pictures are read.
   const refresh = useCallback(async () => {
+    let next: Attachment[];
     try {
-      const next = await listTaskAttachments(taskId);
-      if (live.current) setAttachments(next);
+      next = await listTaskAttachments(taskId);
     } catch {
-      if (live.current) setAttachments([]);
+      next = [];
     }
-  }, [listTaskAttachments, taskId]);
+    if (!live.current) return;
+    setAttachments(next);
+    const read = await readTaskAttachmentPreviews(next);
+    if (live.current) setPreviews(read);
+  }, [listTaskAttachments, readTaskAttachmentPreviews, taskId]);
 
   useEffect(() => {
     live.current = true;
     setAttachments(null);
+    setPreviews(new Map());
     void refresh();
     return () => {
       live.current = false;
@@ -163,7 +203,10 @@ export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
           <div className={styles.table}>
             {attachments.map((attachment) => (
               <div key={attachment.name} className={styles.row}>
-                <FileIcon className={styles.fileIcon} size={16} aria-hidden="true" />
+                <AttachmentThumbnail
+                  name={attachment.name}
+                  bytes={previews.get(attachment.name) ?? null}
+                />
                 <button
                   type="button"
                   className={styles.nameButton}

@@ -1,6 +1,7 @@
 import { FileCode2, X } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createLogger, projectFileName, type ProjectFileRead } from '@boardown/core';
+import { useImageUrl } from '../hooks/use-image-url';
 import { useBoardStore } from '../store';
 import { DialogBackButton } from './DialogBackButton';
 import { MarkdownContent } from './MarkdownContent';
@@ -15,7 +16,7 @@ const log = createLogger('ui.repo-file');
 const isMarkdownFile = (path: string): boolean =>
   projectFileName(path).toLowerCase().endsWith('.md');
 
-const MESSAGES: Record<Exclude<ProjectFileRead['kind'], 'text'>, string> = {
+const MESSAGES: Record<Exclude<ProjectFileRead['kind'], 'text' | 'image'>, string> = {
   binary: 'Unsupported file format',
   'too-large': 'File is too large to preview',
   'not-found': 'File not found',
@@ -27,11 +28,15 @@ export function RepoFilePopupDialog() {
   const projectFiles = useBoardStore((s) => s.projectFiles);
   const close = useBoardStore((s) => s.closeRepoFilePopup);
   const [result, setResult] = useState<ProjectFileRead | null>(null);
+  // Set when the browser cannot decode what the name promised.
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrl = useImageUrl(result?.kind === 'image' ? result.bytes : null, path ?? '');
 
   useEffect(() => {
     if (path === null) return;
     let current = true;
     setResult(null);
+    setImageFailed(false);
     const run = async (): Promise<ProjectFileRead> => {
       if (projectFiles === null) return { kind: 'unreadable' };
       try {
@@ -89,9 +94,22 @@ export function RepoFilePopupDialog() {
       </header>
       <div className={styles.body}>
         {result === null && <p className={styles.message}>Loading…</p>}
-        {result !== null && result.kind !== 'text' && (
+        {result !== null && result.kind !== 'text' && result.kind !== 'image' && (
           <p className={styles.message}>{MESSAGES[result.kind]}</p>
         )}
+        {result?.kind === 'image' &&
+          (imageFailed ? (
+            <p className={styles.message}>{MESSAGES.binary}</p>
+          ) : (
+            imageUrl !== null && (
+              <img
+                className={styles.image}
+                src={imageUrl}
+                alt={name}
+                onError={() => setImageFailed(true)}
+              />
+            )
+          ))}
         {result?.kind === 'text' &&
           (isMarkdownFile(path) ? (
             // No onDocRefClick: a file from the repo is not board text, so its

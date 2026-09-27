@@ -123,3 +123,11 @@
   outline-offset: 1px;
   border-radius: 2px;
 }
+
+/* Scaled down to the body's width and never up; a tall picture scrolls with the
+   body rather than shrinking to fit it. */
+.image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}

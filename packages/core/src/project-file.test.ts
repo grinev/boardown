@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { ATTACHMENT_MAX_BYTES } from './attachments.js';
 import {
   PROJECT_FILE_MAX_BYTES,
   classifyProjectFile,
+  imageMimeType,
+  isImageFile,
+  projectFileMaxBytes,
   projectFileName,
   projectFilePathFromRefToken,
 } from './project-file.js';
@@ -69,41 +73,96 @@ describe('projectFileName', () => {
 
 describe('classifyProjectFile', () => {
   it('decodes utf-8 text', () => {
-    expect(classifyProjectFile(bytes('const a = 1;\nтекст\n'))).toEqual({
+    expect(classifyProjectFile('a.txt', bytes('const a = 1;\nтекст\n'))).toEqual({
       kind: 'text',
       text: 'const a = 1;\nтекст\n',
     });
   });
 
   it('accepts an empty file', () => {
-    expect(classifyProjectFile(new Uint8Array(0))).toEqual({ kind: 'text', text: '' });
+    expect(classifyProjectFile('a.txt', new Uint8Array(0))).toEqual({ kind: 'text', text: '' });
   });
 
   it('strips a byte order mark', () => {
-    expect(classifyProjectFile(bytes('\ufeff# Title'))).toEqual({
+    expect(classifyProjectFile('a.txt', bytes('\ufeff# Title'))).toEqual({
       kind: 'text',
       text: '# Title',
     });
   });
 
   it('rejects content holding a NUL byte', () => {
-    expect(classifyProjectFile(new Uint8Array([0x50, 0x4e, 0x47, 0x00, 0x1a]))).toEqual({
+    expect(classifyProjectFile('a.txt', new Uint8Array([0x50, 0x4e, 0x47, 0x00, 0x1a]))).toEqual({
       kind: 'binary',
     });
   });
 
   it('rejects bytes that are not valid utf-8', () => {
-    expect(classifyProjectFile(new Uint8Array([0xff, 0xfe, 0x41, 0x42]))).toEqual({
+    expect(classifyProjectFile('a.txt', new Uint8Array([0xff, 0xfe, 0x41, 0x42]))).toEqual({
       kind: 'binary',
     });
   });
 
   it('takes a file exactly at the cap and refuses one byte more', () => {
-    expect(classifyProjectFile(new Uint8Array(PROJECT_FILE_MAX_BYTES).fill(0x61)).kind).toBe(
+    expect(classifyProjectFile('a.txt', new Uint8Array(PROJECT_FILE_MAX_BYTES).fill(0x61)).kind).toBe(
       'text',
     );
     expect(
-      classifyProjectFile(new Uint8Array(PROJECT_FILE_MAX_BYTES + 1).fill(0x61)),
+      classifyProjectFile('a.txt', new Uint8Array(PROJECT_FILE_MAX_BYTES + 1).fill(0x61)),
     ).toEqual({ kind: 'too-large' });
+  });
+});
+
+describe('image files', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+
+  it('recognises every image extension in any case', () => {
+    for (const ext of ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif']) {
+      expect(isImageFile(`docs/pic.${ext}`)).toBe(true);
+      expect(isImageFile(`docs/PIC.${ext.toUpperCase()}`)).toBe(true);
+    }
+    expect(isImageFile('notes.txt')).toBe(false);
+    expect(isImageFile('png')).toBe(false);
+    expect(isImageFile('.png')).toBe(false);
+  });
+
+  it('types an image by its extension', () => {
+    expect(imageMimeType('a.JPG')).toBe('image/jpeg');
+    expect(imageMimeType('a.svg')).toBe('image/svg+xml');
+    expect(imageMimeType('a.pdf')).toBeNull();
+  });
+
+  it('caps an image name at the attachment size and anything else at the text size', () => {
+    expect(projectFileMaxBytes('a.png')).toBe(ATTACHMENT_MAX_BYTES);
+    expect(projectFileMaxBytes('a.txt')).toBe(PROJECT_FILE_MAX_BYTES);
+  });
+
+  it('answers binary bytes under an image name as an image carrying them', () => {
+    expect(classifyProjectFile('shot.PNG', png)).toEqual({ kind: 'image', bytes: png });
+  });
+
+  it('still opens a text file named as an image as text', () => {
+    expect(classifyProjectFile('fake.png', bytes('hello'))).toEqual({ kind: 'text', text: 'hello' });
+  });
+
+  it('keeps a text file over the text cap too large, whatever its name', () => {
+    const big = new Uint8Array(PROJECT_FILE_MAX_BYTES + 1).fill(0x61);
+    expect(classifyProjectFile('fake.png', big)).toEqual({ kind: 'too-large' });
+  });
+
+  it('takes a binary image over the text cap up to the attachment cap', () => {
+    const big = new Uint8Array(PROJECT_FILE_MAX_BYTES + 1);
+    expect(classifyProjectFile('big.jpg', big).kind).toBe('image');
+    expect(classifyProjectFile('big.jpg', new Uint8Array(ATTACHMENT_MAX_BYTES + 1))).toEqual({
+      kind: 'too-large',
+    });
+  });
+
+  it('sends an svg to the browser although its content is text', () => {
+    const svg = bytes('<svg xmlns="http://www.w3.org/2000/svg"/>');
+    expect(classifyProjectFile('logo.svg', svg)).toEqual({ kind: 'image', bytes: svg });
+  });
+
+  it('leaves a binary file with no image name binary', () => {
+    expect(classifyProjectFile('app.exe', png)).toEqual({ kind: 'binary' });
   });
 });
