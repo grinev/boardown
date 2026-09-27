@@ -205,6 +205,38 @@ describe('release / epic / move (deepening layer)', () => {
     expect(after.epic.color).toBe('#00ff00');
   });
 
+  // A shell reads an unquoted `#rrggbb` as a comment, which leaves `--color` with no value.
+  it('refuses a bare --color on add and on edit with the quoting hint, writing nothing', async () => {
+    const quoted = '--color "#rrggbb"';
+    for (const argv of [
+      ['epic', 'add', 'Lost', '--color'],
+      ['epic', 'add', 'Lost', '--color', '--description', 'd'],
+    ]) {
+      await expect(epicCommand(parseArgs(argv), ctx)).rejects.toMatchObject({ code: 'USAGE' });
+      await expect(epicCommand(parseArgs(argv), ctx)).rejects.toThrow(quoted);
+    }
+    expect(await epicName(ctx, 'lost')).toBeUndefined();
+
+    const epic = (await epicCommand(parseArgs(['epic', 'add', 'Plain']), ctx)).data as {
+      slug: string;
+    };
+    await expect(
+      epicCommand(parseArgs(['epic', 'edit', epic.slug, '--color']), ctx),
+    ).rejects.toThrow(quoted);
+    const after = (await epicCommand(parseArgs(['epic', 'get', epic.slug]), ctx)).data as {
+      epic: { color: string };
+    };
+    expect(after.epic.color).toBe('#888888');
+  });
+
+  it('prints the color quoted in the add and edit usage errors', async () => {
+    for (const sub of ['add', 'edit']) {
+      await expect(epicCommand(parseArgs(['epic', sub]), ctx)).rejects.toThrow(
+        '[--color "#rrggbb"]',
+      );
+    }
+  });
+
   it('refuses an epic name over the maximum on add, writing nothing', async () => {
     await expect(
       epicCommand(parseArgs(['epic', 'add', 'x'.repeat(EPIC_NAME_MAX_LENGTH + 1)]), ctx),

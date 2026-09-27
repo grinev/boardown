@@ -208,13 +208,13 @@ const DESCRIPTOR = {
     },
     {
       name: 'epic add',
-      usage: 'boardown epic add <name> [--color #rrggbb] [--description TEXT]',
+      usage: 'boardown epic add <name> [--color "#rrggbb"] [--description TEXT]',
       summary:
         'Create an epic. A name longer than epicNameMaxLength, or one whose slug is no_epic, is refused with EPIC_INVALID.',
     },
     {
       name: 'epic edit',
-      usage: 'boardown epic edit <slug> [--name NAME] [--description TEXT] [--color #rrggbb]',
+      usage: 'boardown epic edit <slug> [--name NAME] [--description TEXT] [--color "#rrggbb"]',
       summary:
         'Rename an epic or change its description or color. An empty name, or one longer than epicNameMaxLength, is refused with EPIC_INVALID.',
     },

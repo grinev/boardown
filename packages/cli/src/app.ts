@@ -52,7 +52,7 @@ Releases and epics:
   release done <ref>     Finish a release (--into <release> to carry over open tasks).
   epic get <slug>        Show one epic and its tasks.
   epic list              List epics with task counts.
-  epic add <name>        Create an epic (--color #rrggbb --description).
+  epic add <name>        Create an epic (--color "#rrggbb" --description).
   epic edit <slug>       Edit an epic (--name --description --color).
 
 Other:

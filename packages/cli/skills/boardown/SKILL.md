@@ -126,8 +126,8 @@ boardown release done <ref> [--into <ref>]                   # finish; open task
 
 boardown epic list [--full]
 boardown epic get <slug> [--full]
-boardown epic add <name> [--color '#rrggbb'] [--description TEXT]      # quote the color: an unquoted # starts a shell comment
-boardown epic edit <slug> [--name NAME] [--description TEXT] [--color '#rrggbb']
+boardown epic add <name> [--color "#rrggbb"] [--description TEXT]      # quote the color: an unquoted # starts a shell comment
+boardown epic edit <slug> [--name NAME] [--description TEXT] [--color "#rrggbb"]
 ```
 
 Other: `boardown init [--id-prefix PP] [--project-name NAME]`,
