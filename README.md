@@ -134,6 +134,15 @@ as compact summaries; `task get <id>…` is the full drill-down. See the
 [CLI README](./packages/cli/README.md) for the full command list and the
 machine-readable `schema` contract.
 
+It also carries an agent skill, the page that teaches a coding agent the whole
+CLI. Install it where your agent looks for skills:
+
+```sh
+boardown skill install claude            # Claude Code: .claude/skills/ in this project
+boardown skill install codex opencode    # the shared .agents/skills/ (Cursor, Copilot, Gemini CLI, Amp too)
+boardown skill install claude --global   # under your home directory, for every project
+```
+
 ### Local server (`boardown-web`)
 
 A local HTTP server that serves the board UI in an ordinary browser tab, for one

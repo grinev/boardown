@@ -134,6 +134,11 @@ Other: `boardown init [--id-prefix PP] [--project-name NAME]`,
 `boardown --version`. Global flags: `--data-dir <path to .boardown>` for a board
 outside the working directory, `--json`.
 
+`boardown skill install <agent>… [--global]` writes this page for `claude`,
+`codex`, `opencode` or `agents` - into the project, or with `--global` under the
+home directory. After the CLI is upgraded, run it again to bring this page up to
+date with the new build.
+
 `boardown schema` prints the contract of the installed build together with this
 board's settings: statuses, enabled types, custom fields, the labels registry,
 the WIP limit and which locks below are on. Use it when something here does not

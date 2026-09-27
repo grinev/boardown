@@ -65,6 +65,7 @@ boardown epic edit <slug>       Edit an epic (--name --description --color "#rrg
 
 boardown init                   Create a .boardown/ board here (--id-prefix --project-name). Writes minVersion.
 boardown schema                 Print the machine-readable command/enum contract (including minCompatibleVersion).
+boardown skill install <agent>… Install the agent skill: claude | codex | opencode | agents (--global for ~).
 boardown version                Print the CLI version (also --version / -v).
 ```
 
@@ -312,6 +313,35 @@ at the deleted task, archived files included.
 The board is located by walking up from the current directory to a `.boardown/`
 folder (like git finds `.git`). Use `--data-dir <path>` to point at a specific
 `.boardown/` directory instead.
+
+## Agent skill
+
+The package carries an [agent skill](https://agentskills.io): a `SKILL.md` page
+that teaches a coding agent the board model, every command and the refusal codes,
+so it drives the board through this CLI instead of rediscovering it. `skill
+install` writes it as `boardown/SKILL.md` where the agent looks for skills:
+
+```bash
+boardown skill install claude            # .claude/skills/boardown/SKILL.md, next to .boardown/
+boardown skill install codex opencode    # .agents/skills/boardown/SKILL.md, one file for both
+boardown skill install claude --global   # ~/.claude/skills/boardown/SKILL.md, for every project
+```
+
+| Agent | In the project | With `--global` |
+|---|---|---|
+| `claude` — Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+| `codex`, `opencode`, `agents` | `.agents/skills/` | `~/.agents/skills/` |
+
+`.agents/skills/` is the shared directory that Codex and OpenCode read, and Cursor,
+GitHub Copilot, Gemini CLI and Amp with them — `agents` names it for any of those.
+
+Without `--global` the skill goes into the project, the folder that holds
+`.boardown/` (found the way every command finds the board, so it works from a
+subdirectory or with `--data-dir`), and can be committed with the board. `--global`
+writes under your home directory and needs no board. An existing file is replaced
+with the page of the installed build, so run the command again after upgrading the
+CLI. The answer lists each agent with the file's path and `created`, `updated` or
+`unchanged`.
 
 ## Machine-readable output
 

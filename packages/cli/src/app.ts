@@ -6,6 +6,7 @@ import { epicCommand } from './commands/epic';
 import { initCommand } from './commands/init';
 import { releaseCommand } from './commands/release';
 import { schemaCommand } from './commands/schema';
+import { skillCommand } from './commands/skill';
 import { taskCommand } from './commands/task';
 import { CliError, errEnvelope, okEnvelope } from './output';
 import type { CommandContext, CommandHandler } from './types';
@@ -18,6 +19,7 @@ const COMMANDS: Record<string, CommandHandler> = {
   epic: epicCommand,
   init: initCommand,
   schema: schemaCommand,
+  skill: skillCommand,
 };
 
 const HELP = `boardown — markdown task board CLI
@@ -58,6 +60,8 @@ Releases and epics:
 Other:
   init                   Create a .boardown/ board here.
   schema                 Print the machine-readable command/enum contract.
+  skill install <agent>… Install the agent skill: claude | codex | opencode | agents
+                         (into this project; --global for your home directory).
   version                Print the CLI version (also --version / -v).
 
 Lists show a task summary; \`task get\` shows everything. --full takes any listing

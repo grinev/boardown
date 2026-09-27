@@ -15,6 +15,8 @@ links:
     to: BD-77
   - type: relates
     to: BD-136
+  - type: relates
+    to: BD-132
 ---
 
 Found while reviewing the boardown agent skill against the `release-v0.11.0` source. To be sorted out later.
