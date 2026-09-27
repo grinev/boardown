@@ -25,6 +25,25 @@ import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_COLOR = '#888888';
 
+// A bare `--color` parses as boolean true. It almost always means the shell
+// took an unquoted `#rrggbb` for a comment, so it fails with that hint rather
+// than falling back to a default or being dropped from a patch.
+function colorFlag(args: ParsedArgs): string | undefined {
+  if (args.flags['color'] === undefined) return undefined;
+  const color = flagString(args.flags, 'color');
+  if (color === undefined) {
+    throw new CliError(
+      'USAGE',
+      '--color has no value. Quote the color: --color "#rrggbb" — an unquoted # starts a shell comment.',
+      2,
+    );
+  }
+  if (!HEX_COLOR.test(color)) {
+    throw new CliError('USAGE', `--color must be a 6-digit hex like #1f6feb (got "${color}").`, 2);
+  }
+  return color;
+}
+
 export const epicCommand: CommandHandler = (args, ctx) => {
   const sub = args.positionals[1];
   switch (sub) {
@@ -110,15 +129,12 @@ async function epicAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   if (name === undefined || name.length === 0) {
     throw new CliError(
       'USAGE',
-      `Usage: boardown epic add <name> [--color #rrggbb] [--description ...]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
+      `Usage: boardown epic add <name> [--color "#rrggbb"] [--description ...]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
       2,
     );
   }
 
-  const color = flagString(args.flags, 'color') ?? DEFAULT_COLOR;
-  if (!HEX_COLOR.test(color)) {
-    throw new CliError('USAGE', `--color must be a 6-digit hex like #1f6feb (got "${color}").`, 2);
-  }
+  const color = colorFlag(args) ?? DEFAULT_COLOR;
   const description = flagString(args.flags, 'description');
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
@@ -150,17 +166,11 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   if (slug === undefined) {
     throw new CliError(
       'USAGE',
-      `Usage: boardown epic edit <slug> [--name ...] [--description ...] [--color #rrggbb]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
+      `Usage: boardown epic edit <slug> [--name ...] [--description ...] [--color "#rrggbb"]. The name is at most ${EPIC_NAME_MAX_LENGTH} characters.`,
       2,
     );
   }
-  // A bare `--color` parses as boolean true: the flag is present with a
-  // malformed value, which must fail rather than be dropped from the patch.
-  const color =
-    args.flags['color'] === undefined ? undefined : (flagString(args.flags, 'color') ?? '');
-  if (color !== undefined && !HEX_COLOR.test(color)) {
-    throw new CliError('USAGE', `--color must be a 6-digit hex like #1f6feb (got "${color}").`, 2);
-  }
+  const color = colorFlag(args);
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);

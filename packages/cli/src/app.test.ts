@@ -89,6 +89,8 @@ describe('run() — routing, envelopes, exit codes', () => {
 
     const viaCmd = await capture(['help'], { tty: true });
     expect(viaCmd.stdout).toContain('Usage: boardown <command>');
+    // Unquoted, a shell reads `#rrggbb` as a comment and a copied command loses the color.
+    expect(viaCmd.stdout).toContain('--color "#rrggbb"');
   });
 
   it('--version, -v and `version` print the package version', async () => {
@@ -116,6 +118,12 @@ describe('run() — routing, envelopes, exit codes', () => {
     // The epic name rule is enforced whatever the board, so an agent must be
     // able to read it without first failing a write.
     expect(env.data).toMatchObject({ epicNameMaxLength: EPIC_NAME_MAX_LENGTH });
+    const usage = (name: string): string | undefined =>
+      (env.data as { commands: { name: string; usage: string }[] }).commands.find(
+        (c) => c.name === name,
+      )?.usage;
+    expect(usage('epic add')).toContain('[--color "#rrggbb"]');
+    expect(usage('epic edit')).toContain('[--color "#rrggbb"]');
   });
 
   it('unknown command: JSON error envelope on stdout, exit 2', async () => {
