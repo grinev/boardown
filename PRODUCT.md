@@ -1489,7 +1489,7 @@ A headless shell that does not mount `@boardown/ui` — it consumes
 `@boardown/core` directly and implements `FsAdapter` over Node's filesystem.
 It finds the board by walking up from the working directory to a `.boardown/`
 folder (or via `--data-dir`), and maps commands onto board operations
-(`backlog`, `archive`, `init`, `task`, `release`, `epic`, `schema`).
+(`backlog`, `archive`, `init`, `task`, `release`, `epic`, `schema`, `skill`).
 
 Its output follows the way the UI is read — **a view, then one task**. The three
 UI tabs are three commands: `release current` is the Board, `backlog` is the
@@ -1629,6 +1629,23 @@ field. Because every change is a plain-markdown git
 diff, an agent's edits stay reviewable and revertible. Published to npm as
 [`@grinev/boardown-cli`](https://www.npmjs.com/package/@grinev/boardown-cli)
 (the `boardown` command).
+
+The CLI carries its own **agent skill** — the `SKILL.md` page that teaches a coding
+agent the board model, every command and the refusal codes — inside its bundle, and
+`boardown skill install <agent>…` writes it as `boardown/SKILL.md` where the agent
+looks for skills: `claude` into `.claude/skills/`, and `codex`, `opencode` and
+`agents` into the shared `.agents/skills/`, which Cursor, GitHub Copilot, Gemini CLI
+and Amp read as well — one file for all of them. By default it writes into the
+project, the folder holding `.boardown/`, found the way every command finds the
+board and refused the way `schema` is: no board or no `config.yaml` is `NO_BOARD`,
+an unreadable config `BOARD_INVALID`, a board newer than the build
+`VERSION_TOO_OLD`. `--global` writes under the home directory instead and needs no
+board; it does not take `--data-dir`. An existing file is replaced with the page of
+the running build, so running the command again after an upgrade brings the skill
+up to date. The answer names, for each agent in the order given, the file's path
+and whether it was `created`, `updated` or `unchanged` (already identical, not
+rewritten). An unknown agent, or none, is `USAGE` and nothing is written. It is the
+only file the CLI writes outside `.boardown/`.
 
 ### Browser (`packages/web`)
 

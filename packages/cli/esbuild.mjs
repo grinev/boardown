@@ -10,6 +10,9 @@ const options = {
   format: 'cjs',
   target: 'node20',
   banner: { js: '#!/usr/bin/env node' },
+  // The agent skill is embedded as a string, so `skill install` needs nothing
+  // shipped next to the bundle.
+  loader: { '.md': 'text' },
   sourcemap: true,
 };
 

@@ -21,7 +21,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 20,
+  version: 21,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -219,6 +219,12 @@ const DESCRIPTOR = {
         'Rename an epic or change its description or color. An empty name, or one longer than epicNameMaxLength, is refused with EPIC_INVALID.',
     },
     { name: 'schema', usage: 'boardown schema [--json]', summary: 'Print this contract.' },
+    {
+      name: 'skill install',
+      usage: 'boardown skill install <agent>… [--global]',
+      summary:
+        'Install the boardown agent skill, the page an agent reads to drive this CLI, as <dir>/boardown/SKILL.md. Agents: claude (.claude/skills), codex, opencode and agents (all three share .agents/skills, which Cursor, GitHub Copilot, Gemini CLI and Amp read too). By default it writes into the folder holding .boardown/; --global writes under the home directory instead, needs no board and does not take --data-dir. An existing file is overwritten with the text this build carries. Data is { skill, installed: [{ agent, path, result }] }, path absolute, result created | updated | unchanged.',
+    },
   ],
   globalFlags: {
     '--json': 'Emit a JSON envelope (default when stdout is not a TTY).',

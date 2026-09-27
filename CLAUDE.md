@@ -143,8 +143,10 @@ invariants (release lifecycle, a finished release's content frozen unless the
 board's `editFinishedReleases` lifts it) live in `core`, so the CLI inherits them
 rather than re-implementing them. It also carries the source of the **agent
 skill** — `skills/boardown/SKILL.md`, the page an agent reads to drive the board
-through this CLI. It is a package asset, shipped with the CLI; no harness
-auto-discovers it, since discovery reads `.claude/skills/` only.
+through this CLI. esbuild embeds it in the bundle as text, and `boardown skill
+install <agent>` writes it where the agent discovers skills — `.claude/skills/` or
+the shared `.agents/skills/`, in the project or, with `--global`, under the home
+directory. Where it sits in the package, nothing discovers it.
 
 ## Conventions
 
@@ -164,15 +166,20 @@ auto-discovers it, since discovery reads `.claude/skills/` only.
   **read-only**: `ProjectFileReader`, scoped to the project folder, which repo file
   links use to preview a file from the repo, and `GitHistoryReader`, scoped to the
   Git repository around that folder, which the task dialog's Commits panel reads.
-  The third, `FileSaver`, is the **one exception** to "no write outside
-  `.boardown/`": Download hands it bytes and a name, and it writes them only where
-  the user points the host's own Save-as dialog or browser download — it is never
-  handed a board or project path. Each is deliberately a separate interface rather
-  than a method on `FsAdapter` — the adapter is what the conflict guard wraps and
-  what every board write goes through, and no board write path may reach outside
-  `.boardown/`. A new file-touching feature belongs on `FsAdapter` unless it is
-  read-only *and* needs the project folder, or is a copy the user saves to a place
-  they pick. Never call `fetch`, `fs`, or browser APIs from `core` or `ui`.
+  The third, `FileSaver`, is the **one exception** shared code can reach to "no
+  write outside `.boardown/`": Download hands it bytes and a name, and it writes
+  them only where the user points the host's own Save-as dialog or browser download
+  — it is never handed a board or project path. Each is deliberately a separate
+  interface rather than a method on `FsAdapter` — the adapter is what the conflict
+  guard wraps and what every board write goes through, and no board write path may
+  reach outside `.boardown/`. A new file-touching feature of `core` or `ui` belongs
+  on `FsAdapter` unless it is read-only *and* needs the project folder, or is a copy
+  the user saves to a place they pick. Never call `fetch`, `fs`, or browser APIs
+  from `core` or `ui`. An `FsAdapter` is only ever rooted at `.boardown/`: a shell
+  writing a file of its own that is not board data — the CLI's `skill install`, one
+  fixed file per agent — uses its platform's filesystem directly, and a capability
+  interface is declared in `core` only when `core` or `ui` needs it injected, as
+  `FileSaver` is.
 - Lucide icon names that `config.yaml` may use live in
   `packages/core/src/lucide-icon-names.ts`, generated from lucide-react so core
   never imports it. After bumping lucide-react, run

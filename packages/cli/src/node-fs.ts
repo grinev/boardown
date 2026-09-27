@@ -15,7 +15,7 @@ export function resolveTarget(boardRoot: string, userPath: string): string | nul
   return target;
 }
 
-const isENOENT = (err: unknown): boolean =>
+export const isENOENT = (err: unknown): boolean =>
   typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT';
 
 // FsAdapter backed by Node's filesystem, rooted at a board's `.boardown/`

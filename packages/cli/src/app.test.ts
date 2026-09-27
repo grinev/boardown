@@ -114,7 +114,7 @@ describe('run() — routing, envelopes, exit codes', () => {
     expect(code).toBe(0);
     const env = parse(stdout);
     expect(env).toMatchObject({ ok: true });
-    expect((env.data as { version: number }).version).toBe(20);
+    expect((env.data as { version: number }).version).toBe(21);
     // The epic name rule is enforced whatever the board, so an agent must be
     // able to read it without first failing a write.
     expect(env.data).toMatchObject({ epicNameMaxLength: EPIC_NAME_MAX_LENGTH });
@@ -404,5 +404,63 @@ describe('run() — routing, envelopes, exit codes', () => {
       expect(errorCode(parse(stdout))).toBe('UNREADABLE_FRONTMATTER');
       expect(await readFile(releaseFile, 'utf8')).toBe(before);
     });
+  });
+});
+
+describe('run() — skill install', () => {
+  let project: string;
+  let home: string;
+
+  beforeEach(async () => {
+    project = await mkdtemp(join(tmpdir(), 'bd-cli-run-skill-'));
+    home = await mkdtemp(join(tmpdir(), 'bd-cli-run-skill-home-'));
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    await rm(project, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it('--global before the agent keeps the agent a positional', async () => {
+    const { code, stdout } = await capture(['skill', 'install', '--global', 'claude'], {
+      cwd: project,
+    });
+    expect(code).toBe(0);
+    const path = join(home, '.claude', 'skills', 'boardown', 'SKILL.md');
+    expect(parse(stdout)).toEqual({
+      ok: true,
+      data: { skill: 'boardown', installed: [{ agent: 'claude', path, result: 'created' }] },
+    });
+  });
+
+  it('prints one line per agent under a TTY', async () => {
+    await capture(['init', '--id-prefix', 'TS'], { cwd: project });
+    const { code, stdout } = await capture(['skill', 'install', 'claude'], {
+      cwd: project,
+      tty: true,
+    });
+    expect(code).toBe(0);
+    const path = join(project, '.claude', 'skills', 'boardown', 'SKILL.md');
+    expect(stdout).toBe(`claude → ${path} (created)\n`);
+  });
+
+  it('help and schema list the command with its agents and --global', async () => {
+    const help = await capture(['help'], { tty: true });
+    expect(help.stdout).toContain('skill install <agent>');
+    expect(help.stdout).toContain('claude | codex | opencode | agents');
+    expect(help.stdout).toContain('--global');
+    const helpJson = await capture(['help']);
+    expect((parse(helpJson.stdout).data as { commands: string[] }).commands).toContain('skill');
+
+    const schema = await capture(['schema'], { cwd: project });
+    const entry = (parse(schema.stdout).data as { commands: { name: string; usage: string; summary: string }[] })
+      .commands.find((c) => c.name === 'skill install');
+    expect(entry?.usage).toBe('boardown skill install <agent>… [--global]');
+    for (const agent of ['claude', 'codex', 'opencode', 'agents']) {
+      expect(entry?.summary).toContain(agent);
+    }
   });
 });

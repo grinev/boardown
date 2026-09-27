@@ -19,6 +19,7 @@ const BOOLEAN_FLAGS = new Set([
   'backlog',
   'full',
   'all',
+  'global',
 ]);
 
 export interface ParseArgsOptions {
