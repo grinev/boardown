@@ -14,7 +14,7 @@ interface MenuPosition {
 }
 
 interface TaskActionsMenuProps {
-  // A task in a finished release is read-only: the menu still opens, its one action
+  // A task in a frozen finished release is read-only: the menu still opens, its one action
   // is dead.
   deleteDisabled: boolean;
   onDelete: () => void;

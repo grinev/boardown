@@ -1,5 +1,6 @@
 import {
   activeReleases,
+  BoardOpError,
   boardRelease,
   completeRelease,
   createRelease,
@@ -224,10 +225,10 @@ async function releaseEdit(args: ParsedArgs, ctx: CommandContext): Promise<Comma
 
   let updated: Release;
   try {
-    updated = editRelease(release, patch, board.snapshot.releases);
+    updated = editRelease(release, board.snapshot.config, patch, board.snapshot.releases);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (release.frontmatter.status === 'finished') {
+    if (err instanceof BoardOpError && err.code === 'ARCHIVED') {
       throw new CliError('ARCHIVED', message);
     }
     throw new CliError('RELEASE_INVALID', message, 2);

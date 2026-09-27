@@ -396,6 +396,8 @@ export const BoardConfigSchema = z
     gitIntegration: z.boolean().optional(),
     // Absent means the lock is on: a status may change only in the current release.
     statusOutsideActiveRelease: z.boolean().optional(),
+    // Absent means a finished release is frozen: ARCHIVED refuses every change to it.
+    editFinishedReleases: z.boolean().optional(),
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),

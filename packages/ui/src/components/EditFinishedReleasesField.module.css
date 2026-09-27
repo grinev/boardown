@@ -1,0 +1,25 @@
+/* Only used when the host passes no class of its own; both settings surfaces
+   have their own field spacing. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.control input:disabled {
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}

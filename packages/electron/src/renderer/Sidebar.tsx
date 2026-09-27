@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Menu, Settings } from 'lucide-react';
 import {
   CliHint,
+  EditFinishedReleasesField,
   GitIntegrationField,
   MultipleActiveReleasesField,
   StatusOutsideActiveReleaseField,
@@ -158,6 +159,7 @@ export function Sidebar({
             {boardOpen && (
               <StatusOutsideActiveReleaseField className={styles.boardSettingRow} />
             )}
+            {boardOpen && <EditFinishedReleasesField className={styles.boardSettingRow} />}
             {/* Describes the installation rather than the board, so unlike the
                 field above it shows with no board open. */}
             <span className={styles.settingsLabel}>CLI</span>

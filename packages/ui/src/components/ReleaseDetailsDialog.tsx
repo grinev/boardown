@@ -1,7 +1,12 @@
 import { X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import type { Release, ReleaseStatus } from '@boardown/core';
-import { releaseFilenameForSlug, sanitizeFilenameForFs } from '@boardown/core';
+import {
+  isFinishedRelease,
+  isFrozenRelease,
+  releaseFilenameForSlug,
+  sanitizeFilenameForFs,
+} from '@boardown/core';
 import { useBoardStore } from '../store';
 import { formatStatusLabel } from '../utils/format-status';
 import { DialogBackButton } from './DialogBackButton';
@@ -31,13 +36,15 @@ export function ReleaseDetailsDialog({
 }: ReleaseDetailsDialogProps) {
   const updateRelease = useBoardStore((s) => s.updateRelease);
   const releases = useBoardStore((s) => s.snapshot?.releases ?? []);
+  const config = useBoardStore((s) => s.snapshot?.config);
   // Whatever only the write could discover; the fixable reasons are caught by
   // validateName before anything is saved.
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const { status, name, description } = release.frontmatter;
   const title = name ?? release.slug;
-  const readOnly = status === 'finished';
+  const readOnly =
+    isFinishedRelease(release) && (config === undefined || isFrozenRelease(release, config));
   const descriptionText = description ?? '';
 
   // The same check the create dialog runs while typing, minus this release

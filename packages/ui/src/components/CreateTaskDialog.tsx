@@ -14,11 +14,13 @@ import {
   defaultTaskType,
   enabledTaskTypes,
   isEnabledTaskType,
+  isFrozenRelease,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
 import { pickedLinkRows } from '../utils/linked-tasks';
+import { releaseOptionLabel } from '../utils/release-option';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
 import { CreateTaskAttachments } from './Attachments';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
@@ -80,7 +82,9 @@ export function CreateTaskDialog({
       ? [release]
       : backlogLocked
         ? []
-        : releases.filter((r) => r.frontmatter.status !== 'finished');
+        : releases
+            .filter((r) => config !== undefined && !isFrozenRelease(r, config))
+            .sort((a, b) => a.slug.localeCompare(b.slug));
 
   // Resolved against the live board, so a picked task that leaves it drops out
   // here and from what Create writes.
@@ -299,7 +303,7 @@ export function CreateTaskDialog({
             {(!releaseLocked || backlogLocked) && <option value="">—</option>}
             {releaseOptions.map((r) => (
               <option key={r.filename} value={r.filename}>
-                {r.frontmatter.name ?? r.slug}
+                {releaseOptionLabel(r)}
               </option>
             ))}
           </select>

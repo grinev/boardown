@@ -937,7 +937,7 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
     };
   }
 
-  const updated = applyOp(() => reorderTask(location.container, id, beforeTaskId));
+  const updated = applyOp(() => reorderTask(location.container, snapshot.config, id, beforeTaskId));
   await writeContainer(fs, { kind: location.kind, container: updated }, snapshot.config);
 
   return {
@@ -968,6 +968,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
   const result = applyOp(() =>
     deleteTaskWithLinks(
       refs.map((r) => r.container),
+      snapshot.config,
       id,
     ),
   );
@@ -1322,6 +1323,7 @@ async function attachmentAdd(args: ParsedArgs, ctx: CommandContext): Promise<Com
         await commitChange(fs, change, snapshot.config);
       },
       location.container,
+      snapshot.config,
       id,
       sources,
     ),
@@ -1347,6 +1349,7 @@ async function attachmentRm(args: ParsedArgs, ctx: CommandContext): Promise<Comm
         await commitChange(fs, change, snapshot.config);
       },
       location.container,
+      snapshot.config,
       id,
       name,
     ),

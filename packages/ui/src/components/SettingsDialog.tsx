@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { Theme } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { CliHint } from './CliHint';
+import { EditFinishedReleasesField } from './EditFinishedReleasesField';
 import { GitIntegrationField } from './GitIntegrationField';
 import { Modal } from './Modal';
 import { MultipleActiveReleasesField } from './MultipleActiveReleasesField';
@@ -49,6 +50,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         <MultipleActiveReleasesField className={styles.field} />
         <GitIntegrationField className={styles.field} />
         <StatusOutsideActiveReleaseField className={styles.field} />
+        <EditFinishedReleasesField className={styles.field} />
         <div className={styles.field}>
           <span className={styles.label}>CLI</span>
           <CliHint />

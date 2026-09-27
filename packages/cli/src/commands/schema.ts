@@ -156,7 +156,7 @@ const DESCRIPTOR = {
       name: 'task attachment',
       usage: 'boardown task attachment (add <id> <file>… | rm <id> <name> | ls <id>)',
       summary:
-        "Manage a task's attached files, kept at .boardown/attachments/<id>/<name> and recorded nowhere else — a file put in that folder by hand is listed too, a subfolder is not. `add` reads each <file> (relative to the working directory) and stores it under its own file name, with characters a Windows filename cannot hold turned into `_`; a name already in the folder gets ` (1)`, ` (2)`… before its extension, and nothing is ever overwritten. Data is { id, added: [names as stored] }. A missing file or a directory is FILE_NOT_FOUND, one over attachmentMaxBytes FILE_TOO_LARGE; any refusal refuses the whole command and nothing is written. `rm` removes one file by its stored name, and the folder with its last file; data is { id }, and a name not there is ATTACHMENT_NOT_FOUND. `ls` data is [{ name, size, path }] sorted by name ignoring case — size in bytes, path from the project root (`.boardown/attachments/BD-1/shot.png`), [] when there are none. `add` and `rm` in a finished release are ARCHIVED; `ls` works everywhere. `task rm` removes the task's folder with it.",
+        "Manage a task's attached files, kept at .boardown/attachments/<id>/<name> and recorded nowhere else — a file put in that folder by hand is listed too, a subfolder is not. `add` reads each <file> (relative to the working directory) and stores it under its own file name, with characters a Windows filename cannot hold turned into `_`; a name already in the folder gets ` (1)`, ` (2)`… before its extension, and nothing is ever overwritten. Data is { id, added: [names as stored] }. A missing file or a directory is FILE_NOT_FOUND, one over attachmentMaxBytes FILE_TOO_LARGE; any refusal refuses the whole command and nothing is written. `rm` removes one file by its stored name, and the folder with its last file; data is { id }, and a name not there is ATTACHMENT_NOT_FOUND. `ls` data is [{ name, size, path }] sorted by name ignoring case — size in bytes, path from the project root (`.boardown/attachments/BD-1/shot.png`), [] when there are none. `add` and `rm` in a finished release are ARCHIVED unless editFinishedReleases is on; `ls` works everywhere. `task rm` removes the task's folder with it.",
     },
     {
       name: 'release get',
@@ -183,7 +183,7 @@ const DESCRIPTOR = {
       name: 'release edit',
       usage: 'boardown release edit <file|slug> [--name NAME] [--description TEXT]',
       summary:
-        'Edit a release name/description. A new name moves the file to the slug it derives; a finished release is refused.',
+        'Edit a release name/description. A new name moves the file to the slug it derives; a finished release is refused unless editFinishedReleases is on.',
     },
     {
       name: 'release start',
@@ -245,9 +245,10 @@ const DESCRIPTOR = {
 // The declarations and the WIP limit are board-specific, so they ride along only
 // when a board actually has them; otherwise the command prints the static
 // contract unchanged — a board without either sees no new output.
-// `multipleActiveReleases`, `statusOutsideActiveRelease` and `taskStatuses` are
-// the exceptions: each has a meaning when the config says nothing, so leaving
-// them out would hide a rule an agent would then have to discover by being refused.
+// `multipleActiveReleases`, `statusOutsideActiveRelease`, `editFinishedReleases`
+// and `taskStatuses` are the exceptions: each has a meaning when the config says
+// nothing, so leaving them out would hide a rule an agent would then have to
+// discover by being refused.
 //
 // `wipLimits` is echoed exactly as the file holds it — the key is literally
 // `in-progress` whatever the board's statuses are called — and the statuses it
@@ -261,6 +262,7 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
     ...DESCRIPTOR,
     multipleActiveReleases: config?.multipleActiveReleases ?? false,
     statusOutsideActiveRelease: config?.statusOutsideActiveRelease ?? false,
+    editFinishedReleases: config?.editFinishedReleases ?? false,
     // Positional: the first is the status a new task takes (and, with the lock
     // on, the only one a new task may be created with outside the current
     // release); the last is the terminal one.

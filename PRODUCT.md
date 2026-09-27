@@ -92,8 +92,8 @@ Release lifecycle:
 - **`current`** — actively worked on; the app calls such a release **active**.
   One at a time by default; with `multipleActiveReleases` on, several. The Board
   view shows one of them as a kanban and a switcher picks which.
-- **`finished`** — closed. Task content is frozen; link metadata may still
-  change. Lives in the Archive.
+- **`finished`** — closed. Task content is frozen unless `editFinishedReleases`
+  is on; link metadata may still change either way. Lives in the Archive.
 
 Transitions:
 
@@ -320,6 +320,7 @@ wipLimits:            # optional; absent means no limit anywhere
 multipleActiveReleases: true  # optional; absent means one release at a time
 gitIntegration: true  # optional; absent means on — the task dialog's Commits panel
 statusOutsideActiveRelease: true  # optional; absent means a status may change only in the current release
+editFinishedReleases: true  # optional; absent means a finished release is frozen
 statuses:             # optional (beta); absent means todo / in-progress / done
   - key: backlog
     label: Not started  # optional; absent means the key, prettified
@@ -464,9 +465,10 @@ always allowed.
 
 The rule lives in `@boardown/core` beside the `ARCHIVED` and `STATUS_LOCKED`
 refusals, so every shell inherits it. Both of those take precedence: a task in a
-finished release reports `ARCHIVED`, and one outside an active release reports
-`STATUS_LOCKED` unless `statusOutsideActiveRelease` is on, before the limit is
-ever consulted.
+finished release reports `ARCHIVED` unless `editFinishedReleases` is on, and one
+outside an active release reports `STATUS_LOCKED` unless `statusOutsideActiveRelease`
+is on, before the limit is ever consulted. A finished release is never limited: the
+limit counts active releases only.
 
 On screen the rule is expressed by **prevention, not by complaint** — no toast,
 no banner. Each middle column header shows `count / limit` and takes a warning tone
@@ -480,7 +482,7 @@ Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
 same reason: it is board configuration, not installation configuration, and the
 `gitIntegration` checkbox sits below that one, with `statusOutsideActiveRelease`
-below that.
+below that and `editFinishedReleases` last.
 
 `gitIntegration` is a display preference stored with the board: absent or `true`
 shows the task dialog's Commits panel, `false` hides it and stops the Git read
@@ -493,9 +495,20 @@ in the current release. Absent or `false` keeps the lock: the task dialog of a
 task in the backlog or a future release shows a static pill, and every
 shell refuses a status write there with `STATUS_LOCKED`. `true` lets the status
 be set wherever the task sits — the same dropdown, the same CLI commands — except
-in a finished release, which still answers `ARCHIVED`. Setting the key back does
-not rewrite statuses already given. A present value that is not a boolean makes
-the config invalid, like every other key.
+in a finished release, which answers `ARCHIVED` unless `editFinishedReleases` is on
+too. Setting the key back does not rewrite statuses already given. A present value
+that is not a boolean makes the config invalid, like every other key.
+
+`editFinishedReleases` lifts the freeze on finished releases. Absent or `false`
+keeps it: every shell refuses a change to a finished release or to a task in one
+with `ARCHIVED`. `true` lets a finished release's tasks be edited, reordered,
+deleted, created in it, and moved into and out of it — attachments and labels
+included — and the release's own name and description be edited. A status change
+there still needs `statusOutsideActiveRelease`: with it off, the refusal is
+`STATUS_LOCKED`, as in the backlog. The release stays `finished` — it stays in the
+Archive, never reappears on the Board or in the Backlog, and cannot be reopened.
+Setting the key back repairs nothing: whatever was changed stays changed. A present
+value that is not a boolean makes the config invalid, like every other key.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
@@ -676,7 +689,8 @@ clear button sits at its right end.
 
 Clicking a row — or highlighting it with ↑/↓ and pressing Enter — opens the task
 details dialog over the current tab, with its content frozen when the task sits
-in a finished release (Linked tasks stay editable). Search is a direct entry
+in a finished release and `editFinishedReleases` is off (Linked tasks stay
+editable either way). Search is a direct entry
 point, so the dialog starts an empty back stack
 and shows no back button (see "Dialog back stack"). Escape closes the dropdown
 and an outside click closes it; either way the query stays in the field, so
@@ -763,8 +777,13 @@ start one from Backlog.
 
 The same layout as Backlog, but populated only with `finished` releases
 (newest first). No Backlog section, no current section, no filter bar. All
-releases are collapsed by default. The archive is **read-only** — tasks cannot
-be dragged out. Task and epic cards are still clickable and open the editor.
+releases are collapsed by default. The archive is a **static list** whatever the
+config says — no drag and drop, no `+ Create` in its sections. Task and epic cards
+are still clickable and open the editor; the task dialog is frozen unless
+`editFinishedReleases` is on, and then a task leaves or enters a finished release
+through its Release field. Order inside a finished release changes only through the
+CLI's `task reorder`. A renamed finished release re-sorts here like any renamed
+release.
 
 ### Docs
 
@@ -844,7 +863,8 @@ and Archive rows, the epic dialog's task list, Linked tasks, or search results.
 
 When created from a section's `+ Create`, the task is placed in that section;
 the section determines storage location. The Create menu in the top navigation
-additionally lets the user pick a release (finished releases excluded); with no
+additionally lets the user pick a release (finished releases excluded unless
+`editFinishedReleases` is on, and then each is labelled `<name> (finished)`); with no
 release the task lands in the backlog, `backlog.md`, carrying the chosen epic in
 its `epic` key. The same dialog opens from the epic
 dialog's task list (see "Epic editor"), there with the epic locked.
@@ -864,8 +884,9 @@ epic badge stays clickable to navigate to the epic — the surrounding row
 opens the dropdown, and a "—" option clears the epic. Changing release
 moves the task between containers (release-to-release, release-to-epic
 when "—" is chosen, epic-to-release); the "—" option only appears when
-the task has an epic to fall back to. A **finished** release is never
-offered as a destination — the same exclusion the creation dialog applies.
+the task has an epic to fall back to. A **finished** release is offered as a
+destination only when `editFinishedReleases` is on — the same rule the creation
+dialog applies — keeping its place in the list and labelled `<name> (finished)`.
 
 **Every one of these pickers is fully keyboard-driven.** The five in the task
 dialog, the three in the create-task dialog and the relation selector of the
@@ -893,8 +914,11 @@ when several are.
 is on. Outside one — a **future** release, the backlog — the status
 renders as the archived task's static pill, with a tooltip saying so, and nothing
 else about the task becomes read-only. With the key on, that dialog shows the same
-status dropdown a current-release task has. A task in a finished release stays a
-static pill with no tooltip either way. Relocation carries the status along and
+status dropdown a current-release task has. A task in a finished release is a
+static pill with no tooltip while the release is frozen; with `editFinishedReleases`
+on it follows the same rule as the backlog — the dropdown only when
+`statusOutsideActiveRelease` is on too, otherwise the pill with the backlog's
+tooltip. Relocation carries the status along and
 never rewrites it to the initial one, so a task that was `in-progress` freezes as
 `in-progress` wherever it lands.
 
@@ -951,7 +975,9 @@ the task card, not in the backlog row, not in the filter bar, and not in the
 creation dialog — a new task starts with none and is filled in afterwards.
 
 **A task in a finished release opens with its content frozen**, wherever the
-dialog is opened from. Every value is still shown — and every way to change one
+dialog is opened from — unless `editFinishedReleases` is on, and then it opens
+with the same editable dialog a live task has, `Delete` enabled, its status
+governed as described above. Every value is still shown — and every way to change one
 is gone rather than disabled-looking: title, description, checklist item text and
 note text render as plain text; status, type, priority and release render as
 plain values instead of dropdowns; labels render as chips with no × and no edit
@@ -985,8 +1011,8 @@ confirming removes the task's section from its file permanently (no undo, no tra
 git is the safety net) and closes both modals. Deleting a task also strips the
 mirrored `links` records the other tasks hold pointing at it, so nothing dangling is
 left on disk — a record held by a task in a **finished** release is stripped too.
-A task in a finished release cannot be deleted at all: its menu still opens, with
-the `Delete` item disabled. A task with attachments loses its attachments folder
+A task in a finished release cannot be deleted while the release is frozen: its
+menu still opens, with the `Delete` item disabled. A task with attachments loses its attachments folder
 in the same write, with whatever the folder holds by then — including a file put
 there since the dialog read it — and the confirmation says so: `Delete BD-131
 "…"? Its 3 attachments are deleted too. This cannot be undone.` (`Its 1 attachment
@@ -1212,7 +1238,8 @@ the union of its own records and the records pointing at it, deduplicated, so a
 half-written link (a hand-edited file) is still visible and still removable. A
 link whose target is not on the board is hidden in the UI and never auto-removed
 from disk. A link is metadata, not content: adding or removing one is allowed
-however many of the two tasks sit in a finished release, and a task in a finished
+however many of the two tasks sit in a finished release, whatever
+`editFinishedReleases` says, and a task in a finished
 release appears in the search results like any other. Adding or removing a link
 rewrites two files, and the conflict guard checks both before writing either — an
 external change aborts the whole operation instead of leaving one side linked.
@@ -1306,7 +1333,9 @@ header, and nothing is written.
 
 Status is not editable here: it is owned by the Start / Complete release actions.
 A **finished** release opens the same dialog read-only — the release's own
-fields stay frozen. Dates (`startDate` / `endDate`) are not shown or edited yet.
+fields stay frozen — unless `editFinishedReleases` is on, and then name and
+description edit the way a current release's do; its status stays a read-only
+pill. Dates (`startDate` / `endDate`) are not shown or edited yet.
 
 ### Dialog back stack
 
@@ -1384,7 +1413,9 @@ A dialog opened from the gear button in the top navigation. It holds the board's
 **Theme** selector; below it a **WIP limit (In Progress)** number field, empty
 meaning no limit (see "WIP limit" under Configuration); below that an **Allow
 multiple active releases** checkbox, the dialog's first boolean control, saved the
-moment it is clicked; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
+moment it is clicked; below that the **Git integration**, **Allow status changes
+outside the current release** and **Allow editing finished releases** checkboxes,
+saved the same way; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
 the user is running — the shell supplies it, so it is the installed extension's
 version in VS Code and the checkout's version in the `web` dev shell.
 
@@ -1489,7 +1520,8 @@ registry lacks appended to it in the same write. A label with whitespace or over
 characters is a `USAGE` error naming the rule and nothing is written — `rm`
 included, so a hand-edited label outside the rule is removed in the UI or by hand.
 `add` of a label the task carries and `rm` of one it lacks are an `ok` no-op, and a
-task in a finished release is `ARCHIVED` either way. The acknowledgement is
+task in a finished release is `ARCHIVED` either way unless `editFinishedReleases`
+is on. The acknowledgement is
 `{ id, added, removed }` — the labels the call put on or took off, in the spelling
 stored, both empty on a no-op. A summary carries `labels` only when the task has
 any, and `schema` reports `labelMaxLength` and, when the registry is non-empty,
@@ -1536,13 +1568,14 @@ size in bytes, path from the project root (`.boardown/attachments/BD-131/shot.pn
 `[]` when there are none. Unlike the UI, which keeps the files it can, the CLI is
 all-or-nothing: a missing source or a directory is `FILE_NOT_FOUND`, one over 25 MB
 `FILE_TOO_LARGE`, and on either nothing is written. `rm` of a name not there is
-`ATTACHMENT_NOT_FOUND`; `add` and `rm` in a finished release are `ARCHIVED`, `ls`
-works everywhere. `task rm` removes the task's attachments folder too, and `task
+`ATTACHMENT_NOT_FOUND`; `add` and `rm` in a finished release are `ARCHIVED` unless
+`editFinishedReleases` is on, `ls` works everywhere. `task rm` removes the task's attachments folder too, and `task
 get` and `task list --full` do not list attachments. `schema` reports the cap as
 `attachmentMaxBytes`. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
-`ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /
+`ARCHIVED` unless `editFinishedReleases` is on — then a name it cannot take is
+`RELEASE_INVALID`, as for any release. `epic edit <slug>` sets an epic's `--name` / `--description` /
 `--color`; unlike the UI's palette-only picker it accepts any 6-digit hex, and an
 invalid one is a `USAGE` error. `epic add` and `epic edit --name` enforce the same
 name rule the UI's field does: a name over the maximum is refused with
@@ -1562,19 +1595,21 @@ the first enabled type when `feature` is disabled;
 outside an active release fails with `STATUS_LOCKED` unless
 `statusOutsideActiveRelease` is on; a relocation that carries the status along
 succeeds, and one that sets it is judged by its destination. A finished release
-still answers `ARCHIVED` either way. Putting one
+answers `ARCHIVED` either way unless `editFinishedReleases` is on; then every
+command that would have answered it succeeds instead, and a status there still
+needs `statusOutsideActiveRelease`. Putting one
 more task into a full middle column fails with `WIP_LIMIT` — whether by
 `task status`, `task edit --status`, `task add --status`, or a `task edit --release`
 that pulls a task already in that column into a full active release — and `schema`
 reports the board's `wipLimits` exactly as the config file holds it, plus
 `wipLimitedStatuses` naming the columns that number caps, so an agent reads the
 ceiling and its reach instead of discovering them by failing. It also reports
-`multipleActiveReleases` and `statusOutsideActiveRelease` always, each resolved to
-a boolean: absent from the config means the restrictive default is in force, so
+`multipleActiveReleases`, `statusOutsideActiveRelease` and `editFinishedReleases`
+always, each resolved to a boolean: absent from the config means the restrictive default is in force, so
 leaving either out would hide a rule an agent would then have to discover by being
 refused. `task rm <id>` deletes a task with the same rules
 as the UI (mirrored links cleaned up, including in archived files, a task in a
-finished release refused) and, being agent-facing, without any confirmation
+frozen finished release refused) and, being agent-facing, without any confirmation
 prompt. It is aimed primarily at
 **agents and scripts**: output is a stable JSON envelope when stdout is not a TTY
 (or with `--json`), with stable error codes and exit codes, plus a `schema`

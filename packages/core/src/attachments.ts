@@ -2,11 +2,12 @@ import {
   type Container,
   attachmentsDir,
   BoardOpError,
-  isFinishedRelease,
+  isFrozenRelease,
   isForbiddenFilenameChar,
   isWindowsReservedName,
 } from './board-ops.js';
 import type { GuardedChange, GuardedFs, GuardedWrite } from './conflicts.js';
+import type { BoardConfig } from './schemas.js';
 import type { FsAdapter } from './fs-adapter.js';
 
 // GitHub's own cap for an issue attachment: a file in git stays in its history
@@ -120,8 +121,8 @@ export const attachmentWrites = async (
 // along.
 export type CommitChange = (change: GuardedChange) => Promise<void>;
 
-const refuseIfArchived = (container: Container): void => {
-  if (isFinishedRelease(container)) {
+const refuseIfArchived = (container: Container, config: BoardConfig): void => {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot change the attachments of a task in a finished release');
   }
 };
@@ -132,10 +133,11 @@ export const addAttachments = async (
   fs: FsAdapter,
   commit: CommitChange,
   container: Container,
+  config: BoardConfig,
   taskId: string,
   files: readonly NewAttachment[],
 ): Promise<string[]> => {
-  refuseIfArchived(container);
+  refuseIfArchived(container, config);
   const { writes, names } = await attachmentWrites(fs, taskId, files);
   await commit({ writes, removes: [], unchanged: [container.filename] });
   return names;
@@ -147,10 +149,11 @@ export const removeAttachment = async (
   fs: GuardedFs,
   commit: CommitChange,
   container: Container,
+  config: BoardConfig,
   taskId: string,
   name: string,
 ): Promise<boolean> => {
-  refuseIfArchived(container);
+  refuseIfArchived(container, config);
   if (!(await fileNames(fs, taskId)).includes(name)) return false;
   const dir = attachmentsDir(taskId);
   await commit({

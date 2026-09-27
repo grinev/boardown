@@ -26,6 +26,7 @@ import {
   moveTaskBetweenContainers,
   reorderTask,
   reorderTaskInBacklog,
+  setTaskLabels,
 } from './board-ops.js';
 import { parseBacklog } from './parser.js';
 import { serializeBacklog } from './serializer.js';
@@ -273,7 +274,7 @@ describe('editRelease', () => {
 
   it('moves the file to the slug the new name derives, carrying everything else', () => {
     const release = baseRelease();
-    const r = editRelease(release, { name: 'Beta' }, others(release));
+    const r = editRelease(release, config, { name: 'Beta' }, others(release));
     expect(r.frontmatter.name).toBe('Beta');
     expect(r.frontmatter.description).toBe('old description');
     expect(r.frontmatter.status).toBe('current');
@@ -286,7 +287,7 @@ describe('editRelease', () => {
 
   it('keeps the path when the new name derives the same slug', () => {
     const release = baseRelease();
-    const r = editRelease(release, { name: '1.10' }, others(release));
+    const r = editRelease(release, config, { name: '1.10' }, others(release));
     expect(r.frontmatter.name).toBe('1.10');
     expect(r.slug).toBe('1.10');
     expect(r.filename).toBe('releases/1.10.md');
@@ -294,7 +295,7 @@ describe('editRelease', () => {
 
   it('keeps the path when the slug differs only in case', () => {
     const release: Release = { ...baseRelease(), filename: 'releases/Beta.md', slug: 'Beta' };
-    const r = editRelease(release, { name: 'BETA' }, others(release));
+    const r = editRelease(release, config, { name: 'BETA' }, others(release));
     expect(r.frontmatter.name).toBe('BETA');
     expect(r.slug).toBe('Beta');
     expect(r.filename).toBe('releases/Beta.md');
@@ -302,7 +303,7 @@ describe('editRelease', () => {
 
   it('updates description only, leaving the path alone', () => {
     const release = baseRelease();
-    const r = editRelease(release, { description: 'fresh' }, others(release));
+    const r = editRelease(release, config, { description: 'fresh' }, others(release));
     expect(r.frontmatter.description).toBe('fresh');
     expect(r.frontmatter.name).toBe('1.10');
     expect(r.filename).toBe('releases/1.10.md');
@@ -310,7 +311,7 @@ describe('editRelease', () => {
 
   it('updates name and description together', () => {
     const release = baseRelease();
-    const r = editRelease(release, { name: 'X', description: 'Y' }, others(release));
+    const r = editRelease(release, config, { name: 'X', description: 'Y' }, others(release));
     expect(r.frontmatter.name).toBe('X');
     expect(r.frontmatter.description).toBe('Y');
     expect(r.filename).toBe('releases/x.md');
@@ -318,27 +319,27 @@ describe('editRelease', () => {
 
   it('trims the values', () => {
     const release = baseRelease();
-    const r = editRelease(release, { name: '  X  ', description: ' Y ' }, others(release));
+    const r = editRelease(release, config, { name: '  X  ', description: ' Y ' }, others(release));
     expect(r.frontmatter.name).toBe('X');
     expect(r.frontmatter.description).toBe('Y');
   });
 
   it('drops the description key when cleared', () => {
     const release = baseRelease();
-    const r = editRelease(release, { description: '   ' }, others(release));
+    const r = editRelease(release, config, { description: '   ' }, others(release));
     expect('description' in r.frontmatter).toBe(false);
   });
 
   it('rejects a blank name', () => {
     const release = baseRelease();
-    expect(() => editRelease(release, { name: '  ' }, others(release))).toThrow(
+    expect(() => editRelease(release, config, { name: '  ' }, others(release))).toThrow(
       /name is required/i,
     );
   });
 
   it('rejects a name with nothing usable in a filename', () => {
     const release = baseRelease();
-    expect(() => editRelease(release, { name: '???' }, others(release))).toThrow(
+    expect(() => editRelease(release, config, { name: '???' }, others(release))).toThrow(
       /allowed in a filename/i,
     );
   });
@@ -352,7 +353,7 @@ describe('editRelease', () => {
       preamble: '',
       tasks: [],
     };
-    expect(() => editRelease(release, { name: 'BETA' }, others(release, other))).toThrow(
+    expect(() => editRelease(release, config, { name: 'BETA' }, others(release, other))).toThrow(
       /already exists: beta/i,
     );
   });
@@ -365,7 +366,7 @@ describe('editRelease', () => {
       preamble: '',
       tasks: [],
     };
-    const r = editRelease(legacy, { name: 'Named' }, others(legacy));
+    const r = editRelease(legacy, config, { name: 'Named' }, others(legacy));
     expect(r.frontmatter.name).toBe('Named');
     expect(r.filename).toBe('releases/named.md');
   });
@@ -375,7 +376,7 @@ describe('editRelease', () => {
       ...baseRelease(),
       frontmatter: { ...baseRelease().frontmatter, status: 'finished' },
     };
-    expect(() => editRelease(finished, { name: 'X' }, others(finished))).toThrow(/finished/i);
+    expect(() => editRelease(finished, config, { name: 'X' }, others(finished))).toThrow(/finished/i);
   });
 });
 
@@ -480,7 +481,7 @@ describe('validateEpicName', () => {
 describe('deleteTask', () => {
   it('removes the task', () => {
     const r0 = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
-    const r1 = deleteTask(r0, 'BD-1');
+    const r1 = deleteTask(r0, config, 'BD-1');
     expect(r1.tasks).toHaveLength(1);
     expect(r1.tasks[0]!.frontmatter.id).toBe('BD-2');
   });
@@ -512,27 +513,27 @@ describe('deleteTaskWithLinks', () => {
 
   it('removes the task and reports only its file when it has no links', () => {
     const r0 = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
-    const result = deleteTaskWithLinks([r0, epicOf('ui', task('BD-3', 'todo', 300))], 'BD-1');
+    const result = deleteTaskWithLinks([r0, epicOf('ui', task('BD-3', 'todo', 300))], config, 'BD-1');
     expect(result.changedFilenames).toEqual([r0.filename]);
     expect(result.containers[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
   });
 
   it("names the task's attachments folder among what the change removes", () => {
-    const result = deleteTaskWithLinks([release(task('BD-1', 'todo', 100))], 'BD-1');
+    const result = deleteTaskWithLinks([release(task('BD-1', 'todo', 100))], config, 'BD-1');
     expect(result.unversionedRemoves).toEqual(['attachments/BD-1']);
   });
 
   it('strips the mirrored record from a linked task in another container', () => {
     const r0 = release(linked('BD-1', 'BD-2'));
     const e0 = epicOf('ui', linked('BD-2', 'BD-1'));
-    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    const result = deleteTaskWithLinks([r0, e0], config, 'BD-1');
     expect(result.changedFilenames).toEqual([r0.filename, e0.filename]);
     expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
 
   it('strips the mirrored record from a sibling in the same container', () => {
     const r0 = release(linked('BD-1', 'BD-2'), linked('BD-2', 'BD-1'));
-    const result = deleteTaskWithLinks([r0], 'BD-1');
+    const result = deleteTaskWithLinks([r0], config, 'BD-1');
     expect(result.changedFilenames).toEqual([r0.filename]);
     expect(result.containers[0]!.tasks).toHaveLength(1);
     expect(result.containers[0]!.tasks[0]!.frontmatter.links).toBeUndefined();
@@ -541,7 +542,7 @@ describe('deleteTaskWithLinks', () => {
   it('keeps other links of the survivor', () => {
     const r0 = release(linked('BD-1', 'BD-2'));
     const e0 = epicOf('ui', linked('BD-2', 'BD-1', 'BD-9'));
-    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    const result = deleteTaskWithLinks([r0, e0], config, 'BD-1');
     expect(result.containers[1]!.tasks[0]!.frontmatter.links).toEqual([
       { type: 'relates', to: 'BD-9' },
     ]);
@@ -550,7 +551,7 @@ describe('deleteTaskWithLinks', () => {
   it('strips an archived counterpart', () => {
     const r0 = release(linked('BD-1', 'BD-2'));
     const archived = finished(linked('BD-2', 'BD-1'));
-    const result = deleteTaskWithLinks([r0, archived], 'BD-1');
+    const result = deleteTaskWithLinks([r0, archived], config, 'BD-1');
     expect(result.changedFilenames).toEqual([r0.filename, archived.filename]);
     expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
@@ -558,25 +559,25 @@ describe('deleteTaskWithLinks', () => {
   it('tolerates a one-sided record', () => {
     const r0 = release(task('BD-1', 'todo', 100));
     const e0 = epicOf('ui', linked('BD-2', 'BD-1'));
-    const result = deleteTaskWithLinks([r0, e0], 'BD-1');
+    const result = deleteTaskWithLinks([r0, e0], config, 'BD-1');
     expect(result.changedFilenames).toEqual([r0.filename, e0.filename]);
     expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
   });
 
   it('keeps the container when its last task is deleted', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    const result = deleteTaskWithLinks([r0], 'BD-1');
+    const result = deleteTaskWithLinks([r0], config, 'BD-1');
     expect(result.containers[0]!.tasks).toEqual([]);
   });
 
   it('refuses a task in a finished release', () => {
     const archived = finished(task('BD-1', 'done', 100));
-    expect(() => deleteTaskWithLinks([archived], 'BD-1')).toThrow(/finished release/);
+    expect(() => deleteTaskWithLinks([archived], config, 'BD-1')).toThrow(/finished release/);
   });
 
   it('throws on an unknown task', () => {
     const r0 = release(task('BD-1', 'todo', 100));
-    expect(() => deleteTaskWithLinks([r0], 'BD-9')).toThrow(/not found/);
+    expect(() => deleteTaskWithLinks([r0], config, 'BD-9')).toThrow(/not found/);
   });
 });
 
@@ -601,14 +602,14 @@ describe('reorderTask', () => {
       task('BD-2', 'todo', 200),
       task('BD-3', 'todo', 300),
     );
-    const r1 = reorderTask(r0, 'BD-3', 'BD-2');
+    const r1 = reorderTask(r0, config, 'BD-3', 'BD-2');
     const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-3')!;
     expect(moved.frontmatter.order).toBe(150);
   });
 
   it('places at end when beforeTaskId is null', () => {
     const r0 = release(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
-    const r1 = reorderTask(r0, 'BD-1', null);
+    const r1 = reorderTask(r0, config, 'BD-1', null);
     const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.order).toBe(300);
   });
@@ -619,7 +620,7 @@ describe('reorderTask', () => {
       task('BD-2', 'todo', 101),
       task('BD-3', 'todo', 200),
     );
-    const r1 = reorderTask(r0, 'BD-3', 'BD-2');
+    const r1 = reorderTask(r0, config, 'BD-3', 'BD-2');
     const orders = r1.tasks
       .sort((a, b) => a.frontmatter.order - b.frontmatter.order)
       .map((t) => t.frontmatter.order);
@@ -633,7 +634,7 @@ describe('reorderTask', () => {
       task('BD-3', 'done', 300),
     );
     // Put BD-1 (todo) right before BD-3 (done) — i.e. between BD-2 and BD-3.
-    const r1 = reorderTask(r0, 'BD-1', 'BD-3');
+    const r1 = reorderTask(r0, config, 'BD-1', 'BD-3');
     const moved = r1.tasks.find((t) => t.frontmatter.id === 'BD-1')!;
     expect(moved.frontmatter.status).toBe('todo');
     expect(moved.frontmatter.order).toBe(250);
@@ -1112,8 +1113,8 @@ describe('process invariants — finished release is archived', () => {
     const r = finished(task('BD-1', 'todo', 100));
     expect(() => editTask(r, config, 'BD-1', { title: 'y' })).toThrow(/finished/);
     expect(() => changeTaskStatus(r, config, 'BD-1', 'done')).toThrow(/finished/);
-    expect(() => deleteTask(r, 'BD-1')).toThrow(/finished/);
-    expect(() => reorderTask(r, 'BD-1', null)).toThrow(/finished/);
+    expect(() => deleteTask(r, config, 'BD-1')).toThrow(/finished/);
+    expect(() => reorderTask(r, config, 'BD-1', null)).toThrow(/finished/);
   });
 
   it('moveTaskBetweenContainers rejects a finished source or destination', () => {
@@ -1129,6 +1130,110 @@ describe('process invariants — finished release is archived', () => {
         beforeTaskId: null,
       }),
     ).toThrow(/into a finished/);
+  });
+});
+
+describe('process invariants — editFinishedReleases lifts the freeze', () => {
+  const finished = (...tasks: Task[]): Release => ({
+    ...release(...tasks),
+    filename: 'releases/done.md',
+    slug: 'done',
+    frontmatter: { status: 'finished' },
+  });
+  const unfrozen: BoardConfig = { ...config, editFinishedReleases: true };
+  const both: BoardConfig = { ...unfrozen, statusOutsideActiveRelease: true };
+  const codeOf = (fn: () => unknown): string | undefined => {
+    try {
+      fn();
+    } catch (err) {
+      return err instanceof BoardOpError ? err.code : 'other';
+    }
+    return undefined;
+  };
+
+  it('lets a finished release take edits, labels, reorders, deletions and new tasks', () => {
+    const r = finished(task('BD-1', 'todo', 100), task('BD-2', 'todo', 200));
+    expect(editTask(r, unfrozen, 'BD-1', { title: 'y' }).tasks[0]!.title).toBe('y');
+    expect(
+      setTaskLabels(r, unfrozen, 'BD-1', ['ui']).container.tasks[0]!.frontmatter.labels,
+    ).toEqual(['ui']);
+    const reordered = reorderTask(r, unfrozen, 'BD-2', 'BD-1');
+    const orderOf = (id: string): number =>
+      reordered.tasks.find((t) => t.frontmatter.id === id)!.frontmatter.order;
+    expect(orderOf('BD-2')).toBeLessThan(orderOf('BD-1'));
+    expect(deleteTask(r, unfrozen, 'BD-1').tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
+    const created = createTask(r, unfrozen, { title: 'x', type: 'feature', status: 'todo' });
+    expect(created.container.tasks).toHaveLength(3);
+  });
+
+  it('lets a task move into and out of a finished release, keeping its status', () => {
+    const out = moveTaskBetweenContainers(
+      finished(task('BD-1', 'done', 100)),
+      emptyBacklog(),
+      unfrozen,
+      'BD-1',
+      { newStatus: 'done', beforeTaskId: null },
+    );
+    expect(out.dest.tasks[0]!.frontmatter.status).toBe('done');
+    const into = moveTaskBetweenContainers(
+      release(task('BD-2', 'in-progress', 100)),
+      finished(),
+      unfrozen,
+      'BD-2',
+      { newStatus: 'in-progress', beforeTaskId: null },
+    );
+    expect(into.dest.tasks[0]!.frontmatter.id).toBe('BD-2');
+  });
+
+  it('deletes a task in a finished release together with the links pointing at it', () => {
+    const linked: Task = {
+      ...task('BD-2', 'todo', 100),
+      frontmatter: { ...task('BD-2', 'todo', 100).frontmatter, links: [{ type: 'relates', to: 'BD-1' }] },
+    };
+    const result = deleteTaskWithLinks([finished(task('BD-1', 'done', 100)), release(linked)], unfrozen, 'BD-1');
+    expect(result.containers[0]!.tasks).toHaveLength(0);
+    expect(result.containers[1]!.tasks[0]!.frontmatter.links).toBeUndefined();
+  });
+
+  it('lets a finished release be renamed, moving its file', () => {
+    const renamed = editRelease(finished(), unfrozen, { name: 'Shipped' }, []);
+    expect(renamed.filename).toBe('releases/shipped.md');
+    expect(renamed.frontmatter.status).toBe('finished');
+  });
+
+  it('still needs statusOutsideActiveRelease for a status change there', () => {
+    const r = finished(task('BD-1', 'todo', 100));
+    expect(codeOf(() => changeTaskStatus(r, unfrozen, 'BD-1', 'done'))).toBe('STATUS_LOCKED');
+    expect(codeOf(() => editTask(r, unfrozen, 'BD-1', { status: 'done' }))).toBe('STATUS_LOCKED');
+    expect(
+      codeOf(() =>
+        moveTaskInContainer(r, unfrozen, 'BD-1', { status: 'done', beforeTaskId: null }),
+      ),
+    ).toBe('STATUS_LOCKED');
+    expect(
+      codeOf(() => createTask(r, unfrozen, { title: 'x', type: 'feature', status: 'done' })),
+    ).toBe('STATUS_LOCKED');
+    expect(changeTaskStatus(r, both, 'BD-1', 'done').tasks[0]!.frontmatter.status).toBe('done');
+    expect(
+      createTask(r, both, { title: 'x', type: 'feature', status: 'done' }).task.frontmatter.status,
+    ).toBe('done');
+  });
+
+  it('never applies the WIP limit to a finished release', () => {
+    const limited: BoardConfig = { ...both, wipLimits: { 'in-progress': 1 } };
+    const r = finished(task('BD-1', 'in-progress', 100), task('BD-2', 'todo', 200));
+    const next = changeTaskStatus(r, limited, 'BD-2', 'in-progress');
+    expect(statusCount(next, 'in-progress')).toBe(2);
+  });
+
+  it('keeps ARCHIVED when the key is false', () => {
+    const r = finished(task('BD-1', 'todo', 100));
+    const off: BoardConfig = { ...config, editFinishedReleases: false };
+    expect(codeOf(() => editTask(r, off, 'BD-1', { title: 'y' }))).toBe('ARCHIVED');
+    expect(codeOf(() => changeTaskStatus(r, { ...off, statusOutsideActiveRelease: true }, 'BD-1', 'done'))).toBe(
+      'ARCHIVED',
+    );
+    expect(codeOf(() => editRelease(r, off, { name: 'X' }, []))).toBe('ARCHIVED');
   });
 });
 
@@ -1592,7 +1697,7 @@ describe('process invariants — a status only changes in the current release', 
       task('BD-1', 'in-progress', 100),
       task('BD-2', 'todo', 200),
     );
-    expect(() => reorderTask(r, 'BD-2', 'BD-1')).not.toThrow();
+    expect(() => reorderTask(r, config, 'BD-2', 'BD-1')).not.toThrow();
     const b = backlog(task('BD-3', 'done', 100), task('BD-4', 'todo', 200));
     expect(() =>
       reorderTaskInBacklog({ backlog: b, heldBack: [] }, 'BD-4', 'BD-3'),
@@ -1843,7 +1948,7 @@ describe('block order in the file', () => {
   });
 
   it('survives a reorder', () => {
-    const result = reorderTask(shuffled(), 'BD-3', 'BD-2');
+    const result = reorderTask(shuffled(), config, 'BD-3', 'BD-2');
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
     expect(orderOf(result.tasks, 'BD-3')).toBe(150);
   });
@@ -1854,7 +1959,7 @@ describe('block order in the file', () => {
       task('BD-1', 'todo', 100),
       task('BD-2', 'todo', 101),
     );
-    const result = reorderTask(tight, 'BD-3', 'BD-2');
+    const result = reorderTask(tight, config, 'BD-3', 'BD-2');
 
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-1', 'BD-2']);
     // Visual order is BD-1, BD-3, BD-2 — the values say so, the array does not.
@@ -1886,7 +1991,7 @@ describe('block order in the file', () => {
   });
 
   it('leaves its neighbours in place when a task is deleted', () => {
-    const result = deleteTask(shuffled(), 'BD-1');
+    const result = deleteTask(shuffled(), config, 'BD-1');
     expect(ids(result.tasks)).toEqual(['BD-3', 'BD-2']);
     expect(orderOf(result.tasks, 'BD-2')).toBe(200);
     expect(orderOf(result.tasks, 'BD-3')).toBe(300);

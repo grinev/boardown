@@ -36,7 +36,7 @@ const readPicked = async (
 
 interface HeadingProps {
   count: number;
-  // Null drops the `+` altogether: a finished release takes no new files.
+  // Null drops the `+` altogether: a frozen finished release takes no new files.
   onPick: ((files: NewAttachment[], refused: string[]) => void) | null;
   messages: string[];
   headingClassName?: string | undefined;

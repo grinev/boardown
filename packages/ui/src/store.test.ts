@@ -1006,6 +1006,30 @@ describe('setStatusOutsideActiveRelease', () => {
   });
 });
 
+describe('setEditFinishedReleases', () => {
+  it('stores the setting and rolls back on a failed write', async () => {
+    const { fs } = setup(snap());
+
+    await state().setEditFinishedReleases(true);
+    expect(current().config.editFinishedReleases).toBe(true);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('editFinishedReleases: true');
+
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await state().setEditFinishedReleases(false);
+    expect(current().config.editFinishedReleases).toBe(true);
+    expect(state().errorMessage).toMatch(/failed to save the setting/i);
+  });
+
+  it('writes explicit false when the user turns it off', async () => {
+    const { fs } = setup(snap());
+
+    await state().setEditFinishedReleases(true);
+    await state().setEditFinishedReleases(false);
+    expect(current().config.editFinishedReleases).toBe(false);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('editFinishedReleases: false');
+  });
+});
+
 describe('setGitIntegration', () => {
   it('writes the key only once the user turns it off, since absent means on', async () => {
     const { fs } = setup(snap());

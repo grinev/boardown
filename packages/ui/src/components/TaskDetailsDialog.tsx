@@ -13,6 +13,8 @@ import {
   effectiveTaskPriority,
   boardStatuses,
   enabledTaskTypes,
+  isFinishedRelease,
+  isFrozenRelease,
   statusCount,
   TASK_PRIORITIES,
   wipLimitFor,
@@ -28,6 +30,7 @@ import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
 import { taskCommitMessage } from '../utils/commit-message';
 import { pickContrastText } from '../utils/contrast-color';
+import { releaseOptionLabel } from '../utils/release-option';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
 import { TaskAttachments } from './Attachments';
@@ -98,9 +101,13 @@ export function TaskDetailsDialog({
   const customFields = useBoardStore((s) => s.snapshot?.config.customFields ?? EMPTY_FIELDS);
   const labelRegistry = useBoardStore((s) => s.snapshot?.config.labels ?? EMPTY_LABELS);
   const editTaskLabels = useBoardStore((s) => s.editTaskLabels);
-  const archived = release?.frontmatter.status === 'finished';
-  // A finished release is always a pill. Everywhere else the dropdown appears
-  // when the task sits in the current release, or when the board lifts the lock.
+  // With no config loaded yet a finished release stays frozen.
+  const archived =
+    release !== undefined &&
+    isFinishedRelease(release) &&
+    (config === undefined || isFrozenRelease(release, config));
+  // A frozen release is always a pill. Everywhere else the dropdown appears when
+  // the task sits in the current release, or when the board lifts the lock.
   const statusLocked =
     archived ||
     (release?.frontmatter.status !== 'current' &&
@@ -118,10 +125,10 @@ export function TaskDetailsDialog({
   // container and the release dropdown asks each destination in turn.
 
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
-    // A finished release is archived: core refuses a task moved into one, so it is
+    // A frozen release is archived: core refuses a task moved into one, so it is
     // never offered as a destination (same rule as the create-task dialog).
     const sorted = releases
-      .filter((r) => r.frontmatter.status !== 'finished')
+      .filter((r) => config !== undefined && !isFrozenRelease(r, config))
       .sort((a, b) => a.slug.localeCompare(b.slug));
     const items: IconSelectOption[] = sorted.map((r) => {
       // Relocating a task that sits in a capped middle column into a full active
@@ -133,7 +140,7 @@ export function TaskDetailsDialog({
           : wipLimitFor(r, config, status);
       const count = statusCount(r, status);
       if (limit === null || count < limit) {
-        return { value: r.filename, label: r.frontmatter.name ?? r.slug };
+        return { value: r.filename, label: releaseOptionLabel(r) };
       }
       return {
         value: r.filename,

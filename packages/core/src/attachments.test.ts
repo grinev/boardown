@@ -14,6 +14,9 @@ import {
 import { BoardOpError, type Container } from './board-ops.js';
 import { ConflictError, createGuardedFs, type GuardedChange } from './conflicts.js';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
+import type { BoardConfig } from './schemas.js';
+
+const config: BoardConfig = { idPrefix: 'BD', nextId: 10, projectName: 'Test' };
 
 class InMemoryFs implements FsAdapter {
   files = new Map<string, { content: string | Uint8Array; lastModified: number }>();
@@ -139,7 +142,7 @@ describe('attachments on disk', () => {
   it('adds files under suffixed names, never overwriting', async () => {
     const { inner, fs, commit } = await setup();
     await inner.writeBytes('attachments/BD-1/shot.png', bytes(9));
-    const names = await addAttachments(fs, commit, container(), 'BD-1', [
+    const names = await addAttachments(fs, commit, container(), config, 'BD-1', [
       { name: 'shot.png', content: bytes(0, 255) },
       { name: 'shot.png', content: bytes(1) },
     ]);
@@ -153,7 +156,7 @@ describe('attachments on disk', () => {
     const big = { name: 'big.zip', content: new Uint8Array(ATTACHMENT_MAX_BYTES + 1) };
     const small = { name: 'ok.txt', content: bytes(1) };
     await expect(
-      addAttachments(fs, commit, container(), 'BD-1', [small, big]),
+      addAttachments(fs, commit, container(), config, 'BD-1', [small, big]),
     ).rejects.toBeInstanceOf(AttachmentTooLargeError);
     expect(inner.files.has('attachments/BD-1/ok.txt')).toBe(false);
   });
@@ -171,19 +174,32 @@ describe('attachments on disk', () => {
     await inner.writeBytes('attachments/BD-1/a.txt', bytes(1));
     const done = container('finished');
     await expect(
-      addAttachments(fs, commit, done, 'BD-1', [{ name: 'x', content: bytes(1) }]),
+      addAttachments(fs, commit, done, config, 'BD-1', [{ name: 'x', content: bytes(1) }]),
     ).rejects.toBeInstanceOf(BoardOpError);
-    await expect(removeAttachment(fs, commit, done, 'BD-1', 'a.txt')).rejects.toBeInstanceOf(
+    await expect(removeAttachment(fs, commit, done, config, 'BD-1', 'a.txt')).rejects.toBeInstanceOf(
       BoardOpError,
     );
     expect(inner.files.has('attachments/BD-1/a.txt')).toBe(true);
+  });
+
+  it('adds and removes in a finished release when the board lifts the freeze', async () => {
+    const { inner, fs, commit } = await setup();
+    await inner.writeBytes('attachments/BD-1/a.txt', bytes(1));
+    const done = container('finished');
+    const unfrozen: BoardConfig = { ...config, editFinishedReleases: true };
+    expect(
+      await addAttachments(fs, commit, done, unfrozen, 'BD-1', [{ name: 'x', content: bytes(1) }]),
+    ).toEqual(['x']);
+    expect(await removeAttachment(fs, commit, done, unfrozen, 'BD-1', 'a.txt')).toBe(true);
+    expect(inner.files.has('attachments/BD-1/x')).toBe(true);
+    expect(inner.files.has('attachments/BD-1/a.txt')).toBe(false);
   });
 
   it('refuses when the file holding the task changed on disk since load', async () => {
     const { inner, fs, commit } = await setup();
     await inner.write('releases/1.0.md', 'completed elsewhere');
     await expect(
-      addAttachments(fs, commit, container(), 'BD-1', [{ name: 'x', content: bytes(1) }]),
+      addAttachments(fs, commit, container(), config, 'BD-1', [{ name: 'x', content: bytes(1) }]),
     ).rejects.toBeInstanceOf(ConflictError);
     expect(inner.files.has('attachments/BD-1/x')).toBe(false);
   });
@@ -192,17 +208,17 @@ describe('attachments on disk', () => {
     const { inner, fs, commit } = await setup();
     await inner.writeBytes('attachments/BD-1/a.txt', bytes(1));
     await inner.writeBytes('attachments/BD-1/b.txt', bytes(1));
-    expect(await removeAttachment(fs, commit, container(), 'BD-1', 'a.txt')).toBe(true);
+    expect(await removeAttachment(fs, commit, container(), config, 'BD-1', 'a.txt')).toBe(true);
     expect(await inner.list('attachments/BD-1')).toEqual([{ name: 'b.txt', isDirectory: false }]);
-    expect(await removeAttachment(fs, commit, container(), 'BD-1', 'b.txt')).toBe(true);
+    expect(await removeAttachment(fs, commit, container(), config, 'BD-1', 'b.txt')).toBe(true);
     expect(await inner.list('attachments')).toEqual([]);
   });
 
   it('reports a name that is not there, writing nothing', async () => {
     const { fs, commit } = await setup();
     const spy = vi.fn(commit);
-    expect(await removeAttachment(fs, spy, container(), 'BD-1', 'gone.png')).toBe(false);
-    expect(await removeAttachment(fs, spy, container(), 'BD-1', '../BD-2/a.txt')).toBe(false);
+    expect(await removeAttachment(fs, spy, container(), config, 'BD-1', 'gone.png')).toBe(false);
+    expect(await removeAttachment(fs, spy, container(), config, 'BD-1', '../BD-2/a.txt')).toBe(false);
     expect(spy).not.toHaveBeenCalled();
   });
 
