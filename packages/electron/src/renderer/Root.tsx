@@ -184,6 +184,7 @@ export function Root() {
             fs={bridge.fs}
             projectFiles={bridge.projectFiles}
             gitHistory={bridge.gitHistory}
+            fileSaver={bridge.fileSaver}
             forcedTheme={theme}
             defaultTheme={openThemeRef.current}
             defaultProjectName={folderName(activeFolder)}

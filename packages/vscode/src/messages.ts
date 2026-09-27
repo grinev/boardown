@@ -1,11 +1,21 @@
-export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
+export type FsMethod =
+  | 'read'
+  | 'write'
+  | 'readBytes'
+  | 'writeBytes'
+  | 'list'
+  | 'stat'
+  | 'mkdir'
+  | 'remove';
 
+// Bytes (readBytes' result, writeBytes' content) cross the channel as a typed
+// array, which the webview messaging carries as bytes — never re-encoded.
 export interface FsRequestMessage {
   type: 'fs-request';
   id: number;
   method: FsMethod;
   path: string;
-  content?: string;
+  content?: string | Uint8Array;
 }
 
 export interface FsResponseMessage {
@@ -50,6 +60,22 @@ export interface GitCommitsResponseMessage {
   result: unknown;
 }
 
+// Download: the host asks the user where to put a copy and writes it there. The
+// one write outside .boardown/, and only to a place the user picked.
+export interface SaveFileRequestMessage {
+  type: 'save-file-request';
+  id: number;
+  name: string;
+  content: Uint8Array;
+}
+
+export interface SaveFileResponseMessage {
+  type: 'save-file-response';
+  id: number;
+  ok: boolean;
+  error?: string;
+}
+
 export interface ReadyMessage {
   type: 'ready';
 }
@@ -65,9 +91,11 @@ export type WebviewToHost =
   | FsRequestMessage
   | ProjectFileRequestMessage
   | GitCommitsRequestMessage
+  | SaveFileRequestMessage
   | ReadyMessage;
 export type HostToWebview =
   | FsResponseMessage
   | ProjectFileResponseMessage
   | GitCommitsResponseMessage
+  | SaveFileResponseMessage
   | BoardChangedMessage;

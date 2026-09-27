@@ -4,6 +4,12 @@ import { MIN_COMPATIBLE_VERSION } from './config.js';
 import { loadBoard } from './loader.js';
 
 class InMemoryFs implements FsAdapter {
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new TextEncoder().encode(await this.read(path));
+  }
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    await this.write(path, new TextDecoder().decode(content));
+  }
   files = new Map<string, string>();
   dirs = new Set<string>();
 
@@ -34,7 +40,7 @@ class InMemoryFs implements FsAdapter {
     return [...out].map(([name, isDirectory]) => ({ name, isDirectory }));
   }
   async stat(path: string): Promise<FileStat | null> {
-    return this.files.has(path) ? { lastModified: 0 } : null;
+    return this.files.has(path) ? { lastModified: 0, size: 0 } : null;
   }
 
   async mkdir(dir: string): Promise<void> {

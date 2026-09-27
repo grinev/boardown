@@ -1,4 +1,5 @@
 import {
+  ATTACHMENT_MAX_BYTES,
   customFieldLabel,
   DEFAULT_TASK_PRIORITY,
   EPIC_NAME_MAX_LENGTH,
@@ -20,7 +21,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 19,
+  version: 20,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -93,9 +94,9 @@ const DESCRIPTOR = {
     {
       name: 'task add',
       usage:
-        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>] [--label <label>] [--link [<linkType>=]<id>]',
+        'boardown task add <title> [--type TYPE] [--priority PRIORITY] [--status STATUS] [--description TEXT] [--epic SLUG] [--release FILE] [--field key=value] [--checklist <text>] [--label <label>] [--link [<linkType>=]<id>] [--attach <file>]',
       summary:
-        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order. --label is repeatable and adds labels as `task label add` does; one with whitespace or longer than labelMaxLength is USAGE. --link is repeatable and links the new task to <id> with a relation read from the side of the new task (`--link blocks=BD-9`: the new task blocks BD-9), `relates` when no type is given; each record is mirrored as in `task link add`. The task, its checklist and its links land in one write: an unknown type is USAGE, an unknown <id> TASK_NOT_FOUND, and on any refusal nothing is written.',
+        'Create a task in the backlog (default) or a release; --epic sets its epic in either. Without --priority no priority key is written and the task reads as defaultTaskPriority. --field is repeatable and sets a customFields value. --checklist is repeatable and adds checklist items in flag order. --label is repeatable and adds labels as `task label add` does; one with whitespace or longer than labelMaxLength is USAGE. --link is repeatable and links the new task to <id> with a relation read from the side of the new task (`--link blocks=BD-9`: the new task blocks BD-9), `relates` when no type is given; each record is mirrored as in `task link add`. --attach is repeatable and attaches <file> as `task attachment add` does. The task, its checklist, its links and its files land in one write: an unknown type is USAGE, an unknown <id> TASK_NOT_FOUND, a missing file FILE_NOT_FOUND, one over attachmentMaxBytes FILE_TOO_LARGE, and on any refusal nothing is written.',
     },
     {
       name: 'task edit',
@@ -114,7 +115,11 @@ const DESCRIPTOR = {
       usage: 'boardown task reorder <id> (--before ID | --after ID | --up | --down)',
       summary: "Change a task's priority (order) within its container.",
     },
-    { name: 'task rm', usage: 'boardown task rm <id>', summary: 'Delete a task.' },
+    {
+      name: 'task rm',
+      usage: 'boardown task rm <id>',
+      summary: 'Delete a task, and its attachments folder with whatever it holds.',
+    },
     {
       name: 'task checklist',
       usage:
@@ -146,6 +151,12 @@ const DESCRIPTOR = {
         'boardown task link (add <id> <other-id> [--type <linkType>] | rm <id> <other-id> [--type <linkType>] | ls <id>)',
       summary:
         "Manage a task's links to other tasks. The relation is one of linkTypes, read from <id>'s side: `--type blocks` means \"<id> blocks <other-id>\". Each relation's record is mirrored into the other task as its inverse, so `blocks` reads as `blocked-by` there; `relates` is symmetric and is the default for `add`. One pair may carry several relations at once. `add` is idempotent per relation. `rm` with `--type` drops that one relation, without it every relation between the pair. Changing a relation is `rm` then `add`. `ls` data is { links: [{ type, to, title, status, taskType, missing }], count } — `missing` marks a link whose target is not on the board.",
+    },
+    {
+      name: 'task attachment',
+      usage: 'boardown task attachment (add <id> <file>… | rm <id> <name> | ls <id>)',
+      summary:
+        "Manage a task's attached files, kept at .boardown/attachments/<id>/<name> and recorded nowhere else — a file put in that folder by hand is listed too, a subfolder is not. `add` reads each <file> (relative to the working directory) and stores it under its own file name, with characters a Windows filename cannot hold turned into `_`; a name already in the folder gets ` (1)`, ` (2)`… before its extension, and nothing is ever overwritten. Data is { id, added: [names as stored] }. A missing file or a directory is FILE_NOT_FOUND, one over attachmentMaxBytes FILE_TOO_LARGE; any refusal refuses the whole command and nothing is written. `rm` removes one file by its stored name, and the folder with its last file; data is { id }, and a name not there is ATTACHMENT_NOT_FOUND. `ls` data is [{ name, size, path }] sorted by name ignoring case — size in bytes, path from the project root (`.boardown/attachments/BD-1/shot.png`), [] when there are none. `add` and `rm` in a finished release are ARCHIVED; `ls` works everywhere. `task rm` removes the task's folder with it.",
     },
     {
       name: 'release get',
@@ -217,6 +228,7 @@ const DESCRIPTOR = {
     '--field': 'On `task add`/`task edit`, set a customFields value. Repeatable.',
   },
   epicNameMaxLength: EPIC_NAME_MAX_LENGTH,
+  attachmentMaxBytes: ATTACHMENT_MAX_BYTES,
   labelMaxLength: LABEL_MAX_LENGTH,
   configFields: {
     labels:

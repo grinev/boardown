@@ -55,6 +55,17 @@ describe('handleFsRequest', () => {
     await fsp.rm(root, { recursive: true, force: true });
   });
 
+  it('round-trips bytes that are not UTF-8 and stats their size', async () => {
+    const bytes = new Uint8Array([0, 0xff, 0xfe, 0x80, 13, 10]);
+    await handleFsRequest(root, { method: 'writeBytes', path: 'attachments/BD-1/a.bin', content: bytes });
+    expect(await handleFsRequest(root, { method: 'readBytes', path: 'attachments/BD-1/a.bin' })).toEqual(
+      bytes,
+    );
+    expect(await handleFsRequest(root, { method: 'stat', path: 'attachments/BD-1/a.bin' })).toMatchObject({
+      size: 6,
+    });
+  });
+
   it('write creates parent directories, then read returns the content', async () => {
     await handleFsRequest(root, { method: 'write', path: 'releases/r.md', content: 'hi' });
     expect(await handleFsRequest(root, { method: 'read', path: 'releases/r.md' })).toBe('hi');

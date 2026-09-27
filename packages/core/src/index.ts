@@ -19,4 +19,6 @@ export * from './conflicts.js';
 export * from './docs.js';
 export * from './project-file.js';
 export * from './git-history.js';
+export * from './file-saver.js';
+export * from './attachments.js';
 export * from './logger.js';

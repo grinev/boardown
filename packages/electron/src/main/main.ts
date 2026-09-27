@@ -1,4 +1,4 @@
-import { statSync, readdirSync, watch, type FSWatcher } from 'node:fs';
+import { promises as fsp, statSync, readdirSync, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -21,7 +21,13 @@ import {
   formatLogRecord,
   readTaskCommits,
 } from '@boardown/core';
-import { IPC, type BootstrapState, type FsRequest, type ThemeChoice } from '../bridge';
+import {
+  IPC,
+  type BootstrapState,
+  type FsRequest,
+  type SaveFileRequest,
+  type ThemeChoice,
+} from '../bridge';
 import { handleFsRequest } from './board-fs';
 import { readProjectFile } from './project-file';
 import { gitRunIn } from './git-history';
@@ -432,6 +438,18 @@ function registerIpc(): void {
     // No board open means no project folder to run git in; the panel says so.
     if (!ctx) return { state: 'git-unavailable', commits: [] } satisfies GitHistoryResult;
     return readTaskCommits(taskId, gitRunIn(ctx.folder));
+  });
+
+  // Download: the destination is whatever the user picks in the native dialog —
+  // never a path the renderer names — and a cancelled dialog writes nothing.
+  ipcMain.handle(IPC.saveFile, async (event: IpcMainInvokeEvent, req: SaveFileRequest) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = { defaultPath: req.name };
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options);
+    if (result.canceled || result.filePath === undefined || result.filePath === '') return;
+    await fsp.writeFile(result.filePath, req.content);
   });
 
   ipcMain.handle(IPC.pickFolder, async (event: IpcMainInvokeEvent) => {

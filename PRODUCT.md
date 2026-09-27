@@ -204,11 +204,27 @@ Everything lives under `.boardown/` at the project root:
     ├── epics/             # one file per epic: frontmatter and description
     │   ├── ui-foundation.md
     │   └── parser.md
-    └── docs/              # the project wiki; folders nest to any depth
-        ├── architecture.md
-        └── guides/
-            └── release-process.md
+    ├── docs/              # the project wiki; folders nest to any depth
+    │   ├── architecture.md
+    │   └── guides/
+    │       └── release-process.md
+    └── attachments/       # files attached to tasks, one folder per task id
+        └── BD-131/
+            └── shot.png
 ```
+
+A task's **attachments** are the files in `attachments/<task id>/` and nothing
+else: no frontmatter key records them, so a file dropped into the folder by hand
+is listed like one added through boardown, and a subfolder there is not an
+attachment. A task id never changes, so moving a task between releases, epics and
+the backlog never moves its files. A stored name keeps the file's own name, in
+Unicode NFC, with the characters a Windows filename cannot hold
+(`\ / : * ? " < > |`) turned into `_`, trailing dots and spaces dropped, and a
+reserved Windows name (`CON`, `NUL`, `COM1`…, judged by the part before the first
+dot) given a `_`; a name already in the folder, compared ignoring case, gets
+` (1)`, ` (2)`… before its extension, so an existing file is never overwritten. A
+file over **25 MB** is refused. A folder whose task is no longer on the board is
+left where it is.
 
 The shell chooses which `.boardown/` directory to open. The `config.yaml` file
 stays inside that directory and is the marker that boardown is configured
@@ -823,6 +839,8 @@ and Archive rows, the epic dialog's task list, Linked tasks, or search results.
   written with the task on Create.
 - **Epic** — optional. Dropdown over existing epics; blank = no epic.
 - **Description** — plain text.
+- **Linked tasks** and **Attachments** — the last two fields, described with their
+  task-dialog sections below.
 
 When created from a section's `+ Create`, the task is placed in that section;
 the section determines storage location. The Create menu in the top navigation
@@ -941,7 +959,9 @@ mode; the epic renders as its badge, still clickable to navigate to the epic; cu
 still clickable. Checklist checkboxes are disabled, the add-item row and the
 note composer are absent, and the per-item trash buttons do not appear. The
 Linked tasks section stays fully live — a link is metadata, not content — and
-the `…` menu's `Delete` item is disabled, as described below. An archived file
+the `…` menu's `Delete` item is disabled, as described below. Attachments stay
+readable: a row still opens and downloads, the section has no `+`, and its row
+menu's `Delete` is disabled. An archived file
 is rewritten only for a link change; the content operations `@boardown/core`
 would refuse are simply not reachable.
 
@@ -966,7 +986,42 @@ git is the safety net) and closes both modals. Deleting a task also strips the
 mirrored `links` records the other tasks hold pointing at it, so nothing dangling is
 left on disk — a record held by a task in a **finished** release is stripped too.
 A task in a finished release cannot be deleted at all: its menu still opens, with
-the `Delete` item disabled.
+the `Delete` item disabled. A task with attachments loses its attachments folder
+in the same write, with whatever the folder holds by then — including a file put
+there since the dialog read it — and the confirmation says so: `Delete BD-131
+"…"? Its 3 attachments are deleted too. This cannot be undone.` (`Its 1 attachment
+is deleted too.` for one). It reads the folder when it opens, and its `Delete`
+waits until it has.
+
+**Attachments.** Directly below the description and above the checklist, the task
+dialog has an **Attachments** section: the heading, a count beside it when there is
+anything, and a `+` at its right end, the Linked tasks heading's shape. With no
+attachments only the heading and its `+` show. A row is a file icon, the file name,
+its size (`B`, `KB`, `MB`, 1024-based, one decimal from MB up) and a `…` button;
+rows are sorted by name ignoring case. `+` opens the system file picker, several
+files at once — the only way to add; there is no drag and drop and no paste. A
+picked file over 25 MB is refused with `"big.zip" is over 25 MB and was not added`
+under the heading, and the files picked with it are still added. Clicking a row
+opens the **repo file popup** on that file — the very popup a
+`[[repo:.boardown/attachments/BD-131/shot.png]]` link opens, with the same back
+button to the task dialog and the same rules for what it can show. The `…` menu
+holds `Download` and `Delete`. `Download` saves a copy under the attachment's name
+where the user chooses — a Save-as dialog in VS Code and Electron, the browser's
+own download in the web shell. `Delete` asks `Delete "shot.png"? This cannot be
+undone.` and removes the file, and the task's folder with it when that was the last
+file. A row whose file is gone by the time it is acted on is simply dropped by
+`Delete`, while `Download` says `File not found` under the heading and drops it.
+The list is read from disk each time the dialog opens, saying `Loading…` until it
+has, so a file another tool adds or removes shows on the next open.
+
+**Create task** carries the same section as its **last** field, below Linked tasks.
+A row there is icon, name and size with a trash button on hover; the name is plain
+text, since nothing exists yet to preview or download. Picked files stay in the
+form and nothing is written until **Create**, which writes the task and its files
+together — a refused create (Reload, "File cannot be written") writes neither, and
+the suffix rule holds there too. A file over 25 MB is refused when it is picked,
+with the same message, and one picked file makes the form dirty, so Escape and the
+backdrop ask `Discard changes?`.
 
 **Task links.** Any token shaped like a task ID (2–5 uppercase letters, a dash,
 digits) that resolves to a task on the board renders, in view mode, as a link
@@ -1112,7 +1167,7 @@ unfocused it closes the dialog; a dismissed list comes back on the next keystrok
 Picking a row, or leaving the add row by Escape, puts focus back on the `+` button
 that opened it. "No matching tasks" is not a row that can be picked.
 
-**Create task** carries the same section as its last field, below Release, its
+**Create task** carries the same section as its last field but one, below Release, its
 heading in the form's own label style. It looks and behaves as above — the `+`, the
 add row with its relation selector and keyboard rules, the grouped rows with their
 trash — with two differences that follow from the task not existing yet: a row's
@@ -1345,7 +1400,11 @@ release, no future releases, no archived releases, no tasks under filter).
 
 The product is delivered as a React app (`@boardown/ui`) embedded in
 platform-specific shells. Each shell decides how the user gets to a working
-folder and provides an `FsAdapter` to read/write files there.
+folder and provides an `FsAdapter` to read/write files there — text and bytes, the latter
+for attachments. Next to it every shell supplies two read-only capabilities (the
+project-file reader for repo file previews, the Git history reader for the Commits
+panel) and one that writes: **Download**, which saves a copy of an attachment to a
+place the user picks in the host's own dialog, and nowhere else.
 
 ### VS Code extension
 
@@ -1449,7 +1508,21 @@ with an empty list rather than errors — a repository is missing, not broken. A
 commit is `{ hash, subject }` and nothing more, and every match is returned, since
 an agent-facing filter does not cap. An id that names no task is `TASK_NOT_FOUND`,
 so a typo cannot look like a task with no commits. The board's `gitIntegration`
-setting hides the UI panel and does not reach this command. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
+setting hides the UI panel and does not reach this command. **Attachments** are
+managed with `task attachment add <id> <file>…`, `rm <id> <name>` and `ls <id>`, and
+put on a new task by a repeatable `task add --attach <file>`, landing in the same
+write as the task. A relative `<file>` is read from the working directory and stored
+under its own file name by the rules under "Storage format". `add` acknowledges
+`{ id, added }` with the names as stored; `rm` acknowledges `{ id }` and removes the
+folder with its last file; `ls` answers `[{ name, size, path }]` sorted by name —
+size in bytes, path from the project root (`.boardown/attachments/BD-131/shot.png`),
+`[]` when there are none. Unlike the UI, which keeps the files it can, the CLI is
+all-or-nothing: a missing source or a directory is `FILE_NOT_FOUND`, one over 25 MB
+`FILE_TOO_LARGE`, and on either nothing is written. `rm` of a name not there is
+`ATTACHMENT_NOT_FOUND`; `add` and `rm` in a finished release are `ARCHIVED`, `ls`
+works everywhere. `task rm` removes the task's attachments folder too, and `task
+get` and `task list --full` do not list attachments. `schema` reports the cap as
+`attachmentMaxBytes`. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's
 `slug` is how a caller learns it moved) and a finished release is refused with
 `ARCHIVED`. `epic edit <slug>` sets an epic's `--name` / `--description` /

@@ -30,6 +30,7 @@ import { taskCommitMessage } from '../utils/commit-message';
 import { pickContrastText } from '../utils/contrast-color';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
+import { TaskAttachments } from './Attachments';
 import { Checklist } from './Checklist';
 import { CommitsPanel } from './CommitsPanel';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
@@ -267,6 +268,9 @@ export function TaskDetailsDialog({
               onSave={(next) => updateTask(id, { description: next })}
             />
           </section>
+          {/* Keyed like the Commits panel: another task opened in this dialog
+              starts from its own folder, not the last task's list or messages. */}
+          <TaskAttachments key={id} taskId={id} readOnly={archived} />
           <Checklist
             task={task}
             readOnly={archived}

@@ -68,13 +68,16 @@ export const sendText = (res: ServerResponse, status: number, body: string): voi
   res.end(body);
 };
 
-export const readBody = (req: IncomingMessage): Promise<string> =>
+const readRawBody = (req: IncomingMessage): Promise<Buffer> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+
+export const readBody = async (req: IncomingMessage): Promise<string> =>
+  (await readRawBody(req)).toString('utf-8');
 
 // The three read-shaped endpoints treat a missing file as a 404 and anything
 // else as a 500; both are worth a line.
@@ -176,6 +179,24 @@ export const handleBoardFs = async (
       return;
     }
 
+    if (req.method === 'GET' && pathname === '/api/fs/read-bytes') {
+      const target = resolveContained(boardRoot, userPath);
+      if (!target.ok) {
+        sendText(res, target.status, target.message);
+        return;
+      }
+      try {
+        const content = await fs.readFile(target.abs);
+        log.debug(`read-bytes ${target.rel}: 200 (${content.byteLength} bytes)`);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.end(content);
+      } catch (err) {
+        failTarget(res, 'read-bytes', target.rel, err);
+      }
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/fs/list') {
       const target = resolveContained(boardRoot, userPath);
       if (!target.ok) {
@@ -207,22 +228,35 @@ export const handleBoardFs = async (
       try {
         const stat = await fs.stat(target.abs);
         log.debug(`stat ${target.rel}: 200`);
-        sendJson(res, 200, { lastModified: stat.mtimeMs });
+        sendJson(res, 200, { lastModified: stat.mtimeMs, size: stat.size });
       } catch (err) {
         failTarget(res, 'stat', target.rel, err);
       }
       return;
     }
 
-    if (req.method === 'POST' && pathname === '/api/fs/write') {
-      const body = await readJsonBody(req, res);
-      if (body === null) return;
-      if (typeof body.path !== 'string' || typeof body.content !== 'string') {
-        sendText(res, 400, 'Body must be { path: string, content: string }');
-        return;
+    // Text rides a JSON body; bytes ride the raw body, with the path in the query,
+    // so a file is never re-encoded on its way to disk.
+    if (
+      req.method === 'POST' &&
+      (pathname === '/api/fs/write' || pathname === '/api/fs/write-bytes')
+    ) {
+      let targetPath: string | null;
+      let content: string | Buffer;
+      if (pathname === '/api/fs/write') {
+        const body = await readJsonBody(req, res);
+        if (body === null) return;
+        if (typeof body.path !== 'string' || typeof body.content !== 'string') {
+          sendText(res, 400, 'Body must be { path: string, content: string }');
+          return;
+        }
+        targetPath = body.path;
+        content = body.content;
+      } else {
+        targetPath = userPath;
+        content = await readRawBody(req);
       }
-      const content = body.content;
-      const target = resolveContained(boardRoot, body.path);
+      const target = resolveContained(boardRoot, targetPath);
       if (!target.ok) {
         sendText(res, target.status, target.message);
         return;
@@ -237,9 +271,12 @@ export const handleBoardFs = async (
         // asked for.
         const folder = path.dirname(target.abs);
         const created = await fs.mkdir(folder, { recursive: true });
-        await fs.writeFile(target.abs, content, 'utf-8');
+        if (typeof content === 'string') await fs.writeFile(target.abs, content, 'utf-8');
+        else await fs.writeFile(target.abs, content);
         noteWrite(target.abs, created === undefined ? undefined : folder);
-        log.info(`write ${target.rel}: 204 (${content.length} chars)`);
+        log.info(
+          `write ${target.rel}: 204 (${content.length} ${typeof content === 'string' ? 'chars' : 'bytes'})`,
+        );
         res.statusCode = 204;
         res.end();
       } catch (err) {

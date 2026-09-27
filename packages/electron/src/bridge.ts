@@ -1,11 +1,20 @@
 import type {
+  FileSaver,
   FsAdapter,
   GitHistoryReader,
   ProjectFileReader,
   Theme,
 } from '@boardown/core';
 
-export type FsMethod = 'read' | 'write' | 'list' | 'stat' | 'mkdir' | 'remove';
+export type FsMethod =
+  | 'read'
+  | 'write'
+  | 'readBytes'
+  | 'writeBytes'
+  | 'list'
+  | 'stat'
+  | 'mkdir'
+  | 'remove';
 
 // App-wide theme setting. 'system' follows the OS; 'light'/'dark' are fixed.
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -13,7 +22,13 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
 export interface FsRequest {
   method: FsMethod;
   path: string;
-  content?: string;
+  // Bytes cross IPC as a typed array (structured clone), never re-encoded.
+  content?: string | Uint8Array;
+}
+
+export interface SaveFileRequest {
+  name: string;
+  content: Uint8Array;
 }
 
 export interface RecentEntry {
@@ -63,6 +78,9 @@ export interface BoardownBridge {
   // Read-only access to the repository around the open project folder, for the
   // task dialog's Commits panel. Separate from `fs` for the same reason.
   readonly gitHistory: GitHistoryReader;
+  // Download: a copy of an attachment, to where the user picks in a Save-as
+  // dialog. The one write that leaves the board, and only to the user's choice.
+  readonly fileSaver: FileSaver;
   readonly pickFolder: () => Promise<void>;
   // Pop up the native application menu at the cursor (the ☰ button). Win/Linux
   // only — macOS reaches the same menu through its system menu bar.
@@ -95,6 +113,7 @@ export const IPC = {
   fs: 'boardown:fs',
   projectFile: 'boardown:project-file',
   gitCommits: 'boardown:git-commits',
+  saveFile: 'boardown:save-file',
   pickFolder: 'boardown:pick-folder',
   popupMenu: 'boardown:popup-menu',
   openRecent: 'boardown:open-recent',

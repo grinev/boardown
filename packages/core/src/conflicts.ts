@@ -1,4 +1,4 @@
-import type { FsAdapter } from './fs-adapter.js';
+import type { FsAdapter, FsEntry } from './fs-adapter.js';
 import type { ParseProblem } from './problems.js';
 
 export class ConflictError extends Error {
@@ -26,7 +26,7 @@ export class UnreadableFileError extends Error {
 
 export interface GuardedFile {
   path: string;
-  content: string;
+  content: string | Uint8Array;
 }
 
 // One file of a set that lands together. A create-only target must not exist at
@@ -41,6 +41,15 @@ export interface GuardedWrite extends GuardedFile {
 export interface GuardedChange {
   writes: readonly GuardedWrite[];
   removes: readonly string[];
+  // Things the loader never read, so there is no version to check them against —
+  // a task's attachments. Removed as they stand on disk, a folder with everything
+  // in it, after every other step. Only for a deletion the user confirmed with its
+  // contents named; never a way around a conflict.
+  unversionedRemoves?: readonly string[];
+  // Checked like a write target but not written: the file an operation's decision
+  // was read from when the operation lands elsewhere (a task's release, when only
+  // its attachments change).
+  unchanged?: readonly string[];
 }
 
 // An FsAdapter plus the multi-target operations. Shells keep implementing the
@@ -106,8 +115,9 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
     }
   };
 
-  const put = async (path: string, content: string): Promise<void> => {
-    await inner.write(path, content);
+  const put = async (path: string, content: string | Uint8Array): Promise<void> => {
+    if (typeof content === 'string') await inner.write(path, content);
+    else await inner.writeBytes(path, content);
     const after = await inner.stat(path);
     if (after !== null) {
       versions[path] = after.lastModified;
@@ -120,8 +130,27 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
   };
 
   // What a path held before the commit touched it, so a failed step can put it back.
-  const previous = async (path: string): Promise<string | null> =>
-    (await inner.stat(path)) === null ? null : inner.read(path);
+  // Bytes rather than text, so the undo is exact for every kind of file.
+  const previous = async (path: string): Promise<Uint8Array | null> =>
+    (await inner.stat(path)) === null ? null : inner.readBytes(path);
+
+  // `stat` does not tell a folder from a file; the parent's listing does.
+  const entryOf = async (path: string): Promise<FsEntry | null> => {
+    const slash = path.lastIndexOf('/');
+    const name = path.slice(slash + 1);
+    const entries = await inner.list(slash === -1 ? '' : path.slice(0, slash));
+    return entries.find((e) => e.name === name) ?? null;
+  };
+
+  const filesBeneath = async (dir: string): Promise<string[]> => {
+    const files: string[] = [];
+    for (const entry of await inner.list(dir)) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory) files.push(...(await filesBeneath(path)));
+      else files.push(path);
+    }
+    return files;
+  };
 
   const commit = async (change: GuardedChange): Promise<void> => {
     for (const file of change.writes) checkReadable(file.path);
@@ -134,8 +163,9 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
       await check(file.path);
     }
     for (const path of change.removes) await check(path);
+    for (const path of change.unchanged ?? []) await check(path);
 
-    const touched: { path: string; before: string | null }[] = [];
+    const touched: { path: string; before: Uint8Array | null }[] = [];
     try {
       for (const file of change.writes) {
         const before = await previous(file.path);
@@ -146,6 +176,18 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
         const before = await previous(path);
         await drop(path);
         touched.push({ path, before });
+      }
+      for (const path of change.unversionedRemoves ?? []) {
+        const entry = await entryOf(path);
+        if (entry === null) continue;
+        // A folder is taken file by file, each one's bytes kept, so a failure
+        // part-way can still put back what was already gone.
+        for (const file of entry.isDirectory ? await filesBeneath(path) : [path]) {
+          const before = await inner.readBytes(file);
+          await drop(file);
+          touched.push({ path: file, before });
+        }
+        if (entry.isDirectory) await inner.remove(path);
       }
     } catch (err) {
       // No shell has atomic multi-file I/O, so the steps that landed are undone in
@@ -172,11 +214,18 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
 
   return {
     read: (path) => inner.read(path),
+    readBytes: (path) => inner.readBytes(path),
     list: (dir) => inner.list(dir),
     stat: (path) => inner.stat(path),
     mkdir: (dir) => inner.mkdir(dir),
 
     async write(path, content) {
+      checkReadable(path);
+      await check(path);
+      await put(path, content);
+    },
+
+    async writeBytes(path, content) {
       checkReadable(path);
       await check(path);
       await put(path, content);

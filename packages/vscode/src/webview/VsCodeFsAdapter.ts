@@ -32,7 +32,7 @@ export class VsCodeFsAdapter implements FsAdapter {
     });
   }
 
-  private request(method: FsMethod, path: string, content?: string): Promise<unknown> {
+  private request(method: FsMethod, path: string, content?: string | Uint8Array): Promise<unknown> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -46,6 +46,14 @@ export class VsCodeFsAdapter implements FsAdapter {
 
   async write(path: string, content: string): Promise<void> {
     await this.request('write', path, content);
+  }
+
+  async readBytes(path: string): Promise<Uint8Array> {
+    return (await this.request('readBytes', path)) as Uint8Array;
+  }
+
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    await this.request('writeBytes', path, content);
   }
 
   async list(dir: string): Promise<FsEntry[]> {

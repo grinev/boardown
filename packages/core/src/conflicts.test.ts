@@ -4,15 +4,23 @@ import { ConflictError, UnreadableFileError, createGuardedFs } from './conflicts
 import type { ParseProblem } from './problems.js';
 
 class InMemoryFs implements FsAdapter {
-  files = new Map<string, { content: string; lastModified: number }>();
+  files = new Map<string, { content: string | Uint8Array; lastModified: number }>();
   private clock = 1;
 
   async read(path: string): Promise<string> {
     const entry = this.files.get(path);
     if (entry === undefined) throw new Error(`ENOENT: ${path}`);
-    return entry.content;
+    return typeof entry.content === 'string' ? entry.content : new TextDecoder().decode(entry.content);
   }
   async write(path: string, content: string): Promise<void> {
+    this.files.set(path, { content, lastModified: this.clock++ });
+  }
+  async readBytes(path: string): Promise<Uint8Array> {
+    const entry = this.files.get(path);
+    if (entry === undefined) throw new Error(`ENOENT: ${path}`);
+    return typeof entry.content === 'string' ? new TextEncoder().encode(entry.content) : entry.content;
+  }
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
     this.files.set(path, { content, lastModified: this.clock++ });
   }
   async list(dir: string): Promise<FsEntry[]> {
@@ -28,7 +36,9 @@ class InMemoryFs implements FsAdapter {
   }
   async stat(path: string): Promise<FileStat | null> {
     const entry = this.files.get(path);
-    return entry === undefined ? null : { lastModified: entry.lastModified };
+    if (entry === undefined) return null;
+    const size = typeof entry.content === 'string' ? entry.content.length : entry.content.byteLength;
+    return { lastModified: entry.lastModified, size };
   }
   async mkdir(): Promise<void> {}
   async remove(path: string): Promise<void> {
@@ -457,5 +467,79 @@ describe('createGuardedFs — writeAll', () => {
 
     expect(onUnreadable).toHaveBeenCalledTimes(1);
     expect(onConflict).not.toHaveBeenCalled();
+  });
+});
+
+describe('createGuardedFs unversioned removals and unchanged checks', () => {
+  const guard = (inner: InMemoryFs, versions: Record<string, number> = {}) => {
+    const onConflict = vi.fn();
+    const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
+    return { fs, onConflict };
+  };
+
+  it('removes a folder with whatever it holds, with no recorded version', async () => {
+    const inner = new InMemoryFs();
+    await inner.writeBytes('attachments/BD-1/a.png', new Uint8Array([0, 255]));
+    await inner.writeBytes('attachments/BD-1/sub/b.bin', new Uint8Array([1]));
+    const { fs } = guard(inner);
+    await fs.commit({ writes: [], removes: [], unversionedRemoves: ['attachments/BD-1'] });
+    expect([...inner.files.keys()]).toEqual([]);
+  });
+
+  it('skips a path that is already gone', async () => {
+    const inner = new InMemoryFs();
+    const { fs } = guard(inner);
+    await expect(
+      fs.commit({ writes: [], removes: [], unversionedRemoves: ['attachments/BD-1/gone.png'] }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('puts removed bytes back when a later step fails', async () => {
+    const inner = new InMemoryFs();
+    const bytes = new Uint8Array([0, 159, 146, 150]);
+    await inner.writeBytes('attachments/BD-1/a.bin', bytes);
+    await inner.writeBytes('attachments/BD-1/b.bin', new Uint8Array([7]));
+    await inner.write('r.md', 'old');
+    const { fs } = guard(inner, { 'r.md': inner.files.get('r.md')!.lastModified });
+    const realRemove = inner.remove.bind(inner);
+    inner.remove = async (path: string) => {
+      if (path.endsWith('b.bin')) throw new Error('disk full');
+      await realRemove(path);
+    };
+    await expect(
+      fs.commit({
+        writes: [{ path: 'r.md', content: 'new' }],
+        removes: [],
+        unversionedRemoves: ['attachments/BD-1'],
+      }),
+    ).rejects.toThrow('disk full');
+    expect(await inner.readBytes('attachments/BD-1/a.bin')).toEqual(bytes);
+    expect(await inner.read('r.md')).toBe('old');
+  });
+
+  it('writes bytes as bytes', async () => {
+    const inner = new InMemoryFs();
+    const { fs } = guard(inner);
+    const bytes = new Uint8Array([0, 200, 13, 10]);
+    await fs.commit({ writes: [{ path: 'attachments/BD-1/x.bin', content: bytes, createOnly: true }], removes: [] });
+    expect(await inner.readBytes('attachments/BD-1/x.bin')).toEqual(bytes);
+  });
+
+  it('refuses when a file named as unchanged moved on disk, writing nothing', async () => {
+    const inner = new InMemoryFs();
+    await inner.write('r.md', 'loaded');
+    const versions = { 'r.md': inner.files.get('r.md')!.lastModified };
+    await inner.write('r.md', 'edited elsewhere');
+    const { fs, onConflict } = guard(inner, versions);
+    await expect(
+      fs.commit({
+        writes: [{ path: 'attachments/BD-1/x.bin', content: new Uint8Array([1]), createOnly: true }],
+        removes: [],
+        unchanged: ['r.md'],
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(onConflict).toHaveBeenCalledWith('r.md');
+    expect(inner.files.has('attachments/BD-1/x.bin')).toBe(false);
+    expect(await inner.read('r.md')).toBe('edited elsewhere');
   });
 });

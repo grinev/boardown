@@ -10,6 +10,7 @@ import type {
   FsRequestMessage,
   GitCommitsRequestMessage,
   ProjectFileRequestMessage,
+  SaveFileRequestMessage,
 } from './messages';
 import { gitRunIn } from './git-history';
 
@@ -89,6 +90,10 @@ export function activate(context: vscode.ExtensionContext): void {
             folder.uri,
             message as GitCommitsRequestMessage,
           );
+          return;
+        }
+        if (message.type === 'save-file-request') {
+          void handleSaveFileRequest(created.webview, folder.uri, message as SaveFileRequestMessage);
         }
       });
 
@@ -143,8 +148,19 @@ async function handleFsRequest(
         respond(true, new TextDecoder('utf-8').decode(bytes));
         return;
       }
-      case 'write': {
-        await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(message.content ?? ''));
+      case 'readBytes': {
+        // A fresh Uint8Array rather than the Buffer the API hands back, so the
+        // channel carries plain bytes.
+        respond(true, new Uint8Array(await vscode.workspace.fs.readFile(target)));
+        return;
+      }
+      case 'write':
+      case 'writeBytes': {
+        const content = message.content ?? '';
+        await vscode.workspace.fs.writeFile(
+          target,
+          typeof content === 'string' ? new TextEncoder().encode(content) : asBytes(content),
+        );
         recentWrites.set(target.fsPath, Date.now());
         respond(true);
         return;
@@ -183,7 +199,7 @@ async function handleFsRequest(
       case 'stat': {
         try {
           const stat = await vscode.workspace.fs.stat(target);
-          respond(true, { lastModified: stat.mtime });
+          respond(true, { lastModified: stat.mtime, size: stat.size });
         } catch (err) {
           if (isFileNotFound(err)) respond(true, null);
           else throw err;
@@ -193,6 +209,35 @@ async function handleFsRequest(
     }
   } catch (err) {
     respond(false, undefined, err instanceof Error ? err.message : String(err));
+  }
+}
+
+// The messaging carries typed arrays as bytes; anything else arriving where bytes
+// belong is refused rather than written as whatever it happens to stringify to.
+function asBytes(value: unknown): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  throw new Error('Expected bytes');
+}
+
+// Download. The destination is the user's pick in the native dialog, never a
+// path the webview names; a cancelled dialog writes nothing and is not an error.
+async function handleSaveFileRequest(
+  webview: vscode.Webview,
+  projectRootUri: vscode.Uri,
+  message: SaveFileRequestMessage,
+): Promise<void> {
+  const respond = (ok: boolean, error?: string): void => {
+    void webview.postMessage({ type: 'save-file-response', id: message.id, ok, error });
+  };
+  try {
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.joinPath(projectRootUri, message.name),
+    });
+    if (target !== undefined) await vscode.workspace.fs.writeFile(target, asBytes(message.content));
+    respond(true);
+  } catch (err) {
+    respond(false, err instanceof Error ? err.message : String(err));
   }
 }
 

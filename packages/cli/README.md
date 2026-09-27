@@ -39,16 +39,17 @@ boardown archive                Finished releases.
 
 boardown task get <id>…         Show one or more tasks in full — the drill-down.
 boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
-boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --label --link).
+boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --label --link --attach).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
-boardown task rm <id>           Delete a task.
+boardown task rm <id>           Delete a task, and its attachments folder.
 boardown task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
 boardown task link <op>         Link to another task: add | rm (<id> <other-id> [--type <t>]) | ls <id>.
 boardown task label <op>        Labels: add | rm (<id> <label>…).
 boardown task commits <id>      Local commits whose subject mentions the task.
+boardown task attachment <op>   Attached files: add <id> <file>… | rm <id> <name> | ls <id>.
 
 boardown release get <ref>      Show one release and its tasks.
 boardown release list           List releases with task counts.
@@ -243,6 +244,29 @@ boardown task label rm BD-42 ui
 The answer is `{ id, added, removed }` — the labels the call put on or took off, in
 the spelling stored, both empty on a no-op. Task summaries carry `labels` when a
 task has any, and `boardown schema` reports the board's registry as `labels`.
+
+### Attachments
+
+A task's attached files live in `.boardown/attachments/<id>/` and are recorded
+nowhere else, so a file put there by hand is listed too. `task attachment add <id>
+<file>…` copies each file in (a relative path is read from the working directory)
+under its own file name — a name the folder already holds gets ` (1)`, ` (2)`…
+before its extension, and nothing is overwritten — and answers `{ id, added }`
+with the names as stored. `task attachment rm <id> <name>` deletes one, and the
+folder with the last; `task attachment ls <id>` answers `[{ name, size, path }]`,
+size in bytes and path from the project root. `task add --attach <file>`
+(repeatable) lands the files in the same write as the task, and `task rm` deletes
+the folder with its task. It is all-or-nothing: a missing source or a directory is
+`FILE_NOT_FOUND`, a file over 25 MB (`attachmentMaxBytes` in `boardown schema`)
+`FILE_TOO_LARGE`, and on either nothing is written; `rm` of a name not there is
+`ATTACHMENT_NOT_FOUND`, and `add`/`rm` on a task in a finished release is
+`ARCHIVED` (`ls` still works).
+
+```bash
+boardown task attachment add BD-42 screenshots/login.png logs/trace.txt
+boardown task add "Crash on save" --type bug --attach crash.log
+boardown task attachment ls BD-42
+```
 
 ### Priority
 

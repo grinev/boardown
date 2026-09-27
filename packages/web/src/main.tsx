@@ -4,6 +4,7 @@ import { configureLogging } from '@boardown/core';
 import { App, useBoardStore } from '@boardown/ui';
 import { createBrowserLogSink } from './browser-log-sink';
 import { subscribeToBoardChanges } from './api/board-event-source';
+import { BrowserFileSaver } from './api/browser-file-saver';
 import { HttpFsAdapter } from './api/http-fs-adapter';
 import { HttpGitHistoryReader } from './api/http-git-history-reader';
 import { HttpProjectFileReader } from './api/http-project-file-reader';
@@ -40,6 +41,7 @@ const clientId = crypto.randomUUID();
 const fs = new HttpFsAdapter(`${prefix}/api/fs`, clientId);
 const projectFiles = new HttpProjectFileReader(`${prefix}${PROJECT_FILE_ENDPOINT}`);
 const gitHistory = new HttpGitHistoryReader(`${prefix}${GIT_COMMITS_ENDPOINT}`);
+const fileSaver = new BrowserFileSaver();
 
 createRoot(container).render(
   <StrictMode>
@@ -47,6 +49,7 @@ createRoot(container).render(
       fs={fs}
       projectFiles={projectFiles}
       gitHistory={gitHistory}
+      fileSaver={fileSaver}
       version={__BOARDOWN_VERSION__}
     />
   </StrictMode>,

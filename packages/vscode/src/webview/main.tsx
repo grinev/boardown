@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Theme } from '@boardown/core';
 import { App, useBoardStore } from '@boardown/ui';
+import { VsCodeFileSaver } from './VsCodeFileSaver';
 import { VsCodeFsAdapter } from './VsCodeFsAdapter';
 import { VsCodeGitHistoryReader } from './VsCodeGitHistoryReader';
 import { VsCodeProjectFileReader } from './VsCodeProjectFileReader';
@@ -47,6 +48,7 @@ createRoot(container).render(
       fs={new VsCodeFsAdapter(vscode)}
       projectFiles={new VsCodeProjectFileReader(vscode)}
       gitHistory={new VsCodeGitHistoryReader(vscode)}
+      fileSaver={new VsCodeFileSaver(vscode)}
       defaultTheme={detectTheme()}
       version={detectVersion()}
     />

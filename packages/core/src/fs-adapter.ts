@@ -1,5 +1,7 @@
 export interface FileStat {
   lastModified: number;
+  // In bytes.
+  size: number;
 }
 
 export interface FsEntry {
@@ -9,7 +11,10 @@ export interface FsEntry {
 
 export interface FsAdapter {
   read(path: string): Promise<string>;
+  // Creates missing parent folders, as `write` does.
   write(path: string, content: string): Promise<void>;
+  readBytes(path: string): Promise<Uint8Array>;
+  writeBytes(path: string, content: Uint8Array): Promise<void>;
   list(dir: string): Promise<FsEntry[]>;
   stat(path: string): Promise<FileStat | null>;
   mkdir(dir: string): Promise<void>;

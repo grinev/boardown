@@ -44,6 +44,12 @@ export const BACKLOG_PATH = 'backlog.md';
 
 export const DOCS_DIR = 'docs';
 
+// A task's files live under its id, which never changes — moving the task never
+// moves them.
+export const ATTACHMENTS_DIR = 'attachments';
+
+export const attachmentsDir = (taskId: string): string => `${ATTACHMENTS_DIR}/${taskId}`;
+
 export type Container = Release | Backlog;
 
 // An empty backlog stand-in for boards that have no `backlog.md` yet. The file is
@@ -78,7 +84,7 @@ export class BoardOpError extends Error {
 // change; every other mutation is refused here so every shell inherits the rule.
 // `status` only exists on a Release frontmatter, so the `in` check narrows the
 // union safely.
-const isFinishedRelease = (container: Container): boolean =>
+export const isFinishedRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'finished';
 
 // A task's status only means something while its release is being worked on — the
@@ -190,12 +196,16 @@ const WINDOWS_RESERVED_NAMES = new Set([
   'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
 ]);
 
-const shouldReplaceWithDash = (ch: string): boolean => {
+// A character no filename may hold on some OS the board travels to through git.
+export const isForbiddenFilenameChar = (ch: string): boolean => {
   const code = ch.charCodeAt(0);
-  if (code < 32 || code === 127) return true;
-  if (ch === ' ') return true;
-  return WINDOWS_FORBIDDEN_CHARS.includes(ch);
+  return code < 32 || code === 127 || WINDOWS_FORBIDDEN_CHARS.includes(ch);
 };
+
+export const isWindowsReservedName = (name: string): boolean =>
+  WINDOWS_RESERVED_NAMES.has(name.toUpperCase());
+
+const shouldReplaceWithDash = (ch: string): boolean => ch === ' ' || isForbiddenFilenameChar(ch);
 
 export const sanitizeFilenameForFs = (input: string): string => {
   let out = '';
@@ -206,7 +216,7 @@ export const sanitizeFilenameForFs = (input: string): string => {
   out = out.replace(/-+/g, '-');
   out = out.replace(/^[-.]+/, '').replace(/[-. ]+$/, '');
   if (out.length === 0) return '';
-  if (WINDOWS_RESERVED_NAMES.has(out.toUpperCase())) out = `${out}_`;
+  if (isWindowsReservedName(out)) out = `${out}_`;
   return out;
 };
 
@@ -1112,6 +1122,8 @@ export interface DeleteTaskResult {
   // Same order as the containers handed in, so the caller can put them back.
   containers: Container[];
   changedFilenames: string[];
+  // The task's attachments folder, deleted with it whatever it holds by then.
+  unversionedRemoves: string[];
 }
 
 // Deleting a task also has to clear the mirrored link records pointing at it, or
@@ -1149,7 +1161,7 @@ export const deleteTaskWithLinks = (
     return cleaned;
   });
 
-  return { containers: next, changedFilenames };
+  return { containers: next, changedFilenames, unversionedRemoves: [attachmentsDir(taskId)] };
 };
 
 // The Backlog as containers: `backlog.md`, plus any old-layout file the loader

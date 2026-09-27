@@ -1,5 +1,10 @@
 import {
+  ATTACHMENT_MAX_BYTES,
+  addAttachments,
   addLabels,
+  attachmentWrites,
+  listAttachments,
+  removeAttachment,
   addTaskLink,
   BoardOpError,
   changeTaskStatus,
@@ -38,6 +43,7 @@ import {
   type ChecklistItem,
   type GuardedFs,
   type GitHistoryResult,
+  type NewAttachment,
   type LinkType,
   type NewTaskInput,
   type Note,
@@ -51,7 +57,8 @@ import {
   type TaskStatus,
   type TaskType,
 } from '@boardown/core';
-import { dirname } from 'node:path';
+import { promises as fsp } from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { flagBool, flagList, flagString, type ParsedArgs } from '../args';
 import { gitRunIn } from '../git-history';
 import { CliError } from '../output';
@@ -62,7 +69,9 @@ import {
   loadBoardOrThrow,
   locateTask,
   resolveBoardRoot,
+  serializeContainer,
   allContainers,
+  commitChange,
   fileOf,
   writeContainer,
   writeContainersAndConfig,
@@ -109,10 +118,13 @@ export const taskCommand: CommandHandler = (args, ctx) => {
       return taskLabel(args, ctx);
     case 'commits':
       return taskCommits(args, ctx);
+    case 'attachment':
+    case 'attachments':
+      return taskAttachment(args, ctx);
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | label | commits.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | label | commits | attachment.`,
         2,
       );
   }
@@ -269,15 +281,47 @@ function applyOp<T>(fn: () => T): T {
   }
 }
 
+async function applyOpAsync<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof BoardOpError) throw new CliError(err.code, err.message);
+    throw err;
+  }
+}
+
+// Every source is checked before any is read or anything written, so one bad
+// file refuses the whole command. Stored under the source's own file name; the
+// path around it goes no further.
+async function readAttachmentSources(cwd: string, files: string[]): Promise<NewAttachment[]> {
+  const sources: { path: string; name: string }[] = [];
+  for (const file of files) {
+    const path = resolve(cwd, file);
+    const stat = await fsp.stat(path).catch(() => null);
+    if (stat === null || !stat.isFile()) {
+      throw new CliError('FILE_NOT_FOUND', `No file "${file}".`);
+    }
+    if (stat.size > ATTACHMENT_MAX_BYTES) {
+      throw new CliError('FILE_TOO_LARGE', `"${file}" is over 25 MB.`);
+    }
+    sources.push({ path, name: basename(path) });
+  }
+  return Promise.all(
+    sources.map(async (s) => ({ name: s.name, content: new Uint8Array(await fsp.readFile(s.path)) })),
+  );
+}
+
 async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
   const title = args.positionals[2];
   const addUsage =
-    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>] [--label <label>] [--link [<type>=]<id>].';
+    'Usage: boardown task add <title> [--type ...] [--priority ...] [--epic ...] [--release ...] [--field key=value] [--checklist <text>] [--label <label>] [--link [<type>=]<id>] [--attach <file>].';
   if (title === undefined || title.length === 0) {
     throw new CliError('USAGE', addUsage, 2);
   }
   const links = parseLinkFlags(args);
   const labels = parseLabelFlags(args, addUsage);
+  if (args.flags['attach'] === true) throw new CliError('USAGE', addUsage, 2);
+  const attachments = await readAttachmentSources(ctx.cwd, flagList(args.flags, 'attach'));
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const { fs, snapshot, problems } = await loadBoardOrThrow(root);
@@ -359,7 +403,11 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
       ? [{ kind: ref.kind, container }]
       : [];
   });
-  await writeContainersAndConfig(fs, changed, result.config);
+  const attached =
+    attachments.length === 0
+      ? { writes: [] }
+      : await attachmentWrites(fs, result.task.frontmatter.id, attachments);
+  await writeContainersAndConfig(fs, changed, result.config, attached.writes);
 
   return {
     data: { id: result.task.frontmatter.id },
@@ -926,7 +974,16 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
   const changed = result.containers
     .map((container, i): ContainerRef => ({ kind: refs[i]!.kind, container }))
     .filter((ref) => result.changedFilenames.includes(ref.container.filename));
-  await writeContainers(fs, changed, snapshot.config);
+  // The attachments folder goes in the same commit, whatever it holds.
+  await commitChange(
+    fs,
+    {
+      writes: changed.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
+      removes: [],
+      unversionedRemoves: result.unversionedRemoves,
+    },
+    snapshot.config,
+  );
 
   return {
     data: { id },
@@ -1218,6 +1275,114 @@ function noteRm(
       extra: { note: noteId },
     };
   });
+}
+
+function taskAttachment(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const op = args.positionals[2];
+  switch (op) {
+    case 'add':
+      return attachmentAdd(args, ctx);
+    case 'rm':
+    case 'remove':
+    case 'delete':
+      return attachmentRm(args, ctx);
+    case 'ls':
+    case 'list':
+      return attachmentList(args, ctx);
+    default:
+      throw new CliError(
+        'USAGE',
+        `Unknown attachment subcommand "${op ?? ''}". Use: add | rm | ls.`,
+        2,
+      );
+  }
+}
+
+async function loadAttachmentTask(ctx: CommandContext, id: string) {
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const board = await loadBoardOrThrow(root);
+  const location = locateTask(board.snapshot, id);
+  if (location === null) {
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  }
+  return { root, ...board, location };
+}
+
+async function attachmentAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const [, , , id, ...files] = args.positionals;
+  if (id === undefined || files.length === 0) {
+    throw new CliError('USAGE', 'Usage: boardown task attachment add <id> <file>...', 2);
+  }
+  const { fs, snapshot, problems, location } = await loadAttachmentTask(ctx, id);
+  const sources = await readAttachmentSources(ctx.cwd, files);
+  const added = await applyOpAsync(() =>
+    addAttachments(
+      fs,
+      async (change) => {
+        await commitChange(fs, change, snapshot.config);
+      },
+      location.container,
+      id,
+      sources,
+    ),
+  );
+  return {
+    data: { id, added },
+    human: `Attached ${added.map((n) => `"${n}"`).join(', ')} to ${id}.`,
+    ...problemsField(problems),
+  };
+}
+
+async function attachmentRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[3];
+  const name = args.positionals[4];
+  if (id === undefined || name === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown task attachment rm <id> <name>.', 2);
+  }
+  const { fs, snapshot, problems, location } = await loadAttachmentTask(ctx, id);
+  const removed = await applyOpAsync(() =>
+    removeAttachment(
+      fs,
+      async (change) => {
+        await commitChange(fs, change, snapshot.config);
+      },
+      location.container,
+      id,
+      name,
+    ),
+  );
+  if (!removed) {
+    throw new CliError('ATTACHMENT_NOT_FOUND', `${id} has no attachment "${name}".`);
+  }
+  return {
+    data: { id },
+    human: `Removed "${name}" from ${id}.`,
+    ...problemsField(problems),
+  };
+}
+
+async function attachmentList(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[3];
+  if (id === undefined) {
+    throw new CliError('USAGE', 'Usage: boardown task attachment ls <id>.', 2);
+  }
+  const { root, fs, problems } = await loadAttachmentTask(ctx, id);
+  // From the project folder around the board, the way a repo link names a file.
+  const projectPath = (boardPath: string): string =>
+    relative(dirname(root), join(root, boardPath)).split(sep).join('/');
+  const rows = (await listAttachments(fs, id)).map((a) => ({
+    name: a.name,
+    size: a.size,
+    path: projectPath(a.path),
+  }));
+  return {
+    data: rows,
+    human:
+      rows.length === 0
+        ? `${id} has no attachments.`
+        : rows.map((r) => `${r.name}  ${r.size} B  ${r.path}`).join('\n'),
+    ...problemsField(problems),
+  };
 }
 
 function taskLink(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {

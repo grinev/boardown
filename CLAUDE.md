@@ -99,7 +99,8 @@ out of scope (Electron territory). The Electron desktop build follows the same
 shell pattern and ships installers with each release.
 
 `packages/web` owns one set of HTTP endpoints — `/api/fs/{read,list,stat,write,
-mkdir,remove}` scoped to a board root, the read-only `/api/project-file` scoped to
+mkdir,remove,read-bytes,write-bytes}` scoped to a board root (the two byte
+endpoints carry raw bodies, so an attachment is never re-encoded), the read-only `/api/project-file` scoped to
 the project folder around it, and `/api/events`, the stream a browser tab holds
 open to hear that its board changed — and two hosts for them. The Vite
 middleware serves them for the dev shell; `boardown-web` serves them for a
@@ -153,16 +154,20 @@ invariants (release lifecycle, a finished release's content frozen) live in
   `FsAdapter` implementation, folder picker / workspace acquisition, refresh
   triggers, OS dialogs.
 - All access to the **board** goes through the `FsAdapter` interface defined in
-  `packages/core`, rooted at `.boardown/` by every shell. Two capabilities sit
-  outside it, both declared in `core` and both **read-only**: `ProjectFileReader`,
-  scoped to the project folder, which repo file links use to preview a file from
-  the repo, and `GitHistoryReader`, scoped to the Git repository around that
-  folder, which the task dialog's Commits panel reads. Each is deliberately a
-  separate interface rather than a method on `FsAdapter` — the adapter is what the
-  conflict guard wraps and what every write goes through, and no write path may
-  reach outside `.boardown/`. A new file-touching feature belongs on `FsAdapter`
-  unless it is read-only *and* needs the project folder. Never call `fetch`, `fs`,
-  or browser APIs from `core` or `ui`.
+  `packages/core`, rooted at `.boardown/` by every shell; it reads and writes text
+  and bytes. Three capabilities sit outside it, all declared in `core`. Two are
+  **read-only**: `ProjectFileReader`, scoped to the project folder, which repo file
+  links use to preview a file from the repo, and `GitHistoryReader`, scoped to the
+  Git repository around that folder, which the task dialog's Commits panel reads.
+  The third, `FileSaver`, is the **one exception** to "no write outside
+  `.boardown/`": Download hands it bytes and a name, and it writes them only where
+  the user points the host's own Save-as dialog or browser download — it is never
+  handed a board or project path. Each is deliberately a separate interface rather
+  than a method on `FsAdapter` — the adapter is what the conflict guard wraps and
+  what every board write goes through, and no board write path may reach outside
+  `.boardown/`. A new file-touching feature belongs on `FsAdapter` unless it is
+  read-only *and* needs the project folder, or is a copy the user saves to a place
+  they pick. Never call `fetch`, `fs`, or browser APIs from `core` or `ui`.
 - Lucide icon names that `config.yaml` may use live in
   `packages/core/src/lucide-icon-names.ts`, generated from lucide-react so core
   never imports it. After bumping lucide-react, run
@@ -215,7 +220,15 @@ invariants (release lifecycle, a finished release's content frozen) live in
   applies the writes before the removals, and a step failing part-way undoes the
   steps already taken. `writeAll` (writes only) and `moveFile` (a file that
   changes its name: a create-only target plus the removal of the source) are its
-  narrow forms — reach for one of the three in any new multi-file mutation.
+  narrow forms — reach for one of the three in any new multi-file mutation. A
+  change carries two more, optional lists. `unversionedRemoves` names paths the
+  loader never read — a task's attachments — removed as they stand on disk, a
+  folder with everything in it, after every other step and still undone on a
+  failure; it is only for a deletion the user confirmed with its contents named,
+  never a way around a conflict. `unchanged` names files an operation's decision
+  was read from but does not write (an attachment change checks its task's file),
+  held to the external-change rule like a write target. Operation code never
+  reaches the raw adapter.
   Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
   directory before removing it, so deleting a docs folder is all-or-nothing —
