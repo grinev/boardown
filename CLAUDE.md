@@ -141,7 +141,10 @@ stable JSON envelope when stdout is not a TTY (or with `--json`), human-readable
 otherwise. The bin is bundled with esbuild into a single Node CJS file. Process
 invariants (release lifecycle, a finished release's content frozen unless the
 board's `editFinishedReleases` lifts it) live in `core`, so the CLI inherits them
-rather than re-implementing them.
+rather than re-implementing them. It also carries the source of the **agent
+skill** — `skills/boardown/SKILL.md`, the page an agent reads to drive the board
+through this CLI. It is a package asset, shipped with the CLI; no harness
+auto-discovers it, since discovery reads `.claude/skills/` only.
 
 ## Conventions
 
