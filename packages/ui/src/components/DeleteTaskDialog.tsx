@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { Task } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { Modal } from './Modal';
@@ -12,6 +12,27 @@ interface DeleteTaskDialogProps {
 
 export function DeleteTaskDialog({ task, onClose }: DeleteTaskDialogProps) {
   const deleteTask = useBoardStore((s) => s.deleteTask);
+  const listTaskAttachments = useBoardStore((s) => s.listTaskAttachments);
+  const taskId = task.frontmatter.id;
+
+  // Read when the dialog opens, so the sentence names what the deletion takes;
+  // Delete waits for it.
+  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    listTaskAttachments(taskId).then(
+      (list) => live && setAttachmentCount(list.length),
+      () => live && setAttachmentCount(0),
+    );
+    return () => {
+      live = false;
+    };
+  }, [listTaskAttachments, taskId]);
+
+  const attachmentsSentence =
+    attachmentCount === null || attachmentCount === 0
+      ? ''
+      : ` Its ${attachmentCount} ${attachmentCount === 1 ? 'attachment is' : 'attachments are'} deleted too.`;
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -47,7 +68,8 @@ export function DeleteTaskDialog({ task, onClose }: DeleteTaskDialogProps) {
       </header>
       <form className={styles.form} onSubmit={(e) => void handleSubmit(e)}>
         <p className={styles.message}>
-          Delete {task.frontmatter.id} “{task.title}”? This cannot be undone.
+          Delete {task.frontmatter.id} “{task.title}”?{attachmentsSentence} This cannot be
+          undone.
         </p>
         {submitError !== null && (
           <p className={styles.error} role="alert">
@@ -66,7 +88,7 @@ export function DeleteTaskDialog({ task, onClose }: DeleteTaskDialogProps) {
           <button
             type="submit"
             className={styles.confirmButton}
-            disabled={submitting}
+            disabled={submitting || attachmentCount === null}
           >
             Delete
           </button>

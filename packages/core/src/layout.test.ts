@@ -6,6 +6,12 @@ import { loadBoard, type LoadBoardResult } from './loader.js';
 import { parseBacklog } from './parser.js';
 
 class InMemoryFs implements FsAdapter {
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new TextEncoder().encode(await this.read(path));
+  }
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    await this.write(path, new TextDecoder().decode(content));
+  }
   files = new Map<string, { content: string; lastModified: number }>();
   failWrites: string | null = null;
   private clock = 1;
@@ -32,7 +38,7 @@ class InMemoryFs implements FsAdapter {
   }
   async stat(path: string): Promise<FileStat | null> {
     const entry = this.files.get(path);
-    return entry === undefined ? null : { lastModified: entry.lastModified };
+    return entry === undefined ? null : { lastModified: entry.lastModified, size: new TextEncoder().encode(entry.content).byteLength };
   }
   async mkdir(): Promise<void> {}
   async remove(path: string): Promise<void> {

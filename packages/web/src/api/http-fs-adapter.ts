@@ -46,6 +46,29 @@ export class HttpFsAdapter implements FsAdapter {
     log.debug(`write ${path} (${content.length} chars)`);
   }
 
+  async readBytes(path: string): Promise<Uint8Array> {
+    const res = await fetch(`${this.base}/read-bytes?path=${encodeURIComponent(path)}`);
+    if (!res.ok) {
+      throw await failed('read-bytes', path, res);
+    }
+    const content = new Uint8Array(await res.arrayBuffer());
+    log.debug(`read-bytes ${path} (${content.byteLength} bytes)`);
+    return content;
+  }
+
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    const res = await fetch(`${this.base}/write-bytes?path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', [CLIENT_ID_HEADER]: this.clientId },
+      // A copy typed onto a plain ArrayBuffer, which is what a request body takes.
+      body: content.slice(),
+    });
+    if (!res.ok) {
+      throw await failed('write-bytes', path, res);
+    }
+    log.debug(`write-bytes ${path} (${content.byteLength} bytes)`);
+  }
+
   async list(dir: string): Promise<FsEntry[]> {
     const res = await fetch(`${this.base}/list?path=${encodeURIComponent(dir)}`);
     if (res.status === 404) return [];

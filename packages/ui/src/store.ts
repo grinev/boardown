@@ -8,7 +8,11 @@ import type {
   DocPage,
   EpicPatch,
   FsAdapter,
+  Attachment,
+  FileSaver,
   GitHistoryReader,
+  GuardedWrite,
+  NewAttachment,
   GuardedChange,
   GuardedFs,
   LayoutConversion,
@@ -35,8 +39,13 @@ import {
   completeRelease as completeReleaseInBoard,
   createEpic as createEpicInBoard,
   createRelease as createReleaseInBoard,
+  addAttachments,
   addDocFolder,
   addDocPage,
+  attachmentWrites,
+  listAttachments,
+  readAttachment,
+  removeAttachment,
   createConvertingFs,
   createGuardedFs,
   createLogger,
@@ -89,6 +98,8 @@ export interface CreateTaskInput {
   labels?: string[];
   // Each one read from the new task's side and mirrored into its other task.
   links?: TaskLink[];
+  // Land in the new task's attachments folder in the same write as the task.
+  attachments?: NewAttachment[];
 }
 
 export interface CreateReleaseInput {
@@ -137,6 +148,9 @@ interface BoardState {
   // Parked here the way `projectFiles` is; the panel that reads it holds no
   // result, since related commits are repository state and not board data.
   gitHistory: GitHistoryReader | null;
+  // Download's destination is the user's pick in the host's own dialog; the
+  // store reads the bytes and hands them over.
+  fileSaver: FileSaver | null;
   conflictOpen: boolean;
   // The file a write was refused on because the parser could not read all of it,
   // with the problems that justify the refusal. Null when nothing was refused.
@@ -172,6 +186,7 @@ interface BoardState {
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   setProjectFiles: (reader: ProjectFileReader) => void;
   setGitHistory: (reader: GitHistoryReader) => void;
+  setFileSaver: (saver: FileSaver) => void;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
@@ -237,6 +252,13 @@ interface BoardState {
   // labels on disk now, so a change a refresh brought in meanwhile survives.
   editTaskLabels: (taskId: string, added: string[], removed: string[]) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
+  // Attachments are read from disk each time and held by no state: the folder is
+  // the only record of them.
+  listTaskAttachments: (taskId: string) => Promise<Attachment[]>;
+  addTaskAttachments: (taskId: string, files: NewAttachment[]) => Promise<string[]>;
+  // A file already gone is not an error: there is nothing left to delete.
+  removeTaskAttachment: (taskId: string, name: string) => Promise<void>;
+  downloadTaskAttachment: (taskId: string, name: string) => Promise<'saved' | 'not-found'>;
   moveTask: (taskId: string, status: TaskStatus, beforeTaskId: string | null) => Promise<void>;
   moveTaskToRelease: (taskId: string, targetReleaseFilename: string | null) => Promise<void>;
   moveTaskOnBacklog: (
@@ -353,7 +375,7 @@ const wrapMinVersionWrites = (
     const writes = change.writes.some((file) => file.path === CONFIG_FILENAME)
       ? change.writes.map((file) => (file.path === CONFIG_FILENAME ? { ...file, content } : file))
       : [...change.writes, { path: CONFIG_FILENAME, content }];
-    await fs.commit({ writes, removes: change.removes });
+    await fs.commit({ ...change, writes });
     // Only the stamp is recorded, onto the config as it is now: a config change
     // that landed while this write was in flight must not be rolled back.
     commitConfig(withMinVersionStamp(readConfig() ?? next));
@@ -649,6 +671,7 @@ export const useBoardStore = create<BoardState>(
     rawFs: null,
     projectFiles: null,
     gitHistory: null,
+    fileSaver: null,
     conflictOpen: false,
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
@@ -656,6 +679,8 @@ export const useBoardStore = create<BoardState>(
     setProjectFiles: (reader) => set({ projectFiles: reader }),
 
     setGitHistory: (reader) => set({ gitHistory: reader }),
+
+    setFileSaver: (saver) => set({ fileSaver: saver }),
 
     load: async (fs, defaultTheme) => {
       set({
@@ -1226,6 +1251,23 @@ export const useBoardStore = create<BoardState>(
         };
       });
 
+      let attachmentFiles: GuardedWrite[] = [];
+      if (input.attachments !== undefined && input.attachments.length > 0) {
+        try {
+          const taskId = result.task.frontmatter.id;
+          attachmentFiles = (await attachmentWrites(fs, taskId, input.attachments)).writes;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          set({ errorMessage: message });
+          throw err;
+        }
+        // Reading the folder yielded, and a refresh may have landed meanwhile: what
+        // was built from the old snapshot would put stale containers beside the new
+        // guard. Start over from the board as it is now.
+        const now = get();
+        if (now.snapshot !== snapshot || now.fs !== fs) return now.createTask(input);
+      }
+
       set({
         snapshot: {
           ...snapshot,
@@ -1237,10 +1279,14 @@ export const useBoardStore = create<BoardState>(
         errorMessage: null,
       });
       try {
-        await fs.writeAll([
-          ...files,
-          { path: CONFIG_FILENAME, content: serializeConfig(withMinVersionStamp(result.config)) },
-        ]);
+        await fs.commit({
+          writes: [
+            ...files,
+            { path: CONFIG_FILENAME, content: serializeConfig(withMinVersionStamp(result.config)) },
+            ...attachmentFiles,
+          ],
+          removes: [],
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save task: ${message}` });
@@ -1808,7 +1854,7 @@ export const useBoardStore = create<BoardState>(
       // snapshot unmounts its dialog, and with it the confirm dialog that would have
       // shown a failed write. A refused delete must leave the user where they were.
       try {
-        await fs.writeAll(files);
+        await fs.commit({ writes: files, removes: [], unversionedRemoves: result.unversionedRemoves });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to delete task: ${message}` });
@@ -1824,6 +1870,63 @@ export const useBoardStore = create<BoardState>(
       // A deleted task is the end of the chain, not a step in it: close out of the
       // whole history rather than stepping back into a dialog the user was done with.
       set({ snapshot: nextSnapshot, errorMessage: null, selectedTaskId: null, dialogStack: [] });
+    },
+
+    listTaskAttachments: async (taskId) => {
+      const { fs } = get();
+      if (!fs) return [];
+      return listAttachments(fs, taskId);
+    },
+
+    addTaskAttachments: async (taskId, files) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return [];
+      const found = findTaskContainer(snapshot, taskId);
+      if (found === null) {
+        set({ errorMessage: `Task not found: ${taskId}` });
+        return [];
+      }
+      const { container } = found.location;
+      try {
+        return await addAttachments(fs, (change) => fs.commit(change), container, taskId, files);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: `Failed to attach files: ${message}` });
+        throw err;
+      }
+    },
+
+    removeTaskAttachment: async (taskId, name) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      const found = findTaskContainer(snapshot, taskId);
+      if (found === null) {
+        set({ errorMessage: `Task not found: ${taskId}` });
+        return;
+      }
+      const { container } = found.location;
+      try {
+        await removeAttachment(fs, (change) => fs.commit(change), container, taskId, name);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: `Failed to delete attachment: ${message}` });
+        throw err;
+      }
+    },
+
+    downloadTaskAttachment: async (taskId, name) => {
+      const { fs, fileSaver } = get();
+      if (!fs || !fileSaver) return 'not-found';
+      try {
+        const content = await readAttachment(fs, taskId, name);
+        if (content === null) return 'not-found';
+        await fileSaver.save(name, content);
+        return 'saved';
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ errorMessage: `Failed to download attachment: ${message}` });
+        throw err;
+      }
     },
 
     updateEpic: async (slug, patch) => {

@@ -49,7 +49,8 @@
   cursor: pointer;
 }
 
-.item:hover:not(.itemDisabled) {
+.item:hover:not(.itemDisabled),
+.itemActive {
   background: var(--accent-bg);
   color: var(--accent);
 }

@@ -23,6 +23,12 @@ class InMemoryFs implements FsAdapter {
   async write(path: string, content: string): Promise<void> {
     this.files.set(path, content);
   }
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new TextEncoder().encode(await this.read(path));
+  }
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    this.files.set(path, new TextDecoder().decode(content));
+  }
   async list(): Promise<FsEntry[]> {
     return [];
   }

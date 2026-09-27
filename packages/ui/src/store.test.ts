@@ -27,7 +27,7 @@ import { useBoardStore } from './store';
 // In-memory adapter mirroring packages/core's reference impl, plus a switch to
 // simulate write failures so we can assert optimistic-update rollback.
 class MemFs implements GuardedFs {
-  files = new Map<string, { content: string; lastModified: number }>();
+  files = new Map<string, { content: string | Uint8Array; lastModified: number }>();
   dirs = new Set<string>();
   writes: string[] = [];
   writeAllCalls: string[][] = [];
@@ -37,12 +37,16 @@ class MemFs implements GuardedFs {
 
   async writeAll(files: readonly GuardedFile[]): Promise<void> {
     this.writeAllCalls.push(files.map((file) => file.path));
-    for (const file of files) await this.write(file.path, file.content);
+    for (const file of files) {
+      if (typeof file.content === 'string') await this.write(file.path, file.content);
+      else await this.writeBytes(file.path, file.content);
+    }
   }
 
   async commit(change: GuardedChange): Promise<void> {
     await this.writeAll(change.writes);
     for (const path of change.removes) await this.remove(path);
+    for (const path of change.unversionedRemoves ?? []) await this.remove(path);
   }
 
   async removeDir(path: string): Promise<void> {
@@ -75,10 +79,24 @@ class MemFs implements GuardedFs {
   async read(path: string): Promise<string> {
     const entry = this.files.get(path);
     if (entry === undefined) throw new Error(`ENOENT: ${path}`);
-    return entry.content;
+    return typeof entry.content === 'string' ? entry.content : new TextDecoder().decode(entry.content);
+  }
+
+  async readBytes(path: string): Promise<Uint8Array> {
+    const entry = this.files.get(path);
+    if (entry === undefined) throw new Error(`ENOENT: ${path}`);
+    return typeof entry.content === 'string' ? new TextEncoder().encode(entry.content) : entry.content;
   }
 
   async write(path: string, content: string): Promise<void> {
+    await this.writeBytesOrText(path, content);
+  }
+
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    await this.writeBytesOrText(path, content);
+  }
+
+  private async writeBytesOrText(path: string, content: string | Uint8Array): Promise<void> {
     if (
       this.failWritesMatching !== null &&
       (this.failWritesMatching === '*' || path.includes(this.failWritesMatching))
@@ -110,7 +128,10 @@ class MemFs implements GuardedFs {
 
   async stat(path: string): Promise<FileStat | null> {
     const entry = this.files.get(path);
-    return entry === undefined ? null : { lastModified: entry.lastModified };
+    if (entry === undefined) return null;
+    const size =
+      typeof entry.content === 'string' ? entry.content.length : entry.content.byteLength;
+    return { lastModified: entry.lastModified, size };
   }
 }
 
@@ -243,6 +264,19 @@ describe('deleteTask', () => {
     expect(fs.writes.sort()).toEqual(['releases/0.9.md', 'releases/1.0.md'].sort());
   });
 
+  it("removes the task's attachments folder with it, whatever it holds", async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+    await fs.writeBytes('attachments/BD-1/a.png', new Uint8Array([0, 1]));
+    await fs.writeBytes('attachments/BD-1/sub/b.txt', new Uint8Array([2]));
+    await fs.writeBytes('attachments/BD-2/c.txt', new Uint8Array([3]));
+
+    await state().deleteTask('BD-1');
+
+    expect([...fs.files.keys()].filter((k) => k.startsWith('attachments/'))).toEqual([
+      'attachments/BD-2/c.txt',
+    ]);
+  });
+
   it('refuses a task in a finished release', async () => {
     setup(snap({ releases: [release('0.9', 'finished', [task('BD-1')])] }));
 
@@ -266,6 +300,52 @@ describe('deleteTask', () => {
 });
 
 describe('createTask', () => {
+  it('starts over when a refresh lands while the folder is being read', async () => {
+    const { fs: stale } = setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'future')] }));
+    const fresh = new MemFs();
+    const refreshed = snap({
+      releases: [release('1.0', 'current'), release('2.0', 'future', [task('BD-3')])],
+    });
+    const list = stale.list.bind(stale);
+    stale.list = async (dir: string) => {
+      useBoardStore.setState({ snapshot: refreshed, fs: fresh });
+      return list(dir);
+    };
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'With a file',
+      type: 'feature',
+      attachments: [{ name: 'a.txt', content: new Uint8Array([1]) }],
+    });
+
+    expect(current().releases[1]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-3']);
+    expect(current().releases[0]!.tasks).toHaveLength(1);
+    expect(fresh.files.has('attachments/BD-10/a.txt')).toBe(true);
+    expect(stale.writes).toEqual([]);
+  });
+
+  it("writes picked files into the new task's folder with the task, suffixing a taken name", async () => {
+    const { fs } = setup(snap({ config: config(), releases: [release('1.0', 'current')] }));
+    const id = `BD-${current().config.nextId}`;
+    await fs.writeBytes(`attachments/${id}/shot.png`, new Uint8Array([9]));
+
+    await state().createTask({
+      releaseFilename: 'releases/1.0.md',
+      title: 'With files',
+      type: 'feature',
+      attachments: [
+        { name: 'shot.png', content: new Uint8Array([0, 255]) },
+        { name: 'notes.txt', content: new Uint8Array([1]) },
+      ],
+    });
+
+    expect(await fs.readBytes(`attachments/${id}/shot (1).png`)).toEqual(new Uint8Array([0, 255]));
+    expect(await fs.readBytes(`attachments/${id}/notes.txt`)).toEqual(new Uint8Array([1]));
+    expect(await fs.readBytes(`attachments/${id}/shot.png`)).toEqual(new Uint8Array([9]));
+    expect(current().releases[0]!.tasks[0]!.frontmatter.id).toBe(id);
+  });
+
   it('adds a task to a release and bumps nextId in config', async () => {
     const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
 
@@ -1979,7 +2059,7 @@ order: 100
     await state().reloadSilent();
 
     await state().setTheme('dark');
-    expect(fs.files.get(BACKLOG_PATH)!.content.match(/id: BD-5/g)).toHaveLength(1);
+    expect((fs.files.get(BACKLOG_PATH)!.content as string).match(/id: BD-5/g)).toHaveLength(1);
   });
 });
 

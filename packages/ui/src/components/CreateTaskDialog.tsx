@@ -1,6 +1,13 @@
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import type { Epic, Release, TaskLink, TaskPriority, TaskType } from '@boardown/core';
+import type {
+  Epic,
+  NewAttachment,
+  Release,
+  TaskLink,
+  TaskPriority,
+  TaskType,
+} from '@boardown/core';
 import {
   DEFAULT_TASK_PRIORITY,
   TASK_PRIORITIES,
@@ -13,6 +20,7 @@ import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
 import { pickedLinkRows } from '../utils/linked-tasks';
 import { isSubmitShortcut } from '../utils/submit-shortcut';
+import { CreateTaskAttachments } from './Attachments';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { DocRefTextarea } from './DocRefTextarea';
 import { IconSelect, type IconSelectOption } from './IconSelect';
@@ -61,6 +69,7 @@ export function CreateTaskDialog({
   const [releaseFilename, setReleaseFilename] = useState(initialReleaseFilename);
   const [labels, setLabels] = useState<string[]>([]);
   const [pickedLinks, setPickedLinks] = useState<TaskLink[]>([]);
+  const [pickedFiles, setPickedFiles] = useState<NewAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -96,7 +105,8 @@ export function CreateTaskDialog({
     epicSlug !== initialEpicSlug ||
     releaseFilename !== initialReleaseFilename ||
     labels.length > 0 ||
-    linkRows.length > 0;
+    linkRows.length > 0 ||
+    pickedFiles.length > 0;
 
   const epicOptions = useMemo<IconSelectOption[]>(() => {
     const toOption = (e: Epic): IconSelectOption => ({
@@ -168,6 +178,7 @@ export function CreateTaskDialog({
         ...(linkRows.length > 0
           ? { links: linkRows.map((r) => ({ type: r.type, to: r.task.frontmatter.id })) }
           : {}),
+        ...(pickedFiles.length > 0 ? { attachments: pickedFiles } : {}),
       });
       onClose();
     } catch (err) {
@@ -307,6 +318,11 @@ export function CreateTaskDialog({
               current.filter((l) => !(l.type === linkType && l.to === to)),
             )
           }
+          headingClassName={`${styles.label} ${styles.sectionLabel}`}
+        />
+        <CreateTaskAttachments
+          files={pickedFiles}
+          onChange={setPickedFiles}
           headingClassName={`${styles.label} ${styles.sectionLabel}`}
         />
         {submitError !== null && (

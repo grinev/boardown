@@ -1,5 +1,6 @@
 import type {
   FsAdapter,
+  FileSaver,
   GitHistoryReader,
   ProjectFileReader,
   Theme,
@@ -38,6 +39,9 @@ interface AppProps {
   // dialog's Commits panel. A third capability for the same reason as the
   // second: it reaches outside `.boardown/`, so no write path may hold it.
   gitHistory: GitHistoryReader;
+  // Download: saves a copy of an attachment where the user picks, through the
+  // host's own dialog. The one capability that writes outside `.boardown/`.
+  fileSaver: FileSaver;
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
@@ -62,6 +66,7 @@ export function App({
   fs,
   projectFiles,
   gitHistory,
+  fileSaver,
   defaultTheme,
   defaultProjectName,
   defaultIdPrefix,
@@ -107,6 +112,7 @@ export function App({
   const load = useBoardStore((s) => s.load);
   const setProjectFiles = useBoardStore((s) => s.setProjectFiles);
   const setGitHistory = useBoardStore((s) => s.setGitHistory);
+  const setFileSaver = useBoardStore((s) => s.setFileSaver);
   const repoFilePopupPath = useBoardStore((s) => s.repoFilePopupPath);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
@@ -130,6 +136,10 @@ export function App({
   useEffect(() => {
     setGitHistory(gitHistory);
   }, [gitHistory, setGitHistory]);
+
+  useEffect(() => {
+    setFileSaver(fileSaver);
+  }, [fileSaver, setFileSaver]);
 
   // useLayoutEffect so the attribute is set before the browser paints the first
   // frame — a plain effect runs after paint and flashes the light-theme default.

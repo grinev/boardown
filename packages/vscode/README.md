@@ -66,6 +66,9 @@ instead of overwriting.
   both sides and shown from the right end in each task, finished releases
   included. Any task id mentioned in
   a description or a note renders as a link to that task.
+- **Attachments**: attach files to a task from the task dialog or Create task —
+  they are kept in `.boardown/attachments/<task id>/`, open in the same preview as
+  a repo file link, and download through a Save-as dialog.
 - **Git integration**: a **Commits** panel in the task dialog lists the commits
   in your local repository whose subject names the task's id, and a copy button
   next to the id puts a `feat(BD-123): Add next button` commit message on the

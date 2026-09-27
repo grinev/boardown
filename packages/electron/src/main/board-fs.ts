@@ -52,11 +52,22 @@ export async function handleFsRequest(
         if (isENOENT(err)) return null;
         throw err;
       }
+    case 'readBytes':
+      try {
+        return new Uint8Array(await fsp.readFile(target));
+      } catch (err) {
+        if (isENOENT(err)) return null;
+        throw err;
+      }
     case 'write':
+    case 'writeBytes': {
       await fsp.mkdir(path.dirname(target), { recursive: true });
-      await fsp.writeFile(target, req.content ?? '', 'utf-8');
+      const content = req.content ?? '';
+      if (typeof content === 'string') await fsp.writeFile(target, content, 'utf-8');
+      else await fsp.writeFile(target, content);
       onWrite?.(target);
       return undefined;
+    }
     case 'list':
       try {
         const entries = await fsp.readdir(target, { withFileTypes: true });
@@ -78,7 +89,7 @@ export async function handleFsRequest(
     case 'stat':
       try {
         const s = await fsp.stat(target);
-        return { lastModified: s.mtimeMs } satisfies FileStat;
+        return { lastModified: s.mtimeMs, size: s.size } satisfies FileStat;
       } catch (err) {
         if (isENOENT(err)) return null;
         throw err;

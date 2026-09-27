@@ -517,6 +517,11 @@ describe('deleteTaskWithLinks', () => {
     expect(result.containers[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-2']);
   });
 
+  it("names the task's attachments folder among what the change removes", () => {
+    const result = deleteTaskWithLinks([release(task('BD-1', 'todo', 100))], 'BD-1');
+    expect(result.unversionedRemoves).toEqual(['attachments/BD-1']);
+  });
+
   it('strips the mirrored record from a linked task in another container', () => {
     const r0 = release(linked('BD-1', 'BD-2'));
     const e0 = epicOf('ui', linked('BD-2', 'BD-1'));

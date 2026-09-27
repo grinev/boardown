@@ -17,8 +17,10 @@ import {
   type BoardSnapshot,
   type ConvertingFs,
   type Epic,
+  type GuardedChange,
   type GuardedFile,
   type GuardedFs,
+  type GuardedWrite,
   type ParseProblem,
   type Release,
   type Task,
@@ -200,14 +202,11 @@ export async function writeContainer(
   ref: ContainerRef,
   config: BoardConfig,
 ): Promise<BoardConfig> {
-  const files = stampFiles(config, [
-    { path: ref.container.filename, content: serializeContainer(ref) },
-  ]);
-  if (files.length === 1) {
-    const only = files[0]!;
-    await fs.write(only.path, only.content);
+  const file = { path: ref.container.filename, content: serializeContainer(ref) };
+  if (configNeedsMinVersionStamp(config)) {
+    await fs.writeAll(stampFiles(config, [file]));
   } else {
-    await fs.writeAll(files);
+    await fs.write(file.path, file.content);
   }
   return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }
@@ -270,15 +269,33 @@ export async function writeConfig(fs: GuardedFs, config: BoardConfig): Promise<B
   return next;
 }
 
+// `extra` rides the same commit: a new task's attachments land with the task.
 export async function writeContainersAndConfig(
   fs: GuardedFs,
   refs: ContainerRef[],
   config: BoardConfig,
+  extra: readonly GuardedWrite[] = [],
 ): Promise<BoardConfig> {
   const next = withMinVersionStamp(config);
-  await fs.writeAll([
-    ...refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
-    { path: CONFIG_FILENAME, content: serializeConfig(next) },
-  ]);
+  await fs.commit({
+    writes: [
+      ...refs.map((ref) => ({ path: ref.container.filename, content: serializeContainer(ref) })),
+      { path: CONFIG_FILENAME, content: serializeConfig(next) },
+      ...extra,
+    ],
+    removes: [],
+  });
   return next;
+}
+
+// A whole guarded change — text and binary writes, removals of every kind — with
+// the minVersion stamp folded in like every other write here. Core's attachment
+// operations land through it.
+export async function commitChange(
+  fs: GuardedFs,
+  change: GuardedChange,
+  config: BoardConfig,
+): Promise<BoardConfig> {
+  await fs.commit({ ...change, writes: stampFiles(config, [...change.writes]) });
+  return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }

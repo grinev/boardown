@@ -35,6 +35,14 @@ const bridge: BoardownBridge = {
     write: async (filePath, content) => {
       await fsCall({ method: 'write', path: filePath, content });
     },
+    readBytes: async (filePath) => {
+      const result = await fsCall({ method: 'readBytes', path: filePath });
+      if (result === null) throw new Error(`ENOENT: ${filePath}`);
+      return result as Uint8Array;
+    },
+    writeBytes: async (filePath, content) => {
+      await fsCall({ method: 'writeBytes', path: filePath, content });
+    },
     list: (dir) => fsCall({ method: 'list', path: dir }) as Promise<FsEntry[]>,
     stat: (filePath) => fsCall({ method: 'stat', path: filePath }) as Promise<FileStat | null>,
     mkdir: async (dir) => {
@@ -51,6 +59,9 @@ const bridge: BoardownBridge = {
   gitHistory: {
     commitsForTask: (taskId) =>
       ipcRenderer.invoke(IPC.gitCommits, taskId) as Promise<GitHistoryResult>,
+  },
+  fileSaver: {
+    save: (name, content) => ipcRenderer.invoke(IPC.saveFile, { name, content }) as Promise<void>,
   },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<void>,
   popupMenu: () => ipcRenderer.send(IPC.popupMenu),

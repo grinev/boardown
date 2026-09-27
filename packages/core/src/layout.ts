@@ -193,7 +193,7 @@ export const createConvertingFs = (
       ...taken.epicCuts.filter((cut) => !own.has(cut.path)),
     ];
     const removes = [...change.removes, ...taken.removes.filter((p) => !change.removes.includes(p))];
-    return { writes, removes };
+    return { ...change, writes, removes };
   };
 
   const commit = async (change: GuardedChange): Promise<void> => {

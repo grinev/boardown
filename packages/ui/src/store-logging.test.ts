@@ -14,6 +14,12 @@ class ExplodingFs implements FsAdapter {
   async write(): Promise<void> {
     throw new Error('boom while writing');
   }
+  async readBytes(path: string): Promise<Uint8Array> {
+    throw new Error(`boom while reading ${path}`);
+  }
+  async writeBytes(): Promise<void> {
+    throw new Error('boom while writing');
+  }
   async list(): Promise<FsEntry[]> {
     throw new Error('boom while listing');
   }

@@ -85,6 +85,14 @@ describe('NodeFsAdapter', () => {
     expect(typeof stat?.lastModified).toBe('number');
   });
 
+  it('round-trips bytes that are not UTF-8, creating parent directories, and stats their size', async () => {
+    const fs = new NodeFsAdapter(root);
+    const bytes = new Uint8Array([0, 0xff, 0xfe, 0x80, 13, 10]);
+    await fs.writeBytes('attachments/BD-1/a.bin', bytes);
+    expect(await fs.readBytes('attachments/BD-1/a.bin')).toEqual(bytes);
+    expect((await fs.stat('attachments/BD-1/a.bin'))?.size).toBe(6);
+  });
+
   it('refuses to write outside the board root', async () => {
     await expect(new NodeFsAdapter(root).write('../evil.md', 'x')).rejects.toThrow();
   });

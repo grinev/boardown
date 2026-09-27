@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
 
 class InMemoryFs implements FsAdapter {
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new TextEncoder().encode(await this.read(path));
+  }
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    await this.write(path, new TextDecoder().decode(content));
+  }
   private files = new Map<string, { content: string; lastModified: number }>();
   private dirs = new Set<string>();
 
@@ -36,7 +42,7 @@ class InMemoryFs implements FsAdapter {
 
   async stat(path: string): Promise<FileStat | null> {
     const entry = this.files.get(path);
-    return entry === undefined ? null : { lastModified: entry.lastModified };
+    return entry === undefined ? null : { lastModified: entry.lastModified, size: new TextEncoder().encode(entry.content).byteLength };
   }
 
   async mkdir(dir: string): Promise<void> {

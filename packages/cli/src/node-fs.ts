@@ -33,6 +33,16 @@ export class NodeFsAdapter implements FsAdapter {
     await fsp.writeFile(target, content, 'utf8');
   }
 
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new Uint8Array(await fsp.readFile(this.target(path)));
+  }
+
+  async writeBytes(path: string, content: Uint8Array): Promise<void> {
+    const target = this.target(path);
+    await fsp.mkdir(dirname(target), { recursive: true });
+    await fsp.writeFile(target, content);
+  }
+
   async list(dir: string): Promise<FsEntry[]> {
     try {
       const entries = await fsp.readdir(this.target(dir), { withFileTypes: true });
@@ -56,7 +66,7 @@ export class NodeFsAdapter implements FsAdapter {
   async stat(path: string): Promise<FileStat | null> {
     try {
       const stats = await fsp.stat(this.target(path));
-      return { lastModified: stats.mtimeMs };
+      return { lastModified: stats.mtimeMs, size: stats.size };
     } catch (err) {
       if (isENOENT(err)) return null;
       throw err;
