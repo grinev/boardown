@@ -79,19 +79,24 @@ export class BoardOpError extends Error {
   }
 }
 
-// A finished release is archived: the product treats its task content as frozen
-// and forbids scheduling new work into it. Links are metadata and may still
-// change; every other mutation is refused here so every shell inherits the rule.
 // `status` only exists on a Release frontmatter, so the `in` check narrows the
 // union safely.
 export const isFinishedRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'finished';
 
+// A finished release is archived: the product treats its task content as frozen
+// and forbids scheduling new work into it, unless `editFinishedReleases` lifts the
+// freeze. Links are metadata and may still change either way; every other mutation
+// is refused here so every shell inherits the rule.
+export const isFrozenRelease = (container: Container, config: BoardConfig): boolean =>
+  isFinishedRelease(container) && config.editFinishedReleases !== true;
+
 // A task's status only means something while its release is being worked on — the
 // Board shows the current release alone. So a status may only *change* there,
 // unless `statusOutsideActiveRelease` lifts the lock. A finished release is
-// ARCHIVED either way. Moving a task around never changes its status, so it is
-// unaffected.
+// ARCHIVED ahead of it unless `editFinishedReleases` is on, and then this lock
+// applies to it as to any other release that is not current. Moving a task around
+// never changes its status, so it is unaffected.
 const isCurrentRelease = (container: Container): boolean =>
   'status' in container.frontmatter && container.frontmatter.status === 'current';
 
@@ -345,10 +350,11 @@ export interface ReleasePatch {
 // alone, and callers compare paths to decide between a write and a move.
 export const editRelease = (
   release: Release,
+  config: BoardConfig,
   patch: ReleasePatch,
   existing: readonly Release[],
 ): Release => {
-  if (isFinishedRelease(release)) {
+  if (isFrozenRelease(release, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a finished release');
   }
 
@@ -570,7 +576,7 @@ export const createTask = <C extends Container>(
   config: BoardConfig,
   input: NewTaskInput,
 ): { container: C; config: BoardConfig; task: Task } => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot create a task in a finished release');
   }
   refuseDisabledType(config, 'a new task', input.type);
@@ -633,7 +639,7 @@ export const editTask = <C extends Container>(
   taskId: string,
   patch: TaskPatch,
 ): C => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
   }
   const current = findTask(container.tasks, taskId);
@@ -722,7 +728,7 @@ export const setTaskLabels = <C extends Container>(
   taskId: string,
   labels: readonly string[],
 ): { container: C; config: BoardConfig } => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
   }
   const current = findTask(container.tasks, taskId).frontmatter.labels ?? [];
@@ -776,8 +782,12 @@ export const editEpic = (epic: Epic, patch: EpicPatch): Epic => {
   };
 };
 
-export const deleteTask = <C extends Container>(container: C, taskId: string): C => {
-  if (isFinishedRelease(container)) {
+export const deleteTask = <C extends Container>(
+  container: C,
+  config: BoardConfig,
+  taskId: string,
+): C => {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot delete a task in a finished release');
   }
   return replaceTasks(
@@ -792,7 +802,7 @@ export const changeTaskStatus = <C extends Container>(
   taskId: string,
   newStatus: TaskStatus,
 ): C => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot change the status of a task in a finished release');
   }
   const previousStatus = findTask(container.tasks, taskId).frontmatter.status;
@@ -814,10 +824,11 @@ export const changeTaskStatus = <C extends Container>(
 
 export const reorderTask = <C extends Container>(
   container: C,
+  config: BoardConfig,
   taskId: string,
   beforeTaskId: string | null,
 ): C => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot reorder a task in a finished release');
   }
   const task = findTask(container.tasks, taskId);
@@ -836,7 +847,7 @@ export const moveTaskInContainer = <C extends Container>(
   taskId: string,
   args: { status: TaskStatus; beforeTaskId: string | null },
 ): C => {
-  if (isFinishedRelease(container)) {
+  if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot move a task in a finished release');
   }
   const currentStatus = findTask(container.tasks, taskId).frontmatter.status;
@@ -866,10 +877,10 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   taskId: string,
   args: MoveAcrossArgs,
 ): { source: S; dest: D } => {
-  if (isFinishedRelease(source)) {
+  if (isFrozenRelease(source, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot move a task out of a finished release');
   }
-  if (isFinishedRelease(dest)) {
+  if (isFrozenRelease(dest, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot move a task into a finished release');
   }
   const task = findTask(source.tasks, taskId);
@@ -1131,13 +1142,14 @@ export interface DeleteTaskResult {
 // container, finished releases included. Deleting an archived task is still refused.
 export const deleteTaskWithLinks = (
   containers: readonly Container[],
+  config: BoardConfig,
   taskId: string,
 ): DeleteTaskResult => {
   const owner = containers.find((c) =>
     c.tasks.some((t) => t.frontmatter.id === taskId),
   );
   if (owner === undefined) throw new Error(`Task not found: ${taskId}`);
-  if (isFinishedRelease(owner)) {
+  if (isFrozenRelease(owner, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot delete a task in a finished release');
   }
 
@@ -1152,7 +1164,7 @@ export const deleteTaskWithLinks = (
     if (container === owner) {
       // A sibling task in the same file can hold the mirrored record too, and the
       // file is rewritten anyway — clean it in the same pass.
-      const withoutTask = deleteTask(container, taskId);
+      const withoutTask = deleteTask(container, config, taskId);
       return stripLinks(withoutTask) ?? withoutTask;
     }
     const cleaned = stripLinks(container);

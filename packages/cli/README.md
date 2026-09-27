@@ -68,6 +68,12 @@ boardown schema                 Print the machine-readable command/enum contract
 boardown version                Print the CLI version (also --version / -v).
 ```
 
+A finished release is frozen: every command that would change it or a task in it
+answers `ARCHIVED`. With `editFinishedReleases: true` in `config.yaml` those
+commands succeed instead — a status change there still needs
+`statusOutsideActiveRelease` and is otherwise `STATUS_LOCKED`. `schema` reports
+both keys, resolved to a boolean.
+
 ### Output depth
 
 A **task summary** is `id`, `title`, `type`, `priority`, `status`, plus `epic`,
@@ -136,7 +142,7 @@ alone: a task written under a list you have since changed still loads and still
 reports its own value.
 
 ```bash
-boardown schema --json   # taskStatuses, statusOutsideActiveRelease, plus wipLimitedStatuses when a limit is set
+boardown schema --json   # taskStatuses, statusOutsideActiveRelease, editFinishedReleases, plus wipLimitedStatuses when a limit is set
 ```
 
 ### Custom task types (beta)
@@ -233,7 +239,8 @@ twice. A label the registry lacks is appended to it in the same write as the tas
 if either file cannot be written, neither is; `rm` never touches the registry.
 A label with whitespace or over the limit is a `USAGE` error and nothing is
 written. Adding a label the task carries, or removing one it lacks, is an `ok`
-no-op; a task in a finished release is `ARCHIVED` either way.
+no-op; a task in a finished release is `ARCHIVED` either way unless
+`editFinishedReleases` is on.
 
 ```bash
 boardown task add "Fix login" --label backend --label auth
@@ -260,7 +267,7 @@ the folder with its task. It is all-or-nothing: a missing source or a directory 
 `FILE_NOT_FOUND`, a file over 25 MB (`attachmentMaxBytes` in `boardown schema`)
 `FILE_TOO_LARGE`, and on either nothing is written; `rm` of a name not there is
 `ATTACHMENT_NOT_FOUND`, and `add`/`rm` on a task in a finished release is
-`ARCHIVED` (`ls` still works).
+`ARCHIVED` unless `editFinishedReleases` is on (`ls` still works).
 
 ```bash
 boardown task attachment add BD-42 screenshots/login.png logs/trace.txt

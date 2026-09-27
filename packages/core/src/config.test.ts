@@ -427,6 +427,35 @@ describe('status outside an active release', () => {
   });
 });
 
+describe('editing finished releases', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('is absent until the user sets it, and absent means a finished release is frozen', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('editFinishedReleases');
+    expect(parseConfig(out).value?.editFinishedReleases).toBeUndefined();
+  });
+
+  it('round-trips both values', () => {
+    for (const enabled of [true, false]) {
+      const cfg: BoardConfig = { ...base, editFinishedReleases: enabled };
+      const out = serializeConfig(cfg);
+      expect(out).toContain(`editFinishedReleases: ${String(enabled)}`);
+      const back = parseConfig(out);
+      expect(back.problems).toEqual([]);
+      expect(back.value).toEqual(stamped(cfg));
+    }
+  });
+
+  it('fails the whole config on a non-boolean value rather than falling back', () => {
+    const parsed = parseConfig(
+      'idPrefix: BD\nnextId: 0\nprojectName: P\neditFinishedReleases: "yes"\n',
+    );
+    expect(parsed.value).toBeNull();
+    expect(parsed.problems).toHaveLength(1);
+  });
+});
+
 describe('task types', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 

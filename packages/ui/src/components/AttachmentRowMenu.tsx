@@ -16,7 +16,7 @@ interface MenuPosition {
 
 interface AttachmentRowMenuProps {
   name: string;
-  // A task in a finished release keeps its files readable: Download stays, Delete
+  // A task in a frozen finished release keeps its files readable: Download stays, Delete
   // is dead — the same treatment as the task's own menu.
   deleteDisabled: boolean;
   onDownload: () => void;

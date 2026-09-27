@@ -21,7 +21,7 @@ export function StatusOutsideActiveReleaseField({ className }: { className?: str
       </span>
       <span className={styles.hint}>
         Lets a task&apos;s status be set in the backlog, an epic, or a future release. Finished
-        releases stay frozen.
+        releases also need the setting below.
       </span>
     </label>
   );

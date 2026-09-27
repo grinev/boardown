@@ -204,6 +204,7 @@ interface BoardState {
   setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
   setGitIntegration: (enabled: boolean) => Promise<void>;
   setStatusOutsideActiveRelease: (enabled: boolean) => Promise<void>;
+  setEditFinishedReleases: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -933,6 +934,24 @@ export const useBoardStore = create<BoardState>(
       const nextConfig = withMinVersionStamp({
         ...snapshot.config,
         statusOutsideActiveRelease: enabled,
+      });
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
+    setEditFinishedReleases: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.editFinishedReleases ?? false) === enabled) return;
+      const nextConfig = withMinVersionStamp({
+        ...snapshot.config,
+        editFinishedReleases: enabled,
       });
       const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
       set({ snapshot: nextSnapshot, errorMessage: null });
@@ -1829,7 +1848,7 @@ export const useBoardStore = create<BoardState>(
 
       let result: DeleteTaskResult;
       try {
-        result = deleteTaskWithLinks(containers, taskId);
+        result = deleteTaskWithLinks(containers, snapshot.config, taskId);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: message });
@@ -1904,7 +1923,14 @@ export const useBoardStore = create<BoardState>(
       }
       const { container } = found.location;
       try {
-        return await addAttachments(fs, (change) => fs.commit(change), container, taskId, files);
+        return await addAttachments(
+          fs,
+          (change) => fs.commit(change),
+          container,
+          snapshot.config,
+          taskId,
+          files,
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to attach files: ${message}` });
@@ -1922,7 +1948,14 @@ export const useBoardStore = create<BoardState>(
       }
       const { container } = found.location;
       try {
-        await removeAttachment(fs, (change) => fs.commit(change), container, taskId, name);
+        await removeAttachment(
+          fs,
+          (change) => fs.commit(change),
+          container,
+          snapshot.config,
+          taskId,
+          name,
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to delete attachment: ${message}` });
@@ -1982,7 +2015,7 @@ export const useBoardStore = create<BoardState>(
 
       let nextRelease: Release;
       try {
-        nextRelease = editRelease(release, patch, snapshot.releases);
+        nextRelease = editRelease(release, snapshot.config, patch, snapshot.releases);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: message });
