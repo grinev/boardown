@@ -11,6 +11,7 @@ import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
 import { ConflictDialog } from './components/ConflictDialog';
+import { ConversionNoticeDialog } from './components/ConversionNoticeDialog';
 import { UnwritableFileDialog } from './components/UnwritableFileDialog';
 import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
@@ -25,7 +26,7 @@ import { StartReleaseDialog } from './components/StartReleaseDialog';
 import { TabBar } from './components/TabBar';
 import { TabContent } from './components/TabContent';
 import { TaskDetailsDialog } from './components/TaskDetailsDialog';
-import { useBoardStore } from './store';
+import { isAnyDialogOpen, useBoardStore } from './store';
 import { findReleaseOfTask } from './utils/find-release-of-task';
 import { findTaskById } from './utils/find-task';
 import { findTasksByEpic } from './utils/find-tasks-by-epic';
@@ -105,6 +106,11 @@ export function App({
   const settingsOpen = useBoardStore((s) => s.settingsOpen);
   const conflictOpen = useBoardStore((s) => s.conflictOpen);
   const unwritableFile = useBoardStore((s) => s.unwritableFile);
+  // Owed until dismissed, shown only between dialogs: one opening on top of it
+  // hides it, and it comes back once that one closes.
+  const conversionNoticeShown = useBoardStore(
+    (s) => s.conversionNoticeOwed && !isAnyDialogOpen(s),
+  );
   const completeReleaseForFilename = useBoardStore((s) => s.completeReleaseForFilename);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
@@ -128,6 +134,12 @@ export function App({
   useEffect(() => {
     void load(fs, defaultTheme);
   }, [fs, load, defaultTheme]);
+
+  // The store outlives this App: a shell that switches boards remounts it, and a
+  // notice owed for the board left behind must not open on the next one. A reload
+  // of the same board keeps the App, and with it the notice.
+  const dismissConversionNotice = useBoardStore((s) => s.dismissConversionNotice);
+  useEffect(() => dismissConversionNotice, [dismissConversionNotice]);
 
   useEffect(() => {
     setProjectFiles(projectFiles);
@@ -345,6 +357,7 @@ export function App({
           />
         )
       )}
+      {conversionNoticeShown && <ConversionNoticeDialog />}
     </main>
   );
 }

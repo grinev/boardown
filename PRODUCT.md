@@ -183,8 +183,17 @@ A file holding a block the parser could not read is left untouched and its tasks
 stay shown; the rest converts, and that file converts on the first write after it
 is fixed. An unreadable `backlog.md` holds every old-layout file back. An
 external change to any file the conversion touches refuses the whole write with
-the Reload modal / `CONFLICT`. Nothing on screen announces the conversion, and
-the CLI's reply to the write is the one it always gives. Deleting a doc page or
+the Reload modal / `CONFLICT`. The CLI's reply to the write is the one it always
+gives.
+
+The UI that made the write which completes a conversion — leaving no
+`epics/no_epic.md` and no task section in an epic file — shows a one-time notice,
+"Backlog moved to one file": every backlog task now lives in `backlog.md`, one
+file keeps backlog changes small in git diffs, and builds older than 0.11 no
+longer open the board. It waits while any other dialog is open, a Conflict or
+"File cannot be written" modal included, and opens once none is. Nothing records
+that it was seen: a partial conversion shows nothing, and a board converted by the
+CLI, another tab or another machine never shows it. Deleting a doc page or
 folder and creating an empty folder carry neither the conversion nor the stamp;
 the next write of content does.
 

@@ -47,6 +47,9 @@ export interface LayoutConversion {
   removes: string[];
   // The file a gathered task still sits in until the conversion lands.
   sources: ReadonlyMap<Task, string>;
+  // No old-layout file is left once it lands: nothing was held back, and no epic
+  // file keeps a task section the parser could not read.
+  complete: boolean;
 }
 
 export interface GatheredLayout {
@@ -105,9 +108,15 @@ export const gatherLayout = (layout: OldLayout): GatheredLayout => {
   const epicCuts: GuardedFile[] = [];
   const removes: string[] = [];
   let movedText = '';
+  // An epic file whose every task section failed to parse has no tasks to move or
+  // show, yet still holds the old layout on disk.
+  let strandedSections = false;
 
   for (const file of epicFiles) {
-    if (file.tasks.length === 0) continue;
+    if (file.tasks.length === 0) {
+      if (textAboveFirstTask(file.text) !== null) strandedSections = true;
+      continue;
+    }
     const kept = textAboveFirstTask(file.text);
     if (!isReadable(layout.problems, file.path) || kept === null) {
       holdBack(file.path, file.tasks);
@@ -153,6 +162,10 @@ export const gatherLayout = (layout: OldLayout): GatheredLayout => {
       epicCuts,
       removes,
       sources: new Map(moved.map((m) => [m.task, m.path])),
+      complete:
+        heldBack.length === 0 &&
+        !strandedSections &&
+        (legacyBacklog === null || removes.includes(legacyBacklog.filename)),
     },
   };
 };
@@ -168,11 +181,13 @@ export interface ConvertingFs extends GuardedFs {
 // one is in flight, any other write waits for it, so two writes can never both
 // carry it — or one carry `backlog.md` without the cuts that make it true.
 // Deletions and folder creation pass through: like the minVersion stamp, the
-// conversion rides writes of content only.
+// conversion rides writes of content only. `onLanded` hears of the one write that
+// carried it, so a shell can tell its user.
 export const createConvertingFs = (
   inner: GuardedFs,
   conversion: LayoutConversion | null,
   currentBacklog: () => Backlog | null,
+  onLanded?: (conversion: LayoutConversion) => void,
 ): ConvertingFs => {
   let pending = conversion;
   let inFlight: Promise<void> | null = null;
@@ -217,6 +232,7 @@ export const createConvertingFs = (
     } finally {
       inFlight = null;
     }
+    onLanded?.(taken);
   };
 
   return {
