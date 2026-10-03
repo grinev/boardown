@@ -152,6 +152,10 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     if (parsed.value !== null) {
       epics.push(parsed.value.epic);
       legacyEpicFiles.push({ path, text, tasks: parsed.value.tasks });
+    } else {
+      // No epic and nothing to move, but its task sections still count against a
+      // complete conversion.
+      legacyEpicFiles.push({ path, text, tasks: [] });
     }
   }
 

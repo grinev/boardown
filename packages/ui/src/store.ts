@@ -184,6 +184,10 @@ interface BoardState {
   createDocPageOpen: boolean;
   createDocFolderOpen: boolean;
   deleteDocPath: string | null;
+  // A write of this session completed the layout conversion and the user has not
+  // seen the notice yet. Not a dialog flag: the refusal modals and a reload leave
+  // it standing, and the notice shows whenever no dialog is open.
+  conversionNoticeOwed: boolean;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   setProjectFiles: (reader: ProjectFileReader) => void;
   setGitHistory: (reader: GitHistoryReader) => void;
@@ -193,6 +197,7 @@ interface BoardState {
   openConflict: () => void;
   openUnwritable: (path: string, problems: readonly ParseProblem[]) => void;
   closeUnwritable: () => void;
+  dismissConversionNotice: () => void;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
@@ -426,6 +431,9 @@ const boardFs = (
       }),
       result.conversion,
       () => get().snapshot?.backlog ?? null,
+      (landed) => {
+        if (landed.complete) set({ conversionNoticeOwed: true });
+      },
     ),
     () => get().snapshot?.config ?? null,
     (config) => {
@@ -645,6 +653,15 @@ const ALL_DIALOGS_CLOSED = {
   deleteDocPath: null,
 };
 
+// Read off ALL_DIALOGS_CLOSED rather than a list of its own, so a dialog added
+// there is counted here too.
+export const isAnyDialogOpen = (state: BoardState): boolean =>
+  state.conflictOpen ||
+  (Object.keys(ALL_DIALOGS_CLOSED) as (keyof typeof ALL_DIALOGS_CLOSED)[]).some((key) => {
+    const value = state[key];
+    return Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
+  });
+
 const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
   switch (ref.kind) {
     case 'task':
@@ -680,6 +697,7 @@ export const useBoardStore = create<BoardState>(
     conflictOpen: false,
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
+    conversionNoticeOwed: false,
 
     setProjectFiles: (reader) => set({ projectFiles: reader }),
 
@@ -819,6 +837,8 @@ export const useBoardStore = create<BoardState>(
       set({ ...ALL_DIALOGS_CLOSED, unwritableFile: { path, problems: [...problems] } }),
 
     closeUnwritable: () => set({ unwritableFile: null }),
+
+    dismissConversionNotice: () => set({ conversionNoticeOwed: false }),
 
     completeOnboarding: async (input) => {
       const { fs } = get();

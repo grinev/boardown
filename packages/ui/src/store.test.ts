@@ -22,7 +22,7 @@ import {
   emptyDocsTree,
 } from '@boardown/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useBoardStore } from './store';
+import { isAnyDialogOpen, useBoardStore } from './store';
 
 // In-memory adapter mirroring packages/core's reference impl, plus a switch to
 // simulate write failures so we can assert optimistic-update rollback.
@@ -2084,6 +2084,86 @@ order: 100
 
     await state().setTheme('dark');
     expect((fs.files.get(BACKLOG_PATH)!.content as string).match(/id: BD-5/g)).toHaveLength(1);
+  });
+
+  describe('the notice', () => {
+    beforeEach(() => {
+      useBoardStore.setState({ conversionNoticeOwed: false, conflictOpen: false });
+    });
+
+    const OLD_BOARD = {
+      [CONFIG_FILENAME]: CONFIG_MD,
+      'epics/ui.md': OLD_EPIC_MD,
+      'epics/no_epic.md': OLD_NO_EPIC_MD,
+    };
+
+    it('is owed once the write that completes the conversion lands, and not before', async () => {
+      await loadFrom(OLD_BOARD);
+      expect(state().conversionNoticeOwed).toBe(false);
+      await state().setTheme('dark');
+      expect(state().conversionNoticeOwed).toBe(true);
+    });
+
+    it('is not owed after a partial conversion', async () => {
+      await loadFrom({
+        ...OLD_BOARD,
+        'epics/ui.md': `${OLD_EPIC_MD}\n## Broken\n\n---\nid: [\n---\n`,
+      });
+      await state().setTheme('dark');
+      expect(state().conversionNoticeOwed).toBe(false);
+    });
+
+    it('is not owed when the write is refused', async () => {
+      const fs = await loadFrom({ ...OLD_BOARD, 'releases/1.0.md': RELEASE_MD });
+      fs.files.get('releases/1.0.md')!.lastModified += 1000;
+      await expect(state().updateTask('BD-1', { title: 'Renamed' })).rejects.toThrow();
+      expect(state().conversionNoticeOwed).toBe(false);
+    });
+
+    it('is not owed on a board already in the current layout', async () => {
+      await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+      await state().setTheme('dark');
+      expect(state().conversionNoticeOwed).toBe(false);
+    });
+
+    it('survives the refusal modals and a reload, and is gone once dismissed', async () => {
+      await loadFrom(OLD_BOARD);
+      await state().setTheme('dark');
+      state().openUnwritable('epics/ui.md', []);
+      state().openConflict();
+      expect(state().conversionNoticeOwed).toBe(true);
+      await state().reload();
+      await state().reloadSilent();
+      expect(state().conversionNoticeOwed).toBe(true);
+      // The reloaded board is in the current layout: further writes owe nothing new.
+      state().dismissConversionNotice();
+      await state().setTheme('light');
+      expect(state().conversionNoticeOwed).toBe(false);
+    });
+  });
+});
+
+describe('isAnyDialogOpen', () => {
+  beforeEach(() => {
+    setup(snap());
+    useBoardStore.setState({ conflictOpen: false, settingsOpen: false });
+  });
+
+  it('is false with nothing open', () => {
+    expect(isAnyDialogOpen(state())).toBe(false);
+  });
+
+  it('counts a detail dialog, Settings and both refusal modals', () => {
+    state().openTask('BD-1');
+    expect(isAnyDialogOpen(state())).toBe(true);
+    useBoardStore.setState({ selectedTaskId: null, settingsOpen: true });
+    expect(isAnyDialogOpen(state())).toBe(true);
+    useBoardStore.setState({ settingsOpen: false });
+    state().openUnwritable('releases/1.0.md', []);
+    expect(isAnyDialogOpen(state())).toBe(true);
+    state().closeUnwritable();
+    state().openConflict();
+    expect(isAnyDialogOpen(state())).toBe(true);
   });
 });
 

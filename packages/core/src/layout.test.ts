@@ -142,8 +142,14 @@ const open = async (fs: InMemoryFs) => {
     onConflict,
     onUnreadable,
   });
-  const converting = createConvertingFs(guarded, result.conversion, () => result.snapshot.backlog);
-  return { result, fs: converting, onConflict, onUnreadable };
+  const onLanded = vi.fn();
+  const converting = createConvertingFs(
+    guarded,
+    result.conversion,
+    () => result.snapshot.backlog,
+    onLanded,
+  );
+  return { result, fs: converting, onConflict, onUnreadable, onLanded };
 };
 
 const ids = (text: string | undefined): string[] =>
@@ -340,6 +346,37 @@ Split the input.`);
   });
 });
 
+describe('the layout conversion, reported once it lands', () => {
+  it('reports the landed conversion once, as complete, and nothing on later writes', async () => {
+    const { fs, result, onLanded } = await open(
+      await board({ 'epics/parser.md': PARSER, 'epics/no_epic.md': NO_EPIC }),
+    );
+    expect(result.conversion!.complete).toBe(true);
+    await fs.write('docs/a.md', 'x\n');
+    expect(onLanded).toHaveBeenCalledTimes(1);
+    expect(onLanded).toHaveBeenCalledWith(result.conversion);
+    await fs.write('docs/b.md', 'y\n');
+    expect(onLanded).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing for a refused write, and reports the retry that lands', async () => {
+    const disk = await board({ 'epics/parser.md': PARSER });
+    const { fs, onLanded } = await open(disk);
+    disk.failWrites = 'epics/parser.md';
+    await expect(fs.write('docs/a.md', 'x\n')).rejects.toThrow(/disk full/);
+    expect(onLanded).not.toHaveBeenCalled();
+    disk.failWrites = null;
+    await fs.write('docs/a.md', 'x\n');
+    expect(onLanded).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing on a board already in the current layout', async () => {
+    const { fs, onLanded } = await open(await board({ 'backlog.md': '' }));
+    await fs.write('docs/a.md', 'x\n');
+    expect(onLanded).not.toHaveBeenCalled();
+  });
+});
+
 describe('the layout conversion, around unreadable files', () => {
   const BROKEN_TASK = '\n## Broken\n\n---\nid: [\n---\n';
 
@@ -355,6 +392,43 @@ describe('the layout conversion, around unreadable files', () => {
 
     await expect(fs.write('epics/parser.md', 'anything')).rejects.toThrow(/could not read/);
     expect(onUnreadable).toHaveBeenCalled();
+  });
+
+  it('is incomplete while a file is held back', async () => {
+    const { result } = await open(
+      await board({ 'epics/parser.md': PARSER + BROKEN_TASK, 'epics/ui.md': UI }),
+    );
+    expect(result.conversion!.complete).toBe(false);
+  });
+
+  it('is incomplete while an epic file keeps only task sections it could not read', async () => {
+    const disk = await board({
+      'epics/parser.md': `${PARSER_HEAD}\n${BROKEN_TASK}`,
+      'epics/ui.md': UI,
+    });
+    const { fs, result } = await open(disk);
+    expect(result.snapshot.heldBack).toEqual([]);
+    expect(result.conversion!.complete).toBe(false);
+    await fs.write('docs/a.md', 'x\n');
+    expect(disk.text('epics/parser.md')).toBe(`${PARSER_HEAD}\n${BROKEN_TASK}`);
+  });
+
+  it('is incomplete while no_epic.md keeps only a task section it could not read', async () => {
+    const disk = await board({ 'epics/ui.md': UI, 'epics/no_epic.md': `---\n{}\n---\n${BROKEN_TASK}` });
+    const { fs, result } = await open(disk);
+    expect(result.conversion!.complete).toBe(false);
+    await fs.write('docs/a.md', 'x\n');
+    expect(disk.files.has('epics/no_epic.md')).toBe(true);
+  });
+
+  it('is incomplete while an epic file with unreadable metadata holds a task section', async () => {
+    const disk = await board({
+      'epics/ui.md': UI,
+      'epics/stuck.md': UI.replace('name: UI', 'name: ['),
+    });
+    const { result } = await open(disk);
+    expect(result.snapshot.epics.map((e) => e.slug)).toEqual(['ui']);
+    expect(result.conversion!.complete).toBe(false);
   });
 
   it('holds everything back when backlog.md is unreadable, refusing writes to each file', async () => {
