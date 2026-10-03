@@ -30,7 +30,8 @@ instead of overwriting.
 ## Features
 
 - **Backlog, Board and Archive** views: a Jira-style backlog, a kanban for the
-  current release, and a read-only archive of finished releases.
+  current release, and an archive of finished releases — read-only unless you
+  allow editing them in Settings.
 - **Releases** with a `future → current → finished` lifecycle, with start /
   complete actions and unfinished-task relocation on completion; click a
   release's name to view and edit its details. Opt in from Settings to keep
@@ -44,8 +45,10 @@ instead of overwriting.
 - **External links**: an `http://` or `https://` URL written in a description, a
   note, a custom field, a doc page or a repo file preview is clickable and opens
   in your browser.
-- **Epics** that group tasks across releases and double as the backlog's
-  storage, usable as a filter dimension, with an editable colour.
+- **Epics** that group tasks across releases, usable as a filter dimension,
+  with an editable colour.
+- **Labels**: tag tasks with free-form labels, shown on board cards and
+  suggested from a board-wide list as you type.
 - **Task search**: a search field in the top bar finds any task by id, title or
   description — finished releases included — and opens it in one click.
 - **Task priority**: four levels (Critical / High / Medium / Low) shown as a
@@ -68,7 +71,8 @@ instead of overwriting.
   a description or a note renders as a link to that task.
 - **Attachments**: attach files to a task from the task dialog or Create task —
   they are kept in `.boardown/attachments/<task id>/`, open in the same preview as
-  a repo file link, and download through a Save-as dialog.
+  a repo file link, and download through a Save-as dialog. Images show as
+  thumbnails and open as pictures.
 - **Git integration**: a **Commits** panel in the task dialog lists the commits
   in your local repository whose subject names the task's id, and a copy button
   next to the id puts a `feat(BD-123): Add next button` commit message on the

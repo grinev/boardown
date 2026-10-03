@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.11.0
+
+- **Attachments**: a task dialog's new **Attachments** section, below
+  Description, takes any number of files from the file picker (up to 25 MB
+  each) and keeps them in `.boardown/attachments/<task id>/`. Each opens in the
+  same preview as a repo file link, and its `…` menu offers **Download** —
+  through VS Code's Save dialog — and **Delete**. Create task can attach files
+  too.
+- **Image previews**: an image attachment shows a thumbnail in its row, and an
+  image — attached or linked with `[[repo:…]]` — now opens as a picture in the
+  file popup instead of `Unsupported file format`.
+- **Labels**: tag a task with free-form labels, shown as chips on its board card
+  and edited in a **Labels** row of the task dialog and in Create task. Suggestions
+  come from a board-wide list in `.boardown/config.yaml` that grows as you add new
+  labels.
+- **Link tasks while creating them**: Create task gains a **Linked tasks**
+  section, so a new task is created already linked to the tasks you picked, under
+  any of the seven relations.
+- **Edit finished releases**: a new **Allow editing finished releases** checkbox
+  in Settings lets a task in a finished release be edited, moved, deleted or
+  created there, and the release's own name and description be changed. The
+  release itself stays in the Archive.
+- **The backlog lives in one file**: every task in no release is now kept in
+  `.boardown/backlog.md`, so backlog changes stay small in git diffs. An existing
+  board is converted by the first change made to it and a one-time notice says so;
+  extension versions 0.10.0 and earlier cannot open the board after that.
+
 ## 0.10.0
 
 - **Custom task types**: a board can declare its own task types in
