@@ -71,4 +71,37 @@ describe('taskMatchesFilters', () => {
       taskMatchesFilters(task({ priority: 'high' }), { priorities: ['medium', 'high'] }),
     ).toBe(true);
   });
+
+  it('matches any selected label, ignoring case', () => {
+    const backend = task({ labels: ['Backend', 'ui'] });
+    expect(taskMatchesFilters(backend, { labels: ['backend'] })).toBe(true);
+    expect(taskMatchesFilters(backend, { labels: ['docs', 'UI'] })).toBe(true);
+    expect(taskMatchesFilters(backend, { labels: ['docs'] })).toBe(false);
+    expect(taskMatchesFilters(task(), { labels: ['backend'] })).toBe(false);
+  });
+
+  it('matches a task with no labels when noLabels is set, on its own or with labels', () => {
+    expect(taskMatchesFilters(task(), { noLabels: true })).toBe(true);
+    expect(taskMatchesFilters(task({ labels: ['ui'] }), { noLabels: true })).toBe(false);
+    expect(taskMatchesFilters(task(), { noLabels: true, labels: ['ui'] })).toBe(true);
+    expect(
+      taskMatchesFilters(task({ labels: ['ui'] }), { noLabels: true, labels: ['ui'] }),
+    ).toBe(true);
+    expect(
+      taskMatchesFilters(task({ labels: ['docs'] }), { noLabels: true, labels: ['ui'] }),
+    ).toBe(false);
+  });
+
+  it('skips the label dimension when nothing is selected', () => {
+    expect(taskMatchesFilters(task({ labels: ['ui'] }), { labels: [], noLabels: false })).toBe(
+      true,
+    );
+  });
+
+  it('ANDs the label dimension with the others', () => {
+    const bug = task({ type: 'bug', labels: ['ui'] });
+    expect(taskMatchesFilters(bug, { types: ['bug'], labels: ['ui'] })).toBe(true);
+    expect(taskMatchesFilters(bug, { types: ['docs'], labels: ['ui'] })).toBe(false);
+    expect(taskMatchesFilters(bug, { epicMatches: false, labels: ['ui'] })).toBe(false);
+  });
 });

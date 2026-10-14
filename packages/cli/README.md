@@ -38,7 +38,7 @@ boardown backlog                Active + future releases and the unscheduled bac
 boardown archive                Finished releases.
 
 boardown task get <id>…         Show one or more tasks in full — the drill-down.
-boardown task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
+boardown task list              List/filter tasks (--status --type --priority --epic --label --release --backlog --text).
 boardown task add <title>       Create a task (--type --priority --status --epic --release --description --field --checklist --label --link --attach).
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
@@ -101,11 +101,12 @@ keeps `{ id, item }`; a new note still returns its id. `task label add|rm`
 acknowledge `{ id, added, removed }`.
 
 `task list` filters combine with AND across flags and OR within a flag;
-`--status`, `--type`, `--priority` and `--epic` each take one or more values
-(`--type bug docs` or `--type bug --type docs`). With no filters it prints every
-task. `--epic <slug>…` matches every task whose `epic` key names that epic, in the
-backlog or in a release. `--release <ref>` takes a slug or filename,
-`--backlog` restricts to tasks in no release, and `--text` is a case-insensitive
+`--status`, `--type`, `--priority`, `--epic` and `--label` each take one or more
+values (`--type bug docs` or `--type bug --type docs`). With no filters it prints
+every task. `--epic <slug>…` matches every task whose `epic` key names that epic, in
+the backlog or in a release. `--label <label>…` matches a task carrying any of
+them, ignoring case (see [Labels](#labels)). `--release <ref>` takes a slug or
+filename, `--backlog` restricts to tasks in no release, and `--text` is a case-insensitive
 substring match on a task's title and description. It searches nothing else —
 not notes, checklist items or custom field values, and not the **id**, since
 every id carries the board's prefix and `--text bd` would return the whole
@@ -242,6 +243,12 @@ A label with whitespace or over the limit is a `USAGE` error and nothing is
 written. Adding a label the task carries, or removing one it lacks, is an `ok`
 no-op; a task in a finished release is `ARCHIVED` either way unless
 `editFinishedReleases` is on.
+
+`task list --label <label>…` reads the registry instead of extending it: it takes
+registry labels only, matched ignoring case, and a value the registry lacks is a
+`USAGE` error naming it and the registry's labels — nothing is listed. A label a
+task carries but the registry lacks is matched by no value, and there is no value
+for a task with no labels.
 
 ```bash
 boardown task add "Fix login" --label backend --label auth

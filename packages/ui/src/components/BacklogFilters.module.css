@@ -1,5 +1,6 @@
 .bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: flex-end;
   padding: 16px 16px 16px 16px;

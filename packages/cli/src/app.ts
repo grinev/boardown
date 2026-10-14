@@ -33,7 +33,7 @@ Views — what you look at first:
 
 Tasks:
   task get <id>…         Show one or more tasks in full — the drill-down.
-  task list              List/filter tasks (--status --type --priority --epic --release --backlog --text).
+  task list              List/filter tasks (--status --type --priority --epic --label --release --backlog --text).
   task add <title>       Create a task (--type --priority --status --epic --release --description --label).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
   task status <id> <s>   Change a task status (one of the board's statuses).
@@ -77,10 +77,11 @@ const TASK_LIST_MULTI_VALUE_FLAGS: ReadonlySet<string> = new Set([
   'type',
   'priority',
   'epic',
+  'label',
 ]);
 
 // Two-pass: the first parse names the command, and only `task list` then
-// re-parses so its four filters swallow consecutive values. Other commands
+// re-parses so its five filters swallow consecutive values. Other commands
 // still consume one token per flag.
 export function parseArgv(argv: readonly string[]): ParsedArgs {
   const first = parseArgs(argv);

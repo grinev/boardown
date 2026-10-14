@@ -30,6 +30,7 @@ import { BacklogDndContext } from '../dnd/BacklogDndContext';
 import { useBlockedTargets } from '../dnd/BlockedTargetContext';
 import { BACKLOG_SECTION_KEY, type SectionBuckets } from '../dnd/applyDragOverBacklog';
 import { sectionDropId, taskDragId } from '../dnd/ids';
+import { NO_LABELS, reconcileLabelFilter } from '../utils/label-filter';
 import { BacklogFilters } from './BacklogFilters';
 import { BacklogRowView } from './BacklogRowView';
 import styles from './BacklogView.module.css';
@@ -66,6 +67,7 @@ export function BacklogView() {
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [epicFilter, setEpicFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -111,6 +113,10 @@ export function BacklogView() {
       return next.length === prev.length ? prev : next;
     });
   }, []);
+
+  useEffect(() => {
+    setLabelFilter((prev) => reconcileLabelFilter(prev, snapshot?.config.labels));
+  }, [snapshot?.config]);
 
   const { sectionMetas, sourceBuckets } = useMemo(() => {
     const metas: SectionMeta[] = [];
@@ -209,7 +215,8 @@ export function BacklogView() {
     statusFilter.length > 0 ||
     typeFilter.length > 0 ||
     epicFilter.length > 0 ||
-    priorityFilter.length > 0;
+    priorityFilter.length > 0 ||
+    labelFilter.length > 0;
 
   const matchesFilters = (task: Task): boolean => {
     let epicMatches: boolean | undefined;
@@ -224,6 +231,8 @@ export function BacklogView() {
       statuses: statusFilter,
       types: typeFilter,
       priorities: priorityFilter,
+      labels: labelFilter.filter((v) => v !== NO_LABELS),
+      noLabels: labelFilter.includes(NO_LABELS),
       ...(epicMatches !== undefined ? { epicMatches } : {}),
     });
   };
@@ -236,10 +245,12 @@ export function BacklogView() {
         typeFilter={typeFilter}
         epicFilter={epicFilter}
         priorityFilter={priorityFilter}
+        labelFilter={labelFilter}
         onStatusChange={setStatusFilter}
         onTypeChange={setTypeFilter}
         onEpicChange={setEpicFilter}
         onPriorityChange={setPriorityFilter}
+        onLabelChange={setLabelFilter}
       />
       <BacklogDndContext
         buckets={overlayBuckets}
