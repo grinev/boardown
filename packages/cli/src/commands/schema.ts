@@ -21,7 +21,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 21,
+  version: 22,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -87,9 +87,9 @@ const DESCRIPTOR = {
     {
       name: 'task list',
       usage:
-        'boardown task list [--status STATUS…] [--type TYPE…] [--priority PRIORITY…] [--epic SLUG…] [--release REF] [--backlog] [--text SUBSTR] [--full]',
+        'boardown task list [--status STATUS…] [--type TYPE…] [--priority PRIORITY…] [--epic SLUG…] [--label LABEL…] [--release REF] [--backlog] [--text SUBSTR] [--full]',
       summary:
-        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, release, backlog-only (every task in no release), or a case-insensitive text match on title/description (not the id — use task get for that). --status, --type, --priority and --epic each take one or more values, space-separated after the flag or repeated; values within a flag are OR, flags combine with AND. --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
+        'List tasks across the whole board, filtered by any combination of status, type, priority, epic, label, release, backlog-only (every task in no release), or a case-insensitive text match on title/description (not the id — use task get for that). --status, --type, --priority, --epic and --label each take one or more values, space-separated after the flag or repeated; values within a flag are OR, flags combine with AND. --label takes only labels from the board registry, matched ignoring case, and has no value for "no labels". --priority matches the resolved value, so the default also matches tasks with no priority key. Data is { tasks: [{ ...taskSummaryFields, in: { kind, file } }], count }; --full returns { task, in } with whole tasks.',
     },
     {
       name: 'task add',

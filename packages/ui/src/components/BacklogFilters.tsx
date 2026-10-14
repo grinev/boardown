@@ -4,6 +4,7 @@ import { TASK_PRIORITIES, boardStatuses, enabledTaskTypes } from '@boardown/core
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
+import { NO_LABELS } from '../utils/label-filter';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import { MultiSelect, type MultiSelectOption } from './MultiSelect';
 import styles from './BacklogFilters.module.css';
@@ -14,10 +15,12 @@ interface BacklogFiltersProps {
   typeFilter: readonly string[];
   epicFilter: readonly string[];
   priorityFilter: readonly string[];
+  labelFilter: readonly string[];
   onStatusChange: (value: string[]) => void;
   onTypeChange: (value: string[]) => void;
   onEpicChange: (value: string[]) => void;
   onPriorityChange: (value: string[]) => void;
+  onLabelChange: (value: string[]) => void;
 }
 
 export function BacklogFilters({
@@ -26,10 +29,12 @@ export function BacklogFilters({
   typeFilter,
   epicFilter,
   priorityFilter,
+  labelFilter,
   onStatusChange,
   onTypeChange,
   onEpicChange,
   onPriorityChange,
+  onLabelChange,
 }: BacklogFiltersProps) {
   const config = useBoardStore((s) => s.snapshot?.config);
   const statusOptions = useMemo<MultiSelectOption[]>(
@@ -96,6 +101,17 @@ export function BacklogFilters({
     ];
   }, [epics]);
 
+  const registry = config?.labels;
+  const labelOptions = useMemo<MultiSelectOption[]>(
+    () => [
+      { value: NO_LABELS, label: 'No labels' },
+      ...[...(registry ?? [])]
+        .sort((a, b) => a.localeCompare(b))
+        .map((label) => ({ value: label, label })),
+    ],
+    [registry],
+  );
+
   return (
     <div className={styles.bar}>
       <div className={styles.field}>
@@ -135,6 +151,16 @@ export function BacklogFilters({
           options={priorityOptions}
           onChange={onPriorityChange}
           ariaLabel="Filter by priority"
+          triggerClassName={styles.trigger}
+        />
+      </div>
+      <div className={styles.field}>
+        <span className={styles.label}>label</span>
+        <MultiSelect
+          value={labelFilter}
+          options={labelOptions}
+          onChange={onLabelChange}
+          ariaLabel="Filter by label"
           triggerClassName={styles.trigger}
         />
       </div>

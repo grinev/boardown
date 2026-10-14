@@ -109,7 +109,9 @@ describe('labels (cli)', () => {
 
   it('reports the limit and the registry in schema', async () => {
     const out = await schemaCommand(parseArgs(['schema']), ctx);
-    expect(out.data).toMatchObject({ labelMaxLength: 28, labels: ['backend'], version: 21 });
+    expect(out.data).toMatchObject({ labelMaxLength: 28, labels: ['backend'], version: 22 });
+    const commands = (out.data as { commands: { name: string; usage: string }[] }).commands;
+    expect(commands.find((c) => c.name === 'task list')?.usage).toContain('[--label LABEL…]');
     await writeFile(configPath, (await config()).replace(/labels:\n {2}- backend\n/, ''), 'utf8');
     const bare = await schemaCommand(parseArgs(['schema']), ctx);
     expect(bare.data).not.toHaveProperty('labels');

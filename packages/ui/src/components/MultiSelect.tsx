@@ -12,7 +12,9 @@ import styles from './MultiSelect.module.css';
 
 const MAX_LISTBOX_WIDTH = 320;
 const VIEWPORT_MARGIN = 8;
-const ALL_VALUE = '*all';
+// The `All` row is told apart by its place, first, never by its value: an option
+// may carry any string, `*all` included.
+const ALL_INDEX = 0;
 
 interface ListboxPosition {
   top: number;
@@ -57,7 +59,7 @@ export function MultiSelect({
   const listboxId = useId();
   const optionIdPrefix = useId();
 
-  const rows: MultiSelectOption[] = [{ value: ALL_VALUE, label: 'All' }, ...options];
+  const rows: MultiSelectOption[] = [{ value: '', label: 'All' }, ...options];
   const selectedOption = value.length === 1 ? options.find((o) => o.value === value[0]) : undefined;
   const oneLabel = selectedOption?.label ?? value[0] ?? 'All';
   const triggerLabel =
@@ -146,7 +148,7 @@ export function MultiSelect({
   const toggleAt = (index: number) => {
     const row = rows[index];
     if (!row) return;
-    if (row.value === ALL_VALUE) {
+    if (index === ALL_INDEX) {
       onChange([]);
       return;
     }
@@ -249,12 +251,12 @@ export function MultiSelect({
           onKeyDown={handleListKeyDown}
         >
           {rows.map((option, index) => {
-            const isAll = option.value === ALL_VALUE;
+            const isAll = index === ALL_INDEX;
             const isSelected = isAll ? value.length === 0 : value.includes(option.value);
             const isHighlighted = index === highlightedIndex;
             return (
               <li
-                key={option.value}
+                key={isAll ? 'all' : `option:${option.value}`}
                 id={`${optionIdPrefix}-${index}`}
                 role="option"
                 aria-selected={isSelected}

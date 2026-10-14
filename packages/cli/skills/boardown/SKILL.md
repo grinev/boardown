@@ -77,7 +77,7 @@ Tasks:
 
 ```bash
 boardown task get <id>…
-boardown task list [--status S…] [--type T…] [--priority P…] [--epic SLUG…] [--release <ref>] [--backlog] [--text SUBSTR] [--full]
+boardown task list [--status S…] [--type T…] [--priority P…] [--epic SLUG…] [--label L…] [--release <ref>] [--backlog] [--text SUBSTR] [--full]
 boardown task add <title> [--type T] [--priority P] [--status S] [--description TEXT] [--epic SLUG] [--release <ref>] [--field key=value]… [--checklist TEXT]… [--label L]… [--link [TYPE=]ID]… [--attach FILE]…
 boardown task edit <id> [--title T] [--description D] [--type T] [--priority P] [--status S] [--epic SLUG | --no-epic] [--release <ref> | --no-release] [--field key=value]…
 boardown task status <id> <status>
@@ -92,8 +92,9 @@ boardown task commits <id>                                               # local
 ```
 
 - `task list`: values inside one flag are OR, different flags are AND. `--text`
-  searches title and description, not the id. There is no label filter - a
-  `--label` is ignored and every task comes back; filter `labels` in the output.
+  searches title and description, not the id. `--label` takes registry labels
+  only, matched ignoring case - one the registry lacks is `USAGE` and nothing is
+  listed. There is no value for "no labels"; filter `labels` in the output.
 - `task add` writes the task with its checklist, links, labels and files at once;
   any refusal writes nothing.
 - `task edit`: a release move and an epic change go in separate calls. A release

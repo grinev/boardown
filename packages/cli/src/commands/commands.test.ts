@@ -1350,5 +1350,67 @@ describe('cli commands (integration)', () => {
         ),
       ).toEqual(['TS-1', 'TS-3', 'TS-4']);
     });
+
+    describe('--label', () => {
+      async function seedLabels(): Promise<void> {
+        await seed();
+        await taskCommand(parseArgs(['task', 'label', 'add', 'TS-1', 'Backend', 'ui']), ctx);
+        await taskCommand(parseArgs(['task', 'label', 'add', 'TS-3', 'docs']), ctx);
+      }
+
+      const list = async (...flags: string[]): Promise<string[]> =>
+        listIds((await taskCommand(parseArgv(['task', 'list', ...flags]), ctx)).data);
+
+      it('matches a registry label ignoring case', async () => {
+        await seedLabels();
+        expect(await list('--label', 'backend')).toEqual(['TS-1']);
+        expect(await list('--label', 'DOCS')).toEqual(['TS-3']);
+      });
+
+      it('ORs values, space-separated or repeated, and ANDs with other flags', async () => {
+        await seedLabels();
+        expect(await list('--label', 'ui', 'docs')).toEqual(['TS-1', 'TS-3']);
+        expect(await list('--label', 'ui', '--label', 'docs')).toEqual(['TS-1', 'TS-3']);
+        expect(await list('--label', 'ui', 'docs', '--type', 'tech')).toEqual(['TS-3']);
+        expect(await list('--label', 'docs', '--type', 'bug')).toEqual([]);
+      });
+
+      it('refuses a value the registry lacks, naming the first one and the registry', async () => {
+        await seedLabels();
+        await expect(
+          taskCommand(parseArgv(['task', 'list', '--label', 'ui', 'nope', 'gone']), ctx),
+        ).rejects.toMatchObject({
+          code: 'USAGE',
+          exitCode: 2,
+          message: 'Invalid --label "nope" (one of Backend, ui, docs).',
+        });
+      });
+
+      it('says the board declares no labels when the registry is empty', async () => {
+        await seed();
+        await expect(
+          taskCommand(parseArgv(['task', 'list', '--label', 'ui']), ctx),
+        ).rejects.toMatchObject({
+          code: 'USAGE',
+          exitCode: 2,
+          message: 'Invalid --label "ui" (this board declares no labels).',
+        });
+      });
+
+      it('lets an earlier filter flag report its error first', async () => {
+        await seedLabels();
+        await expect(
+          taskCommand(parseArgv(['task', 'list', '--label', 'nope', '--type', 'ghost']), ctx),
+        ).rejects.toMatchObject({
+          code: 'USAGE',
+          message: 'Invalid --type "ghost" (one of bug, feature, docs, tech).',
+        });
+      });
+
+      it('applies no filter when the flag has no value', async () => {
+        await seedLabels();
+        expect(await list('--label')).toEqual(['TS-1', 'TS-2', 'TS-3', 'TS-4']);
+      });
+    });
   });
 });

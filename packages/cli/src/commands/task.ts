@@ -13,6 +13,7 @@ import {
   editTask,
   effectiveTaskPriority,
   emptyBacklog,
+  findLabel,
   moveTaskBetweenContainers,
   nextChecklistItemId,
   nextNoteId,
@@ -776,6 +777,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const typeFlags = flagList(args.flags, 'type');
   const priorityFlags = flagList(args.flags, 'priority');
   const epicFlags = flagList(args.flags, 'epic');
+  const labelFlags = flagList(args.flags, 'label');
   const releaseFlag = flagString(args.flags, 'release');
   const backlogOnly = flagBool(args.flags, 'backlog');
   const textFlag = flagString(args.flags, 'text');
@@ -817,6 +819,15 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     if (release === undefined) throw new CliError('RELEASE_NOT_FOUND', `No release "${releaseFlag}".`);
     releaseFile = release.filename;
   }
+  // Only a registry label can be picked, as in the UI; anything else would match
+  // a hand-edited label the board never declared, or nothing at all.
+  const registry = snapshot.config.labels ?? [];
+  for (const value of labelFlags) {
+    if (findLabel(registry, value) !== undefined) continue;
+    const known =
+      registry.length > 0 ? `one of ${registry.join(', ')}` : 'this board declares no labels';
+    throw new CliError('USAGE', `Invalid --label "${value}" (${known}).`, 2);
+  }
 
   const entries = collectEntries(board).filter(({ task, in: loc }) => {
     const fm = task.frontmatter;
@@ -828,6 +839,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
         ...(epicMemberIds !== undefined
           ? { epicMatches: epicMemberIds.has(fm.id) }
           : {}),
+        ...(labelFlags.length > 0 ? { labels: labelFlags } : {}),
       })
     ) {
       return false;

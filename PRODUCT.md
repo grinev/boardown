@@ -725,9 +725,10 @@ A vertical, Jira-style stack of collapsible sections (top to bottom):
    and `epics/no_epic.md` of a board still in the old layout), rendered as a flat
    list with epic badges (no nested grouping), ordered by `order`.
 
-A compact filter bar sits at the very top of the screen with four
-multi-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`)
-above the control so the controls themselves stay narrow. Each list has a
+A compact filter bar sits at the very top of the screen with five
+multi-select dropdowns, each labelled (`status`, `type`, `epic`, `priority`,
+`label`) above the control so the controls themselves stay narrow; when the view
+is too narrow for all five, the bar wraps onto a further line. Each list has a
 checkbox per row and keeps the icon and label it showed as a single-select.
 The trigger reads "All" when nothing is selected, that value's icon and label
 when exactly one is, and `N selected` (no icon) when two or more are. The
@@ -743,10 +744,17 @@ The filter applies **globally** to all three sections. The `epic` filter
 additionally has a "No epic" option for tasks with no `epic` key, and it
 combines with real epics the same way any two values do. A task whose `epic`
 names no epic file shows no badge, and no filter value matches it — "No epic"
-included. A selected
+included. The `label` filter lists "No labels", then the labels of the registry
+in `config.yaml`, alphabetically, as text with no icon; an empty registry leaves
+just "All" and "No labels". A task matches when it carries any selected label,
+ignoring case, and "No labels" matches a task with none, combining with real
+labels like any two values. A label a task carries that the registry lacks is
+never offered, so only "All" shows that task — and "No labels" does not match it
+either. A selected label whose registry entry changes only in case stays
+selected. A selected
 value that stops being offered — an epic deleted, a status dropped from
-`config.yaml`, a type disabled — is dropped from the selection and the rest
-stays.
+`config.yaml`, a type disabled, a label taken out of the registry — is dropped
+from the selection and the rest stays.
 
 Drag and drop:
 
@@ -1532,13 +1540,17 @@ included, so a hand-edited label outside the rule is removed in the UI or by han
 task in a finished release is `ARCHIVED` either way unless `editFinishedReleases`
 is on. The acknowledgement is
 `{ id, added, removed }` — the labels the call put on or took off, in the spelling
-stored, both empty on a no-op. A summary carries `labels` only when the task has
+stored, both empty on a no-op. `task list --label <label>…` filters by labels
+and reads the registry instead of extending it: registry labels only, matched
+ignoring case, an unknown one a `USAGE` error naming it and the registry's labels
+(or saying the board declares none), nothing listed; there is no value for "no
+labels". A summary carries `labels` only when the task has
 any, and `schema` reports `labelMaxLength` and, when the registry is non-empty,
 the board's `labels`. **Priority** rides on the commands that already exist: `task add`
 and `task edit` take `--priority`, `task list` filters by it (matching the
 resolved value, so `--priority medium` also returns tasks with no key; `--status`,
-`--type`, `--priority` and `--epic` each take one or more values, space-separated
-or repeated, OR within a flag and AND across flags), and
+`--type`, `--priority`, `--epic` and `--label` each take one or more values,
+space-separated or repeated, OR within a flag and AND across flags), and
 `schema` reports the vocabulary and the default so an agent reads them instead of
 guessing. `task list --text <substr>` is the CLI's **search**: the same
 case-insensitive substring the app's search field uses, shared from
@@ -1775,8 +1787,7 @@ and no `logs/` folder.
 Broad strokes only. The concrete backlog lives on boardown's own board in
 [`.boardown/`](./.boardown/) — read that for what is actually planned next.
 
-- **Richer task model** — labels with label filters, assignee, per-task
-  last-updated date.
+- **Richer task model** — assignee, per-task last-updated date.
 - **Fuller release management** — editing a release's dates, reordering releases
   in the Backlog, and support for multiple simultaneously active releases (e.g. a
   large release in flight plus an urgent hotfix).
