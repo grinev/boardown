@@ -89,9 +89,48 @@
   white-space: nowrap;
 }
 
-.completeButton {
+.releaseActions {
   flex: 0 0 auto;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+}
+
+.swimlanesCaption {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.swimlanesTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.swimlanesTrigger:hover {
+  background: var(--surface-muted);
+}
+
+.swimlanesTrigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.completeButton {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;

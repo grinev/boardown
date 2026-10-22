@@ -982,6 +982,38 @@ describe('setBoardRelease and setMultipleActiveReleases', () => {
   });
 });
 
+describe('setBoardSwimlanes', () => {
+  it('stores the grouping, removes the key on none, and rolls back on a failed write', async () => {
+    const { fs } = setup(snap());
+
+    await state().setBoardSwimlanes('epic');
+    expect(current().config.boardSwimlanes).toBe('epic');
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('boardSwimlanes: epic');
+
+    await state().setBoardSwimlanes(null);
+    expect(current().config.boardSwimlanes).toBeUndefined();
+    expect(fs.files.get(CONFIG_FILENAME)?.content).not.toContain('boardSwimlanes');
+
+    await state().setBoardSwimlanes('type');
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await state().setBoardSwimlanes('epic');
+    expect(current().config.boardSwimlanes).toBe('type');
+    expect(state().errorMessage).toMatch(/failed to save the swimlanes/i);
+  });
+
+  it('survives another write of config.yaml', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')] }));
+    await state().setBoardSwimlanes('type');
+    await state().setBoardRelease('1.0');
+
+    await state().setWipLimit(2);
+    await state().updateRelease('releases/1.0.md', { name: '1.1' });
+
+    expect(current().config.boardSwimlanes).toBe('type');
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('boardSwimlanes: type');
+  });
+});
+
 describe('setStatusOutsideActiveRelease', () => {
   it('stores the setting and rolls back on a failed write', async () => {
     const { fs } = setup(snap());

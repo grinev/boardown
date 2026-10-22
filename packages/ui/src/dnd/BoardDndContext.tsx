@@ -26,13 +26,14 @@ import type { Epic, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import boardStyles from '../components/BoardView.module.css';
-import { isTaskDragId, parseTaskDragId } from './ids';
-import { applyDragOver, findOverlayPlacement, findStatusOf } from './applyDragOver';
+import { blockedCells, isTaskDragId, parseTaskDragId } from './ids';
+import { applyDragOver, findCellOf, findOverlayPlacement } from './applyDragOver';
 import { BlockedTargetProvider, NO_BLOCKED_TARGETS } from './BlockedTargetContext';
 
 interface BoardDndContextProps {
-  buckets: Map<TaskStatus, Task[]>;
-  setBuckets: Dispatch<SetStateAction<Map<TaskStatus, Task[]>>>;
+  // Keyed by Board cell — a status, or a status inside a swimlane.
+  buckets: Map<string, Task[]>;
+  setBuckets: Dispatch<SetStateAction<Map<string, Task[]>>>;
   epics: Epic[];
   // The middle columns already at their WIP limit, judged before the drag.
   fullStatuses: ReadonlySet<TaskStatus>;
@@ -49,8 +50,8 @@ export function BoardDndContext({
   const moveTask = useBoardStore((s) => s.moveTask);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [blockedTargets, setBlockedTargets] =
-    useState<ReadonlySet<TaskStatus>>(NO_BLOCKED_TARGETS);
-  const originalBucketsRef = useRef<Map<TaskStatus, Task[]> | null>(null);
+    useState<ReadonlySet<string>>(NO_BLOCKED_TARGETS);
+  const originalBucketsRef = useRef<Map<string, Task[]> | null>(null);
   const bucketsRef = useRef(buckets);
 
   useEffect(() => {
@@ -75,10 +76,9 @@ export function BoardDndContext({
     if (!isTaskDragId(id)) return;
     const taskId = parseTaskDragId(id);
     setActiveTaskId(taskId);
-    // A card already in the column is only being reordered, so the column stays
-    // open to it however full it is.
-    const from = findStatusOf(buckets, taskId);
-    const blocked = new Set([...fullStatuses].filter((s) => s !== from));
+    const from = findCellOf(buckets, taskId);
+    const blocked =
+      from === null ? NO_BLOCKED_TARGETS : blockedCells(buckets.keys(), from, fullStatuses);
     setBlockedTargets(blocked.size === 0 ? NO_BLOCKED_TARGETS : blocked);
     originalBucketsRef.current = cloneBuckets(buckets);
   };
@@ -179,7 +179,7 @@ export function BoardDndContext({
 }
 
 const findTaskInBuckets = (
-  buckets: Map<TaskStatus, Task[]>,
+  buckets: Map<string, Task[]>,
   taskId: string,
 ): Task | null => {
   for (const tasks of buckets.values()) {
@@ -190,9 +190,9 @@ const findTaskInBuckets = (
 };
 
 const cloneBuckets = (
-  buckets: Map<TaskStatus, Task[]>,
-): Map<TaskStatus, Task[]> => {
-  const next = new Map<TaskStatus, Task[]>();
+  buckets: Map<string, Task[]>,
+): Map<string, Task[]> => {
+  const next = new Map<string, Task[]>();
   for (const [s, tasks] of buckets) next.set(s, [...tasks]);
   return next;
 };
