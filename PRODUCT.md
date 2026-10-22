@@ -48,6 +48,8 @@ A single unit of work. Fields:
 | `notes`       | array?    | Optional list of `{ id, text, createdAt }` notes (lightweight comments). `createdAt` is an ISO 8601 timestamp; shown in chronological order (oldest first). Purely informational. Omitted entirely when empty. Shown as a count badge on the card and added/edited/deleted in the task dialog. |
 | `links`       | array?    | Optional list of `{ type, to }` links to other tasks. `type` is one of seven relations — `relates` (symmetric) plus `blocks`/`blocked-by`, `duplicates`/`duplicated-by`, `includes`/`part-of` — and reads from the side holding the record; `to` is another task's id. A link is **mirrored**: both tasks carry a record pointing at each other, the other side carrying the relation's **inverse**. One pair may carry several relations at once. Omitted entirely when empty. Edited in the task dialog's "Linked tasks" section and via `boardown task link`; a new task can carry them from the start, picked in Create task or passed as `task add --link`. |
 | `labels`      | array?    | Optional list of label strings, stored in the order they were added. Omitted entirely when empty. Shown as a line of chips on the board card and in the task dialog's Details card, set in Create task, and managed via `boardown task label` and `task add --label`. A label written by boardown holds no whitespace, is at most 28 characters and takes the spelling of the registry entry it matches ignoring case; a hand-edited one loads and shows as it is. See "Labels" under Configuration. |
+| `createdAt`   | string?   | When the task was created: an ISO 8601 UTC timestamp with milliseconds, quoted. Written by boardown on every create — the UI, the CLI, a task created with links — whatever the board's settings, and never changed after. Absent on a task an older build wrote; nothing backfills it. Shown as the **Created** row of the task dialog's Details card. |
+| `updatedAt`   | string?   | When the task last changed, in the same form. Written by boardown with the create's own moment and then on every change to the task — any field, its checklist, notes, links (both tasks of a link; every task that loses a link to a deleted one), its attachments, a move to another release or the backlog, Complete release moving it out — except a change of `order` alone (a drag within a column, a renumbering). A save that changes nothing stamps nothing, and an edit made by hand in the markdown stamps nothing. Governed by `trackUpdatedAt`: with it off, nothing writes or changes the key and values already in the files stay. Shown as the **Updated** row of the Details card while tracking is on. |
 | *custom fields* | string?  | **Beta.** Any field declared in `config.yaml`'s `customFields` is stored as a **plain top-level key** here, alongside the built-ins (`reporter: alice`). Only fields with a value are written, always after every built-in key and in declaration order. See "Custom fields" under Configuration. |
 
 Priorities are a fixed set baked into the app: each has an icon and a color used
@@ -233,7 +235,11 @@ reserved Windows name (`CON`, `NUL`, `COM1`…, judged by the part before the fi
 dot) given a `_`; a name already in the folder, compared ignoring case, gets
 ` (1)`, ` (2)`… before its extension, so an existing file is never overwritten. A
 file over **25 MB** is refused. A folder whose task is no longer on the board is
-left where it is.
+left where it is. Adding or removing a task's file is a change to the task, so it
+also rewrites the task's own markdown file — stamping `updatedAt` while
+`trackUpdatedAt` is on, unchanged otherwise — and is refused exactly as an edit of
+the task would be: when that file did not load whole, or changed on disk since it
+was read.
 
 The shell chooses which `.boardown/` directory to open. The `config.yaml` file
 stays inside that directory and is the marker that boardown is configured
@@ -309,7 +315,10 @@ end, a task moved in from another container is appended too, and no write ever
 re-sorts the sections. `order` is what says where a task sits on the board, and
 every reader sorts by it. This keeps an edit — a status change above all — a
 change to a couple of lines inside one task's own frontmatter, so two git
-branches touching different tasks in the same release merge cleanly. It also
+branches touching different tasks in the same release merge cleanly. With
+`trackUpdatedAt` on — the default — the task's `updatedAt` line changes too, so a
+status change is three lines and two branches changing the *same* task conflict on
+it; turning the setting off takes that line out of every diff. It also
 means a file's sections are typically *not* in `order` order after a while, and
 that is expected, not damage.
 
@@ -329,6 +338,7 @@ wipLimits:            # optional; absent means no limit anywhere
   in-progress: 3      # at most 3 tasks in each middle column of an active release
 multipleActiveReleases: true  # optional; absent means one release at a time
 gitIntegration: true  # optional; absent means on — the task dialog's Commits panel
+trackUpdatedAt: false  # optional; absent means on — every task change stamps updatedAt
 statusOutsideActiveRelease: true  # optional; absent means a status may change only in the current release
 editFinishedReleases: true  # optional; absent means a finished release is frozen
 statuses:             # optional (beta); absent means todo / in-progress / done
@@ -491,8 +501,17 @@ carrying the count and a tooltip naming the rule. The limit is edited in the
 Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
 same reason: it is board configuration, not installation configuration, and the
-`gitIntegration` checkbox sits below that one, with `statusOutsideActiveRelease`
-below that and `editFinishedReleases` last.
+`gitIntegration` checkbox sits below that one, `trackUpdatedAt` right below it,
+with `statusOutsideActiveRelease` below that and `editFinishedReleases` last.
+
+`trackUpdatedAt` is a rule, not a display preference: absent or `true` has every
+change to a task stamp its `updatedAt` (see the task frontmatter table), `false`
+stops boardown writing or changing that key and hides the task dialog's **Updated**
+row. Values already in the files stay as they are, and turning it back on resumes
+stamping from the next change. `createdAt` is not governed by it — it is always
+written and always shown. Every shell and the CLI follow it, and `schema` reports it
+resolved, as `true` when the file says nothing. A present value that is not a
+boolean makes the config invalid.
 
 `gitIntegration` is a display preference stored with the board: absent or `true`
 shows the task dialog's Commits panel, `false` hides it and stops the Git read
@@ -1016,6 +1035,15 @@ while the editor is open. A value's task-ID, `[[…]]` and `[[repo:…]]` tokens
 as links in view mode, exactly as they do in the description (see "Task links",
 "Doc links" and "Repo file links"), and typing `[[` while editing offers the same
 doc-page suggestions.
+
+The Details card ends with two read-only rows, **Created** and **Updated** —
+below the custom fields, in the active and the Archive's dialog alike. Each shows
+its date as `DD.MM.YYYY HH:MM` in the viewer's local time; a hand-written value no
+date can be read from shows as written. A task without the date keeps the row, its
+value empty, as an unset custom field's row is. With `trackUpdatedAt` off the
+**Updated** row is not there at all; **Created** always is. The dates appear in the
+task dialog only — not on cards, backlog rows, the epic task table, linked-task rows
+or search results — and nothing sorts or filters by them.
 Custom fields appear in the task dialog only: not on
 the task card, not in the backlog row, not in the filter bar, and not in the
 creation dialog — a new task starts with none and is filled in afterwards.
@@ -1459,9 +1487,10 @@ A dialog opened from the gear button in the top navigation. It holds the board's
 **Theme** selector; below it a **WIP limit (In Progress)** number field, empty
 meaning no limit (see "WIP limit" under Configuration); below that an **Allow
 multiple active releases** checkbox, the dialog's first boolean control, saved the
-moment it is clicked; below that the **Git integration**, **Allow status changes
-outside the current release** and **Allow editing finished releases** checkboxes,
-saved the same way; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
+moment it is clicked; below that the **Git integration**, **Track update date**
+(hint: *"Stamps a task's Updated date on every change. Turn off so parallel branches
+never conflict on it."*), **Allow status changes outside the current release** and
+**Allow editing finished releases** checkboxes, saved the same way; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
 the user is running — the shell supplies it, so it is the installed extension's
 version in VS Code and the checkout's version in the `web` dev shell.
 
@@ -1479,10 +1508,11 @@ filesystem), and a false "not installed" reads as a bug.
 
 The Electron shell hides this dialog (it owns the theme app-wide) and surfaces the
 version through the OS-native About window instead. Its own settings popover
-carries the WIP limit field and the multiple-active-releases checkbox in the
-**Board** section below the auto-refresh checkbox, since they belong to the
-board's `config.yaml` rather than to the installation, and ends with a **CLI** section holding the same command and link —
-which, unlike the two board settings, shows with no board open.
+carries the WIP limit field and the Settings dialog's board checkboxes, in the
+same order, in the **Board** section below the auto-refresh checkbox, since they
+belong to the board's `config.yaml` rather than to the installation, and ends with
+a **CLI** section holding the same command and link — which, unlike the board
+settings, shows with no board open.
 
 ### Empty states
 
@@ -1548,7 +1578,13 @@ found id is `{ task, in }` in the order given — `in.kind` is `release` or
 `backlog` (every task in no release) and `in.file` the file the task sits in —
 an unknown id is listed in
 `missing`, both arrays are always present, and the call succeeds even when none
-of the ids exist. `TASK_NOT_FOUND` is not this command's code.
+of the ids exist. `TASK_NOT_FOUND` is not this command's code. A task's
+`createdAt` and `updatedAt` ride in its frontmatter in JSON and under `--full`,
+never in a summary; the human output adds `Created: …` and, while the board tracks
+it, `Updated: …` lines with the stored strings. Every command that changes a task
+stamps it as the UI does, `trackUpdatedAt` included, and one that changes nothing
+writes nothing. `schema` lists both in `taskFields` and reports `trackUpdatedAt`
+resolved.
 `priority` in a summary is always populated: a task with no key on disk
 reports the default, so a caller never has to know about the unset case.
 A single `--full` flag takes any listing command one level deeper. Mutating
@@ -1619,7 +1655,9 @@ size in bytes, path from the project root (`.boardown/attachments/BD-131/shot.pn
 all-or-nothing: a missing source or a directory is `FILE_NOT_FOUND`, one over 25 MB
 `FILE_TOO_LARGE`, and on either nothing is written. `rm` of a name not there is
 `ATTACHMENT_NOT_FOUND`; `add` and `rm` in a finished release are `ARCHIVED` unless
-`editFinishedReleases` is on, `ls` works everywhere. `task rm` removes the task's attachments folder too, and `task
+`editFinishedReleases` is on, `ls` works everywhere; like any task edit, `add` and
+`rm` are `UNREADABLE_FRONTMATTER` when the task's file did not load whole and
+`CONFLICT` when it changed on disk since it was read. `task rm` removes the task's attachments folder too, and `task
 get` and `task list --full` do not list attachments. `schema` reports the cap as
 `attachmentMaxBytes`. `release edit <ref>` sets a release's `--name` / `--description`, mirroring the
 release dialog: a new name moves the file to the slug it derives (the payload's

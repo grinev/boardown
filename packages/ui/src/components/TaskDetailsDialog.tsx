@@ -15,6 +15,7 @@ import {
   enabledTaskTypes,
   isFinishedRelease,
   isFrozenRelease,
+  isUpdateTracked,
   statusCount,
   TASK_PRIORITIES,
   wipLimitFor,
@@ -28,6 +29,7 @@ import { useCopyToClipboard } from '../hooks/use-copy-to-clipboard';
 import { useBoardStore } from '../store';
 import { TASK_PRIORITY_META } from '../task-priorities';
 import { taskTypeDisplay } from '../task-types';
+import { formatCommitDate } from '../utils/format-commit-date';
 import { taskCommitMessage } from '../utils/commit-message';
 import { pickContrastText } from '../utils/contrast-color';
 import { releaseOptionLabel } from '../utils/release-option';
@@ -454,6 +456,20 @@ export function TaskDetailsDialog({
                   </dd>
                 </div>
               ))}
+              <div className={styles.detailRow}>
+                <dt className={styles.detailLabel}>Created</dt>
+                <dd className={styles.detailValue}>
+                  <TaskDate value={task.frontmatter.createdAt} />
+                </dd>
+              </div>
+              {(config === undefined || isUpdateTracked(config)) && (
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Updated</dt>
+                  <dd className={styles.detailValue}>
+                    <TaskDate value={task.frontmatter.updatedAt} />
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
           {/* Not mounted when the setting is off, so "no Git read" is true rather
@@ -469,6 +485,12 @@ export function TaskDetailsDialog({
       )}
     </Modal>
   );
+}
+
+// A task an older build wrote has no date: the row stays, its value empty.
+function TaskDate({ value }: { value: string | undefined }) {
+  if (value === undefined) return null;
+  return <span className={styles.staticValue}>{formatCommitDate(value)}</span>;
 }
 
 interface EpicEditorProps {

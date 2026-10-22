@@ -470,7 +470,7 @@ describe('createGuardedFs — writeAll', () => {
   });
 });
 
-describe('createGuardedFs unversioned removals and unchanged checks', () => {
+describe('createGuardedFs unversioned removals', () => {
   const guard = (inner: InMemoryFs, versions: Record<string, number> = {}) => {
     const onConflict = vi.fn();
     const fs = createGuardedFs(inner, { versions, problems: [], onConflict, onUnreadable: vi.fn() });
@@ -523,23 +523,5 @@ describe('createGuardedFs unversioned removals and unchanged checks', () => {
     const bytes = new Uint8Array([0, 200, 13, 10]);
     await fs.commit({ writes: [{ path: 'attachments/BD-1/x.bin', content: bytes, createOnly: true }], removes: [] });
     expect(await inner.readBytes('attachments/BD-1/x.bin')).toEqual(bytes);
-  });
-
-  it('refuses when a file named as unchanged moved on disk, writing nothing', async () => {
-    const inner = new InMemoryFs();
-    await inner.write('r.md', 'loaded');
-    const versions = { 'r.md': inner.files.get('r.md')!.lastModified };
-    await inner.write('r.md', 'edited elsewhere');
-    const { fs, onConflict } = guard(inner, versions);
-    await expect(
-      fs.commit({
-        writes: [{ path: 'attachments/BD-1/x.bin', content: new Uint8Array([1]), createOnly: true }],
-        removes: [],
-        unchanged: ['r.md'],
-      }),
-    ).rejects.toBeInstanceOf(ConflictError);
-    expect(onConflict).toHaveBeenCalledWith('r.md');
-    expect(inner.files.has('attachments/BD-1/x.bin')).toBe(false);
-    expect(await inner.read('r.md')).toBe('edited elsewhere');
   });
 });

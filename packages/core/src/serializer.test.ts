@@ -627,7 +627,7 @@ order: 200
     const parsed = parseRelease(SHUFFLED, 'releases/v0.2.0.md', 'v0.2.0');
     const edited = changeTaskStatus(
       parsed.value!,
-      { idPrefix: 'BD', nextId: 1, projectName: 'Test' },
+      { idPrefix: 'BD', nextId: 1, projectName: 'Test', trackUpdatedAt: false },
       'BD-1',
       'done',
     );
@@ -636,6 +636,28 @@ order: 200
 
     expect(after.length).toBe(before.length);
     const changed = after
+      .map((line, i) => (line === before[i] ? null : `${before[i]} → ${line}`))
+      .filter((entry): entry is string => entry !== null);
+    expect(changed).toEqual(['status: todo → status: done', 'order: 100 → order: 400']);
+  });
+
+  it('adds one updatedAt line to the edited task when the board tracks it', () => {
+    const parsed = parseRelease(SHUFFLED, 'releases/v0.2.0.md', 'v0.2.0');
+    const edited = changeTaskStatus(
+      parsed.value!,
+      { idPrefix: 'BD', nextId: 1, projectName: 'Test' },
+      'BD-1',
+      'done',
+      '2026-10-22T10:00:00.000Z',
+    );
+    const before = SHUFFLED.split('\n');
+    const after = serializeRelease(edited).split('\n');
+
+    const inserted = after.findIndex((line) => line.startsWith('updatedAt:'));
+    expect(after[inserted]).toBe('updatedAt: "2026-10-22T10:00:00.000Z"');
+    const rest = after.filter((_, i) => i !== inserted);
+    expect(rest.length).toBe(before.length);
+    const changed = rest
       .map((line, i) => (line === before[i] ? null : `${before[i]} → ${line}`))
       .filter((entry): entry is string => entry !== null);
     expect(changed).toEqual(['status: todo → status: done', 'order: 100 → order: 400']);
@@ -674,6 +696,22 @@ body
     const fm = out.slice(out.indexOf('id: BD-1'));
     expect(fm.indexOf('order: 100')).toBeLessThan(fm.indexOf('reporter: alice'));
     expect(fm.indexOf('reporter: alice')).toBeLessThan(fm.indexOf('env: staging'));
+  });
+
+  it('writes the two dates after labels and before custom keys, quoted, and reads them back', () => {
+    const text = RELEASE_WITH_FIELDS.replace(
+      'order: 100\n',
+      'order: 100\nupdatedAt: 2026-02-01T09:30:00.000Z\nlabels:\n  - ui\ncreatedAt: "2026-01-01T08:00:00.000Z"\n',
+    );
+    const out = serializeRelease(parseRelease(text, 'releases/r.md', 'r', FIELDS).value!);
+    expect(out).toContain(
+      'labels:\n  - ui\ncreatedAt: "2026-01-01T08:00:00.000Z"\nupdatedAt: "2026-02-01T09:30:00.000Z"\nreporter: alice\n',
+    );
+    const back = parseRelease(out, 'releases/r.md', 'r', FIELDS);
+    expect(back.value?.tasks[0]?.frontmatter).toMatchObject({
+      createdAt: '2026-01-01T08:00:00.000Z',
+      updatedAt: '2026-02-01T09:30:00.000Z',
+    });
   });
 
   it('round-trips idempotently', () => {

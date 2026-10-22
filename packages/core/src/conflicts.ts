@@ -46,10 +46,6 @@ export interface GuardedChange {
   // in it, after every other step. Only for a deletion the user confirmed with its
   // contents named; never a way around a conflict.
   unversionedRemoves?: readonly string[];
-  // Checked like a write target but not written: the file an operation's decision
-  // was read from when the operation lands elsewhere (a task's release, when only
-  // its attachments change).
-  unchanged?: readonly string[];
 }
 
 // An FsAdapter plus the multi-target operations. Shells keep implementing the
@@ -163,7 +159,6 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
       await check(file.path);
     }
     for (const path of change.removes) await check(path);
-    for (const path of change.unchanged ?? []) await check(path);
 
     const touched: { path: string; before: Uint8Array | null }[] = [];
     try {

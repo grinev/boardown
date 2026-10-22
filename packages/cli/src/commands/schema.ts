@@ -12,6 +12,7 @@ import {
   WIP_LIMIT_KEY,
   boardStatuses,
   enabledTaskTypes,
+  isUpdateTracked,
   middleStatusKeys,
 } from '@boardown/core';
 import { loadConfigIfAny } from '../persistence';
@@ -21,7 +22,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 22,
+  version: 23,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -45,6 +46,10 @@ const DESCRIPTOR = {
       'optional array of strings, in the order they were added; managed via `task label` and `--label` on `task add`. A label written by boardown has no whitespace, at most labelMaxLength characters, and takes the spelling of the board labels registry entry it matches ignoring case; a hand-edited one loads as it is',
     custom:
       'optional map of the board customFields values, stored flat in the task frontmatter; managed via `--field key=value` on `task add`/`task edit`',
+    createdAt:
+      'optional ISO 8601 UTC timestamp string, written by boardown when the task is created and never changed after; absent on a task an older build wrote. Not settable.',
+    updatedAt:
+      'optional ISO 8601 UTC timestamp string, written by boardown on every change to the task except its order (a reorder or a drag within a column), while trackUpdatedAt is true; a command that changes nothing leaves it as it is. Not settable.',
   },
   linkTypes: LINK_TYPES,
   taskSummaryFields: {
@@ -251,10 +256,10 @@ const DESCRIPTOR = {
 // The declarations and the WIP limit are board-specific, so they ride along only
 // when a board actually has them; otherwise the command prints the static
 // contract unchanged — a board without either sees no new output.
-// `multipleActiveReleases`, `statusOutsideActiveRelease`, `editFinishedReleases`
-// and `taskStatuses` are the exceptions: each has a meaning when the config says
-// nothing, so leaving them out would hide a rule an agent would then have to
-// discover by being refused.
+// `multipleActiveReleases`, `statusOutsideActiveRelease`, `editFinishedReleases`,
+// `trackUpdatedAt` and `taskStatuses` are the exceptions: each has a meaning when
+// the config says nothing, so leaving them out would hide a rule an agent would
+// then have to discover by being refused.
 //
 // `wipLimits` is echoed exactly as the file holds it — the key is literally
 // `in-progress` whatever the board's statuses are called — and the statuses it
@@ -269,6 +274,8 @@ export const schemaCommand: CommandHandler = async (_args, ctx) => {
     multipleActiveReleases: config?.multipleActiveReleases ?? false,
     statusOutsideActiveRelease: config?.statusOutsideActiveRelease ?? false,
     editFinishedReleases: config?.editFinishedReleases ?? false,
+    // Whether a change stamps a task's updatedAt; absent in the file means true.
+    trackUpdatedAt: config ? isUpdateTracked(config) : true,
     // Positional: the first is the status a new task takes (and, with the lock
     // on, the only one a new task may be created with outside the current
     // release); the last is the terminal one.

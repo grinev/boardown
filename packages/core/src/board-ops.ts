@@ -15,6 +15,7 @@ import {
   isMiddleStatus,
   terminalStatus,
 } from './statuses.js';
+import { currentMoment, stampChangedTasks, withUpdatedAt } from './task-dates.js';
 import { enabledTaskTypeKeys, isEnabledTaskType } from './task-types.js';
 import type {
   Backlog,
@@ -444,6 +445,19 @@ const replaceTasks = <C extends Container>(container: C, tasks: Task[]): C => ({
   tasks,
 });
 
+// Every op that changes a task's content lands its result through here, so the
+// `updatedAt` rule is applied in one place rather than remembered per op. A result
+// identical to what came in hands back the container itself: nothing to write.
+const withTasks = <C extends Container>(
+  container: C,
+  tasks: Task[],
+  config: BoardConfig,
+  now: string,
+): C => {
+  const stamped = stampChangedTasks(container.tasks, tasks, config, now);
+  return stamped === container.tasks ? container : replaceTasks(container, stamped);
+};
+
 const sortByOrder = (tasks: Task[]): Task[] =>
   [...tasks].sort((a, b) => a.frontmatter.order - b.frontmatter.order);
 
@@ -575,6 +589,7 @@ export const createTask = <C extends Container>(
   container: C,
   config: BoardConfig,
   input: NewTaskInput,
+  now: string = currentMoment(),
 ): { container: C; config: BoardConfig; task: Task } => {
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot create a task in a finished release');
@@ -611,12 +626,15 @@ export const createTask = <C extends Container>(
       ...(custom !== undefined ? { custom } : {}),
       ...(checklist !== undefined ? { checklist } : {}),
       ...(labels.length > 0 ? { labels } : {}),
+      // Written whatever the setting: only the update date is optional.
+      createdAt: now,
     },
   };
+  const next = withTasks(container, [...container.tasks, task], config, now);
   return {
-    container: replaceTasks(container, [...container.tasks, task]),
+    container: next,
     config: withLabelsInRegistry(nextConfig, labels),
-    task,
+    task: findTask(next.tasks, id),
   };
 };
 
@@ -638,6 +656,7 @@ export const editTask = <C extends Container>(
   config: BoardConfig,
   taskId: string,
   patch: TaskPatch,
+  now: string = currentMoment(),
 ): C => {
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
@@ -715,7 +734,7 @@ export const editTask = <C extends Container>(
       frontmatter: nextFrontmatter,
     };
   });
-  return replaceTasks(container, tasks);
+  return withTasks(container, tasks, config, now);
 };
 
 // The whole next list, in the order it is to be stored. A label the task already
@@ -727,6 +746,7 @@ export const setTaskLabels = <C extends Container>(
   config: BoardConfig,
   taskId: string,
   labels: readonly string[],
+  now: string = currentMoment(),
 ): { container: C; config: BoardConfig } => {
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot edit a task in a finished release');
@@ -750,7 +770,7 @@ export const setTaskLabels = <C extends Container>(
     return { ...t, frontmatter };
   });
   return {
-    container: replaceTasks(container, tasks),
+    container: withTasks(container, tasks, config, now),
     config: withLabelsInRegistry(config, added),
   };
 };
@@ -801,6 +821,7 @@ export const changeTaskStatus = <C extends Container>(
   config: BoardConfig,
   taskId: string,
   newStatus: TaskStatus,
+  now: string = currentMoment(),
 ): C => {
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot change the status of a task in a finished release');
@@ -813,12 +834,14 @@ export const changeTaskStatus = <C extends Container>(
     refuseStatusChange(container, taskId);
   }
   refuseIfWipLimitReached(container, config, taskId, newStatus, previousStatus === newStatus);
-  return replaceTasks(
+  return withTasks(
     container,
     placeTaskInContainer(container.tasks, taskId, {
       status: newStatus,
       beforeTaskId: null,
     }),
+    config,
+    now,
   );
 };
 
@@ -846,6 +869,7 @@ export const moveTaskInContainer = <C extends Container>(
   config: BoardConfig,
   taskId: string,
   args: { status: TaskStatus; beforeTaskId: string | null },
+  now: string = currentMoment(),
 ): C => {
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot move a task in a finished release');
@@ -860,7 +884,7 @@ export const moveTaskInContainer = <C extends Container>(
     }
   }
   refuseIfWipLimitReached(container, config, taskId, args.status, currentStatus === args.status);
-  return replaceTasks(container, placeTaskInContainer(container.tasks, taskId, args));
+  return withTasks(container, placeTaskInContainer(container.tasks, taskId, args), config, now);
 };
 
 export interface MoveAcrossArgs {
@@ -876,6 +900,7 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   config: BoardConfig,
   taskId: string,
   args: MoveAcrossArgs,
+  now: string = currentMoment(),
 ): { source: S; dest: D } => {
   if (isFrozenRelease(source, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot move a task out of a finished release');
@@ -905,14 +930,14 @@ export const moveTaskBetweenContainers = <S extends Container, D extends Contain
   );
   // Appended, deliberately: the end of the file is the only insertion point that
   // leaves every existing block untouched.
-  const destWithTask = replaceTasks(dest, [...dest.tasks, updated]);
-  const placed = placeTaskInContainer(destWithTask.tasks, taskId, {
+  const placed = placeTaskInContainer([...dest.tasks, updated], taskId, {
     status: args.newStatus,
     beforeTaskId: args.beforeTaskId,
   });
+  // The task is new to `dest`, so it is stamped there: a move is a change.
   return {
     source: newSource,
-    dest: replaceTasks(destWithTask, placed),
+    dest: withTasks(dest, placed, config, now),
   };
 };
 
@@ -941,17 +966,27 @@ const taskWithoutLink = (task: Task, link: TaskLink): Task => {
   return { ...task, frontmatter };
 };
 
+// The moment and the setting a link edit stamps its tasks with.
+interface Stamp {
+  config: BoardConfig;
+  now: string;
+}
+
+// The edits handed in return the task itself when they change nothing, so a new
+// object is a change and gets stamped.
 const mapTask = <C extends Container>(
   container: C,
   taskId: string,
   edit: (task: Task) => Task,
+  stamp: Stamp,
 ): { container: C; changed: boolean } => {
   let changed = false;
   const tasks = container.tasks.map((t) => {
     if (t.frontmatter.id !== taskId) return t;
     const next = edit(t);
-    if (next !== t) changed = true;
-    return next;
+    if (next === t) return t;
+    changed = true;
+    return withUpdatedAt(next, stamp.config, stamp.now);
   });
   return changed
     ? { container: replaceTasks(container, tasks), changed }
@@ -967,12 +1002,13 @@ const applyPairEdit = <S extends Container, D extends Container>(
   sourceTaskId: string,
   targetTaskId: string,
   edit: (task: Task, otherTaskId: string) => Task,
+  stamp: Stamp,
 ): TaskLinkResult<S, D> => {
   if (source.filename === target.filename) {
     // Source and target are the same container, so the cast restates what the
     // caller passed.
-    const first = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId));
-    const second = mapTask(first.container, targetTaskId, (t) => edit(t, sourceTaskId));
+    const first = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId), stamp);
+    const second = mapTask(first.container, targetTaskId, (t) => edit(t, sourceTaskId), stamp);
     const merged = second.container;
     return {
       source: merged,
@@ -981,8 +1017,8 @@ const applyPairEdit = <S extends Container, D extends Container>(
     };
   }
 
-  const nextSource = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId));
-  const nextTarget = mapTask(target, targetTaskId, (t) => edit(t, sourceTaskId));
+  const nextSource = mapTask(source, sourceTaskId, (t) => edit(t, targetTaskId), stamp);
+  const nextTarget = mapTask(target, targetTaskId, (t) => edit(t, sourceTaskId), stamp);
   const changedFilenames: string[] = [];
   if (nextSource.changed) changedFilenames.push(source.filename);
   if (nextTarget.changed) changedFilenames.push(target.filename);
@@ -1001,12 +1037,19 @@ const applyLinkPair = <S extends Container, D extends Container>(
   targetTaskId: string,
   type: LinkType,
   edit: (task: Task, link: TaskLink) => Task,
+  stamp: Stamp,
 ): TaskLinkResult<S, D> =>
-  applyPairEdit(source, target, sourceTaskId, targetTaskId, (task, otherTaskId) =>
-    edit(task, {
-      type: otherTaskId === targetTaskId ? type : LINK_TYPE_META[type].inverse,
-      to: otherTaskId,
-    }),
+  applyPairEdit(
+    source,
+    target,
+    sourceTaskId,
+    targetTaskId,
+    (task, otherTaskId) =>
+      edit(task, {
+        type: otherTaskId === targetTaskId ? type : LINK_TYPE_META[type].inverse,
+        to: otherTaskId,
+      }),
+    stamp,
   );
 
 const taskWithoutLinksTo = (task: Task, targetId: string): Task => {
@@ -1040,23 +1083,33 @@ const assertLinkableTasks = (
 export const addTaskLink = <S extends Container, D extends Container>(
   source: S,
   target: D,
+  config: BoardConfig,
   sourceTaskId: string,
   targetTaskId: string,
   type: LinkType,
+  now: string = currentMoment(),
 ): TaskLinkResult<S, D> => {
   assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'link');
-  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithLink);
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithLink, {
+    config,
+    now,
+  });
 };
 
 export const removeTaskLink = <S extends Container, D extends Container>(
   source: S,
   target: D,
+  config: BoardConfig,
   sourceTaskId: string,
   targetTaskId: string,
   type: LinkType,
+  now: string = currentMoment(),
 ): TaskLinkResult<S, D> => {
   assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'unlink');
-  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink);
+  return applyLinkPair(source, target, sourceTaskId, targetTaskId, type, taskWithoutLink, {
+    config,
+    now,
+  });
 };
 
 // Drops every relation between the two tasks at once, whatever their types — what
@@ -1065,11 +1118,16 @@ export const removeTaskLink = <S extends Container, D extends Container>(
 export const removeAllTaskLinks = <S extends Container, D extends Container>(
   source: S,
   target: D,
+  config: BoardConfig,
   sourceTaskId: string,
   targetTaskId: string,
+  now: string = currentMoment(),
 ): TaskLinkResult<S, D> => {
   assertLinkableTasks(source, target, sourceTaskId, targetTaskId, 'unlink');
-  return applyPairEdit(source, target, sourceTaskId, targetTaskId, taskWithoutLinksTo);
+  return applyPairEdit(source, target, sourceTaskId, targetTaskId, taskWithoutLinksTo, {
+    config,
+    now,
+  });
 };
 
 export interface CreateTaskWithLinksResult {
@@ -1090,6 +1148,7 @@ export const createTaskWithLinks = (
   config: BoardConfig,
   input: NewTaskInput,
   links: readonly TaskLink[],
+  now: string = currentMoment(),
 ): CreateTaskWithLinksResult => {
   const targetIndex = containers.findIndex((c) => c.filename === targetFilename);
   const target = containers[targetIndex];
@@ -1100,7 +1159,9 @@ export const createTaskWithLinks = (
     if (indexOfTask(containers, link.to) === -1) throw new Error(`Task not found: ${link.to}`);
   }
 
-  const created = createTask(target, config, input);
+  // One moment for the whole operation, so the new task carries a single instant
+  // in both of its dates.
+  const created = createTask(target, config, input, now);
   const id = created.task.frontmatter.id;
   const next = [...containers];
   next[targetIndex] = created.container;
@@ -1112,9 +1173,11 @@ export const createTaskWithLinks = (
     const result: TaskLinkResult<Container, Container> = addTaskLink(
       next[targetIndex],
       next[otherIndex]!,
+      config,
       id,
       link.to,
       link.type,
+      now,
     );
     next[targetIndex] = result.source;
     next[otherIndex] = result.target;
@@ -1144,6 +1207,7 @@ export const deleteTaskWithLinks = (
   containers: readonly Container[],
   config: BoardConfig,
   taskId: string,
+  now: string = currentMoment(),
 ): DeleteTaskResult => {
   const owner = containers.find((c) =>
     c.tasks.some((t) => t.frontmatter.id === taskId),
@@ -1155,7 +1219,10 @@ export const deleteTaskWithLinks = (
 
   const changedFilenames: string[] = [owner.filename];
   const stripLinks = <C extends Container>(container: C): C | null => {
-    const tasks = container.tasks.map((t) => taskWithoutLinksTo(t, taskId));
+    const tasks = container.tasks.map((t) => {
+      const next = taskWithoutLinksTo(t, taskId);
+      return next === t ? t : withUpdatedAt(next, config, now);
+    });
     const changed = tasks.some((t, i) => t !== container.tasks[i]);
     return changed ? replaceTasks(container, tasks) : null;
   };
@@ -1327,6 +1394,7 @@ export interface CompleteReleaseResult {
 
 export const completeRelease = (
   input: CompleteReleaseContainers,
+  now: string = currentMoment(),
 ): CompleteReleaseResult => {
   if (input.release.frontmatter.status !== 'current') {
     throw new Error('Only an active release can be completed');
@@ -1346,14 +1414,21 @@ export const completeRelease = (
     const args = { newStatus: task.frontmatter.status, beforeTaskId: null };
 
     if (targetRelease !== null) {
-      const moved = moveTaskBetweenContainers(release, targetRelease, input.config, taskId, args);
+      const moved = moveTaskBetweenContainers(
+        release,
+        targetRelease,
+        input.config,
+        taskId,
+        args,
+        now,
+      );
       release = moved.source;
       targetRelease = moved.dest;
       changedFilenames.add(targetRelease.filename);
       continue;
     }
 
-    const moved = moveTaskBetweenContainers(release, backlog, input.config, taskId, args);
+    const moved = moveTaskBetweenContainers(release, backlog, input.config, taskId, args, now);
     release = moved.source;
     backlog = moved.dest;
     changedFilenames.add(backlog.filename);

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Task } from '@boardown/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgs } from '../args';
 import type { CommandContext } from '../types';
 import { archiveCommand } from './archive';
@@ -144,8 +144,14 @@ describe('view commands (backlog / archive)', () => {
   // what they write. Guard that claim rather than trusting the diff.
   it('trimming the output did not change what a mutation writes to disk', async () => {
     const file = join(project, '.boardown', 'backlog.md');
-    await taskCommand(parseArgs(['task', 'add', 'Write me', '--description', 'body']), ctx);
-    await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'step one']), ctx);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T10:00:00.000Z'));
+    try {
+      await taskCommand(parseArgs(['task', 'add', 'Write me', '--description', 'body']), ctx);
+      await taskCommand(parseArgs(['task', 'checklist', 'add', 'TS-1', 'step one']), ctx);
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(await readFile(file, 'utf8')).toBe(
       [
@@ -160,6 +166,8 @@ describe('view commands (backlog / archive)', () => {
         '  - id: c1',
         '    text: step one',
         '    done: false',
+        'createdAt: "2026-10-22T10:00:00.000Z"',
+        'updatedAt: "2026-10-22T10:00:00.000Z"',
         '---',
         '',
         'body',

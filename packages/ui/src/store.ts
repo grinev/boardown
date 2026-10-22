@@ -61,6 +61,7 @@ import {
   findDocFolder,
   findDocPage,
   isDocFolderEmpty,
+  isUpdateTracked,
   deleteTaskWithLinks,
   emptyBacklog,
   editEpic,
@@ -211,6 +212,7 @@ interface BoardState {
   setBoardSwimlanes: (swimlanes: BoardSwimlanes | null) => Promise<void>;
   setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
   setGitIntegration: (enabled: boolean) => Promise<void>;
+  setTrackUpdatedAt: (enabled: boolean) => Promise<void>;
   setStatusOutsideActiveRelease: (enabled: boolean) => Promise<void>;
   setEditFinishedReleases: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
@@ -362,6 +364,58 @@ const withContainers = (
   }
   return { ...snapshot, releases, backlog, heldBack };
 };
+
+// An attachment change awaits the disk, so the board may have moved on by the time
+// it lands. It reads the task from the snapshot as it is when it builds the write,
+// and only its stamp goes into the snapshot — never the task object it built.
+const locateForAttachments =
+  (get: () => BoardState, taskId: string) =>
+  (): { container: Container; config: BoardConfig } => {
+    const snapshot = get().snapshot;
+    const found = snapshot ? findTaskContainer(snapshot, taskId) : null;
+    if (!snapshot || found === null) throw new Error(`Task not found: ${taskId}`);
+    return { container: found.location.container, config: snapshot.config };
+  };
+
+const withTaskUpdatedAt = (
+  snapshot: BoardSnapshot,
+  taskId: string,
+  updatedAt: string | undefined,
+): BoardSnapshot => {
+  const found = findTaskContainer(snapshot, taskId);
+  if (found === null) return snapshot;
+  const { location } = found;
+  const tasks = location.container.tasks.map((t) => {
+    if (t.frontmatter.id !== taskId) return t;
+    const frontmatter = { ...t.frontmatter };
+    if (updatedAt === undefined) delete frontmatter.updatedAt;
+    else frontmatter.updatedAt = updatedAt;
+    return { ...t, frontmatter };
+  });
+  return withContainers(snapshot, [{ location, container: { ...location.container, tasks } }]);
+};
+
+// Lands an attachment change with its task's stamp already in the snapshot, so an
+// edit made while the bytes upload writes the stamp too; a refusal takes it back.
+const commitWithStamp =
+  (get: () => BoardState, set: (partial: Partial<BoardState>) => void, fs: GuardedFs) =>
+  async (change: GuardedChange, task: Task): Promise<void> => {
+    const taskId = task.frontmatter.id;
+    const before = get().snapshot;
+    const previous = before ? findTaskById(before, taskId)?.frontmatter.updatedAt : undefined;
+    if (before) set({ snapshot: withTaskUpdatedAt(before, taskId, task.frontmatter.updatedAt) });
+    try {
+      await fs.commit(change);
+    } catch (err) {
+      // An edit that stamped the task meanwhile keeps its own, later stamp.
+      const now = get().snapshot;
+      const stillOurs = now
+        ? findTaskById(now, taskId)?.frontmatter.updatedAt === task.frontmatter.updatedAt
+        : false;
+      if (now && stillOurs) set({ snapshot: withTaskUpdatedAt(now, taskId, previous) });
+      throw err;
+    }
+  };
 
 // Turns the filenames a board op reports as changed into the files to write.
 // An unknown filename throws rather than being skipped: the op declared that
@@ -970,6 +1024,21 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
+    setTrackUpdatedAt: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if (isUpdateTracked(snapshot.config) === enabled) return;
+      const nextConfig = withMinVersionStamp({ ...snapshot.config, trackUpdatedAt: enabled });
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
     setStatusOutsideActiveRelease: async (enabled) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
@@ -1514,6 +1583,8 @@ export const useBoardStore = create<BoardState>(
         set({ errorMessage: message });
         throw err;
       }
+      // The op hands back the container itself when the save changes nothing.
+      if (nextContainer === sourceLoc.container) return;
       const nextSnapshot = withContainers(snapshot, [
         { location: sourceLoc, container: nextContainer },
       ]);
@@ -1602,6 +1673,7 @@ export const useBoardStore = create<BoardState>(
           set({ errorMessage: message });
           throw err;
         }
+        if (nextRelease === release) return;
         const nextReleases = [...snapshot.releases];
         nextReleases[releaseIndex] = nextRelease;
         const nextSnapshot: BoardSnapshot = { ...snapshot, releases: nextReleases };
@@ -1629,6 +1701,7 @@ export const useBoardStore = create<BoardState>(
           set({ errorMessage: message });
           throw err;
         }
+        if (nextContainer === found.location.container) return;
         const nextSnapshot = withContainers(snapshot, [
           { location: found.location, container: nextContainer },
         ]);
@@ -1868,14 +1941,14 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
-        addTaskLinkInBoard(s, t, a, b, type), set);
+        addTaskLinkInBoard(s, t, snapshot.config, a, b, type), set);
     },
 
     removeTaskLink: async (taskId, otherTaskId, type) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
-        removeTaskLinkInBoard(s, t, a, b, type), set);
+        removeTaskLinkInBoard(s, t, snapshot.config, a, b, type), set);
     },
 
     deleteTask: async (taskId) => {
@@ -1959,21 +2032,19 @@ export const useBoardStore = create<BoardState>(
     addTaskAttachments: async (taskId, files) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return [];
-      const found = findTaskContainer(snapshot, taskId);
-      if (found === null) {
+      if (findTaskContainer(snapshot, taskId) === null) {
         set({ errorMessage: `Task not found: ${taskId}` });
         return [];
       }
-      const { container } = found.location;
       try {
-        return await addAttachments(
+        const added = await addAttachments(
           fs,
-          (change) => fs.commit(change),
-          container,
-          snapshot.config,
+          commitWithStamp(get, set, fs),
+          locateForAttachments(get, taskId),
           taskId,
           files,
         );
+        return added.names;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to attach files: ${message}` });
@@ -1984,18 +2055,15 @@ export const useBoardStore = create<BoardState>(
     removeTaskAttachment: async (taskId, name) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
-      const found = findTaskContainer(snapshot, taskId);
-      if (found === null) {
+      if (findTaskContainer(snapshot, taskId) === null) {
         set({ errorMessage: `Task not found: ${taskId}` });
         return;
       }
-      const { container } = found.location;
       try {
         await removeAttachment(
           fs,
-          (change) => fs.commit(change),
-          container,
-          snapshot.config,
+          commitWithStamp(get, set, fs),
+          locateForAttachments(get, taskId),
           taskId,
           name,
         );

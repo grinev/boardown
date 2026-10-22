@@ -130,4 +130,30 @@ describe('task attachments (cli)', () => {
     expect(data.commands.some((c) => c.name === 'task attachment')).toBe(true);
     expect(data.commands.find((c) => c.name === 'task add')?.usage).toContain('--attach <file>');
   });
+
+  it('stamps the task updatedAt when its files change', async () => {
+    const backlog = join(project, '.boardown', 'backlog.md');
+    const stamp = async () => /updatedAt: "([^"]+)"/.exec(await readFile(backlog, 'utf8'))?.[1];
+    const created = await stamp();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await run('attachment', 'add', 'TS-1', 'notes.txt');
+    const added = await stamp();
+    expect(added).not.toBe(created);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await run('attachment', 'rm', 'TS-1', 'notes.txt');
+    expect(await stamp()).not.toBe(added);
+  });
+
+  it('refuses add and rm with UNREADABLE_FRONTMATTER when the task file did not load whole', async () => {
+    await run('attachment', 'add', 'TS-1', 'notes.txt');
+    const backlog = join(project, '.boardown', 'backlog.md');
+    const broken = `${await readFile(backlog, 'utf8')}\n## Broken\n\n---\nid: TS-9\n---\n`;
+    await writeFile(backlog, broken);
+    expect(await code(run('attachment', 'add', 'TS-1', 'src/shots/shot.png'))).toBe(
+      'UNREADABLE_FRONTMATTER',
+    );
+    expect(await code(run('attachment', 'rm', 'TS-1', 'notes.txt'))).toBe('UNREADABLE_FRONTMATTER');
+    expect(await readdir(folder('TS-1'))).toEqual(['notes.txt']);
+    expect(await readFile(backlog, 'utf8')).toBe(broken);
+  });
 });

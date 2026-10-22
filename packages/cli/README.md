@@ -275,13 +275,26 @@ the folder with its task. It is all-or-nothing: a missing source or a directory 
 `FILE_NOT_FOUND`, a file over 25 MB (`attachmentMaxBytes` in `boardown schema`)
 `FILE_TOO_LARGE`, and on either nothing is written; `rm` of a name not there is
 `ATTACHMENT_NOT_FOUND`, and `add`/`rm` on a task in a finished release is
-`ARCHIVED` unless `editFinishedReleases` is on (`ls` still works).
+`ARCHIVED` unless `editFinishedReleases` is on (`ls` still works). `add` and `rm`
+also rewrite the task's own file, stamping its `updatedAt`, so like any task edit
+they are `UNREADABLE_FRONTMATTER` when that file did not load whole and `CONFLICT`
+when it changed on disk meanwhile.
 
 ```bash
 boardown task attachment add BD-42 screenshots/login.png logs/trace.txt
 boardown task add "Crash on save" --type bug --attach crash.log
 boardown task attachment ls BD-42
 ```
+
+### Task dates
+
+boardown writes `createdAt` when a task is created and `updatedAt` on every change
+to it except a reorder — both ISO 8601 UTC strings in the task's frontmatter, never
+set by a flag. A command that changes nothing writes nothing. A board with
+`trackUpdatedAt: false` in `config.yaml` keeps `createdAt` and stops writing
+`updatedAt`; `boardown schema` reports the setting as `trackUpdatedAt`. `task get`
+and `--full` carry both dates, summaries none, and the human output of `task get`
+prints `Created: …` and, while tracked, `Updated: …`.
 
 ### Priority
 

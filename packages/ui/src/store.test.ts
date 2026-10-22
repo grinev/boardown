@@ -299,6 +299,50 @@ describe('deleteTask', () => {
   });
 });
 
+describe('task attachments', () => {
+  it('stamps the task and puts it back into the snapshot after an add and a remove', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+
+    const names = await state().addTaskAttachments('BD-1', [
+      { name: 'a.txt', content: new Uint8Array([1]) },
+    ]);
+    expect(names).toEqual(['a.txt']);
+    const added = current().releases[0]!.tasks[0]!.frontmatter.updatedAt;
+    expect(added).toEqual(expect.any(String));
+    expect(fs.files.get('releases/1.0.md')?.content).toContain(`updatedAt: "${added}"`);
+
+    await state().removeTaskAttachment('BD-1', 'a.txt');
+    expect(fs.files.has('attachments/BD-1/a.txt')).toBe(false);
+    expect(fs.writes.filter((w) => w === 'releases/1.0.md').length).toBe(2);
+  });
+
+  it('takes the stamp back out of the snapshot when the change is refused', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+    fs.failWritesMatching = 'releases/1.0.md';
+
+    await expect(
+      state().addTaskAttachments('BD-1', [{ name: 'a.txt', content: new Uint8Array([1]) }]),
+    ).rejects.toThrow();
+
+    expect(current().releases[0]!.tasks[0]!.frontmatter.updatedAt).toBeUndefined();
+    expect(state().errorMessage).toMatch(/failed to attach files/i);
+  });
+
+  it('keeps an edit that lands while the files are being added', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+
+    const adding = state().addTaskAttachments('BD-1', [
+      { name: 'a.txt', content: new Uint8Array([1]) },
+    ]);
+    const editing = state().updateTask('BD-1', { title: 'Edited meanwhile' });
+    await Promise.all([adding, editing]);
+
+    expect(current().releases[0]!.tasks[0]!.title).toBe('Edited meanwhile');
+    expect(fs.files.get('releases/1.0.md')?.content).toContain('## Edited meanwhile');
+    expect(fs.files.has('attachments/BD-1/a.txt')).toBe(true);
+  });
+});
+
 describe('createTask', () => {
   it('starts over when a refresh lands while the folder is being read', async () => {
     const { fs: stale } = setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'future')] }));
@@ -491,7 +535,18 @@ describe('updateTask', () => {
     await state().updateTask('BD-1', { title: 'Renamed' });
 
     expect(current().releases[0]!.tasks[0]!.title).toBe('Renamed');
+    expect(current().releases[0]!.tasks[0]!.frontmatter.updatedAt).toEqual(expect.any(String));
     expect(fs.writes).toContain('releases/1.0.md');
+  });
+
+  it('writes nothing for a save that changes nothing', async () => {
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
+    const before = current();
+
+    await state().updateTask('BD-1', { title: 'BD-1' });
+
+    expect(fs.writes).toEqual([]);
+    expect(current()).toBe(before);
   });
 
   it('writes a custom field value flat into the task frontmatter', async () => {
@@ -1083,6 +1138,30 @@ describe('setGitIntegration', () => {
     await state().setGitIntegration(false);
 
     expect(current().config.gitIntegration).toBeUndefined();
+    expect(state().errorMessage).toMatch(/failed to save the setting/i);
+  });
+});
+
+describe('setTrackUpdatedAt', () => {
+  it('writes the key only once the user turns it off, since absent means on', async () => {
+    const { fs } = setup(snap());
+
+    await state().setTrackUpdatedAt(true);
+    expect(current().config.trackUpdatedAt).toBeUndefined();
+    expect(fs.writes).toEqual([]);
+
+    await state().setTrackUpdatedAt(false);
+    expect(current().config.trackUpdatedAt).toBe(false);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('trackUpdatedAt: false');
+  });
+
+  it('rolls back and reports when the write fails', async () => {
+    const { fs } = setup(snap());
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await state().setTrackUpdatedAt(false);
+
+    expect(current().config.trackUpdatedAt).toBeUndefined();
     expect(state().errorMessage).toMatch(/failed to save the setting/i);
   });
 });

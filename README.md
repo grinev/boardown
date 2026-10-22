@@ -372,7 +372,11 @@ arbitrates writes. Two habits keep merges clean.
 description, checklist, notes. That is one task block in one file, and a status
 change is a two-line diff: task sections never move around, so nothing else in
 the file shifts. Leave the neighbouring tasks alone even if you spot something
-worth fixing; note it down for later.
+worth fixing; note it down for later. While **Track update date** is on (the
+default), every change also rewrites the task's `updatedAt` line — a status change
+is three lines, and two branches that change the *same* task conflict on that
+line. Turn the setting off in Settings (`trackUpdatedAt: false`) if your branches
+often share tasks.
 
 **Reshape the board on the main branch:** creating tasks (a new task bumps
 `nextId` in `config.yaml` and two branches end up with the same ID, which nothing

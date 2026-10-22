@@ -7,8 +7,10 @@ import {
   isWindowsReservedName,
 } from './board-ops.js';
 import type { GuardedChange, GuardedFs, GuardedWrite } from './conflicts.js';
-import type { BoardConfig } from './schemas.js';
+import type { BoardConfig, Task } from './schemas.js';
 import type { FsAdapter } from './fs-adapter.js';
+import { serializeBacklog, serializeRelease } from './serializer.js';
+import { currentMoment, withUpdatedAt } from './task-dates.js';
 
 // GitHub's own cap for an issue attachment: a file in git stays in its history
 // for good, so the board keeps what it takes to what a repo can reasonably hold.
@@ -118,8 +120,10 @@ export const attachmentWrites = async (
 };
 
 // How a caller lands a change: through its own fs, so its minVersion stamp rides
-// along.
-export type CommitChange = (change: GuardedChange) => Promise<void>;
+// along. It is handed the task as the change stamps it, so a shell holding the
+// board in memory can carry the stamp before the disk answers — an edit made
+// while the bytes upload then writes it too, instead of writing it away.
+export type CommitChange = (change: GuardedChange, task: Task) => Promise<void>;
 
 const refuseIfArchived = (container: Container, config: BoardConfig): void => {
   if (isFrozenRelease(container, config)) {
@@ -127,43 +131,78 @@ const refuseIfArchived = (container: Container, config: BoardConfig): void => {
   }
 };
 
-// Adds files to a task already on the board. The task's own file is not written,
-// but it must be unchanged since load: the finished-release rule was read from it.
-export const addAttachments = async (
-  fs: FsAdapter,
-  commit: CommitChange,
-  container: Container,
+// A change to a task's files is a change to the task: its own file is rewritten
+// with `updatedAt` stamped, so it is refused exactly as an edit would be — a file
+// that did not load whole, or one changed on disk since. It is written with
+// tracking off too, unchanged then, so the refusals do not depend on the setting.
+const stampedTaskFile = <C extends Container>(
+  container: C,
   config: BoardConfig,
   taskId: string,
-  files: readonly NewAttachment[],
-): Promise<string[]> => {
-  refuseIfArchived(container, config);
-  const { writes, names } = await attachmentWrites(fs, taskId, files);
-  await commit({ writes, removes: [], unchanged: [container.filename] });
-  return names;
+  now: string,
+): { container: C; task: Task; write: GuardedWrite } => {
+  const task = container.tasks.find((t) => t.frontmatter.id === taskId);
+  if (task === undefined) throw new Error(`Task not found: ${taskId}`);
+  const stamped = withUpdatedAt(task, config, now);
+  const next: C = {
+    ...container,
+    tasks: container.tasks.map((t) => (t === task ? stamped : t)),
+  };
+  // The backlog is the one container without a slug.
+  const content = 'slug' in next ? serializeRelease(next) : serializeBacklog(next);
+  return { container: next, task: stamped, write: { path: next.filename, content } };
 };
 
-// False when the folder holds no such file — already gone, or never there —
-// and then nothing is written. The folder goes when its last file does.
-export const removeAttachment = async (
+// Where the task stands, asked for again once the folder has been read: the task's
+// file is written whole, so it must be built from the board as it is by then, not
+// as it was when the call began — a shell may have landed an edit meanwhile.
+export type LocateTask<C extends Container> = () => { container: C; config: BoardConfig };
+
+// Adds files to a task already on the board. The task's file goes first in the
+// change, so it lands right after the checks rather than behind the bytes. The
+// container comes back with the task stamped.
+export const addAttachments = async <C extends Container>(
+  fs: FsAdapter,
+  commit: CommitChange,
+  locate: LocateTask<C>,
+  taskId: string,
+  files: readonly NewAttachment[],
+  now: string = currentMoment(),
+): Promise<{ names: string[]; container: C }> => {
+  const before = locate();
+  refuseIfArchived(before.container, before.config);
+  const { writes, names } = await attachmentWrites(fs, taskId, files);
+  const { container, config } = locate();
+  refuseIfArchived(container, config);
+  const task = stampedTaskFile(container, config, taskId, now);
+  await commit({ writes: [task.write, ...writes], removes: [] }, task.task);
+  return { names, container: task.container };
+};
+
+// Null when the folder holds no such file — already gone, or never there — and
+// then nothing is written. Otherwise the stamped container, as for an add. The
+// folder goes when its last file does.
+export const removeAttachment = async <C extends Container>(
   fs: GuardedFs,
   commit: CommitChange,
-  container: Container,
-  config: BoardConfig,
+  locate: LocateTask<C>,
   taskId: string,
   name: string,
-): Promise<boolean> => {
+  now: string = currentMoment(),
+): Promise<C | null> => {
+  const before = locate();
+  refuseIfArchived(before.container, before.config);
+  if (!(await fileNames(fs, taskId)).includes(name)) return null;
+  const { container, config } = locate();
   refuseIfArchived(container, config);
-  if (!(await fileNames(fs, taskId)).includes(name)) return false;
   const dir = attachmentsDir(taskId);
-  await commit({
-    writes: [],
-    removes: [],
-    unversionedRemoves: [`${dir}/${name}`],
-    unchanged: [container.filename],
-  });
+  const task = stampedTaskFile(container, config, taskId, now);
+  await commit(
+    { writes: [task.write], removes: [], unversionedRemoves: [`${dir}/${name}`] },
+    task.task,
+  );
   if ((await fs.list(dir)).length === 0) await fs.removeDir(dir);
-  return true;
+  return task.container;
 };
 
 // Null when the file is gone.

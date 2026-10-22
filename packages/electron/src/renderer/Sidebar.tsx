@@ -6,6 +6,7 @@ import {
   GitIntegrationField,
   MultipleActiveReleasesField,
   StatusOutsideActiveReleaseField,
+  TrackUpdatedAtField,
   WipLimitField,
 } from '@boardown/ui';
 import type { ProjectEntry, ThemeChoice } from '../bridge';
@@ -156,6 +157,7 @@ export function Sidebar({
               <MultipleActiveReleasesField className={styles.boardSettingRow} />
             )}
             {boardOpen && <GitIntegrationField className={styles.boardSettingRow} />}
+            {boardOpen && <TrackUpdatedAtField className={styles.boardSettingRow} />}
             {boardOpen && (
               <StatusOutsideActiveReleaseField className={styles.boardSettingRow} />
             )}
