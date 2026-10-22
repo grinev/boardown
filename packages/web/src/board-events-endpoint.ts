@@ -12,3 +12,9 @@ export const BOARD_EVENTS_ENDPOINT = '/api/events';
 // bodies stay the operation's own arguments.
 export const CLIENT_ID_HEADER = 'x-boardown-client';
 export const CLIENT_ID_PARAM = 'client';
+
+// A board path that does not exist yet is a normal answer, not a failure: the
+// /api/fs/* reads answer it 200 with this header and an empty body, because any
+// 4xx is a line the browser prints to the console. Out of band so an empty file
+// stays an empty 200.
+export const MISSING_PATH_HEADER = 'x-boardown-missing';

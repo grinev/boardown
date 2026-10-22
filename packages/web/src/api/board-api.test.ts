@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { MISSING_PATH_HEADER } from '../board-events-endpoint';
 import { handleBoardFs, handleProjectFile, resolveContained } from './board-api';
 
 const ROOT = path.resolve('/tmp/board-root');
@@ -55,27 +56,32 @@ describe('resolveContained', () => {
   });
 });
 
+const callBoardFs = async (
+  root: string,
+  method: string,
+  url: string,
+  body?: Uint8Array,
+): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> => {
+  const req = Readable.from(body === undefined ? [] : [Buffer.from(body)]) as unknown as IncomingMessage;
+  Object.assign(req, { method, headers: {} });
+  const headers: Record<string, string> = {};
+  const chunks: Buffer[] = [];
+  const res = {
+    statusCode: 200,
+    setHeader: (name: string, value: string) => {
+      headers[name.toLowerCase()] = value;
+    },
+    end: (chunk?: string | Buffer) => {
+      if (chunk !== undefined) chunks.push(Buffer.from(chunk));
+    },
+  } as unknown as ServerResponse;
+  const parsed = new URL(url, 'http://localhost');
+  await handleBoardFs(req, res, parsed.pathname, parsed.searchParams, root);
+  return { status: res.statusCode, headers, body: Buffer.concat(chunks) };
+};
+
 describe('handleBoardFs bytes', () => {
-  const call = async (
-    root: string,
-    method: string,
-    url: string,
-    body?: Uint8Array,
-  ): Promise<{ status: number; body: Buffer }> => {
-    const req = Readable.from(body === undefined ? [] : [Buffer.from(body)]) as unknown as IncomingMessage;
-    Object.assign(req, { method, headers: {} });
-    const chunks: Buffer[] = [];
-    const res = {
-      statusCode: 200,
-      setHeader: () => undefined,
-      end: (chunk?: string | Buffer) => {
-        if (chunk !== undefined) chunks.push(Buffer.from(chunk));
-      },
-    } as unknown as ServerResponse;
-    const parsed = new URL(url, 'http://localhost');
-    await handleBoardFs(req, res, parsed.pathname, parsed.searchParams, root);
-    return { status: res.statusCode, body: Buffer.concat(chunks) };
-  };
+  const call = callBoardFs;
 
   it('round-trips bytes that are not UTF-8 and reports their size', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'bd-web-bytes-'));
@@ -90,6 +96,49 @@ describe('handleBoardFs bytes', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('handleBoardFs missing paths', () => {
+  let root = '';
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), 'bd-web-missing-'));
+    await writeFile(path.join(root, 'empty.md'), '');
+    await writeFile(path.join(root, 'backlog.md'), '# Backlog\n');
+    await mkdir(path.join(root, 'epics'));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const get = (op: string, target: string) =>
+    callBoardFs(root, 'GET', `/api/fs/${op}?path=${encodeURIComponent(target)}`);
+
+  it.each(['read', 'read-bytes', 'list', 'stat'])(
+    'answers %s of a path that does not exist with 200, the mark and no body',
+    async (op) => {
+      for (const target of ['nope.md', 'attachments/BD-1', 'backlog.md/child']) {
+        const reply = await get(op, target);
+        expect(reply.status).toBe(200);
+        expect(reply.headers[MISSING_PATH_HEADER]).toBe('1');
+        expect(reply.body.byteLength).toBe(0);
+      }
+    },
+  );
+
+  it('answers an empty file as an empty file, without the mark', async () => {
+    const reply = await get('read', 'empty.md');
+    expect(reply.status).toBe(200);
+    expect(reply.headers[MISSING_PATH_HEADER]).toBeUndefined();
+    expect(reply.body.byteLength).toBe(0);
+  });
+
+  it('keeps a real failure an error', async () => {
+    const folderAsFile = await get('read', 'epics');
+    expect(folderAsFile.status).toBe(500);
+    expect(folderAsFile.headers[MISSING_PATH_HEADER]).toBeUndefined();
+    expect((await get('stat', '../outside.md')).status).toBe(400);
+    expect((await callBoardFs(root, 'GET', '/api/fs/nope?path=x')).status).toBe(404);
   });
 });
 
