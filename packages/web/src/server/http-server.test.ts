@@ -256,6 +256,12 @@ describe('registry mode', () => {
     expect(reply.location).toBe('/b/shop/');
   });
 
+  it('keeps the query string when it redirects a prefix', async () => {
+    const reply = await request('/b/shop?embed');
+    expect(reply.status).toBe(308);
+    expect(reply.location).toBe('/b/shop/?embed');
+  });
+
   it('answers an unknown id with 404', async () => {
     expect((await request('/b/nope/')).status).toBe(404);
   });

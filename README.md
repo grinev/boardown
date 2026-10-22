@@ -220,6 +220,12 @@ your files stay exactly where they are. Both write one line of the registry file
 and leave the rest of it, comments included, alone — so the file is still yours to
 edit, and a project you add by hand and one you add from the page look the same.
 
+To show a board inside another app's window that already names the project, open
+it with `?embed` — `http://127.0.0.1:<port>/b/shop/?embed`, or `/?embed` with
+`--data-dir`. The project-name row above the tabs is left out and the tab bar
+becomes the top of the page; everything else stays. It belongs to that page only:
+the same board opened without it shows its title as usual.
+
 ## Custom task statuses (beta)
 
 > **Beta.** Statuses are declared by hand in `config.yaml` and there is no UI for
