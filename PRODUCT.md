@@ -685,7 +685,9 @@ externally, the write is refused and the user gets a modal offering to
 **Reload**. A file that is both unreadable and changed on disk is refused as
 unreadable — that check runs first. That modal takes over the screen: any dialog open when the write was
 refused is closed, so the only thing on offer is Reload — the refused change was
-not written, and reloading is the only way on.
+not written, and reloading is the only way on. The onboarding form is no
+exception: its own write is refused the same way, and the form gives way to the
+modal.
 
 No automated backups — git is the safety net.
 
@@ -706,6 +708,15 @@ screen, with an update message instead of a validation error.
 After onboarding the board starts empty (no releases), opened on the Backlog
 tab; the user creates the first release themselves. `backlog.md` is likewise
 not seeded — it is created lazily on the first task that lands in no release.
+
+A `config.yaml` that appears on disk while the form is open — another window,
+the CLI, a `git checkout` — is never overwritten by it. With auto-refresh on, the
+board simply replaces the form. A Create that gets there first is refused like
+any write over an external change: the form closes and the Reload conflict modal
+opens over the empty page. Reload board loads whatever `config.yaml` is on disk
+now — the board, the error screen if that file is invalid, or a fresh form if it
+is gone again — and the values typed into the form are dropped. Any other failure
+of the write stays as a line inside the form.
 
 ## UI
 
