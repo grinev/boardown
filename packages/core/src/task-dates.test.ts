@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   addTaskLink,
   changeTaskStatus,
@@ -14,7 +14,7 @@ import {
   reorderTask,
   setTaskLabels,
 } from './board-ops.js';
-import { isUpdateTracked, stampChangedTasks } from './task-dates.js';
+import { isUpdateTracked, localDay, stampChangedTasks } from './task-dates.js';
 import type { Backlog, BoardConfig, Release, Task } from './schemas.js';
 
 const NOW = '2026-10-22T10:00:00.000Z';
@@ -51,6 +51,21 @@ describe('isUpdateTracked', () => {
     expect(isUpdateTracked(config)).toBe(true);
     expect(isUpdateTracked({ ...config, trackUpdatedAt: true })).toBe(true);
     expect(isUpdateTracked(untracked)).toBe(false);
+  });
+});
+
+describe('localDay', () => {
+  const zone = process.env.TZ;
+  afterEach(() => {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  });
+
+  it('is the day on the local calendar, not the UTC one', () => {
+    process.env.TZ = 'America/New_York';
+    expect(localDay('2026-10-23T02:00:00.000Z')).toBe('2026-10-22');
+    process.env.TZ = 'Asia/Tokyo';
+    expect(localDay('2026-10-22T20:00:00.000Z')).toBe('2026-10-23');
   });
 });
 

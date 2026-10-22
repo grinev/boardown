@@ -1035,6 +1035,24 @@ describe('completeRelease', () => {
     expect(result.changedFilenames).toEqual(['releases/1.10.md']);
   });
 
+  it('records the day it was completed, over a date already there', () => {
+    const source: Release = {
+      ...release(task('BD-1', 'done', 100)),
+      frontmatter: { status: 'current', name: 'One', startDate: '2026-09-01', endDate: '2027-01-01' },
+    };
+
+    const result = completeRelease(
+      { config, release: source, backlog: emptyBacklog(), targetRelease: null },
+      '2026-10-23T12:00:00.000Z',
+    );
+
+    expect(result.release.frontmatter).toEqual({
+      status: 'finished',
+      name: 'One',
+      startDate: '2026-09-01',
+      endDate: '2026-10-23',
+    });
+  });
 });
 
 const futureRelease = (slug: string): Release => ({
@@ -1070,6 +1088,20 @@ describe('startRelease', () => {
       multipleActiveReleases: true,
     });
     expect(started.frontmatter.status).toBe('current');
+  });
+
+  it('records the day it was started, over a planned date, and nothing else', () => {
+    const planned: Release = {
+      ...futureRelease('1.0'),
+      frontmatter: { status: 'future', name: '1.0', description: 'Plan', startDate: '2027-01-01' },
+    };
+    const started = startRelease(planned, [planned], config, '2026-10-23T12:00:00.000Z');
+    expect(started.frontmatter).toEqual({
+      status: 'current',
+      name: '1.0',
+      description: 'Plan',
+      startDate: '2026-10-23',
+    });
   });
 
   it('still refuses a non-future release with the setting on', () => {

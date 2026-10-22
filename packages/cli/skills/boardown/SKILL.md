@@ -74,7 +74,7 @@ Views:
 ```bash
 boardown release current [--all] [--full]   # the Board view; --all for every active release
 boardown backlog [--full]                   # active releases, future releases, then the backlog
-boardown archive [--full]                   # finished releases, by file name descending - not by date
+boardown archive [--full]                   # finished releases, newest first by completion date
 ```
 
 Tasks:
@@ -126,8 +126,8 @@ boardown release list [--full]
 boardown release get <ref> [--full]
 boardown release add <name> [--description TEXT]            # a future release
 boardown release edit <ref> [--name NAME] [--description TEXT]
-boardown release start <ref>                                 # make it active
-boardown release done <ref> [--into <ref>]                   # finish; open tasks go to the backlog, or into --into
+boardown release start <ref>                                 # make it active; records today as startDate
+boardown release done <ref> [--into <ref>]                   # finish, recording today as endDate; open tasks go to the backlog, or into --into
 
 boardown epic list [--full]
 boardown epic get <slug> [--full]
