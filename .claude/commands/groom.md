@@ -230,12 +230,19 @@ request", which stay verbatim in whatever language he said them.
 
 ```sh
 boardown task edit BD-42 --field spec="[[repo:.claude/specs/BD-42-csv-export/spec.md]]"
-boardown task status BD-42 ready
+boardown task edit BD-42 --release <current release> --status ready
 ```
 
 Never earlier: together they are what makes a task ready, and a ready task gets
 picked up. The field value is a path token, never content — the board is public,
 the specs are not.
+
+**A groomed task always goes into the current release** — the one
+`boardown release current` names — together with its `ready` status, in the one
+call above. A task's status never changes in the backlog, so a task left there
+cannot become `ready`. It does not matter where the task sat when grooming
+started, and it is not a question for the user. A task already in the current
+release takes `boardown task status BD-42 ready`.
 
 **The status is the signal, the field is the address.** `ready` is the column the
 user reads to see whether a release can go and the only status a run starts from;
