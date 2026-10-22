@@ -66,6 +66,9 @@ id: BD-23
 type: feature
 status: todo
 order: 250
+links:
+  - type: relates
+    to: BD-143
 ---
 
 ## No DOM test environment for packages/ui
@@ -94,18 +97,6 @@ order: 400
 ---
 
 The project list page at / in registry mode carries its own minimal styling — rows, buttons and dialogs assembled from currentColor and the system Canvas/CanvasText colours — so it only resembles the board rather than looking like it. It should read as the same product: the surfaces, controls and dialogs of the board UI, in light and in dark. The page serves several boards at once while a theme belongs to one board's config, so what it follows when the boards disagree is part of the task.
-
-## Show last updated date on tasks
-
----
-id: BD-32
-type: feature
-status: todo
-epic: git-integration
-order: 600
----
-
-Use git or custom field??
 
 ## The project list page does not render in Orca's built-in browser
 
@@ -205,6 +196,9 @@ id: BD-20
 type: feature
 status: todo
 order: 1600
+links:
+  - type: relates
+    to: BD-143
 ---
 
 ## Add localization infrastructure
@@ -254,17 +248,6 @@ container file, so two sessions creating unrelated tasks also conflict on the
 last lines of `no_epic.md` (27 tasks today). Splitting storage further — a file
 per task — is not the answer; it breaks docs/decisions/storage-format.md and
 principle 2. Close this first and see what pain is left.
-
-## Conflict modal is unreachable during onboarding
-
----
-id: BD-70
-type: bug
-status: todo
-order: 1900
----
-
-In the status === 'onboarding' branch App.tsx early-returns and renders only OnboardingDialog, so ConflictDialog never mounts. Onboarding writes config.yaml through the pre-load guard, which carries an empty version map: if the file appeared on disk between the missing-config check and the submit, check() sees known === undefined, calls onConflict and throws ConflictError. The user gets nothing but the inline error in the onboarding form — no Reload button, no way forward — a dead end they can only leave by reopening the folder. Found while working on BD-69; a separate defect from the modal stacking.
 
 ## Surface core invariant refusals in the UI
 
@@ -325,26 +308,6 @@ status: todo
 order: 2400
 ---
 
-## IconSelect: Escape inside a dialog can close the dialog instead of the select
-
----
-id: BD-95
-type: bug
-status: todo
-order: 2500
-notes:
-  - id: n1
-    text: "Covered by BD-94: the same focus fix in IconSelect. Close once BD-94 is accepted; do not work separately. See .claude/specs/BD-94-picker-keyboard-nav/product.md"
-    createdAt: "2026-08-19T10:47:01.980Z"
-links:
-  - type: relates
-    to: BD-57
-  - type: relates
-    to: BD-94
----
-
-Escape over an open IconSelect popup inside the task dialog can close the whole dialog instead of just the select. Pre-existing and older than BD-57; found by the tester during that run.
-
 ## Manage custom fields in Settings
 
 ---
@@ -385,23 +348,3 @@ order: 3000
 ---
 
 `sanitizeFilenameForFs` keeps non-ASCII characters as typed and never normalizes them, so `epics/рост-и-geo.md` is stored NFC on Linux and NFD on macOS — the classic "the file changed but the diff is empty" on a mixed team. Normalize the derived name to NFC and warn about non-ASCII slugs in the docs. A slug transliteration option in config.yaml is a second level, decided separately.
-
-## Agent skill: allow editing docs pages directly
-
----
-id: BD-140
-type: docs
-status: todo
-epic: cli
-order: 3200
----
-
-The skill template [[repo:packages/cli/skills/boardown/SKILL.md]] tells the agent never to edit board files by hand and lists a docs page among the things the CLI cannot do, so the agent stops instead of writing one. The CLI has no command for docs pages, so this blocks a legitimate request ("create a docs page with the findings").
-
-Add an exception: docs pages are plain Markdown, the agent creates and edits `.boardown/docs/<page>.md` directly and links them with `[[<page>]]`. Everything else under `.boardown/` stays CLI-only.
-
-Suggested wording (already applied by hand to a local install, which `boardown skill install` will overwrite):
-
-> When the CLI has no command for what is asked (renaming or removing a label in the registry, deleting an epic or a release), tell the user it cannot be done through the CLI and stop there.
->
-> The one exception is docs pages: the CLI has no command for them, so create and edit `.boardown/docs/<page>.md` directly as plain Markdown files. Link them from tasks and epics with `[[<page>]]`.
