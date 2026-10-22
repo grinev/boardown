@@ -9,6 +9,7 @@ import { HttpFsAdapter } from './api/http-fs-adapter';
 import { HttpGitHistoryReader } from './api/http-git-history-reader';
 import { HttpProjectFileReader } from './api/http-project-file-reader';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
+import { isEmbedRequested } from './embed-param';
 import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
 import { resolveDevLogLevel } from './log-level';
@@ -34,6 +35,10 @@ if (!container) {
 // prefix; only the endpoints move.
 const prefix = /^\/b\/[^/]+/.exec(window.location.pathname)?.[0] ?? '';
 
+// Read once, for the life of the page: `ui` never sees the URL, and nothing the
+// page does afterwards changes the URL, so a browser reload keeps it.
+const embedded = isEmbedRequested(window.location.search);
+
 // Names this tab to the server, so the changes it makes itself are not sent back
 // to it as external ones. Loopback is a secure context, so randomUUID is there.
 const clientId = crypto.randomUUID();
@@ -51,6 +56,7 @@ createRoot(container).render(
       gitHistory={gitHistory}
       fileSaver={fileSaver}
       version={__BOARDOWN_VERSION__}
+      embedded={embedded}
     />
   </StrictMode>,
 );

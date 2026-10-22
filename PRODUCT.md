@@ -1835,6 +1835,20 @@ file that exists but cannot be read is not absence, and refuses the start like a
 other invalid one. The startup lines name the registry's absolute path either way,
 so which file was opened never has to be guessed.
 
+A board page opened with **`?embed`** is rendered for another app's window that
+already names the project: the row holding the project name above the tabs is not
+there, on the board and on its loading, onboarding and error screens alike, and
+the tab bar is the top of the page. Everything else — tabs, search, Create,
+Reload, Settings, the theme — is as it is without it. It is a parameter of the
+page, read the same way at `/` of a single board, under `/b/<id>/` of a registry
+(`/b/<id>?embed` redirects with the parameter kept) and in the dev shell: `?embed`,
+`?embed=`, `?embed=1` and `?embed=true` turn it on, the value matched ignoring
+case, and anything else — `0`, `false`, `yes` — leaves the page as it is; a
+repeated parameter counts by its first occurrence. Nothing is stored, so the same
+board opened without it shows its title; it lasts for the life of the page and a
+browser reload keeps it with the URL. The list page ignores it, and its links do
+not carry it.
+
 The **dev shell** is also the only thing in the project that writes a **log
 file** — `boardown-web` installs no log destination, like every other shell a
 user runs. Each `pnpm dev` /

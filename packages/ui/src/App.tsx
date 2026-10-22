@@ -61,6 +61,10 @@ interface AppProps {
   // The running build's version, supplied by the shell. Shown read-only in the
   // settings dialog; omitted by shells that surface it their own way.
   version?: string | undefined;
+  // The page is rendered inside another app's window, which already names the
+  // project, so the title row above the tabs is left out. Only the web shell
+  // passes it today, from the page's `?embed`.
+  embedded?: boolean;
 }
 
 export function App({
@@ -74,6 +78,7 @@ export function App({
   onCancel,
   forcedTheme,
   version,
+  embedded = false,
 }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
@@ -168,9 +173,11 @@ export function App({
   if (status === 'idle' || status === 'loading') {
     return (
       <main className={styles.app}>
-        <header className={styles.header}>
-          <h1 />
-        </header>
+        {!embedded && (
+          <header className={styles.header}>
+            <h1 />
+          </header>
+        )}
         <div className={styles.loading}>Loading…</div>
       </main>
     );
@@ -179,9 +186,11 @@ export function App({
   if (status === 'onboarding') {
     return (
       <main className={styles.app}>
-        <header className={styles.header}>
-          <h1 />
-        </header>
+        {!embedded && (
+          <header className={styles.header}>
+            <h1 />
+          </header>
+        )}
         <OnboardingDialog
           defaultProjectName={defaultProjectName ?? ''}
           defaultIdPrefix={defaultIdPrefix ?? ''}
@@ -194,9 +203,11 @@ export function App({
   if (status === 'error' || snapshot === null) {
     return (
       <main className={styles.app}>
-        <header className={styles.header}>
-          <h1 />
-        </header>
+        {!embedded && (
+          <header className={styles.header}>
+            <h1 />
+          </header>
+        )}
         <div className={styles.errorScreen}>
           <p className={styles.errorMessage}>Failed to load board.</p>
           {errorMessage && <pre className={styles.errorDetails}>{errorMessage}</pre>}
@@ -237,9 +248,11 @@ export function App({
 
   return (
     <main className={styles.app}>
-      <header className={styles.header}>
-        <h1>{snapshot.config.projectName}</h1>
-      </header>
+      {!embedded && (
+        <header className={styles.header}>
+          <h1>{snapshot.config.projectName}</h1>
+        </header>
+      )}
       <TabBar
         activeTab={activeTab}
         onSelect={setActiveTab}
