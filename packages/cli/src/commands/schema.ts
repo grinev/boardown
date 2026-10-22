@@ -22,7 +22,7 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 23,
+  version: 24,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
@@ -76,7 +76,7 @@ const DESCRIPTOR = {
       name: 'archive',
       usage: 'boardown archive [--full]',
       summary:
-        'The Archive view: finished releases, newest first. Data is { releases: [{ slug, name, status, taskCount }] }; --full adds task summaries.',
+        'The Archive view: finished releases, newest first — by endDate, then by version for releases without one. Data is { releases: [{ slug, name, status, taskCount }] }; --full adds task summaries.',
     },
     {
       name: 'init',
@@ -171,7 +171,8 @@ const DESCRIPTOR = {
     {
       name: 'release list',
       usage: 'boardown release list [--full]',
-      summary: 'List releases (slug, name, status, task count); --full adds task summaries.',
+      summary:
+        'List every release by version, lowest first (slug, name, status, task count); --full adds task summaries.',
     },
     {
       name: 'release current',
@@ -194,12 +195,13 @@ const DESCRIPTOR = {
       name: 'release start',
       usage: 'boardown release start <file|slug>',
       summary:
-        'Make a release active. Refused with RELEASE_CONFLICT while another release is active, unless multipleActiveReleases is true.',
+        'Make a release active, recording the local day as its startDate. Refused with RELEASE_CONFLICT while another release is active, unless multipleActiveReleases is true.',
     },
     {
       name: 'release done',
       usage: 'boardown release done <file|slug> [--into <release>]',
-      summary: 'Finish a release; open tasks go to the backlog, keeping their epic, or carry into --into.',
+      summary:
+        'Finish a release, recording the local day as its endDate; open tasks go to the backlog, keeping their epic, or carry into --into.',
     },
     {
       name: 'epic get',

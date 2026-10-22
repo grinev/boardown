@@ -84,8 +84,9 @@ same rules and moves the file, so `name` and filename never drift apart. A name
 that derives the slug the file already has (a case change, or a change only in
 characters the rules strip) leaves the file where it is; a name whose slug is
 taken by another release, or that has no character usable in a filename, is
-refused and nothing is written. Since release lists are ordered by filename, a
-renamed release re-sorts — it lands where its new name says it should.
+refused and nothing is written. Since release lists are ordered by name (see
+"Release order" below), a renamed release re-sorts — it lands where its new name
+says it should.
 
 Release lifecycle:
 
@@ -103,10 +104,15 @@ Transitions:
   already active, unless `multipleActiveReleases` is on; the user is otherwise
   asked to finish that one first. The setting gates the start only: several
   releases already active render as several whatever it says, and turning it off
-  never touches them.
+  never touches them. Starting writes `startDate`.
 - **Complete release** (`current → finished`). If any tasks are not `done`,
   a modal asks the user where to put them: another future release, or the
-  Backlog (epic preserved).
+  Backlog (epic preserved). Completing writes `endDate`.
+
+Both dates are the local calendar day, `YYYY-MM-DD`, in the UI and the CLI alike,
+and replace any value already there; they are the only frontmatter lines the
+transition adds. Nothing backfills them on releases finished before they were
+written.
 
 Release frontmatter fields:
 
@@ -115,11 +121,24 @@ Release frontmatter fields:
 | `status`      | string  | `future` / `current` / `finished`.                     |
 | `name`        | string  | Human-readable name shown everywhere in the UI. Required for new releases; legacy files without `name` fall back to the slug for display. |
 | `description` | string? | Optional plain-text description.                        |
-| `startDate`   | date?   | Optional.                                              |
-| `endDate`     | date?   | Optional.                                              |
+| `startDate`   | date?   | Optional. Written by Start release. Shown nowhere in the UI. |
+| `endDate`     | date?   | Optional. Written by Complete release; orders the Archive. Shown nowhere in the UI. A hand-written value in any form but `YYYY-MM-DD` stays on disk and counts as no date. |
 
 The slug lives in the filename only — there is no `release` (or `slug`)
 key in frontmatter, mirroring the way `Epic` stores its slug.
+
+**Release order.** Releases order by the name they show (`name`, else the slug).
+A name that reads as a version — an optional `v`, one to three numbers joined by
+dots, an optional `-suffix` — orders by semver: `v0.9.0 < v0.10.0 < v0.11.0`,
+`v1.0.0-beta < v1.0.0-rc.1 < v1.0.0`, and `v0.10` equals `v0.10.0`. Any other
+name comes after the versions and orders as text with its numbers compared as
+numbers, ignoring case (`Sprint 2 < Sprint 10`). Names that still compare equal
+fall back to the filename. Active and future releases list in that order,
+ascending — the Backlog's sections, the Board's switcher, the Release pickers,
+Complete release's destinations — and the release a board falls back to, like the
+destination Complete release preselects, is the lowest. Finished releases list
+newest first: those with an `endDate` by it, descending, then those without one by
+version, descending; two completed the same day by version, descending.
 
 ### Epic
 A markdown file under `epics/`, e.g. `epics/ui-foundation.md`, holding the
@@ -735,10 +754,11 @@ and it has neither the minimum length nor the result cap (see "CLI").
 
 A vertical, Jira-style stack of collapsible sections (top to bottom):
 
-1. **Active releases** — one section per active release, oldest first by
-   filename, each with its tasks listed flat and its own "Complete release"
+1. **Active releases** — one section per active release, in release order
+   (lowest version first), each with its tasks listed flat and its own "Complete release"
    button on the section header, which completes that release.
-2. **Future releases** — one section per `future` release. Each shows a
+2. **Future releases** — one section per `future` release, in release order.
+   Each shows a
    "Start release" button, which is hidden while another release is active
    unless `multipleActiveReleases` is on.
 3. **Backlog** — all tasks with no release (`backlog.md`, plus the epic files
@@ -799,7 +819,7 @@ release editor. While more than one release is active, a switch-release button
 beside the name opens a list of them and marks the one on screen; picking one
 stores it in `config.yaml` under `boardRelease`, so every shell opens on the same
 release and a reload keeps it. The stored release is resolved on every read: once
-it stops being active the Board falls back to the first active release, and the
+it stops being active the Board falls back to the lowest active release, and the
 key is left as the user wrote it. With one active release there is no button and
 the header is exactly what it always was. When the release has a description, it follows the name on the
 same line in a muted style, clipped to a single line with an ellipsis (newlines
@@ -840,15 +860,15 @@ start one from Backlog.
 
 ### Archive
 
-The same layout as Backlog, but populated only with `finished` releases
-(newest first). No Backlog section, no current section, no filter bar. All
+The same layout as Backlog, but populated only with `finished` releases,
+newest first: by `endDate`, then by version for releases without one. No Backlog section, no current section, no filter bar. All
 releases are collapsed by default. The archive is a **static list** whatever the
 config says — no drag and drop, no `+ Create` in its sections. Task and epic cards
 are still clickable and open the editor; the task dialog is frozen unless
 `editFinishedReleases` is on, and then a task leaves or enters a finished release
 through its Release field. Order inside a finished release changes only through the
-CLI's `task reorder`. A renamed finished release re-sorts here like any renamed
-release.
+CLI's `task reorder`. A renamed finished release moves here only among releases
+with no `endDate` or completed the same day — a completion date outranks the name.
 
 ### Docs
 
@@ -1409,7 +1429,8 @@ Status is not editable here: it is owned by the Start / Complete release actions
 A **finished** release opens the same dialog read-only — the release's own
 fields stay frozen — unless `editFinishedReleases` is on, and then name and
 description edit the way a current release's do; its status stays a read-only
-pill. Dates (`startDate` / `endDate`) are not shown or edited yet.
+pill. Dates (`startDate` / `endDate`) are written by Start and Complete release
+but not shown or edited yet.
 
 ### Dialog back stack
 
@@ -1570,7 +1591,10 @@ folder (or via `--data-dir`), and maps commands onto board operations
 Its output follows the way the UI is read — **a view, then one task**. The three
 UI tabs are three commands: `release current` is the Board, `backlog` is the
 Backlog tab (active releases, future releases, then the unscheduled tasks) and
-`archive` is the Archive. Any task appearing in a list is rendered as a **task
+`archive` is the Archive, each in release order. `release list` lists every
+release by version, lowest first; `task list` reads releases in the Backlog's
+order, then finished releases in the Archive's. `release get` and `release
+current` carry `startDate` / `endDate` once set. Any task appearing in a list is rendered as a **task
 summary** — the fields the task card carries (id, title, type, priority, status,
 epic, labels, checklist `done/total`, notes count) — while `task get` returns whole
 tasks. It takes one or more ids and always answers `{ tasks, missing }`: each

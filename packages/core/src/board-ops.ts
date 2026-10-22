@@ -15,7 +15,7 @@ import {
   isMiddleStatus,
   terminalStatus,
 } from './statuses.js';
-import { currentMoment, stampChangedTasks, withUpdatedAt } from './task-dates.js';
+import { currentMoment, localDay, stampChangedTasks, withUpdatedAt } from './task-dates.js';
 import { enabledTaskTypeKeys, isEnabledTaskType } from './task-types.js';
 import type {
   Backlog,
@@ -26,7 +26,6 @@ import type {
   LinkType,
   Note,
   Release,
-  ReleaseStatus,
   Task,
   TaskLink,
   TaskPriority,
@@ -403,18 +402,11 @@ export const editRelease = (
   };
 };
 
-export const setReleaseStatus = (
-  release: Release,
-  status: ReleaseStatus,
-): Release => ({
-  ...release,
-  frontmatter: { ...release.frontmatter, status },
-});
-
 export const startRelease = (
   release: Release,
   existing: readonly Release[],
   config: BoardConfig,
+  now: string = currentMoment(),
 ): Release => {
   if (release.frontmatter.status !== 'future') {
     throw new Error('Only a future release can be started');
@@ -431,7 +423,10 @@ export const startRelease = (
       );
     }
   }
-  return setReleaseStatus(release, 'current');
+  return {
+    ...release,
+    frontmatter: { ...release.frontmatter, status: 'current', startDate: localDay(now) },
+  };
 };
 
 const findTask = (tasks: Task[], taskId: string): Task => {
@@ -1435,7 +1430,10 @@ export const completeRelease = (
   }
 
   return {
-    release: setReleaseStatus(release, 'finished'),
+    release: {
+      ...release,
+      frontmatter: { ...release.frontmatter, status: 'finished', endDate: localDay(now) },
+    },
     targetRelease,
     backlog,
     changedFilenames: [...changedFilenames],

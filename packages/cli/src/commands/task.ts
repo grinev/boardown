@@ -27,6 +27,9 @@ import {
   readTaskCommits,
   sortTasksByOrder,
   unscheduledTasks,
+  activeReleases,
+  futureReleases,
+  finishedReleases,
   taskMatchRank,
   taskMatchesFilters,
   DEFAULT_LINK_TYPE,
@@ -51,7 +54,6 @@ import {
   type Note,
   type ParseProblem,
   type Release,
-  type ReleaseStatus,
   type Task,
   type TaskLink,
   type TaskPatch,
@@ -754,22 +756,20 @@ interface TaskListEntry {
 function collectEntries(board: LoadedBoard): TaskListEntry[] {
   const { snapshot } = board;
   const entries: TaskListEntry[] = [];
-  const releasesByStatus = (status: ReleaseStatus): readonly Release[] =>
-    snapshot.releases.filter((r) => r.frontmatter.status === status);
   const pushRelease = (release: Release): void => {
     for (const task of sortTasksByOrder(release.tasks)) {
       entries.push({ task, in: { kind: 'release', file: release.filename } });
     }
   };
 
-  for (const r of releasesByStatus('current')) pushRelease(r);
-  for (const r of releasesByStatus('future')) pushRelease(r);
+  for (const r of activeReleases(snapshot)) pushRelease(r);
+  for (const r of futureReleases(snapshot)) pushRelease(r);
   const backlogRefs = allContainers(snapshot).filter((ref) => ref.kind === 'backlog');
   for (const task of unscheduledTasks(snapshot)) {
     const ref = backlogRefs.find((r) => r.container.tasks.includes(task));
     if (ref !== undefined) entries.push({ task, in: { kind: 'backlog', file: fileOf(board, ref, task) } });
   }
-  for (const r of releasesByStatus('finished')) pushRelease(r);
+  for (const r of finishedReleases(snapshot)) pushRelease(r);
   return entries;
 }
 

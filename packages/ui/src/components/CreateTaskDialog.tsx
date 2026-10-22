@@ -11,8 +11,11 @@ import type {
 import {
   DEFAULT_TASK_PRIORITY,
   TASK_PRIORITIES,
+  activeReleases,
   defaultTaskType,
   enabledTaskTypes,
+  finishedReleases,
+  futureReleases,
   isEnabledTaskType,
   isFrozenRelease,
 } from '@boardown/core';
@@ -82,9 +85,11 @@ export function CreateTaskDialog({
       ? [release]
       : backlogLocked
         ? []
-        : releases
-            .filter((r) => config !== undefined && !isFrozenRelease(r, config))
-            .sort((a, b) => a.slug.localeCompare(b.slug));
+        : [
+            ...activeReleases({ releases }),
+            ...futureReleases({ releases }),
+            ...finishedReleases({ releases }),
+          ].filter((r) => config !== undefined && !isFrozenRelease(r, config));
 
   // Resolved against the live board, so a picked task that leaves it drops out
   // here and from what Create writes.

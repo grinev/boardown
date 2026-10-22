@@ -9,6 +9,15 @@ export const isUpdateTracked = (config: BoardConfig): boolean => config.trackUpd
 // ISO 8601 UTC with milliseconds — the form a note's `createdAt` takes.
 export const currentMoment = (): string => new Date().toISOString();
 
+// The calendar day of `moment` where the user is — a release's dates are days, and
+// the day on the user's calendar, so this reads local time rather than slicing the
+// UTC instant.
+export const localDay = (moment: string): string => {
+  const d = new Date(moment);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 export const withUpdatedAt = (task: Task, config: BoardConfig, now: string): Task =>
   isUpdateTracked(config) ? { ...task, frontmatter: { ...task.frontmatter, updatedAt: now } } : task;
 

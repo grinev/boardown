@@ -8,6 +8,9 @@ import {
   type KeyboardEvent,
 } from 'react';
 import {
+  activeReleases,
+  finishedReleases,
+  futureReleases,
   hasLabel,
   customFieldLabel,
   effectiveTaskPriority,
@@ -129,9 +132,11 @@ export function TaskDetailsDialog({
   const releaseOptions = useMemo<IconSelectOption[]>(() => {
     // A frozen release is archived: core refuses a task moved into one, so it is
     // never offered as a destination (same rule as the create-task dialog).
-    const sorted = releases
-      .filter((r) => config !== undefined && !isFrozenRelease(r, config))
-      .sort((a, b) => a.slug.localeCompare(b.slug));
+    const sorted = [
+      ...activeReleases({ releases }),
+      ...futureReleases({ releases }),
+      ...finishedReleases({ releases }),
+    ].filter((r) => config !== undefined && !isFrozenRelease(r, config));
     const items: IconSelectOption[] = sorted.map((r) => {
       // Relocating a task that sits in a capped middle column into a full active
       // release enters that column, so the destination is unavailable — unless the

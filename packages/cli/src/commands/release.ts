@@ -6,6 +6,7 @@ import {
   createRelease,
   editRelease,
   emptyBacklog,
+  releasesByVersion,
   sortTasksByOrder,
   startRelease,
   type BoardConfig,
@@ -107,7 +108,7 @@ async function releaseList(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
   const board = await loadBoardOrThrow(root);
   const full = isFull(args.flags);
-  const releases = board.snapshot.releases.map((release) => ({
+  const releases = releasesByVersion(board.snapshot).map((release) => ({
     slug: release.slug,
     name: release.frontmatter.name ?? release.slug,
     status: release.frontmatter.status,
