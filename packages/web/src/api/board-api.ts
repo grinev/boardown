@@ -7,7 +7,7 @@ import {
   projectFileMaxBytes,
   type ProjectFileRead,
 } from '../../../core/src/project-file';
-import { CLIENT_ID_HEADER } from '../board-events-endpoint.js';
+import { CLIENT_ID_HEADER, MISSING_PATH_HEADER } from '../board-events-endpoint.js';
 import type { BoardWatchHub } from './board-events.js';
 
 // The endpoints both hosts serve: the Vite dev middleware and the boardown-web
@@ -79,12 +79,16 @@ const readRawBody = (req: IncomingMessage): Promise<Buffer> =>
 export const readBody = async (req: IncomingMessage): Promise<string> =>
   (await readRawBody(req)).toString('utf-8');
 
-// The three read-shaped endpoints treat a missing file as a 404 and anything
-// else as a 500; both are worth a line.
+// The read-shaped endpoints answer a path that does not exist yet as a normal
+// result (see MISSING_PATH_HEADER) — no backlog.md, no attachments folder — and
+// anything else as a 500.
 const failTarget = (res: ServerResponse, op: string, rel: string, err: unknown): void => {
-  if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-    log.warn(`${op} ${rel}: 404 not found`);
-    sendText(res, 404, `Not found: ${rel}`);
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code === 'ENOENT' || code === 'ENOTDIR') {
+    log.debug(`${op} ${rel}: missing`);
+    res.statusCode = 200;
+    res.setHeader(MISSING_PATH_HEADER, '1');
+    res.end();
   } else {
     log.error(`${op} ${rel}: 500`, err);
     sendText(res, 500, (err as Error).message);

@@ -1,6 +1,6 @@
 import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
 import { createLogger } from '@boardown/core';
-import { CLIENT_ID_HEADER } from '../board-events-endpoint';
+import { CLIENT_ID_HEADER, MISSING_PATH_HEADER } from '../board-events-endpoint';
 
 const log = createLogger('web.fs-adapter');
 
@@ -11,6 +11,15 @@ const failed = async (op: string, target: string, res: Response): Promise<Error>
   const error = new Error(`${op} ${target} failed: ${res.status} ${await res.text()}`);
   log.error(error.message);
   return error;
+};
+
+const isMissing = (res: Response): boolean => res.headers.has(MISSING_PATH_HEADER);
+
+// A missing file is a throw, as FsAdapter.read promises, but not a failure worth
+// an error line: callers expect it.
+const missing = (op: string, target: string): Error => {
+  log.debug(`${op} ${target}: missing`);
+  return new Error(`${op} ${target} failed: not found`);
 };
 
 export class HttpFsAdapter implements FsAdapter {
@@ -31,6 +40,7 @@ export class HttpFsAdapter implements FsAdapter {
 
   async read(path: string): Promise<string> {
     const res = await fetch(`${this.base}/read?path=${encodeURIComponent(path)}`);
+    if (isMissing(res)) throw missing('read', path);
     if (!res.ok) {
       throw await failed('read', path, res);
     }
@@ -48,6 +58,7 @@ export class HttpFsAdapter implements FsAdapter {
 
   async readBytes(path: string): Promise<Uint8Array> {
     const res = await fetch(`${this.base}/read-bytes?path=${encodeURIComponent(path)}`);
+    if (isMissing(res)) throw missing('read-bytes', path);
     if (!res.ok) {
       throw await failed('read-bytes', path, res);
     }
@@ -71,7 +82,7 @@ export class HttpFsAdapter implements FsAdapter {
 
   async list(dir: string): Promise<FsEntry[]> {
     const res = await fetch(`${this.base}/list?path=${encodeURIComponent(dir)}`);
-    if (res.status === 404) return [];
+    if (isMissing(res)) return [];
     if (!res.ok) {
       throw await failed('list', dir, res);
     }
@@ -98,7 +109,7 @@ export class HttpFsAdapter implements FsAdapter {
 
   async stat(path: string): Promise<FileStat | null> {
     const res = await fetch(`${this.base}/stat?path=${encodeURIComponent(path)}`);
-    if (res.status === 404) return null;
+    if (isMissing(res)) return null;
     if (!res.ok) {
       throw await failed('stat', path, res);
     }
