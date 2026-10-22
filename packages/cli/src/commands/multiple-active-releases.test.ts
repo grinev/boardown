@@ -106,6 +106,13 @@ describe('multiple active releases (cli)', () => {
     expect(await readFile(configPath, 'utf8')).toContain('boardRelease: v1.1');
   });
 
+  it('keeps the Board swimlanes through a config write', async () => {
+    await appendConfig('boardRelease: v1.0\nboardSwimlanes: epic\n');
+    await releaseCommand(parseArgs(['release', 'edit', 'v1.0', '--name', 'v1.1']), ctx);
+
+    expect(await readFile(configPath, 'utf8')).toContain('boardSwimlanes: epic');
+  });
+
   it('reports the setting from schema, with and without a board', async () => {
     const off = await schemaCommand(parseArgs(['schema']), ctx);
     expect(off.data).toMatchObject({ multipleActiveReleases: false });

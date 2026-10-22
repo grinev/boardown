@@ -215,6 +215,11 @@ export type DocPage = z.infer<typeof DocPageSchema>;
 export const ThemeSchema = z.enum(['light', 'dark']);
 export type Theme = z.infer<typeof ThemeSchema>;
 
+// What the Board groups its rows by. Absent means no lanes.
+export const BOARD_SWIMLANES = ['epic', 'type'] as const;
+export const BoardSwimlanesSchema = z.enum(BOARD_SWIMLANES);
+export type BoardSwimlanes = z.infer<typeof BoardSwimlanesSchema>;
+
 export const ID_PREFIX_REGEX = /^[A-Z]{2,5}$/;
 export const ID_PREFIX_MESSAGE = 'idPrefix must be 2-5 uppercase letters (A-Z)';
 
@@ -389,6 +394,7 @@ export const BoardConfigSchema = z
     // time, and failing the whole board over a stale view preference would be
     // out of proportion to what it means.
     boardRelease: z.string().min(1).optional(),
+    boardSwimlanes: BoardSwimlanesSchema.optional(),
     wipLimits: WipLimitsSchema.optional(),
     multipleActiveReleases: z.boolean().optional(),
     // Absent means on. Hides the task dialog's Commits panel when false; the CLI

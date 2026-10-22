@@ -3,10 +3,10 @@ import type { Task, TaskStatus } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import {
   applyDragOver,
+  findCellOf,
   findOverlayPlacement,
-  findStatusOf,
 } from './applyDragOver';
-import { UNKNOWN_COLUMN, columnDropId, taskDragId } from './ids';
+import { UNKNOWN_COLUMN, boardCellKey, columnDropId, taskDragId } from './ids';
 
 const task = (id: string): Task => ({
   title: id,
@@ -129,13 +129,61 @@ describe('applyDragOver', () => {
   });
 });
 
-describe('findStatusOf', () => {
+describe('findCellOf', () => {
   it('returns the column of a task', () => {
-    expect(findStatusOf(buckets(), 'BD-3')).toBe('in-progress');
+    expect(findCellOf(buckets(), 'BD-3')).toBe('in-progress');
   });
 
   it('returns null when the task is absent', () => {
-    expect(findStatusOf(buckets(), 'BD-999')).toBeNull();
+    expect(findCellOf(buckets(), 'BD-999')).toBeNull();
+  });
+});
+
+describe('applyDragOver across swimlanes', () => {
+  const cell = boardCellKey;
+  const laned = (): Map<string, Task[]> =>
+    new Map<string, Task[]>([
+      [cell('epic:a', 'todo'), [task('BD-1'), task('BD-2')]],
+      [cell('epic:a', 'done'), []],
+      [cell('epic:b', 'todo'), [task('BD-3')]],
+      [cell('epic:b', 'done'), []],
+      [cell('epic:b', UNKNOWN_COLUMN), [task('BD-9')]],
+    ]);
+
+  it('moves a card to another column of its own lane', () => {
+    const next = applyDragOver(
+      dndId(taskDragId('BD-1')),
+      dndId(columnDropId(cell('epic:a', 'done'))),
+      laned(),
+    );
+    expect(ids(next.get(cell('epic:a', 'done')))).toEqual(['BD-1']);
+  });
+
+  it('reorders inside a cell', () => {
+    const next = applyDragOver(dndId(taskDragId('BD-2')), dndId(taskDragId('BD-1')), laned());
+    expect(ids(next.get(cell('epic:a', 'todo')))).toEqual(['BD-2', 'BD-1']);
+  });
+
+  it('refuses a blocked cell of another lane, on the cell and on a card in it', () => {
+    const start = laned();
+    const blocked = new Set([cell('epic:b', 'todo'), cell('epic:b', 'done')]);
+    for (const over of [columnDropId(cell('epic:b', 'done')), taskDragId('BD-3')]) {
+      expect(applyDragOver(dndId(taskDragId('BD-1')), dndId(over), start, blocked)).toBe(start);
+    }
+  });
+
+  it('refuses the Unknown cell of a lane', () => {
+    const start = laned();
+    expect(
+      applyDragOver(dndId(taskDragId('BD-3')), dndId(taskDragId('BD-9')), start),
+    ).toBe(start);
+  });
+
+  it('reports the status of the cell as the placement', () => {
+    expect(findOverlayPlacement(laned(), 'BD-1')).toEqual({
+      status: 'todo',
+      beforeTaskId: 'BD-2',
+    });
   });
 });
 

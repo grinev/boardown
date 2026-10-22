@@ -261,3 +261,140 @@
 .checklistBadge + .notesBadge {
   margin-left: 8px;
 }
+
+/* Swimlanes: the page scrolls as one, so a cell grows with its cards instead of
+   scrolling, and the column headers stay on top of every lane. */
+.laneBoard {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px 16px;
+}
+
+.laneGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.laneHeaderRow {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  background: var(--bg);
+}
+
+.laneColumnHeader {
+  flex: 0 0 280px;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-muted);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.laneHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.laneHeader:hover {
+  background: var(--inset-bg);
+}
+
+.laneHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.laneChevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.laneTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.laneEpicBadge {
+  max-width: 240px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: var(--epic-bg);
+  color: var(--epic-fg);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.laneCells {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.laneCell {
+  flex: 0 0 280px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  min-height: 60px;
+  background: var(--surface-muted);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+}
+
+.laneCell.columnBlocked > * {
+  pointer-events: none;
+}
+
+.laneCreateRow {
+  display: flex;
+}
+
+.laneCreateRow .addTaskButton {
+  flex: 0 0 280px;
+  margin: 0;
+}

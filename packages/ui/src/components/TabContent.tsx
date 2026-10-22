@@ -1,12 +1,30 @@
 import { CheckCircle2 } from 'lucide-react';
-import { activeReleases, boardRelease, type Epic, type TaskStatus } from '@boardown/core';
+import {
+  BOARD_SWIMLANES,
+  activeReleases,
+  boardRelease,
+  type BoardSwimlanes,
+  type Epic,
+  type TaskStatus,
+} from '@boardown/core';
 import { useBoardStore, type ActiveTab } from '../store';
 import { ArchiveView } from './ArchiveView';
 import { BacklogView } from './BacklogView';
 import { BoardView } from './BoardView';
 import { DocsView } from './DocsView';
+import { IconSelect, type IconSelectOption } from './IconSelect';
 import { ReleaseSwitcher } from './ReleaseSwitcher';
 import styles from './TabContent.module.css';
+
+const NO_SWIMLANES = 'none';
+const SWIMLANE_OPTIONS: IconSelectOption[] = [
+  { value: NO_SWIMLANES, label: 'None' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'type', label: 'Type' },
+];
+
+const isBoardSwimlanes = (value: string): value is BoardSwimlanes =>
+  (BOARD_SWIMLANES as readonly string[]).includes(value);
 
 interface TabContentProps {
   activeTab: ActiveTab;
@@ -19,6 +37,7 @@ export function TabContent({ activeTab, epics, statuses }: TabContentProps) {
   const openCompleteRelease = useBoardStore((s) => s.openCompleteRelease);
   const openRelease = useBoardStore((s) => s.openRelease);
   const setBoardRelease = useBoardStore((s) => s.setBoardRelease);
+  const setBoardSwimlanes = useBoardStore((s) => s.setBoardSwimlanes);
 
   if (activeTab === 'backlog') {
     return <BacklogView />;
@@ -45,6 +64,7 @@ export function TabContent({ activeTab, epics, statuses }: TabContentProps) {
   }
 
   const heading = `Release ${current.frontmatter.name ?? current.slug}`;
+  const swimlanes = snapshot?.config.boardSwimlanes;
   // A multiline description must not break the single-line header.
   const descriptionPreview = current.frontmatter.description
     ?.replace(/\s+/g, ' ')
@@ -77,16 +97,37 @@ export function TabContent({ activeTab, epics, statuses }: TabContentProps) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          className={styles.completeButton}
-          onClick={() => openCompleteRelease(current.filename)}
-        >
-          <CheckCircle2 size={14} aria-hidden="true" />
-          Complete release
-        </button>
+        <div className={styles.releaseActions}>
+          <span className={styles.swimlanesCaption} aria-hidden="true">
+            Swimlanes
+          </span>
+          <IconSelect
+            value={swimlanes ?? NO_SWIMLANES}
+            options={SWIMLANE_OPTIONS}
+            onChange={(value) =>
+              void setBoardSwimlanes(isBoardSwimlanes(value) ? value : null)
+            }
+            ariaLabel="Swimlanes"
+            triggerClassName={styles.swimlanesTrigger}
+            hideTriggerIcon
+          />
+          <button
+            type="button"
+            className={styles.completeButton}
+            onClick={() => openCompleteRelease(current.filename)}
+          >
+            <CheckCircle2 size={14} aria-hidden="true" />
+            Complete release
+          </button>
+        </div>
       </header>
-      <BoardView release={current} epics={epics} statuses={statuses} />
+      {/* Keyed so lane collapse starts over on another release or grouping. */}
+      <BoardView
+        key={`${current.filename}:${swimlanes ?? NO_SWIMLANES}`}
+        release={current}
+        epics={epics}
+        statuses={statuses}
+      />
     </section>
   );
 }

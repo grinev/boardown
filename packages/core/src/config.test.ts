@@ -306,6 +306,41 @@ ${keys.map((k) => `  - key: ${k}
   });
 });
 
+describe('board swimlanes', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips the key right after boardRelease', () => {
+    const cfg: BoardConfig = {
+      ...base,
+      boardRelease: 'v0-8-0',
+      boardSwimlanes: 'type',
+      wipLimits: { 'in-progress': 3 },
+    };
+    const out = serializeConfig(cfg);
+    expect(out.indexOf('boardRelease:')).toBeLessThan(out.indexOf('boardSwimlanes:'));
+    expect(out.indexOf('boardSwimlanes:')).toBeLessThan(out.indexOf('wipLimits:'));
+    const back = parseConfig(out);
+    expect(back.problems).toEqual([]);
+    expect(back.value).toEqual(stamped(cfg));
+  });
+
+  it('writes no key when the user chose no lanes', () => {
+    expect(serializeConfig(base)).not.toContain('boardSwimlanes');
+  });
+
+  it('rejects a value other than epic or type', () => {
+    for (const value of ['label', 'none', '""', 'true']) {
+      expect(
+        parseConfig(`idPrefix: BD\nnextId: 0\nprojectName: P\nboardSwimlanes: ${value}\n`).value,
+      ).toBeNull();
+    }
+    expect(
+      parseConfig('idPrefix: BD\nnextId: 0\nprojectName: P\nboardSwimlanes: epic\n').value
+        ?.boardSwimlanes,
+    ).toBe('epic');
+  });
+});
+
 describe('multiple active releases', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 

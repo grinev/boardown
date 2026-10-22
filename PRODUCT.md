@@ -324,6 +324,7 @@ nextId: 47            # next id to hand out (verified against existing ids on st
 projectName: My Board # required, human-readable name shown in the app header
 theme: light          # optional, "light" or "dark"; defaults to "light" when absent
 boardRelease: v0-8-0  # optional; slug of the active release the Board shows
+boardSwimlanes: epic  # optional; "epic" or "type"; absent means the Board has no swimlanes
 wipLimits:            # optional; absent means no limit anywhere
   in-progress: 3      # at most 3 tasks in each middle column of an active release
 multipleActiveReleases: true  # optional; absent means one release at a time
@@ -786,6 +787,34 @@ same line in a muted style, clipped to a single line with an ellipsis (newlines
 collapsed to spaces). Hovering the preview shows a native tooltip of the
 description as stored, line breaks included. This preview is Board-only — the
 Backlog and Archive section headers show the name alone.
+
+A `Swimlanes` dropdown sits at the right of the same header row, just left of
+Complete release, offering `None`, `Epic` and `Type`. The choice is stored in
+`config.yaml` under `boardSwimlanes` (`epic` or `type`) the moment it changes, so,
+like `boardRelease`, it is shared by every shell and every active release and
+survives a reload; `None` removes the key. Every other write of `config.yaml` keeps
+it, and a value other than those two makes the config invalid. With swimlanes the
+release's tasks are split into lanes stacked under one row of column headers that
+stays on screen while the lanes scroll beneath it. Each lane holds the same columns,
+the `Unknown` one included in every lane while the release needs it, and exists only
+while it holds a card. By epic, the lanes run alphabetically by epic name (ties by
+slug) with a trailing `No epic` lane, which also takes a task whose `epic` names no
+epic file. By type, they follow the type pickers' order — the base types, then the
+board's own — with a disabled type that still has tasks keeping its place and an
+undeclared type following by key, under its raw key and the fallback circle icon.
+A lane header carries a collapse chevron, the epic's badge or the type's icon and
+label, and the lane's task count; the whole header toggles the lane, by click or by
+Enter / Space. Every lane starts expanded; collapse survives an auto-refresh and task
+edits, and starts over on leaving the tab, changing the grouping or switching (or
+renaming) the release. Cells show no count and no placeholder; one Create task sits
+below the last lane under the first column, opening the dialog with nothing preset.
+A card moves between the columns of its own lane and reorders inside its cell, but
+cannot leave the lane: during a drag every other lane's cells are dimmed and refuse
+the drop, and epic and type change only in the task dialog, whose save moves the card
+to its new lane. The WIP limit counts the whole column across lanes: the column
+header shows that total, and a full column is dimmed with its tooltip in every lane.
+A release with no tasks shows the columns exactly as without swimlanes, while the
+dropdown keeps its value. The Backlog, the Archive and the CLI never read the key.
 
 If no release is active, the Board shows an empty state pointing the user to
 start one from Backlog.

@@ -2,6 +2,7 @@ import type {
   Backlog,
   BoardConfig,
   BoardSnapshot,
+  BoardSwimlanes,
   Container,
   CreateTaskWithLinksResult,
   DeleteTaskResult,
@@ -206,6 +207,8 @@ interface BoardState {
   // The active release the Board shows, by slug. Shared through config.yaml, so
   // every shell opens on the same one.
   setBoardRelease: (slug: string) => Promise<void>;
+  // What the Board groups its rows by; `null` removes the key from config.yaml.
+  setBoardSwimlanes: (swimlanes: BoardSwimlanes | null) => Promise<void>;
   setMultipleActiveReleases: (enabled: boolean) => Promise<void>;
   setGitIntegration: (enabled: boolean) => Promise<void>;
   setStatusOutsideActiveRelease: (enabled: boolean) => Promise<void>;
@@ -910,6 +913,26 @@ export const useBoardStore = create<BoardState>(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save the board release: ${message}` });
+      }
+    },
+
+    setBoardSwimlanes: async (swimlanes) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.boardSwimlanes ?? null) === swimlanes) return;
+      const nextConfig = withMinVersionStamp({ ...snapshot.config });
+      if (swimlanes === null) {
+        delete nextConfig.boardSwimlanes;
+      } else {
+        nextConfig.boardSwimlanes = swimlanes;
+      }
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({ snapshot: nextSnapshot, errorMessage: null });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the swimlanes: ${message}` });
       }
     },
 

@@ -111,6 +111,9 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.boardRelease !== undefined) {
     ordered.boardRelease = config.boardRelease;
   }
+  if (config.boardSwimlanes !== undefined) {
+    ordered.boardSwimlanes = config.boardSwimlanes;
+  }
   const wipLimits = config.wipLimits;
   if (wipLimits !== undefined && wipLimits['in-progress'] !== undefined) {
     ordered.wipLimits = { 'in-progress': wipLimits['in-progress'] };
