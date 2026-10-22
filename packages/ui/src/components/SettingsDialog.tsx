@@ -4,6 +4,7 @@ import { useBoardStore } from '../store';
 import { CliHint } from './CliHint';
 import { EditFinishedReleasesField } from './EditFinishedReleasesField';
 import { GitIntegrationField } from './GitIntegrationField';
+import { TrackUpdatedAtField } from './TrackUpdatedAtField';
 import { Modal } from './Modal';
 import { MultipleActiveReleasesField } from './MultipleActiveReleasesField';
 import { StatusOutsideActiveReleaseField } from './StatusOutsideActiveReleaseField';
@@ -49,6 +50,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         <WipLimitField className={styles.field} />
         <MultipleActiveReleasesField className={styles.field} />
         <GitIntegrationField className={styles.field} />
+        <TrackUpdatedAtField className={styles.field} />
         <StatusOutsideActiveReleaseField className={styles.field} />
         <EditFinishedReleasesField className={styles.field} />
         <div className={styles.field}>

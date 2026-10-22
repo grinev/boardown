@@ -204,7 +204,9 @@ directory. Where it sits in the package, nothing discovers it.
   it received it — new tasks are appended, and everything else is patched in
   place. Sorting is the reader's job (`sortTasksByOrder` / `unscheduledTasks`);
   a list that skips it shows whatever the markdown happens to look like. This is
-  what keeps a status change a two-line diff that merges across git branches.
+  what keeps a status change a two-line diff that merges across git branches —
+  three with the task's `updatedAt`, which board-ops stamp on every change but an
+  `order`-only one while the board's `trackUpdatedAt` is on.
 - If `.boardown/config.yaml` is missing, the UI shows an onboarding modal
   that writes it on submit. Do not auto-create `config.yaml` outside that
   flow, and do not fall back to defaults — a present-but-invalid config is
@@ -233,14 +235,11 @@ directory. Where it sits in the package, nothing discovers it.
   steps already taken. `writeAll` (writes only) and `moveFile` (a file that
   changes its name: a create-only target plus the removal of the source) are its
   narrow forms — reach for one of the three in any new multi-file mutation. A
-  change carries two more, optional lists. `unversionedRemoves` names paths the
+  change carries one more, optional list: `unversionedRemoves` names paths the
   loader never read — a task's attachments — removed as they stand on disk, a
   folder with everything in it, after every other step and still undone on a
   failure; it is only for a deletion the user confirmed with its contents named,
-  never a way around a conflict. `unchanged` names files an operation's decision
-  was read from but does not write (an attachment change checks its task's file),
-  held to the external-change rule like a write target. Operation code never
-  reaches the raw adapter.
+  never a way around a conflict. Operation code never reaches the raw adapter.
   Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
   directory before removing it, so deleting a docs folder is all-or-nothing —

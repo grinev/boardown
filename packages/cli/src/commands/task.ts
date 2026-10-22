@@ -39,6 +39,7 @@ import {
   initialStatus,
   isDeclaredStatus,
   isEnabledTaskType,
+  isUpdateTracked,
   type BoardConfig,
   type BoardSnapshot,
   type ChecklistItem,
@@ -461,7 +462,10 @@ async function moveAndReport(
   newStatus?: TaskStatus,
 ): Promise<CommandOutput> {
   if (edited.filename === dest.container.filename) {
-    await writeContainer(fs, { kind: location.kind, container: edited }, config);
+    // An op hands back the container itself when nothing changed: nothing to write.
+    if (edited !== location.container) {
+      await writeContainer(fs, { kind: location.kind, container: edited }, config);
+    }
     return { data: { id: taskId }, human: `Updated ${taskId}.`, ...problemsField(problems) };
   }
   const movingTask = edited.tasks.find((t) => t.frontmatter.id === taskId);
@@ -561,7 +565,9 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
       ? applyOp(() => editTask(location.container, snapshot.config, id, patch))
       : location.container;
     if (dest === null) {
-      await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+      if (edited !== location.container) {
+        await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+      }
       return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
     }
     return moveAndReport(fs, snapshot.config, location, edited, dest, id, problems, movedStatus);
@@ -578,7 +584,9 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   const patch: TaskPatch = { ...fields };
   if (nextEpic !== undefined) patch.epic = nextEpic;
   const edited = applyOp(() => editTask(location.container, snapshot.config, id, patch));
-      await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+  if (edited !== location.container) {
+    await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+  }
   return { data: { id }, human: `Updated ${id}.`, ...problemsField(problems) };
 }
 
@@ -597,7 +605,9 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
   }
 
   const updated = applyOp(() => changeTaskStatus(location.container, snapshot.config, id, status));
-  await writeContainer(fs, { kind: location.kind, container: updated }, snapshot.config);
+  if (updated !== location.container) {
+    await writeContainer(fs, { kind: location.kind, container: updated }, snapshot.config);
+  }
 
   return { data: { id }, human: `${id} → ${status}.`, ...problemsField(problems) };
 }
@@ -631,13 +641,22 @@ const renderCustom = (custom: Record<string, string> | undefined): string => {
   return `\n\nFields:\n${lines}`;
 };
 
-const renderTask = (task: Task, kind: string, file: string): string => {
+// The stored strings, unformatted: a script reads them as they are on disk. The
+// update date follows the board's setting, as the task dialog's row does.
+const renderDates = (fm: Task['frontmatter'], config: BoardConfig): string => {
+  const lines: string[] = [];
+  if (fm.createdAt !== undefined) lines.push(`Created: ${fm.createdAt}`);
+  if (fm.updatedAt !== undefined && isUpdateTracked(config)) lines.push(`Updated: ${fm.updatedAt}`);
+  return lines.length > 0 ? `\n\n${lines.join('\n')}` : '';
+};
+
+const renderTask = (task: Task, kind: string, file: string, config: BoardConfig): string => {
   const fm = task.frontmatter;
   const epic = fm.epic !== undefined ? `  epic:${fm.epic}` : '';
   const labels =
     fm.labels !== undefined && fm.labels.length > 0 ? `  labels:${fm.labels.join(',')}` : '';
   const body = task.description.length > 0 ? `\n\n${task.description}` : '';
-  return `${fm.id}  [${fm.type}/${effectiveTaskPriority(fm)}/${fm.status}]${epic}${labels}  (${kind}: ${file})\n${task.title}${body}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
+  return `${fm.id}  [${fm.type}/${effectiveTaskPriority(fm)}/${fm.status}]${epic}${labels}  (${kind}: ${file})\n${task.title}${body}${renderDates(fm, config)}${renderCustom(fm.custom)}${renderChecklist(fm.checklist)}${renderNotes(fm.notes)}${renderTaskLinks(fm.links)}`;
 };
 
 async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
@@ -665,7 +684,9 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
     tasks.push({ task, in: { kind: location.kind, file: fileOf(board, location, task) } });
   }
 
-  const blocks = tasks.map((entry) => renderTask(entry.task, entry.in.kind, entry.in.file));
+  const blocks = tasks.map((entry) =>
+    renderTask(entry.task, entry.in.kind, entry.in.file, snapshot.config),
+  );
   const missingLine = missing.length > 0 ? `missing: ${missing.join(', ')}` : '';
   let human = blocks.join('\n\n');
   if (missingLine.length > 0) {
@@ -1032,7 +1053,9 @@ async function mutateTask(
 
   const { patch, human, extra } = build(task);
   const edited = applyOp(() => editTask(location.container, snapshot.config, taskId, patch));
-      await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+  if (edited !== location.container) {
+    await writeContainer(fs, { kind: location.kind, container: edited }, snapshot.config);
+  }
 
   return {
     data: { id: taskId, ...(extra ?? {}) },
@@ -1328,14 +1351,13 @@ async function attachmentAdd(args: ParsedArgs, ctx: CommandContext): Promise<Com
   }
   const { fs, snapshot, problems, location } = await loadAttachmentTask(ctx, id);
   const sources = await readAttachmentSources(ctx.cwd, files);
-  const added = await applyOpAsync(() =>
+  const { names: added } = await applyOpAsync(() =>
     addAttachments(
       fs,
       async (change) => {
         await commitChange(fs, change, snapshot.config);
       },
-      location.container,
-      snapshot.config,
+      () => ({ container: location.container, config: snapshot.config }),
       id,
       sources,
     ),
@@ -1360,13 +1382,12 @@ async function attachmentRm(args: ParsedArgs, ctx: CommandContext): Promise<Comm
       async (change) => {
         await commitChange(fs, change, snapshot.config);
       },
-      location.container,
-      snapshot.config,
+      () => ({ container: location.container, config: snapshot.config }),
       id,
       name,
     ),
   );
-  if (!removed) {
+  if (removed === null) {
     throw new CliError('ATTACHMENT_NOT_FOUND', `${id} has no attachment "${name}".`);
   }
   return {
@@ -1462,14 +1483,15 @@ async function linkMutate(
       return addTaskLink(
         source.container,
         target.container,
+        snapshot.config,
         id,
         otherId,
         type ?? DEFAULT_LINK_TYPE,
       );
     }
     return type === undefined
-      ? removeAllTaskLinks(source.container, target.container, id, otherId)
-      : removeTaskLink(source.container, target.container, id, otherId, type);
+      ? removeAllTaskLinks(source.container, target.container, snapshot.config, id, otherId)
+      : removeTaskLink(source.container, target.container, snapshot.config, id, otherId, type);
   });
 
   const refs: ContainerRef[] = result.changedFilenames.map((filename) =>

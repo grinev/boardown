@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { completeRelease, emptyBacklog, type Task } from '@boardown/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseArgv } from '../app';
 import { parseArgs } from '../args';
 import type { CliError } from '../output';
@@ -39,6 +39,7 @@ describe('cli commands (integration)', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await rm(project, { recursive: true, force: true });
   });
 
@@ -461,6 +462,12 @@ describe('cli commands (integration)', () => {
     });
 
     it('a one-item call keeps singular TTY and writes the same markdown as before batching', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-22T10:00:00.000Z'));
+      const stamps = [
+        'createdAt: "2026-10-22T10:00:00.000Z"',
+        'updatedAt: "2026-10-22T10:00:00.000Z"',
+      ];
       await initCommand(parseArgs(['init', '--id-prefix', 'TS']), ctx);
       await taskCommand(
         parseArgs(['task', 'add', 'Write me', '--description', 'body']),
@@ -485,6 +492,7 @@ describe('cli commands (integration)', () => {
         '  - id: c1',
         '    text: step one',
         '    done: false',
+        ...stamps,
         '---',
         '',
         'body',
@@ -514,6 +522,7 @@ describe('cli commands (integration)', () => {
           'type: feature',
           'status: todo',
           'order: 100',
+          ...stamps,
           '---',
           '',
           'body',

@@ -6,6 +6,7 @@ export * from './labels.js';
 export * from './problems.js';
 export * from './parser.js';
 export * from './serializer.js';
+export * from './task-dates.js';
 export * from './fs-adapter.js';
 export * from './id-generator.js';
 export * from './board-ops.js';

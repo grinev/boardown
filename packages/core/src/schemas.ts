@@ -116,6 +116,9 @@ export const TaskFrontmatterSchema = z.object({
   checklist: z.array(ChecklistItemSchema).optional(),
   notes: z.array(NoteSchema).optional(),
   links: z.array(TaskLinkSchema).optional(),
+  // Stamped by board-ops, never by hand: absent on a task an older build wrote.
+  createdAt: timestampString.optional(),
+  updatedAt: timestampString.optional(),
 });
 
 // Parsed apart from the keys above, so a malformed value is a problem on the task
@@ -249,6 +252,8 @@ export const RESERVED_TASK_KEYS = [
   'notes',
   'links',
   'labels',
+  'createdAt',
+  'updatedAt',
 ] as const;
 
 export const CustomFieldSchema = z
@@ -404,6 +409,9 @@ export const BoardConfigSchema = z
     statusOutsideActiveRelease: z.boolean().optional(),
     // Absent means a finished release is frozen: ARCHIVED refuses every change to it.
     editFinishedReleases: z.boolean().optional(),
+    // Absent means on: every task change stamps `updatedAt`. Read through
+    // `isUpdateTracked`, never inline.
+    trackUpdatedAt: z.boolean().optional(),
     // Absent keeps the default three; present replaces the whole set.
     statuses: StatusesSchema.optional(),
     customFields: CustomFieldsSchema.optional(),

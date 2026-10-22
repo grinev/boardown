@@ -38,6 +38,8 @@ const orderedTaskFrontmatter = (fm: TaskFrontmatter): Record<string, unknown> =>
   if (fm.labels && fm.labels.length > 0) {
     out.labels = [...fm.labels];
   }
+  if (fm.createdAt !== undefined) out.createdAt = fm.createdAt;
+  if (fm.updatedAt !== undefined) out.updatedAt = fm.updatedAt;
   // Custom values are flat on disk. The bag is already in declaration order —
   // board-ops owns that — so this only spreads it out.
   if (fm.custom) {
@@ -48,7 +50,8 @@ const orderedTaskFrontmatter = (fm: TaskFrontmatter): Record<string, unknown> =>
   return out;
 };
 
-const serializeTask = (task: Task): string => {
+// One task block exactly as a container file holds it.
+export const serializeTask = (task: Task): string => {
   const fmBlock = `${FENCE}\n${dumpYaml(orderedTaskFrontmatter(task.frontmatter))}\n${FENCE}`;
   const desc = task.description.trim();
   const body = desc === '' ? '' : `\n\n${desc}`;

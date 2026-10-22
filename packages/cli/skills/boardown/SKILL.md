@@ -9,9 +9,10 @@ the CLI has no command for what is asked (a docs page, renaming or removing a
 label in the registry, deleting an epic or a release), tell the user it cannot be
 done through the CLI and stop there.
 
-This page follows boardown 0.11. Labels, attachments, `--label` / `--link` /
-`--attach` on `task add` and `editFinishedReleases` do not exist in older builds;
-`boardown --version` says what is installed.
+This page follows boardown 0.12. Labels, attachments, `--label` / `--link` /
+`--attach` on `task add` and `editFinishedReleases` do not exist before 0.11, task
+dates and `trackUpdatedAt` not before 0.12; `boardown --version` says what is
+installed.
 
 ## Board model
 
@@ -20,7 +21,10 @@ This page follows boardown 0.11. Labels, attachments, `--label` / `--link` /
   (`critical` | `high` | `medium` | `low`; absent reads as `medium`), `epic`,
   `labels`, `checklist`, `notes`, `links`, custom fields. `order` ranks the task
   within its release or the backlog and is set by `task reorder` - it is not
-  `priority`.
+  `priority`. `createdAt` / `updatedAt` are ISO timestamps boardown writes itself:
+  the first when the task is created, the second on every change but a reorder
+  while the board's `trackUpdatedAt` is on (the default). Neither can be set, and
+  either may be absent on an older task.
 - **Statuses and types belong to the board.** The defaults are `todo` →
   `in-progress` → `done` and `bug` | `feature` | `docs` | `tech`, but a board may
   declare its own (`ready`, `review`, a custom type). Statuses are positional: the
@@ -49,7 +53,7 @@ status or type this board does not declare is `USAGE`, and its message lists the
 valid values.
 
 Listing commands return task summaries (id, title, type, priority, status, epic,
-labels, checklist counts, notes count); `--full` goes one level deeper - whole
+labels, checklist counts, notes count - no dates); `--full` goes one level deeper - whole
 tasks where a listing shows summaries, summaries where it shows only counts
 (`release list`, `epic list`, `archive`). `task get` returns
 `{ tasks: [{ task, in }], missing }` - an unknown id lands in `missing`, it is not
@@ -142,8 +146,8 @@ date with the new build.
 
 `boardown schema` prints the contract of the installed build together with this
 board's settings: statuses, enabled types, custom fields, the labels registry,
-the WIP limit and which locks below are on. Use it when something here does not
-match what the CLI does.
+the WIP limit, which locks below are on, and `trackUpdatedAt`. Use it when
+something here does not match what the CLI does.
 
 ## Refusals
 
@@ -159,8 +163,8 @@ to do.
 | `ARCHIVED` | any change in a finished release except its links - a task edited, added, moved in or out - unless `editFinishedReleases` |
 | `RELEASE_CONFLICT` | `release start` on a release that is not `future`, or while another release is active unless `multipleActiveReleases` |
 | `RELEASE_NOT_CURRENT` | `release done` on a release that is not active - check the ref |
-| `CONFLICT` | a board file changed on disk while the command ran - re-run it |
-| `UNREADABLE_FRONTMATTER` | a file holds a block the parser cannot read, and the CLI will not write it - tell the user |
+| `CONFLICT` | a board file changed on disk while the command ran - re-run it. `task attachment add` / `rm` can return it too: they rewrite the task's file |
+| `UNREADABLE_FRONTMATTER` | a file holds a block the parser cannot read, and the CLI will not write it - tell the user. Attachment changes included, since they rewrite the task's file |
 | `VERSION_TOO_OLD` | the board needs a newer boardown - tell the user |
 
 ## Working rules

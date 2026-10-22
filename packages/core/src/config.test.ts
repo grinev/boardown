@@ -395,6 +395,32 @@ describe('multiple active releases', () => {
   });
 });
 
+describe('track update date', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('round-trips both values right after gitIntegration, absent until set', () => {
+    expect(serializeConfig(base)).not.toContain('trackUpdatedAt');
+    for (const enabled of [true, false]) {
+      const cfg: BoardConfig = { ...base, gitIntegration: true, trackUpdatedAt: enabled };
+      const out = serializeConfig(cfg);
+      expect(out).toContain(`gitIntegration: true\ntrackUpdatedAt: ${String(enabled)}\n`);
+      const back = parseConfig(out);
+      expect(back.problems).toEqual([]);
+      expect(back.value).toEqual(stamped(cfg));
+    }
+  });
+
+  it('makes a custom field named after either date an invalid config', () => {
+    for (const key of ['createdAt', 'updatedAt']) {
+      const parsed = parseConfig(
+        `idPrefix: BD\nnextId: 0\nprojectName: P\ncustomFields:\n  - key: ${key}\n    type: string\n`,
+      );
+      expect(parsed.value).toBeNull();
+      expect(parsed.problems[0]?.message).toContain('customFields key must not be one of');
+    }
+  });
+});
+
 describe('git integration', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 

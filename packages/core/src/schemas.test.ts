@@ -198,6 +198,35 @@ describe('TaskFrontmatterSchema', () => {
     }
   });
 
+  it('accepts the two dates as written, and coerces a YAML timestamp back to ISO', () => {
+    const result = TaskFrontmatterSchema.safeParse({
+      id: 'BD-1',
+      type: 'feature',
+      status: 'todo',
+      order: 100,
+      createdAt: new Date('2026-01-01T10:00:00.000Z'),
+      updatedAt: 'last tuesday',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.createdAt).toBe('2026-01-01T10:00:00.000Z');
+      expect(result.data.updatedAt).toBe('last tuesday');
+    }
+  });
+
+  it('rejects an empty or non-string date, as it does for a note', () => {
+    for (const updatedAt of ['', null, 5]) {
+      const result = TaskFrontmatterSchema.safeParse({
+        id: 'BD-1',
+        type: 'feature',
+        status: 'todo',
+        order: 100,
+        updatedAt,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
   it('rejects a note with empty text', () => {
     const result = TaskFrontmatterSchema.safeParse({
       id: 'BD-1',

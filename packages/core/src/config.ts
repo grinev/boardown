@@ -124,6 +124,9 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.gitIntegration !== undefined) {
     ordered.gitIntegration = config.gitIntegration;
   }
+  if (config.trackUpdatedAt !== undefined) {
+    ordered.trackUpdatedAt = config.trackUpdatedAt;
+  }
   if (config.statusOutsideActiveRelease !== undefined) {
     ordered.statusOutsideActiveRelease = config.statusOutsideActiveRelease;
   }
