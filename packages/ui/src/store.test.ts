@@ -17,9 +17,11 @@ import {
   APP_VERSION,
   BACKLOG_PATH,
   CONFIG_FILENAME,
+  ConflictError,
   MIN_COMPATIBLE_VERSION,
   createGuardedFs,
   emptyDocsTree,
+  serializeConfig,
 } from '@boardown/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { isAnyDialogOpen, useBoardStore } from './store';
@@ -1191,6 +1193,67 @@ describe('completeOnboarding', () => {
 
     expect(current().config.theme).toBeUndefined();
     expect(state().theme).toBe('light');
+  });
+
+  describe('a config.yaml that appeared while the form was open', () => {
+    const outside = serializeConfig({ idPrefix: 'OT', nextId: 1, projectName: 'Outside' });
+
+    it('is not overwritten, and the conflict opens instead', async () => {
+      const fs = new MemFs();
+      await state().load(fs);
+      expect(state().status).toBe('onboarding');
+      fs.files.set(CONFIG_FILENAME, { content: outside, lastModified: Date.now() });
+
+      await expect(
+        state().completeOnboarding({ projectName: 'Mine', idPrefix: 'MN' }),
+      ).rejects.toBeInstanceOf(ConflictError);
+
+      expect(state().conflictOpen).toBe(true);
+      expect(state().status).toBe('onboarding');
+      expect(await fs.read(CONFIG_FILENAME)).toBe(outside);
+    });
+
+    it('reload loads the board from the file on disk', async () => {
+      const fs = new MemFs();
+      await state().load(fs);
+      fs.files.set(CONFIG_FILENAME, { content: outside, lastModified: Date.now() });
+      await state()
+        .completeOnboarding({ projectName: 'Mine', idPrefix: 'MN' })
+        .catch(() => {});
+
+      await state().reload();
+
+      expect(state().status).toBe('ready');
+      expect(state().conflictOpen).toBe(false);
+      expect(current().config.projectName).toBe('Outside');
+    });
+
+    it('reload lands on the error screen when that file is invalid', async () => {
+      const fs = new MemFs();
+      await state().load(fs);
+      fs.files.set(CONFIG_FILENAME, { content: 'idPrefix: [\n', lastModified: Date.now() });
+      await state()
+        .completeOnboarding({ projectName: 'Mine', idPrefix: 'MN' })
+        .catch(() => {});
+
+      await state().reload();
+
+      expect(state().status).toBe('error');
+      expect(state().conflictOpen).toBe(false);
+    });
+  });
+
+  it('leaves any other write failure to the form, without the conflict', async () => {
+    const fs = new MemFs();
+    await state().load(fs);
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await expect(
+      state().completeOnboarding({ projectName: 'Mine', idPrefix: 'MN' }),
+    ).rejects.toThrow('disk full');
+
+    expect(state().conflictOpen).toBe(false);
+    expect(state().status).toBe('onboarding');
   });
 });
 

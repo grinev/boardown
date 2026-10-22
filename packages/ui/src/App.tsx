@@ -191,11 +191,18 @@ export function App({
             <h1 />
           </header>
         )}
-        <OnboardingDialog
-          defaultProjectName={defaultProjectName ?? ''}
-          defaultIdPrefix={defaultIdPrefix ?? ''}
-          {...(onCancel ? { onCancel } : {})}
-        />
+        {/* A config.yaml that appeared while the form was open refuses its
+            write; the form gives way to the modal, as any dialog on the board
+            does, since Reload is the only way on. */}
+        {conflictOpen ? (
+          <ConflictDialog />
+        ) : (
+          <OnboardingDialog
+            defaultProjectName={defaultProjectName ?? ''}
+            defaultIdPrefix={defaultIdPrefix ?? ''}
+            {...(onCancel ? { onCancel } : {})}
+          />
+        )}
       </main>
     );
   }
