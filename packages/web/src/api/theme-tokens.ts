@@ -23,14 +23,15 @@ const COLORS = [
   '--tab-border',
   '--epic-bg',
   '--epic-fg',
-  '--id-bg',
-  '--id-fg',
+  '--epic-text-dark',
+  '--epic-text-light',
   '--label-border',
   '--label-fg',
   '--type-bug',
   '--type-feature',
   '--type-docs',
   '--type-tech',
+  '--type-fallback',
   '--type-epic',
   '--priority-critical',
   '--priority-high',
@@ -67,9 +68,17 @@ const COLORS = [
   '--banner-warn-fg',
   '--banner-error-bg',
   '--banner-error-fg',
+  '--danger',
+  '--backdrop',
 ];
 
-const SHADOWS = ['--card-shadow', '--drag-shadow', '--tab-active-shadow'];
+const SHADOWS = [
+  '--card-shadow',
+  '--drag-shadow',
+  '--tab-active-shadow',
+  '--popover-shadow',
+  '--dialog-shadow',
+];
 
 export const THEME_TOKENS: ReadonlyMap<string, ThemeTokenKind> = new Map([
   ...COLORS.map((name) => [name, 'color'] as const),

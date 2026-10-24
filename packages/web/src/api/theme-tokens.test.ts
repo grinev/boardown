@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BASE_TASK_TYPE_META, FALLBACK_TYPE_COLOR, TASK_TYPES } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import { THEME_TOKENS } from './theme-tokens';
 
@@ -23,6 +24,35 @@ describe('the shared theme tokens', () => {
 
   it('mark the shadows as shadows and everything else as a colour', () => {
     const shadows = [...THEME_TOKENS].filter(([, kind]) => kind === 'shadow').map(([name]) => name);
-    expect(shadows.sort()).toEqual(['--card-shadow', '--drag-shadow', '--tab-active-shadow']);
+    expect(shadows.sort()).toEqual([
+      '--card-shadow',
+      '--dialog-shadow',
+      '--drag-shadow',
+      '--popover-shadow',
+      '--tab-active-shadow',
+    ]);
+  });
+});
+
+// A type icon reads its colour from the palette, while `boardown schema` prints
+// core's hex; the two must be the same colour until a theme says otherwise.
+const block = (selector: string): string => {
+  const start = themeCss.indexOf(`${selector} {`);
+  if (start < 0) throw new Error(`theme.css has no ${selector} block`);
+  return themeCss.slice(start, themeCss.indexOf('}', start));
+};
+
+const valueIn = (css: string, name: string): string | undefined =>
+  new RegExp(String.raw`^\s*${name}\s*:\s*([^;]+);`, 'm').exec(css)?.[1]?.trim().toLowerCase();
+
+describe.each(["[data-theme='light']", "[data-theme='dark']"])('the %s palette', (selector) => {
+  const css = block(selector);
+
+  it.each(TASK_TYPES)('gives the %s type the colour core prints', (key) => {
+    expect(valueIn(css, `--type-${key}`)).toBe(BASE_TASK_TYPE_META[key].color.toLowerCase());
+  });
+
+  it('gives the fallback type colour the colour core prints', () => {
+    expect(valueIn(css, '--type-fallback')).toBe(FALLBACK_TYPE_COLOR.toLowerCase());
   });
 });

@@ -76,6 +76,7 @@ describe('task types', () => {
       label: 'Tech',
       icon: 'wrench',
       color: '#8b5cf6',
+      colorSource: 'base',
       commitPrefix: 'chore',
       enabled: false,
     });
@@ -88,6 +89,7 @@ describe('task types', () => {
       label: 'Ops',
       icon: 'circle',
       color: '#94a3b8',
+      colorSource: 'fallback',
       commitPrefix: 'ops',
       enabled: true,
     });
@@ -99,8 +101,17 @@ describe('task types', () => {
       label: 'mystery',
       icon: 'circle',
       color: '#94a3b8',
+      colorSource: 'fallback',
       commitPrefix: 'mystery',
       enabled: false,
     });
+  });
+
+  it('marks a colour the board declares, even the fallback hex, as its own', () => {
+    const config: BoardConfig = {
+      ...base,
+      customTaskTypes: [{ key: 'ops', color: '#94a3b8' }],
+    };
+    expect(resolveTaskType(config, 'ops').colorSource).toBe('declared');
   });
 });

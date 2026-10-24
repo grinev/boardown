@@ -236,7 +236,7 @@
   background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+  box-shadow: var(--popover-shadow);
 }
 
 .suggestion {

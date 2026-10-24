@@ -18,11 +18,16 @@ export type TypeConfig =
   | null
   | undefined;
 
+// Where `color` came from: only a base type's and the fallback are the product's,
+// and so the theme's; a declared colour is board data.
+export type TaskTypeColorSource = 'base' | 'declared' | 'fallback';
+
 export interface ResolvedTaskType {
   readonly key: string;
   readonly label: string;
   readonly icon: string;
   readonly color: string;
+  readonly colorSource: TaskTypeColorSource;
   readonly commitPrefix: string;
   readonly enabled: boolean;
 }
@@ -49,13 +54,14 @@ const resolveCustom = (entry: CustomTaskType): ResolvedTaskType => ({
   label: entry.label ?? prettifyKey(entry.key),
   icon: entry.icon ?? FALLBACK_TYPE_ICON,
   color: entry.color ?? FALLBACK_TYPE_COLOR,
+  colorSource: entry.color === undefined ? 'fallback' : 'declared',
   commitPrefix: entry.commitPrefix ?? entry.key,
   enabled: true,
 });
 
 const resolveBase = (key: BaseTaskType, enabled: boolean): ResolvedTaskType => {
   const meta = BASE_TASK_TYPE_META[key];
-  return { key, ...meta, enabled };
+  return { key, ...meta, colorSource: 'base', enabled };
 };
 
 export const enabledTaskTypes = (config: TypeConfig): readonly ResolvedTaskType[] => {
@@ -88,6 +94,7 @@ export const resolveTaskType = (config: TypeConfig, type: TaskType): ResolvedTas
     label: type,
     icon: FALLBACK_TYPE_ICON,
     color: FALLBACK_TYPE_COLOR,
+    colorSource: 'fallback',
     commitPrefix: type,
     enabled: false,
   };

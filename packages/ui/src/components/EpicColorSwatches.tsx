@@ -31,7 +31,7 @@ export function EpicColorSwatches({ value, onSelect, className }: EpicColorSwatc
             aria-label={c}
             onClick={() => onSelect(c)}
           >
-            {selected && <Check size={14} color={pickContrastText(c)} aria-hidden="true" />}
+            {selected && <Check size={14} style={{ color: pickContrastText(c) }} aria-hidden="true" />}
           </button>
         );
       })}
