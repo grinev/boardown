@@ -1,5 +1,5 @@
 import { Archive, BookText, ClipboardList, SquareKanban, type LucideIcon } from 'lucide-react';
-import type { ActiveTab } from '../store';
+import { useBoardStore, type ActiveTab } from '../store';
 import { CreateMenu } from './CreateMenu';
 import { ReloadButton } from './ReloadButton';
 import { SettingsButton } from './SettingsButton';
@@ -25,10 +25,13 @@ const tabClass = (active: boolean): string =>
   [styles.tab, active && styles.tabActive].filter(Boolean).join(' ');
 
 export function TabBar({ activeTab, onSelect, hideSettings }: TabBarProps) {
+  const docsTab = useBoardStore((s) => s.snapshot?.config.docsTab ?? true);
+  const tabs = docsTab ? TABS : TABS.filter(({ key }) => key !== 'docs');
+
   return (
     <div className={styles.bar}>
       <div className={styles.tabs}>
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"

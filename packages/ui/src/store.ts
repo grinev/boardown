@@ -236,6 +236,7 @@ interface BoardState {
   setTrackUpdatedAt: (enabled: boolean) => Promise<void>;
   setStatusOutsideActiveRelease: (enabled: boolean) => Promise<void>;
   setEditFinishedReleases: (enabled: boolean) => Promise<void>;
+  setDocsTab: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
   closeTask: () => void;
   openEpic: (slug: string) => void;
@@ -443,6 +444,11 @@ const commitWithStamp =
 // container changed, so dropping it would lose the write silently.
 const versionTooOldMessage = (required: string, running: string): string =>
   `This board requires boardown ${required} (this build is ${running}). Update boardown.`;
+
+// A config that hides the Docs tab moves the view off it. The tab itself is
+// changed, not just drawn as Board, so showing Docs again does not jump back to it.
+const tabFor = (tab: ActiveTab, config: BoardConfig): ActiveTab =>
+  tab === 'docs' && config.docsTab === false ? 'board' : tab;
 
 // The minVersion stamp rides every write of file content, as one set with it. The
 // stamped config is recorded only once that set has landed — the rule the layout
@@ -886,6 +892,7 @@ export const useBoardStore = create<BoardState>(
           conflictOpen: false,
           unwritableFile: null,
           theme: boardTheme(result.snapshot.config),
+          activeTab: tabFor(get().activeTab, result.snapshot.config),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -933,6 +940,7 @@ export const useBoardStore = create<BoardState>(
           conflictOpen: false,
           unwritableFile: null,
           theme: boardTheme(result.snapshot.config),
+          activeTab: tabFor(get().activeTab, result.snapshot.config),
         });
       } catch (err) {
         // The only failure in this store that never reaches errorMessage: it
@@ -1133,6 +1141,26 @@ export const useBoardStore = create<BoardState>(
         await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
+      }
+    },
+
+    setDocsTab: async (enabled) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs) return;
+      if ((snapshot.config.docsTab ?? true) === enabled) return;
+      const nextConfig = withMinVersionStamp({ ...snapshot.config, docsTab: enabled });
+      const nextSnapshot: BoardSnapshot = { ...snapshot, config: nextConfig };
+      set({
+        snapshot: nextSnapshot,
+        errorMessage: null,
+        activeTab: tabFor(get().activeTab, nextConfig),
+      });
+      try {
+        await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // The tab stays where it went: jumping back would surprise more than help.
         set({ snapshot, errorMessage: `Failed to save the setting: ${message}` });
       }
     },

@@ -146,6 +146,9 @@ export const serializeConfig = (config: BoardConfig): string => {
   if (config.editFinishedReleases !== undefined) {
     ordered.editFinishedReleases = config.editFinishedReleases;
   }
+  if (config.docsTab !== undefined) {
+    ordered.docsTab = config.docsTab;
+  }
   if (config.statuses !== undefined) {
     ordered.statuses = config.statuses.map((status) => {
       const entry: Record<string, unknown> = { key: status.key };

@@ -12,6 +12,7 @@ export function DocPopupDialog() {
   const closeDocPopup = useBoardStore((s) => s.closeDocPopup);
   const openDocPopup = useBoardStore((s) => s.openDocPopup);
   const openDocPage = useBoardStore((s) => s.openDocPage);
+  const docsTab = useBoardStore((s) => s.snapshot?.config.docsTab ?? true);
 
   const page = docs && docPopupPath ? findDocPage(docs, docPopupPath) : null;
   if (!page) return null;
@@ -27,14 +28,16 @@ export function DocPopupDialog() {
           <DialogBackButton />
         </div>
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={styles.viewButton}
-            onClick={() => openDocPage(page.path)}
-          >
-            <ExternalLink size={14} aria-hidden="true" />
-            View in docs
-          </button>
+          {docsTab && (
+            <button
+              type="button"
+              className={styles.viewButton}
+              onClick={() => openDocPage(page.path)}
+            >
+              <ExternalLink size={14} aria-hidden="true" />
+              View in docs
+            </button>
+          )}
           <button
             type="button"
             className={styles.closeButton}
