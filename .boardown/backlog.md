@@ -94,6 +94,9 @@ type: tech
 status: todo
 epic: web-app
 order: 400
+links:
+  - type: relates
+    to: BD-144
 ---
 
 The project list page at / in registry mode carries its own minimal styling — rows, buttons and dialogs assembled from currentColor and the system Canvas/CanvasText colours — so it only resembles the board rather than looking like it. It should read as the same product: the surfaces, controls and dialogs of the board UI, in light and in dark. The page serves several boards at once while a theme belongs to one board's config, so what it follows when the boards disagree is part of the task.
@@ -348,3 +351,14 @@ order: 3000
 ---
 
 `sanitizeFilenameForFs` keeps non-ASCII characters as typed and never normalizes them, so `epics/рост-и-geo.md` is stored NFC on Linux and NFD on macOS — the classic "the file changed but the diff is empty" on a mixed team. Normalize the derived name to NFC and warn about non-ASCII slugs in the docs. A slug transliteration option in config.yaml is a second level, decided separately.
+
+## Delete a release
+
+---
+id: BD-145
+type: feature
+status: todo
+order: 3100
+---
+
+Allow deleting a release. Deleting asks where its tasks go, with the same dialog as completing a release (CompleteReleaseDialog): move every task of the release into another release or into the backlog, then remove the release file.
