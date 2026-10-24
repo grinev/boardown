@@ -36,6 +36,8 @@ import type {
 } from '@boardown/core';
 import {
   CONFIG_FILENAME,
+  DEFAULT_THEME,
+  boardTheme,
   configNeedsMinVersionStamp,
   withMinVersionStamp,
   addTaskLink as addTaskLinkInBoard,
@@ -209,6 +211,10 @@ interface BoardState {
   setFileSaver: (saver: FileSaver) => void;
   setSharedThemeReader: (reader: SharedThemeReader) => void;
   refreshSharedTheme: () => Promise<void>;
+  // What the host already knew when it served the page, so the first frame is in
+  // the theme the page settles on. Called once, before the first load; later loads
+  // and reads overwrite it like any other value.
+  seedHostTheme: (seed: { theme?: Theme; sharedTheme?: SharedThemeState }) => void;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
@@ -763,7 +769,7 @@ export const useBoardStore = create<BoardState>(
     problems: [],
     errorMessage: null,
     activeTab: 'board',
-    theme: 'light',
+    theme: DEFAULT_THEME,
     defaultTheme: null,
     fs: null,
     rawFs: null,
@@ -785,6 +791,14 @@ export const useBoardStore = create<BoardState>(
     setFileSaver: (saver) => set({ fileSaver: saver }),
 
     setSharedThemeReader: (reader) => set({ sharedThemeReader: reader }),
+
+    seedHostTheme: ({ theme, sharedTheme }) =>
+      set({
+        ...(theme !== undefined ? { theme } : {}),
+        ...(sharedTheme !== undefined
+          ? { sharedTheme: sharedTheme.theme, sharedThemeError: sharedTheme.error }
+          : {}),
+      }),
 
     refreshSharedTheme: async () => {
       const reader = get().sharedThemeReader;
@@ -838,7 +852,7 @@ export const useBoardStore = create<BoardState>(
             snapshot: null,
             problems: [],
             errorMessage: null,
-            theme: get().defaultTheme ?? 'light',
+            theme: get().defaultTheme ?? DEFAULT_THEME,
           });
           return;
         }
@@ -871,7 +885,7 @@ export const useBoardStore = create<BoardState>(
           errorMessage: null,
           conflictOpen: false,
           unwritableFile: null,
-          theme: result.snapshot.config.theme ?? 'light',
+          theme: boardTheme(result.snapshot.config),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -918,7 +932,7 @@ export const useBoardStore = create<BoardState>(
           errorMessage: null,
           conflictOpen: false,
           unwritableFile: null,
-          theme: result.snapshot.config.theme ?? 'light',
+          theme: boardTheme(result.snapshot.config),
         });
       } catch (err) {
         // The only failure in this store that never reaches errorMessage: it

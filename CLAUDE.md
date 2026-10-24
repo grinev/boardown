@@ -115,7 +115,9 @@ down the same way it hands down a root, and a host that is not watching
 also watches the shared configuration directory when the host has one, and tells
 every open stream, whatever its board, when it changes. The browser side talks to
 them through `HttpFsAdapter`, `HttpProjectFileReader` and `HttpSharedThemeReader`,
-which take the endpoint base and so follow the prefix. Which tab is asking is a fact about the
+which take the endpoint base and so follow the prefix. Both hosts also stamp the
+board page they serve with the theme it settles on (`src/api/page-boot.ts`), on
+`<html>` and as a payload the shell hands `ui`, so the first frame is already right. Which tab is asking is a fact about the
 request rather than an argument of the operation, so it rides in a header
 (`X-Boardown-Client`) — and on the stream, which cannot send one, in a query
 parameter — leaving the `/api/fs/*` bodies the operation's own arguments. The two
@@ -171,6 +173,9 @@ directory. Where it sits in the package, nothing discovers it.
 - Shells (`web`, future `vscode`, `electron`) own platform integrations:
   `FsAdapter` implementation, folder picker / workspace acquisition, refresh
   triggers, OS dialogs.
+- A shell hands `ui` what it knows at mount as `App` props (`defaultTheme`,
+  `initialTheme`, `embedded`, …); a shell calling into the store is for events
+  after mount (`reloadSilent`, `refreshSharedTheme`), never for starting state.
 - All access to the **board** goes through the `FsAdapter` interface defined in
   `packages/core`, rooted at `.boardown/` by every shell; it reads and writes text
   and bytes. Four capabilities sit outside it, all declared in `core`. Three are

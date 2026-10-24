@@ -19,6 +19,19 @@ export interface SharedThemeState {
   error: string | null;
 }
 
+// What a shared theme puts on the page: its base over the board's own theme, and
+// its tokens plus the font family as CSS variables. One rule for ui, which applies
+// it, and for a host that stamps it into the page before ui runs.
+export const displayedTheme = (shared: SharedTheme | null, board: Theme): Theme =>
+  shared?.base ?? board;
+
+export const sharedThemeOverrides = (shared: SharedTheme | null): Record<string, string> => {
+  if (shared === null) return {};
+  return shared.fontFamily === undefined
+    ? { ...shared.tokens }
+    : { ...shared.tokens, '--font-family': shared.fontFamily };
+};
+
 // Read-only, scoped to the host's configuration directory. Its own interface
 // rather than a method on FsAdapter: it reads outside `.boardown/`, and no
 // board write path may hold it.

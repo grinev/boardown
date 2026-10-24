@@ -1,11 +1,5 @@
+import { escapeHtml } from '../api/html-escape.js';
 import type { BoardListRow } from './board-list.js';
-
-const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 // Plain HTML with inline styles rather than a second client bundle: the page is
 // a list of links and two dialogs, and giving it a build would make an app out

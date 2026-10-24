@@ -1047,6 +1047,34 @@ describe('the shared theme', () => {
   });
 });
 
+describe('seedHostTheme', () => {
+  const ocean: SharedTheme = { id: 'ocean', name: 'Ocean', base: 'dark', tokens: { '--bg': '#000' } };
+
+  afterEach(() => {
+    useBoardStore.setState({ sharedTheme: null, sharedThemeError: null, defaultTheme: null });
+  });
+
+  it('shows what the host knew when it served the page', () => {
+    state().seedHostTheme({ theme: 'dark', sharedTheme: { theme: ocean, error: 'bad edit' } });
+    expect(state().theme).toBe('dark');
+    expect(state().sharedTheme).toEqual(ocean);
+    expect(state().sharedThemeError).toBe('bad edit');
+  });
+
+  it('gives way to the board once it loads', async () => {
+    state().seedHostTheme({ theme: 'dark' });
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    expect(state().theme).toBe('light');
+  });
+
+  it('never reaches the config onboarding writes', async () => {
+    state().seedHostTheme({ theme: 'dark' });
+    await state().load(new MemFs());
+    await state().completeOnboarding({ projectName: 'New', idPrefix: 'NW' });
+    expect(current().config.theme).toBeUndefined();
+  });
+});
+
 describe('setWipLimit', () => {
   it('writes the limit into config and clears it again', async () => {
     const { fs } = setup(snap());
