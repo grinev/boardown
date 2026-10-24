@@ -9,9 +9,11 @@ import {
   sendText,
 } from '../api/board-api.js';
 import { createBoardWatchHub, type BoardWatchHub } from '../api/board-events.js';
+import { handleSharedTheme, type SharedConfigSource } from '../api/shared-config.js';
 import { BOARD_EVENTS_ENDPOINT } from '../board-events-endpoint.js';
 import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
 import { GIT_COMMITS_ENDPOINT } from '../git-history-endpoint.js';
+import { SHARED_THEME_ENDPOINT } from '../shared-theme-endpoint.js';
 import { handleGitCommits } from '../api/git-history.js';
 import { describeEntries } from './board-list.js';
 import { renderListPage } from './list-page.js';
@@ -38,6 +40,8 @@ export interface ServerOptions {
    * routed, so the browser's one attempt 404s and it stops asking.
    */
   watch?: boolean;
+  /** `--config-dir`, already read once: a host that could not read it never starts. */
+  sharedConfig?: SharedConfigSource;
 }
 
 export const LOOPBACK_HOST = '127.0.0.1';
@@ -106,7 +110,11 @@ const BOARD_PATH_PATTERN = /^\/b\/([^/]+)(\/.*)?$/;
 export const createBoardownServer = (options: ServerOptions): http.Server => {
   const clientDir = path.resolve(options.clientDir);
   const watch: BoardWatchHub | undefined =
-    options.watch === false ? undefined : createBoardWatchHub();
+    options.watch === false
+      ? undefined
+      : createBoardWatchHub(
+          options.sharedConfig === undefined ? {} : { configDir: options.sharedConfig.dir },
+        );
 
   const sendFile = async (res: http.ServerResponse, abs: string): Promise<void> => {
     try {
@@ -159,6 +167,10 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     }
     if (req.method === 'GET' && rest === GIT_COMMITS_ENDPOINT) {
       await handleGitCommits(res, params, roots.projectRoot);
+      return;
+    }
+    if (req.method === 'GET' && rest === SHARED_THEME_ENDPOINT) {
+      await handleSharedTheme(res, options.sharedConfig);
       return;
     }
     // The board root comes from whichever registry entry this request resolved

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { defaultRegistryPath } from './default-registry.js';
+import { openSharedConfig } from '../api/shared-config.js';
 import { createBoardownServer, LOOPBACK_HOST } from './http-server.js';
 import { UsageError, parseArgs, resolveMode } from './options.js';
 
@@ -28,16 +29,22 @@ const run = async (argv: readonly string[]): Promise<void> => {
       homedir: () => os.homedir(),
     }),
   );
+  const sharedConfig =
+    args.configDir === undefined
+      ? undefined
+      : await openSharedConfig(path.resolve(process.cwd(), args.configDir));
 
   const server = createBoardownServer({
     mode,
     clientDir: path.join(__dirname, 'client'),
     watch: args.noWatch !== true,
+    ...(sharedConfig === undefined ? {} : { sharedConfig }),
   });
   const port = await listen(server, args.port ?? 0);
   const origin = `http://${LOOPBACK_HOST}:${port}`;
 
   out(`boardown-web  ${origin}`);
+  if (sharedConfig !== undefined) out(`  config  ${sharedConfig.dir}`);
   if (singleRoots !== null) {
     out(`  board  ${singleRoots.boardRoot}`);
     return;

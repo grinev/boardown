@@ -3,10 +3,11 @@ import type {
   FileSaver,
   GitHistoryReader,
   ProjectFileReader,
+  SharedThemeReader,
   Theme,
 } from '@boardown/core';
 import { boardStatusKeys } from '@boardown/core';
-import { useEffect, useLayoutEffect, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
@@ -43,6 +44,10 @@ interface AppProps {
   // Download: saves a copy of an attachment where the user picks, through the
   // host's own dialog. The one capability that writes outside `.boardown/`.
   fileSaver: FileSaver;
+  // The host's shared theme, read-only: it overrides every board's own theme on
+  // screen, and Settings shows it instead of the picker. Only the web shell
+  // passes it, from its configuration directory.
+  sharedTheme?: SharedThemeReader;
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
@@ -72,6 +77,7 @@ export function App({
   projectFiles,
   gitHistory,
   fileSaver,
+  sharedTheme: sharedThemeReader,
   defaultTheme,
   defaultProjectName,
   defaultIdPrefix,
@@ -124,6 +130,10 @@ export function App({
   const setProjectFiles = useBoardStore((s) => s.setProjectFiles);
   const setGitHistory = useBoardStore((s) => s.setGitHistory);
   const setFileSaver = useBoardStore((s) => s.setFileSaver);
+  const setSharedThemeReader = useBoardStore((s) => s.setSharedThemeReader);
+  const refreshSharedTheme = useBoardStore((s) => s.refreshSharedTheme);
+  const sharedTheme = useBoardStore((s) => s.sharedTheme);
+  const sharedThemeError = useBoardStore((s) => s.sharedThemeError);
   const repoFilePopupPath = useBoardStore((s) => s.repoFilePopupPath);
   const setActiveTab = useBoardStore((s) => s.setActiveTab);
   const closeTask = useBoardStore((s) => s.closeTask);
@@ -158,6 +168,12 @@ export function App({
     setFileSaver(fileSaver);
   }, [fileSaver, setFileSaver]);
 
+  useEffect(() => {
+    if (sharedThemeReader === undefined) return;
+    setSharedThemeReader(sharedThemeReader);
+    void refreshSharedTheme();
+  }, [sharedThemeReader, setSharedThemeReader, refreshSharedTheme]);
+
   // useLayoutEffect so the attribute is set before the browser paints the first
   // frame — a plain effect runs after paint and flashes the light-theme default.
   // While the board is still loading, prefer the host-provided theme (e.g. VS
@@ -165,10 +181,26 @@ export function App({
   // config and wins.
   useLayoutEffect(() => {
     const resolved =
+      sharedTheme?.base ??
       forcedTheme ??
       (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme);
     document.documentElement.setAttribute('data-theme', resolved);
-  }, [theme, defaultTheme, forcedTheme, status]);
+  }, [sharedTheme, theme, defaultTheme, forcedTheme, status]);
+
+  // A shared theme's overrides sit inline on the root, which beats the
+  // [data-theme] blocks; whatever an update no longer overrides is removed, so
+  // the base's own value shows through again.
+  const appliedOverrides = useRef<string[]>([]);
+  useLayoutEffect(() => {
+    const overrides: Record<string, string> = { ...sharedTheme?.tokens };
+    if (sharedTheme?.fontFamily !== undefined) overrides['--font-family'] = sharedTheme.fontFamily;
+    const style = document.documentElement.style;
+    for (const name of appliedOverrides.current) {
+      if (!(name in overrides)) style.removeProperty(name);
+    }
+    for (const [name, value] of Object.entries(overrides)) style.setProperty(name, value);
+    appliedOverrides.current = Object.keys(overrides);
+  }, [sharedTheme]);
 
   if (status === 'idle' || status === 'loading') {
     return (
@@ -270,8 +302,16 @@ export function App({
         epics={snapshot.epics}
         statuses={statuses}
       />
-      {problems.length > 0 && (
+      {(problems.length > 0 || sharedThemeError !== null) && (
         <section className={styles.problems} data-testid="problems-banner">
+          {sharedThemeError !== null && (
+            <div className={styles.problemGroup} data-testid="problems-shared-config">
+              <strong>Shared configuration not applied — the last valid theme is kept:</strong>
+              <ul>
+                <li>{sharedThemeError}</li>
+              </ul>
+            </div>
+          )}
           {blocking.length > 0 && (
             <div className={styles.problemGroup} data-testid="problems-blocking">
               <strong>Not writable — fix these files by hand:</strong>

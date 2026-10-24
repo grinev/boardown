@@ -405,7 +405,10 @@ seeded at onboarding from the host's color theme when the shell provides one
 (the VS Code shell maps the editor's light/dark theme); shells that don't pass a
 default (e.g. the dev web shell) leave it absent, in which case it defaults to
 `"light"`. After onboarding it is owned by the in-app theme switcher — the host
-theme no longer influences it. Epic colors are user-defined per epic (see Epic
+theme no longer influences it. The one exception is the `web` shell started with a
+shared configuration directory that selects a theme: that theme is shown on every
+board it serves instead, and the board's own `theme` stays as it is on disk (see
+"Shared configuration" under Browser). Epic colors are user-defined per epic (see Epic
 frontmatter above).
 
 ### Task types
@@ -662,7 +665,11 @@ and left untouched on disk.
 - A broken task does not block other tasks in the same file.
 - Problems are surfaced in a banner at the app's edge, in two groups: the
   error-level ones under a heading saying those files are not writable and must be
-  fixed by hand, then the rest as parse warnings.
+  fixed by hand, then the rest as parse warnings. In the `web` shell the same
+  banner carries a third group, first, when a change to the host's shared
+  configuration could not be applied — its heading says the last valid theme is
+  kept, and it lists the reason. It is not a problem of any board file and locks
+  nothing; it goes away with the next valid change.
 - The app **never** rewrites a file it could not fully parse. A block whose
   frontmatter does not parse is not in the loaded board, so writing that file back
   would delete it; every write to such a file is refused instead, and the change
@@ -1526,6 +1533,11 @@ never conflict on it."*), **Allow status changes outside the current release** a
 the user is running — the shell supplies it, so it is the installed extension's
 version in VS Code and the checkout's version in the `web` dev shell.
 
+When the `web` shell's shared configuration selects a theme, the **Theme** row is
+text instead of a selector: the theme's name, and below it a note that the shared
+configuration sets it for every board. The rest of the dialog is unchanged and
+saves as usual, leaving the board's own stored `theme` as it was.
+
 The **CLI** row exists because the command-line shell is otherwise undiscoverable
 from inside the app: a user who installed the extension has no way to learn it
 exists. It states what the CLI is for — letting AI agents work with the board —
@@ -1883,6 +1895,64 @@ repeated parameter counts by its first occurrence. Nothing is stored, so the sam
 board opened without it shows its title; it lasts for the life of the page and a
 browser reload keeps it with the URL. The list page ignores it, and its links do
 not carry it.
+
+#### Shared configuration
+
+Both hosts accept a **shared configuration directory** — settings that apply to
+every board the process serves, kept outside every board, for an app that embeds
+boardown and owns their look. `boardown-web --config-dir <path>` takes it in either
+mode, without changing which registry is served; the dev shell takes `pnpm dev --
+--config-dir <path>` or the `BOARDOWN_CONFIG_DIR` environment variable, the flag
+winning. A relative path resolves from where the command was typed. Without one,
+every board has its own theme and its own picker.
+
+The directory holds `config.yaml`, whose optional `theme` names the theme: `light`
+and `dark` are the built-ins, and any other name is `themes/<name>.json` beside it.
+The name is matched exactly, case included, the same on every OS, and `Light` is
+not the built-in. Keys `config.yaml` does not know are ignored, and an empty file
+selects nothing. A theme file looks like this:
+
+```json
+{
+  "name": "Studio Dark",
+  "base": "dark",
+  "fontFamily": "\"Inter\", system-ui, sans-serif",
+  "tokens": { "--accent": "#7c5cff", "--card-shadow": "0 1px 2px rgba(0, 0, 0, 0.5)" }
+}
+```
+
+- **`base` is required** (`light` or `dark`): every token the file leaves out, and
+  the font when `fontFamily` is absent, come from that built-in palette.
+- **`tokens`** names the palette's own CSS variables and gives each a CSS value,
+  checked against what that variable is — a colour, or a shadow for
+  `--card-shadow`, `--drag-shadow` and `--tab-active-shadow`. A value that refers
+  to another variable through `var()` is taken as written.
+- **`fontFamily`** replaces the font stack only. `--font-family` inside `tokens`
+  is ignored.
+- **`name`** is what Settings shows, the file name without `.json` when absent.
+- **Unknown content.** Fields and token names the build does not know are
+  ignored, so a newer file still serves an older build.
+- **Errors.** Malformed JSON, a missing or wrong `base`, a value of the wrong type
+  and a CSS value that is not valid for its variable are errors, and a theme is
+  never applied in part.
+
+The selected theme is shown on every board, over each board's own `theme` and
+whatever `?embed` says. Nothing of it is ever written into a board. Epic and
+custom task-type colours stay the board's own.
+
+The directory, `config.yaml` and the file a theme names must exist. Nothing is
+created, and deleting a file is an error rather than a way to drop the theme;
+removing the `theme` key is that way, and it gives every board its own theme and
+picker back. A problem found at startup refuses the start, naming the directory
+and the reason.
+
+While the host watches — always in the dev shell, unless `--no-watch` on the
+server — an edit to `config.yaml` or to a theme file reaches every open board at
+once. No restart, no browser reload, no dialog closed and no unsaved input lost.
+An override that is removed shows its base's value again. An edit that breaks a
+file keeps the last valid theme on screen and shows the reason in the problems
+banner of every open board, until a valid edit clears it. With `--no-watch`,
+the **Reload** button and a browser reload read the directory again.
 
 The **dev shell** is also the only thing in the project that writes a **log
 file** — `boardown-web` installs no log destination, like every other shell a

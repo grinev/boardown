@@ -20,6 +20,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
   const theme = useBoardStore((s) => s.theme);
   const status = useBoardStore((s) => s.status);
   const setTheme = useBoardStore((s) => s.setTheme);
+  const sharedTheme = useBoardStore((s) => s.sharedTheme);
 
   return (
     <Modal open onClose={onClose} ariaLabel="Settings" className={styles.dialog}>
@@ -35,18 +36,27 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         </button>
       </header>
       <div className={styles.body}>
-        <label className={styles.field}>
-          <span className={styles.label}>Theme</span>
-          <select
-            className={styles.select}
-            value={theme}
-            disabled={status !== 'ready'}
-            onChange={(e) => void setTheme(e.target.value as Theme)}
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
+        {sharedTheme === null ? (
+          <label className={styles.field}>
+            <span className={styles.label}>Theme</span>
+            <select
+              className={styles.select}
+              value={theme}
+              disabled={status !== 'ready'}
+              onChange={(e) => void setTheme(e.target.value as Theme)}
+            >
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+        ) : (
+          // Text rather than a disabled picker: there is nothing here to choose.
+          <div className={styles.field}>
+            <span className={styles.label}>Theme</span>
+            <span className={styles.value}>{sharedTheme.name}</span>
+            <span className={styles.hint}>Set by the shared configuration for every board.</span>
+          </div>
+        )}
         <WipLimitField className={styles.field} />
         <MultipleActiveReleasesField className={styles.field} />
         <GitIntegrationField className={styles.field} />

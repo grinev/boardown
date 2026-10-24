@@ -4,10 +4,12 @@ import { configureLogging, createLogger, isLogLevel, type LogRecord } from '../.
 import type { Plugin } from 'vite';
 import { BOARD_FS_PREFIX, handleBoardFs, handleProjectFile, readBody } from './api/board-api.js';
 import { createBoardWatchHub } from './api/board-events.js';
+import { handleSharedTheme, openSharedConfig } from './api/shared-config.js';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint.js';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint.js';
 import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint.js';
+import { SHARED_THEME_ENDPOINT } from './shared-theme-endpoint.js';
 import { handleGitCommits } from './api/git-history.js';
 import { createLogFileSink } from './log-file-sink.js';
 import { resolveDevLogLevel } from './log-level.js';
@@ -16,6 +18,8 @@ interface DevFsPluginOptions {
   boardRoot: string;
   // Where per-run log files go. The repo root's logs/, resolved by the config.
   logsDir: string;
+  // --config-dir / BOARDOWN_CONFIG_DIR, absolute. Only read, never created.
+  configDir?: string | undefined;
 }
 
 const log = createLogger('web.dev-fs');
@@ -66,6 +70,13 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
     async configureServer(server) {
       await ensureBoardRoot(boardRoot);
       server.config.logger.info(`boardown data dir: ${boardRoot}`);
+      // Thrown before anything is served, so Vite refuses to start with the
+      // diagnostic, as boardown-web does.
+      const sharedConfig =
+        options.configDir === undefined ? undefined : await openSharedConfig(options.configDir);
+      if (sharedConfig !== undefined) {
+        server.config.logger.info(`boardown config dir: ${sharedConfig.dir}`);
+      }
 
       const level = resolveDevLogLevel(process.env.BOARDOWN_LOG_LEVEL);
       const fileSink = createLogFileSink(logsDir);
@@ -77,7 +88,9 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
         log.info(`dev server started, board root ${boardRoot}`);
       }
 
-      const watch = createBoardWatchHub();
+      const watch = createBoardWatchHub(
+        sharedConfig === undefined ? {} : { configDir: sharedConfig.dir },
+      );
       // Vite starts a fresh server when its config changes, and a dev session can
       // do that many times over; the watchers go with the one they belonged to.
       server.httpServer?.on('close', () => {
@@ -117,6 +130,11 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
 
         if (req.method === 'GET' && url.pathname === GIT_COMMITS_ENDPOINT) {
           await handleGitCommits(res, url.searchParams, projectRoot);
+          return;
+        }
+
+        if (req.method === 'GET' && url.pathname === SHARED_THEME_ENDPOINT) {
+          await handleSharedTheme(res, sharedConfig);
           return;
         }
 

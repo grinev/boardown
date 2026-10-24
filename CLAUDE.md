@@ -102,7 +102,7 @@ shell pattern and ships installers with each release.
 mkdir,remove,read-bytes,write-bytes}` scoped to a board root (the two byte
 endpoints carry raw bodies, so an attachment is never re-encoded), the read-only `/api/project-file` scoped to
 the project folder around it (JSON for every answer except an image, which comes back
-as a raw `application/octet-stream` body with `nosniff`), and `/api/events`, the stream a browser tab holds
+as a raw `application/octet-stream` body with `nosniff`), the read-only `/api/shared-theme`, and `/api/events`, the stream a browser tab holds
 open to hear that its board changed — and two hosts for them. The Vite
 middleware serves them for the dev shell; `boardown-web` serves them for a
 locally installed server, where they sit under `/b/<id>/` when a registry lists
@@ -111,9 +111,11 @@ never drift into two implementations of the same rule: the per-request handlers,
 given a root per request by whichever host is running, and next to them the watch
 hub, which is long-lived instead — each host builds one at startup and hands it
 down the same way it hands down a root, and a host that is not watching
-(`--no-watch`) builds none, which is the whole of what the flag does. The browser
-side talks to them through `HttpFsAdapter` and `HttpProjectFileReader`, which take
-the endpoint base and so follow the prefix. Which tab is asking is a fact about the
+(`--no-watch`) builds none, which is the whole of what the flag does. The hub
+also watches the shared configuration directory when the host has one, and tells
+every open stream, whatever its board, when it changes. The browser side talks to
+them through `HttpFsAdapter`, `HttpProjectFileReader` and `HttpSharedThemeReader`,
+which take the endpoint base and so follow the prefix. Which tab is asking is a fact about the
 request rather than an argument of the operation, so it rides in a header
 (`X-Boardown-Client`) — and on the stream, which cannot send one, in a query
 parameter — leaving the `/api/fs/*` bodies the operation's own arguments. The two
@@ -132,6 +134,15 @@ one line in or out, the rest of the file including its comments untouched — an
 every patch is re-parsed and compared against what the edit meant before it is
 allowed to land, so a file shape the patcher misreads becomes a refusal instead of
 a corrupted registry.
+
+The **shared configuration directory** (`--config-dir`, or `BOARDOWN_CONFIG_DIR`
+for the dev shell) is a fourth root, and a read-only one. It holds settings that
+apply to every board the process serves — today only a theme — and `src/api/shared-config.ts`
+reads it with `node:fs` for both hosts, re-reading it on every `/api/shared-theme`
+request. That module validates CSS values with `css-tree`, server side only, and it
+owns the list of palette tokens a theme may override. A test keeps that list equal
+to `packages/ui/src/theme/theme.css`. Nothing ever writes there, and nothing in it
+is board data.
 
 `packages/cli` is a headless shell that does **not** mount `@boardown/ui` — it has
 no DOM. Instead it consumes `@boardown/core` directly (board-ops, loader,
@@ -162,19 +173,22 @@ directory. Where it sits in the package, nothing discovers it.
   triggers, OS dialogs.
 - All access to the **board** goes through the `FsAdapter` interface defined in
   `packages/core`, rooted at `.boardown/` by every shell; it reads and writes text
-  and bytes. Three capabilities sit outside it, all declared in `core`. Two are
+  and bytes. Four capabilities sit outside it, all declared in `core`. Three are
   **read-only**: `ProjectFileReader`, scoped to the project folder, which repo file
-  links use to preview a file from the repo, and `GitHistoryReader`, scoped to the
-  Git repository around that folder, which the task dialog's Commits panel reads.
-  The third, `FileSaver`, is the **one exception** shared code can reach to "no
+  links use to preview a file from the repo; `GitHistoryReader`, scoped to the
+  Git repository around that folder, which the task dialog's Commits panel reads;
+  and `SharedThemeReader`, scoped to a host-owned configuration directory outside
+  both the board and the project, which hands `ui` a theme to show over every
+  board's own. The fourth, `FileSaver`, is the **one exception** shared code can reach to "no
   write outside `.boardown/`": Download hands it bytes and a name, and it writes
   them only where the user points the host's own Save-as dialog or browser download
   — it is never handed a board or project path. Each is deliberately a separate
   interface rather than a method on `FsAdapter` — the adapter is what the conflict
   guard wraps and what every board write goes through, and no board write path may
   reach outside `.boardown/`. A new file-touching feature of `core` or `ui` belongs
-  on `FsAdapter` unless it is read-only *and* needs the project folder, or is a copy
-  the user saves to a place they pick. Never call `fetch`, `fs`, or browser APIs
+  on `FsAdapter` unless it is read-only *and* reads outside `.boardown/` (the
+  project folder, or a host-owned directory), or is a copy the user saves to a
+  place they pick. Never call `fetch`, `fs`, or browser APIs
   from `core` or `ui`. An `FsAdapter` is only ever rooted at `.boardown/`: a shell
   writing a file of its own that is not board data — the CLI's `skill install`, one
   fixed file per agent — uses its platform's filesystem directly, and a capability

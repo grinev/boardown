@@ -8,10 +8,12 @@ import { BrowserFileSaver } from './api/browser-file-saver';
 import { HttpFsAdapter } from './api/http-fs-adapter';
 import { HttpGitHistoryReader } from './api/http-git-history-reader';
 import { HttpProjectFileReader } from './api/http-project-file-reader';
+import { HttpSharedThemeReader } from './api/http-shared-theme-reader';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
 import { isEmbedRequested } from './embed-param';
 import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
+import { SHARED_THEME_ENDPOINT } from './shared-theme-endpoint';
 import { resolveDevLogLevel } from './log-level';
 
 // Only the dev shell installs a sink; the server has no endpoint to post to, and
@@ -47,6 +49,7 @@ const fs = new HttpFsAdapter(`${prefix}/api/fs`, clientId);
 const projectFiles = new HttpProjectFileReader(`${prefix}${PROJECT_FILE_ENDPOINT}`);
 const gitHistory = new HttpGitHistoryReader(`${prefix}${GIT_COMMITS_ENDPOINT}`);
 const fileSaver = new BrowserFileSaver();
+const sharedTheme = new HttpSharedThemeReader(`${prefix}${SHARED_THEME_ENDPOINT}`);
 
 createRoot(container).render(
   <StrictMode>
@@ -55,6 +58,7 @@ createRoot(container).render(
       projectFiles={projectFiles}
       gitHistory={gitHistory}
       fileSaver={fileSaver}
+      sharedTheme={sharedTheme}
       version={__BOARDOWN_VERSION__}
       embedded={embedded}
     />
@@ -63,6 +67,11 @@ createRoot(container).render(
 
 // The same receiving end the VS Code and Electron shells use: the shell only
 // delivers the event, and the store already knows how to answer it.
-subscribeToBoardChanges(`${prefix}${BOARD_EVENTS_ENDPOINT}`, clientId, () => {
-  void useBoardStore.getState().reloadSilent();
+subscribeToBoardChanges(`${prefix}${BOARD_EVENTS_ENDPOINT}`, clientId, {
+  onBoardChange: () => {
+    void useBoardStore.getState().reloadSilent();
+  },
+  onSharedConfigChange: () => {
+    void useBoardStore.getState().refreshSharedTheme();
+  },
 });

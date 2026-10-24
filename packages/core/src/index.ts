@@ -21,6 +21,7 @@ export * from './docs.js';
 export * from './project-file.js';
 export * from './git-history.js';
 export * from './file-saver.js';
+export * from './shared-theme.js';
 export * from './attachments.js';
 export * from './attachment-previews.js';
 export * from './logger.js';

@@ -1,14 +1,21 @@
 import { createLogger } from '@boardown/core';
 import { CLIENT_ID_PARAM } from '../board-events-endpoint';
+import { SHARED_CONFIG_CHANGED_EVENT } from '../shared-theme-endpoint';
 
 const log = createLogger('web.board-events');
 
 // The browser half of auto-refresh, and the only file here that knows the page is
 // a tab. It delivers the event; what to do about it is the store's business.
+export interface BoardChangeHandlers {
+  onBoardChange: () => void;
+  /** The host's shared configuration changed; it is the same for every board. */
+  onSharedConfigChange: () => void;
+}
+
 export const subscribeToBoardChanges = (
   base: string,
   clientId: string,
-  onChange: () => void,
+  { onBoardChange, onSharedConfigChange }: BoardChangeHandlers,
 ): void => {
   const url = `${base}?${CLIENT_ID_PARAM}=${encodeURIComponent(clientId)}`;
   let source: EventSource | null = null;
@@ -31,13 +38,22 @@ export const subscribeToBoardChanges = (
     const es = new EventSource(url);
     source = es;
 
+    // A change made while no stream was up was never heard, whichever folder it
+    // was in, so catching up re-reads both.
     es.addEventListener('open', () => {
-      if (!current) onChange();
+      if (!current) {
+        onBoardChange();
+        onSharedConfigChange();
+      }
       current = true;
     });
 
     es.addEventListener('board-changed', () => {
-      onChange();
+      onBoardChange();
+    });
+
+    es.addEventListener(SHARED_CONFIG_CHANGED_EVENT, () => {
+      onSharedConfigChange();
     });
 
     es.addEventListener('error', () => {
