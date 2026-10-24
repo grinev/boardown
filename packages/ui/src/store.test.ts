@@ -1251,6 +1251,51 @@ describe('setGitIntegration', () => {
   });
 });
 
+describe('setDocsTab', () => {
+  it('writes the key only once the user turns it off, since absent means on', async () => {
+    const { fs } = setup(snap());
+
+    await state().setDocsTab(true);
+    expect(current().config.docsTab).toBeUndefined();
+    expect(fs.writes).toEqual([]);
+
+    await state().setDocsTab(false);
+    expect(current().config.docsTab).toBe(false);
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('docsTab: false');
+  });
+
+  it('moves the view off the Docs tab, and does not move it back', async () => {
+    setup(snap());
+    useBoardStore.setState({ activeTab: 'docs' });
+
+    await state().setDocsTab(false);
+    expect(state().activeTab).toBe('board');
+
+    await state().setDocsTab(true);
+    expect(state().activeTab).toBe('board');
+  });
+
+  it('leaves any other tab where it is', async () => {
+    setup(snap());
+    useBoardStore.setState({ activeTab: 'archive' });
+
+    await state().setDocsTab(false);
+    expect(state().activeTab).toBe('archive');
+  });
+
+  it('rolls back the config, not the tab, when the write fails', async () => {
+    const { fs } = setup(snap());
+    useBoardStore.setState({ activeTab: 'docs' });
+    fs.failWritesMatching = CONFIG_FILENAME;
+
+    await state().setDocsTab(false);
+
+    expect(current().config.docsTab).toBeUndefined();
+    expect(state().activeTab).toBe('board');
+    expect(state().errorMessage).toMatch(/failed to save the setting/i);
+  });
+});
+
 describe('setTrackUpdatedAt', () => {
   it('writes the key only once the user turns it off, since absent means on', async () => {
     const { fs } = setup(snap());
@@ -1438,6 +1483,45 @@ const loadFrom = async (files: Record<string, string>): Promise<MemFs> => {
   await state().load(fs);
   return fs;
 };
+
+describe('a config that hides the Docs tab', () => {
+  const hideDocs = (): void => {
+    const raw = state().rawFs as MemFs;
+    raw.files.set(CONFIG_FILENAME, {
+      content: `${CONFIG_MD}docsTab: false\n`,
+      lastModified: Date.now() + 1,
+    });
+  };
+
+  it('moves a Reload off the Docs tab', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    useBoardStore.setState({ activeTab: 'docs' });
+    hideDocs();
+
+    await state().reload();
+
+    expect(state().activeTab).toBe('board');
+  });
+
+  it('moves a silent reload off the Docs tab', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    useBoardStore.setState({ activeTab: 'docs' });
+    hideDocs();
+
+    await state().reloadSilent();
+
+    expect(state().activeTab).toBe('board');
+  });
+
+  it('leaves the Docs tab alone while the key is absent', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    useBoardStore.setState({ activeTab: 'docs' });
+
+    await state().reloadSilent();
+
+    expect(state().activeTab).toBe('docs');
+  });
+});
 
 describe('reload', () => {
   it('re-reads the board from disk', async () => {

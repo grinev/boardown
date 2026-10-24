@@ -360,6 +360,7 @@ gitIntegration: true  # optional; absent means on — the task dialog's Commits 
 trackUpdatedAt: false  # optional; absent means on — every task change stamps updatedAt
 statusOutsideActiveRelease: true  # optional; absent means a status may change only in the current release
 editFinishedReleases: true  # optional; absent means a finished release is frozen
+docsTab: false        # optional; absent means on — the Docs tab is shown
 statuses:             # optional (beta); absent means todo / in-progress / done
   - key: backlog
     label: Not started  # optional; absent means the key, prettified
@@ -524,7 +525,8 @@ Settings dialog, and in the Electron shell in its own settings popover. The
 `multipleActiveReleases` checkbox sits directly below it on both surfaces, for the
 same reason: it is board configuration, not installation configuration, and the
 `gitIntegration` checkbox sits below that one, `trackUpdatedAt` right below it,
-with `statusOutsideActiveRelease` below that and `editFinishedReleases` last.
+with `statusOutsideActiveRelease` below that, `editFinishedReleases` below it and
+`docsTab` last.
 
 `trackUpdatedAt` is a rule, not a display preference: absent or `true` has every
 change to a task stamp its `updatedAt` (see the task frontmatter table), `false`
@@ -540,6 +542,15 @@ shows the task dialog's Commits panel, `false` hides it and stops the Git read
 altogether. A present value that is not a boolean makes the config invalid, like
 every other key. The CLI's `task commits` ignores it — reading history is what that
 command is for.
+
+`docsTab` is a display preference of the same kind: absent or `true` shows the
+**Docs** tab, `false` hides it and the doc popup's **View in docs** button with it.
+Nothing under `docs/` is touched, and everything else about doc pages stays — a doc
+link still renders and opens the popup, and `[[` still suggests pages. Hiding the tab
+while it is open moves the view to the Board, whether the change came from Settings
+or from the file; showing it again does not switch tabs. A present value that is not
+a boolean makes the config invalid. The CLI ignores it and `schema` does not report
+it.
 
 `statusOutsideActiveRelease` lifts the rule that a task's status may change only
 in the current release. Absent or `false` keeps the lock: the task dialog of a
@@ -728,11 +739,12 @@ of the write stays as a line inside the form.
 ## UI
 
 The app is divided into four top-level views, presented as tabs in the top
-navigation: **Backlog**, **Board**, **Archive**, **Docs**.
+navigation: **Backlog**, **Board**, **Archive**, **Docs** — the last one only while
+`docsTab` is not `false` (see Configuration).
 
 ### Task search
 
-A search field sits in the top navigation immediately after the **Docs** tab, so
+A search field sits in the top navigation immediately after the last tab, so
 it is on screen whichever tab is open. Like the whole top bar — the tabs and the
 Create / Reload / Settings controls opposite it — it appears once the board is
 loaded: the onboarding, loading and invalid-config screens carry no bar and so no
@@ -1191,7 +1203,8 @@ its rendered body, no docs tree, the same width as the task and epic dialogs. On
 one dialog is on screen at a time, so the popup takes over from the dialog it was
 opened from — which goes onto the dialog back stack (see "Dialog back stack").
 The popup carries a **View in docs** button in its top-right that switches to the
-Docs tab and selects the page (the full editing surface). A link clicked **inside
+Docs tab and selects the page (the full editing surface); with the Docs tab hidden
+by `docsTab` the button is not there. A link clicked **inside
 a doc page's body in the Docs tab** navigates to that page in place, as before.
 Inside the popup, a `[[…]]` link swaps the popup to the linked page and a task-ID
 reference swaps in that task's dialog. A leading `docs/` and a
@@ -1529,7 +1542,9 @@ multiple active releases** checkbox, the dialog's first boolean control, saved t
 moment it is clicked; below that the **Git integration**, **Track update date**
 (hint: *"Stamps a task's Updated date on every change. Turn off so parallel branches
 never conflict on it."*), **Allow status changes outside the current release** and
-**Allow editing finished releases** checkboxes, saved the same way; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
+**Allow editing finished releases** and **Docs tab** (hint: *"Turn off to hide the
+Docs tab. Pages stay on disk and doc links still open."*) checkboxes, saved the same
+way; below that a read-only **CLI** row; and last a read-only **Version** row showing the version of the build
 the user is running — the shell supplies it, so it is the installed extension's
 version in VS Code and the checkout's version in the `web` dev shell.
 

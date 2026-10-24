@@ -409,6 +409,9 @@ export const BoardConfigSchema = z
     statusOutsideActiveRelease: z.boolean().optional(),
     // Absent means a finished release is frozen: ARCHIVED refuses every change to it.
     editFinishedReleases: z.boolean().optional(),
+    // Absent means on. Hides the Docs tab when false; doc pages, doc links and the
+    // doc popup stay. A display preference the CLI ignores.
+    docsTab: z.boolean().optional(),
     // Absent means on: every task change stamps `updatedAt`. Read through
     // `isUpdateTracked`, never inline.
     trackUpdatedAt: z.boolean().optional(),

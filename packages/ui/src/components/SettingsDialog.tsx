@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import type { Theme } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { CliHint } from './CliHint';
+import { DocsTabField } from './DocsTabField';
 import { EditFinishedReleasesField } from './EditFinishedReleasesField';
 import { GitIntegrationField } from './GitIntegrationField';
 import { TrackUpdatedAtField } from './TrackUpdatedAtField';
@@ -63,6 +64,7 @@ export function SettingsDialog({ onClose, version }: SettingsDialogProps) {
         <TrackUpdatedAtField className={styles.field} />
         <StatusOutsideActiveReleaseField className={styles.field} />
         <EditFinishedReleasesField className={styles.field} />
+        <DocsTabField className={styles.field} />
         <div className={styles.field}>
           <span className={styles.label}>CLI</span>
           <CliHint />

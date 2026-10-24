@@ -460,6 +460,39 @@ describe('git integration', () => {
   });
 });
 
+describe('docs tab', () => {
+  const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
+
+  it('is absent until the user sets it, and absent means on', () => {
+    const out = serializeConfig(base);
+    expect(out).not.toContain('docsTab');
+    expect(parseConfig(out).value?.docsTab).toBeUndefined();
+  });
+
+  it('round-trips both values, in the slot after editFinishedReleases', () => {
+    for (const enabled of [true, false]) {
+      const cfg: BoardConfig = {
+        ...base,
+        editFinishedReleases: true,
+        docsTab: enabled,
+        customFields: [{ key: 'env', type: 'string' }],
+      };
+      const out = serializeConfig(cfg);
+      expect(out).toContain(`editFinishedReleases: true\ndocsTab: ${String(enabled)}\n`);
+      expect(out.indexOf('docsTab:')).toBeLessThan(out.indexOf('customFields:'));
+      const back = parseConfig(out);
+      expect(back.problems).toEqual([]);
+      expect(back.value).toEqual(stamped(cfg));
+    }
+  });
+
+  it('fails the whole config on a non-boolean value rather than falling back', () => {
+    const parsed = parseConfig('idPrefix: BD\nnextId: 0\nprojectName: P\ndocsTab: "no"\n');
+    expect(parsed.value).toBeNull();
+    expect(parsed.problems).toHaveLength(1);
+  });
+});
+
 describe('status outside an active release', () => {
   const base: BoardConfig = { idPrefix: 'BD', nextId: 0, projectName: 'My Project' };
 
