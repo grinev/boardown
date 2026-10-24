@@ -44,6 +44,18 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--no-watch=yes'])).toThrow(/takes no value/);
   });
 
+  it('reads --config-dir alongside either root flag', () => {
+    expect(parseArgs(['--config-dir', 'shared', '--registry', '/projects.yaml'])).toEqual({
+      configDir: 'shared',
+      registry: '/projects.yaml',
+    });
+    expect(parseArgs(['--data-dir=/a/.boardown', '--config-dir=/shared'])).toEqual({
+      dataDir: '/a/.boardown',
+      configDir: '/shared',
+    });
+    expect(() => parseArgs(['--config-dir'])).toThrow(UsageError);
+  });
+
   it('refuses a flag with no value', () => {
     expect(() => parseArgs(['--data-dir'])).toThrow(UsageError);
     expect(() => parseArgs(['--registry='])).toThrow(UsageError);

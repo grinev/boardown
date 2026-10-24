@@ -10,6 +10,7 @@ let streams: FakeEventSource[] = [];
 let visibility: DocumentVisibilityState = 'visible';
 let onVisibilityChange: (() => void) | undefined;
 let refreshes = 0;
+let themeReads = 0;
 
 class FakeEventSource {
   static readonly CONNECTING = 0;
@@ -50,8 +51,13 @@ const hide = (): void => {
 };
 
 const subscribe = (): void => {
-  subscribeToBoardChanges('/api/events', 'tab-a', () => {
-    refreshes += 1;
+  subscribeToBoardChanges('/api/events', 'tab-a', {
+    onBoardChange: () => {
+      refreshes += 1;
+    },
+    onSharedConfigChange: () => {
+      themeReads += 1;
+    },
   });
 };
 
@@ -64,6 +70,7 @@ const live = (): FakeEventSource => {
 beforeEach(() => {
   streams = [];
   refreshes = 0;
+  themeReads = 0;
   visibility = 'visible';
   onVisibilityChange = undefined;
   vi.stubGlobal('EventSource', FakeEventSource);
@@ -96,10 +103,29 @@ describe('subscribeToBoardChanges', () => {
     expect(refreshes).toBe(2);
   });
 
+  it('re-reads the shared theme on its own event, without reloading the board', () => {
+    subscribe();
+    live().emit('open');
+    live().emit('shared-config-changed');
+    expect(themeReads).toBe(1);
+    expect(refreshes).toBe(0);
+  });
+
+  it('catches up on both the board and the shared theme when a tab comes back', () => {
+    subscribe();
+    live().emit('open');
+    hide();
+    show();
+    live().emit('open');
+    expect(refreshes).toBe(1);
+    expect(themeReads).toBe(1);
+  });
+
   it('does not refresh on the opening that belongs to the page load', () => {
     subscribe();
     live().emit('open');
     expect(refreshes).toBe(0);
+    expect(themeReads).toBe(0);
   });
 
   it('opens nothing for a tab that loads in the background', () => {

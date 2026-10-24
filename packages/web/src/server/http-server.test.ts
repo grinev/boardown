@@ -3,6 +3,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createSharedConfigSource, type SharedConfigSource } from '../api/shared-config';
 import { createBoardownServer, isAllowedOrigin, isLoopbackHost } from './http-server';
 import { RegistryFile } from './registry';
 import { rootsFromProjectFolder } from './roots';
@@ -93,11 +94,17 @@ const clientDir = (): string => path.join(dir, 'client');
 const start = async (
   mode: Parameters<typeof createBoardownServer>[0]['mode'],
   watch = true,
+  sharedConfig?: SharedConfigSource,
 ): Promise<void> => {
   // A test that starts a second server drops the first one, so it is closed here
   // rather than left listening for the rest of the run.
   if (server !== null) await new Promise((resolve) => server?.close(resolve));
-  server = createBoardownServer({ mode, clientDir: clientDir(), watch });
+  server = createBoardownServer({
+    mode,
+    clientDir: clientDir(),
+    watch,
+    ...(sharedConfig === undefined ? {} : { sharedConfig }),
+  });
   port = await listen(server);
 };
 
@@ -448,5 +455,73 @@ describe('the registry endpoints', () => {
   it('has no such endpoints in single-board mode', async () => {
     await start({ kind: 'single', roots: rootsFromProjectFolder(projectA) });
     expect((await post('/api/projects/add', { path: projectB, id: 'beta' })).status).toBe(404);
+  });
+});
+
+describe('the shared theme endpoint', () => {
+  let configDir = '';
+
+  beforeEach(async () => {
+    configDir = path.join(dir, 'shared');
+    await fs.mkdir(path.join(configDir, 'themes'), { recursive: true });
+    await fs.writeFile(path.join(configDir, 'config.yaml'), 'theme: ocean\n', 'utf-8');
+    await fs.writeFile(
+      path.join(configDir, 'themes', 'ocean.json'),
+      JSON.stringify({ name: 'Ocean', base: 'dark', tokens: { '--bg': '#001122' } }),
+      'utf-8',
+    );
+    await writeBoard(path.join(dir, 'solo'), 'Solo');
+  });
+
+  const json = async (requestPath: string): Promise<unknown> =>
+    JSON.parse((await request(requestPath)).body) as unknown;
+
+  it('answers no theme when the server has no configuration directory', async () => {
+    await start({ kind: 'single', roots: rootsFromProjectFolder(path.join(dir, 'solo')) });
+    expect(await json('/api/shared-theme')).toEqual({ theme: null, error: null });
+  });
+
+  it('serves the selected theme to a single board', async () => {
+    await start(
+      { kind: 'single', roots: rootsFromProjectFolder(path.join(dir, 'solo')) },
+      true,
+      createSharedConfigSource(configDir),
+    );
+    expect(await json('/api/shared-theme')).toEqual({
+      theme: { id: 'ocean', name: 'Ocean', base: 'dark', tokens: { '--bg': '#001122' } },
+      error: null,
+    });
+  });
+
+  it('serves the same theme under every registry prefix', async () => {
+    const registryPath = path.join(dir, 'projects.yaml');
+    const other = path.join(dir, 'other');
+    await writeBoard(other, 'Other');
+    await fs.writeFile(
+      registryPath,
+      `projects:\n  solo: ${path.join(dir, 'solo').replace(/\\/g, '/')}\n  other: ${other.replace(/\\/g, '/')}\n`,
+      'utf-8',
+    );
+    await start(
+      { kind: 'registry', registry: new RegistryFile(registryPath) },
+      true,
+      createSharedConfigSource(configDir),
+    );
+    const one = await json('/b/solo/api/shared-theme');
+    expect(one).toEqual(await json('/b/other/api/shared-theme'));
+    expect((one as { theme: { id: string } }).theme.id).toBe('ocean');
+  });
+
+  it('re-reads the files on every request, so --no-watch still sees a change', async () => {
+    await start(
+      { kind: 'single', roots: rootsFromProjectFolder(path.join(dir, 'solo')) },
+      false,
+      createSharedConfigSource(configDir),
+    );
+    await fs.writeFile(path.join(configDir, 'config.yaml'), 'theme: light\n', 'utf-8');
+    expect(await json('/api/shared-theme')).toEqual({
+      theme: { id: 'light', name: 'Light', base: 'light', tokens: {} },
+      error: null,
+    });
   });
 });

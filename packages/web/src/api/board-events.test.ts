@@ -17,6 +17,7 @@ let port = 0;
 
 interface Stream {
   events: number;
+  themeEvents: number;
   close: () => void;
 }
 
@@ -29,10 +30,11 @@ const open = (boardRoot: string, clientId: string): Promise<Stream> =>
         path: `/events?client=${clientId}&root=${encodeURIComponent(boardRoot)}`,
       },
       (res) => {
-        const stream: Stream = { events: 0, close: () => req.destroy() };
+        const stream: Stream = { events: 0, themeEvents: 0, close: () => req.destroy() };
         res.setEncoding('utf-8');
         res.on('data', (chunk: string) => {
           stream.events += chunk.split('event: board-changed').length - 1;
+          stream.themeEvents += chunk.split('event: shared-config-changed').length - 1;
         });
         res.on('error', () => {});
         // The headers are flushed before the first event, so the stream is live
@@ -213,5 +215,48 @@ describe('the board watch hub', () => {
     await touch(board, 'config.yaml');
     await settle();
     expect(again.events).toBe(1);
+  });
+});
+
+describe('the shared configuration watch', () => {
+  let configDir = '';
+
+  beforeEach(async () => {
+    configDir = path.join(dir, 'config');
+    await fs.mkdir(path.join(configDir, 'themes'), { recursive: true });
+    await touch(configDir, 'config.yaml');
+    hub?.close();
+    hub = createBoardWatchHub({ configDir });
+  });
+
+  it('tells every open board, once per burst', async () => {
+    const one = await open(path.join(dir, 'one'), 'a');
+    const two = await open(path.join(dir, 'two'), 'b');
+    await touch(configDir, 'config.yaml');
+    await touch(configDir, 'themes', 'ocean.json');
+    await settle();
+    expect(one.themeEvents).toBe(1);
+    expect(two.themeEvents).toBe(1);
+    expect(one.events).toBe(0);
+  });
+
+  it('watches the directory only while a stream is open', async () => {
+    expect(hub?.watchedRoots()).toEqual([]);
+    const stream = await open(path.join(dir, 'one'), 'a');
+    expect(hub?.watchedRoots()).toContain(configDir);
+    stream.close();
+    await settle();
+    expect(hub?.watchedRoots()).toEqual([]);
+  });
+
+  it('keeps hearing a themes folder that was replaced', async () => {
+    const stream = await open(path.join(dir, 'one'), 'a');
+    await fs.rm(path.join(configDir, 'themes'), { recursive: true });
+    await fs.mkdir(path.join(configDir, 'themes'));
+    await settle();
+    const before = stream.themeEvents;
+    await touch(configDir, 'themes', 'ocean.json');
+    await settle();
+    expect(stream.themeEvents).toBe(before + 1);
   });
 });

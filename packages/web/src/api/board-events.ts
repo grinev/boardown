@@ -1,8 +1,11 @@
 import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import { createLogger } from '../../../core/src/logger';
+import { statSync } from 'node:fs';
 import { CLIENT_ID_PARAM } from '../board-events-endpoint.js';
+import { SHARED_CONFIG_CHANGED_EVENT } from '../shared-theme-endpoint.js';
 import { watchBoard, type BoardWatcher } from './board-watcher.js';
+import { THEMES_DIR } from './shared-config.js';
 
 // The policy half of auto-refresh: which change reaches which open tab, and
 // when. Both hosts build one of these and hand it down, the way each already
@@ -42,7 +45,8 @@ export interface BoardWatchHub {
   /** Records a write so the tab that made it does not see its own change. */
   noteWrite: (boardRoot: string, clientId: string | undefined, absolutePath: string) => void;
   /**
-   * The boards under watch right now. Exists so the reference counting can be
+   * The folders under watch right now: boards, and the shared configuration
+   * while any stream is open. Exists so the reference counting can be
    * asserted: a registry of twenty projects holding twenty watchers for boards
    * nobody opened is the failure this is built to avoid, and it is invisible
    * from every other angle.
@@ -51,10 +55,72 @@ export interface BoardWatchHub {
   close: () => void;
 }
 
-export const createBoardWatchHub = (): BoardWatchHub => {
+export interface BoardWatchHubOptions {
+  /**
+   * The shared configuration directory, when the host was started with one. Its
+   * changes go to every open stream, whatever its board: one directory themes
+   * every board the process serves.
+   */
+  configDir?: string;
+}
+
+export const createBoardWatchHub = (options: BoardWatchHubOptions = {}): BoardWatchHub => {
   // Keyed by resolved board root, not by registry id: two ids naming one board
   // are one board, and share the watcher.
   const entries = new Map<string, WatchEntry>();
+  const configDir = options.configDir === undefined ? undefined : path.resolve(options.configDir);
+  // Held while any stream is open, like a board's: a tab that reconnects later
+  // catches up on its own, so nobody needs the changes made while none was.
+  let configWatcher: BoardWatcher | undefined;
+  let configTimer: ReturnType<typeof setTimeout> | undefined;
+  let themesIdentity: string | undefined;
+
+  const openConnections = (): Connection[] =>
+    [...entries.values()].flatMap((entry) => [...entry.connections]);
+
+  const identityOf = (dir: string): string => {
+    try {
+      const stat = statSync(dir);
+      return stat.isDirectory() ? `${stat.dev}:${stat.ino}:${stat.birthtimeMs}` : '';
+    } catch {
+      return '';
+    }
+  };
+
+  const onConfigChange = (absolutePath: string): void => {
+    if (configDir === undefined) return;
+    log.debug(`shared configuration changed ${absolutePath}`);
+    // watchBoard collects its folders once, so a themes/ that appears or is
+    // replaced needs a fresh watcher. Compared by identity, not by the event:
+    // reading a folder can itself report it, and that must not loop.
+    const themes = path.join(configDir, THEMES_DIR);
+    if (absolutePath === themes && identityOf(themes) !== themesIdentity) startConfigWatch(true);
+    clearTimeout(configTimer);
+    configTimer = setTimeout(() => {
+      configTimer = undefined;
+      for (const connection of openConnections()) {
+        connection.res.write(`event: ${SHARED_CONFIG_CHANGED_EVENT}
+data: 1
+
+`);
+      }
+    }, REFRESH_DEBOUNCE_MS);
+  };
+
+  function startConfigWatch(restart: boolean): void {
+    if (configDir === undefined || (configWatcher !== undefined && !restart)) return;
+    configWatcher?.close();
+    themesIdentity = identityOf(path.join(configDir, THEMES_DIR));
+    configWatcher = watchBoard(configDir, onConfigChange);
+  }
+
+  const stopConfigWatchIfIdle = (): void => {
+    if (configWatcher === undefined || entries.size > 0) return;
+    configWatcher.close();
+    configWatcher = undefined;
+    clearTimeout(configTimer);
+    configTimer = undefined;
+  };
 
   const isOwnWrite = (connection: Connection, absolutePath: string): boolean => {
     const now = Date.now();
@@ -107,6 +173,7 @@ export const createBoardWatchHub = (): BoardWatchHub => {
     entry.watcher.close();
     entries.delete(key);
     log.debug(`stopped watching ${key}`);
+    stopConfigWatchIfIdle();
   };
 
   return {
@@ -127,6 +194,7 @@ export const createBoardWatchHub = (): BoardWatchHub => {
         entries.set(key, entry);
         log.debug(`watching ${key}`);
       }
+      startConfigWatch(false);
       const connection: Connection = {
         clientId: params.get(CLIENT_ID_PARAM) ?? '',
         res,
@@ -150,7 +218,10 @@ export const createBoardWatchHub = (): BoardWatchHub => {
       }
     },
 
-    watchedRoots: () => [...entries.keys()],
+    watchedRoots: () => [
+      ...entries.keys(),
+      ...(configWatcher !== undefined && configDir !== undefined ? [configDir] : []),
+    ],
 
     close: () => {
       for (const entry of entries.values()) {
@@ -161,6 +232,7 @@ export const createBoardWatchHub = (): BoardWatchHub => {
         }
       }
       entries.clear();
+      stopConfigWatchIfIdle();
     },
   };
 };

@@ -8,11 +8,12 @@ export class UsageError extends Error {}
 export interface CliArgs {
   dataDir?: string;
   registry?: string;
+  configDir?: string;
   port?: number;
   noWatch?: boolean;
 }
 
-const VALUE_FLAGS = ['--data-dir', '--registry', '--port'] as const;
+const VALUE_FLAGS = ['--data-dir', '--registry', '--config-dir', '--port'] as const;
 const BARE_FLAGS = ['--no-watch'] as const;
 
 export const parseArgs = (argv: readonly string[]): CliArgs => {
@@ -44,6 +45,7 @@ export const parseArgs = (argv: readonly string[]): CliArgs => {
     }
     if (flag === '--data-dir') args.dataDir = value;
     else if (flag === '--registry') args.registry = value;
+    else if (flag === '--config-dir') args.configDir = value;
     else {
       const port = Number(value);
       if (!Number.isInteger(port) || port < 0 || port > 65535) {

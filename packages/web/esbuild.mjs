@@ -13,6 +13,9 @@ const options = {
   target: 'node20',
   banner: { js: '#!/usr/bin/env node' },
   sourcemap: true,
+  // css-tree's ESM entry loads its grammar through createRequire(import.meta.url),
+  // which is empty in a CJS bundle; its self-contained build inlines the data.
+  alias: { 'css-tree': 'css-tree/dist/csstree.esm' },
 };
 
 if (process.argv.includes('--watch')) {

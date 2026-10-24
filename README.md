@@ -167,6 +167,7 @@ boardown-web --data-dir /path/to/project/.boardown
 boardown-web --registry /home/me/projects.yaml
 boardown-web --port 7777                          # otherwise the OS picks the port
 boardown-web --no-watch                           # do not watch; Reload only
+boardown-web --config-dir /home/me/studio-config  # one theme for every board
 ```
 
 The default registry file lives where your OS keeps user configuration:
@@ -225,6 +226,40 @@ it with `?embed` — `http://127.0.0.1:<port>/b/shop/?embed`, or `/?embed` with
 `--data-dir`. The project-name row above the tabs is left out and the tab bar
 becomes the top of the page; everything else stays. It belongs to that page only:
 the same board opened without it shows its title as usual.
+
+The app hosting those pages can also own their look. `--config-dir <path>`, in
+either mode, names a **shared configuration directory** outside every board:
+
+```
+studio-config/
+├── config.yaml          # theme: studio   (or light / dark)
+└── themes/
+    └── studio.json
+```
+
+```json
+{
+  "name": "Studio",
+  "base": "dark",
+  "fontFamily": "\"Inter\", system-ui, sans-serif",
+  "tokens": { "--accent": "#7c5cff", "--bg": "#14141a" }
+}
+```
+
+The selected theme is shown on every board the server serves, whatever each
+board's own `theme` says, and Settings shows it as read-only. Nothing is written
+into the boards.
+
+- **`base`** is required. Every token left out, and the font when `fontFamily` is
+  absent, comes from that built-in palette.
+- **`tokens`** are the palette's own CSS variables (see
+  `packages/ui/src/theme/theme.css`), each checked as a colour or a shadow.
+- **Names.** The theme name must match the file name exactly, case included.
+- **Unknown content.** Fields and token names a build does not know are ignored.
+- **Errors.** A broken file refuses the start. While watching, an edit shows up on
+  every open board at once; a broken edit keeps the last valid theme and shows the
+  reason on each board. Remove the `theme` key to give every board its own theme
+  back.
 
 ## Custom task statuses (beta)
 
@@ -525,6 +560,13 @@ pnpm dev -- --data-dir /path/to/project/.boardown
 If `--data-dir` is omitted, boardown uses this repository's `.boardown/`, same
 as before. Relative `--data-dir` paths are resolved from the directory where
 you run the command.
+
+A shared configuration directory (see
+[Local server](#local-server-boardown-web)) is passed the same way, as
+`--config-dir <path>` or the `BOARDOWN_CONFIG_DIR` environment variable. The flag
+wins, and both resolve a relative path from where you run the command. It works
+with the sandbox too:
+`BOARDOWN_CONFIG_DIR=/path/to/config pnpm dev:sandbox`.
 
 ### Desktop app (Electron)
 

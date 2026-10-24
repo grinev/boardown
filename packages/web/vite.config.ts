@@ -12,6 +12,9 @@ const boardRoot = configuredDataDir
   ? path.resolve(configuredDataDir)
   : path.resolve(repoRoot, '.boardown');
 
+// Absolute already: scripts/dev.mjs resolves it against the launch directory.
+const configDir = process.env.BOARDOWN_CONFIG_DIR || undefined;
+
 // Logs always go to the repo root, never into the board being edited — so
 // dev:sandbox writes next to the sources rather than into its temp board.
 const logsDir = path.resolve(repoRoot, 'logs');
@@ -23,7 +26,7 @@ const { version } = createRequire(import.meta.url)(
 ) as { version: string };
 
 export default defineConfig({
-  plugins: [react(), devFsPlugin({ boardRoot, logsDir })],
+  plugins: [react(), devFsPlugin({ boardRoot, logsDir, configDir })],
   // The client lands in a subdirectory so the server bundle can sit beside it in
   // dist/ and find it at runtime. Assets keep the default absolute base: one
   // copy serves every /b/<id>/ prefix.

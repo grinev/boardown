@@ -22,6 +22,9 @@ import type {
   ProjectFileReader,
   Release,
   ReleasePatch,
+  SharedTheme,
+  SharedThemeReader,
+  SharedThemeState,
   Task,
   TaskLink,
   TaskLinkResult,
@@ -154,6 +157,16 @@ interface BoardState {
   // Download's destination is the user's pick in the host's own dialog; the
   // store reads the bytes and hands them over.
   fileSaver: FileSaver | null;
+  // The host's shared theme, when it has one: it overrides every board's own
+  // theme on screen and is never written into a board. Its own slice, apart from
+  // `theme` and `snapshot.config`, which is what keeps every config save from
+  // carrying it to disk.
+  sharedThemeReader: SharedThemeReader | null;
+  sharedTheme: SharedTheme | null;
+  // A newer read of the shared configuration failed; `sharedTheme` is still the
+  // last valid one. Not `errorMessage`, which a ready board never shows and
+  // every reload clears.
+  sharedThemeError: string | null;
   conflictOpen: boolean;
   // The file a write was refused on because the parser could not read all of it,
   // with the problems that justify the refusal. Null when nothing was refused.
@@ -194,6 +207,8 @@ interface BoardState {
   setProjectFiles: (reader: ProjectFileReader) => void;
   setGitHistory: (reader: GitHistoryReader) => void;
   setFileSaver: (saver: FileSaver) => void;
+  setSharedThemeReader: (reader: SharedThemeReader) => void;
+  refreshSharedTheme: () => Promise<void>;
   reload: () => Promise<void>;
   reloadSilent: () => Promise<void>;
   openConflict: () => void;
@@ -737,6 +752,10 @@ const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
   }
 };
 
+// Reads of the shared theme can overlap — a burst of edits, a Reload on top of a
+// live event — and only the latest one may land.
+let sharedThemeReads = 0;
+
 export const useBoardStore = create<BoardState>(
   logErrors((set, get) => ({
     status: 'idle',
@@ -751,6 +770,9 @@ export const useBoardStore = create<BoardState>(
     projectFiles: null,
     gitHistory: null,
     fileSaver: null,
+    sharedThemeReader: null,
+    sharedTheme: null,
+    sharedThemeError: null,
     conflictOpen: false,
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
@@ -761,6 +783,30 @@ export const useBoardStore = create<BoardState>(
     setGitHistory: (reader) => set({ gitHistory: reader }),
 
     setFileSaver: (saver) => set({ fileSaver: saver }),
+
+    setSharedThemeReader: (reader) => set({ sharedThemeReader: reader }),
+
+    refreshSharedTheme: async () => {
+      const reader = get().sharedThemeReader;
+      if (reader === null) return;
+      sharedThemeReads += 1;
+      const request = sharedThemeReads;
+      let next: SharedThemeState;
+      try {
+        next = await reader.read();
+      } catch (err) {
+        next = {
+          theme: get().sharedTheme,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+      if (request !== sharedThemeReads) return;
+      // Outside errorMessage, so the logging wrapper does not see it.
+      if (next.error !== null && next.error !== get().sharedThemeError) {
+        log.error(`shared configuration: ${next.error}`);
+      }
+      set({ sharedTheme: next.theme, sharedThemeError: next.error });
+    },
 
     load: async (fs, defaultTheme) => {
       set({
@@ -838,9 +884,11 @@ export const useBoardStore = create<BoardState>(
       }
     },
 
+    // The manual Reload re-reads everything the page shows, the host's shared
+    // theme included — under `--no-watch` it is the only way a change arrives.
     reload: async () => {
       const { rawFs } = get();
-      if (rawFs) await get().load(rawFs);
+      await Promise.all([rawFs ? get().load(rawFs) : undefined, get().refreshSharedTheme()]);
     },
 
     // Re-read the board and swap it in place without flipping status to

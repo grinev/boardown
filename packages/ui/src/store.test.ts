@@ -12,7 +12,7 @@ import type {
   ReleaseStatus,
   Task,
 } from '@boardown/core';
-import type { ParseProblem } from '@boardown/core';
+import type { ParseProblem, SharedTheme, SharedThemeState } from '@boardown/core';
 import {
   APP_VERSION,
   BACKLOG_PATH,
@@ -23,7 +23,7 @@ import {
   emptyDocsTree,
   serializeConfig,
 } from '@boardown/core';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isAnyDialogOpen, useBoardStore } from './store';
 
 // In-memory adapter mirroring packages/core's reference impl, plus a switch to
@@ -965,6 +965,85 @@ describe('setTheme', () => {
 
     expect(state().theme).toBe('light');
     expect(state().errorMessage).toMatch(/failed to save theme/i);
+  });
+});
+
+describe('the shared theme', () => {
+  const ocean: SharedTheme = { id: 'ocean', name: 'Ocean', base: 'dark', tokens: { '--bg': '#000' } };
+
+  // Each read answers the next queued result.
+  const readerOf = (...answers: (SharedThemeState | Error)[]) => ({
+    read: (): Promise<SharedThemeState> => {
+      const next = answers.shift();
+      if (next === undefined) return Promise.resolve({ theme: null, error: null });
+      return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+    },
+  });
+
+  afterEach(() => {
+    useBoardStore.setState({ sharedThemeReader: null, sharedTheme: null, sharedThemeError: null });
+  });
+
+  it('takes the theme and the error the host answers', async () => {
+    setup(snap());
+    state().setSharedThemeReader(
+      readerOf({ theme: ocean, error: null }, { theme: ocean, error: 'themes/ocean.json: bad' }),
+    );
+
+    await state().refreshSharedTheme();
+    expect(state().sharedTheme).toEqual(ocean);
+    expect(state().sharedThemeError).toBeNull();
+
+    await state().refreshSharedTheme();
+    expect(state().sharedTheme).toEqual(ocean);
+    expect(state().sharedThemeError).toBe('themes/ocean.json: bad');
+  });
+
+  it('keeps what is on screen when the read itself fails', async () => {
+    setup(snap());
+    state().setSharedThemeReader(readerOf({ theme: ocean, error: null }, new Error('offline')));
+    await state().refreshSharedTheme();
+    await state().refreshSharedTheme();
+    expect(state().sharedTheme).toEqual(ocean);
+    expect(state().sharedThemeError).toBe('offline');
+  });
+
+  it('lets only the latest of two overlapping reads land', async () => {
+    setup(snap());
+    let releaseFirst: (value: SharedThemeState) => void = () => {};
+    const answers: Promise<SharedThemeState>[] = [
+      new Promise((resolve) => {
+        releaseFirst = resolve;
+      }),
+      Promise.resolve({ theme: null, error: null }),
+    ];
+    state().setSharedThemeReader({ read: () => answers.shift() ?? Promise.reject(new Error('extra')) });
+
+    const first = state().refreshSharedTheme();
+    await state().refreshSharedTheme();
+    releaseFirst({ theme: ocean, error: null });
+    await first;
+
+    expect(state().sharedTheme).toBeNull();
+  });
+
+  it('is re-read by the manual Reload', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD });
+    state().setSharedThemeReader(readerOf({ theme: ocean, error: null }));
+    await state().reload();
+    expect(state().sharedTheme).toEqual(ocean);
+  });
+
+  it('never reaches the board config a settings save writes', async () => {
+    const { fs } = setup(snap({ config: { ...snap().config, theme: 'light' } }));
+    state().setSharedThemeReader(readerOf({ theme: ocean, error: null }));
+    await state().refreshSharedTheme();
+
+    await state().setWipLimit(4);
+
+    expect(current().config.theme).toBe('light');
+    expect(state().theme).toBe('light');
+    expect(fs.files.get(CONFIG_FILENAME)?.content).toContain('theme: light');
   });
 });
 
