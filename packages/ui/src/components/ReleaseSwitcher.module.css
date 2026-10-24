@@ -35,7 +35,7 @@
   background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--popover-shadow);
   z-index: 10;
   min-width: 180px;
   max-height: 260px;

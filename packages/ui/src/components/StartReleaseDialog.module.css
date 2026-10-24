@@ -59,7 +59,7 @@
 .error {
   margin: 0;
   font-size: 13px;
-  color: var(--type-bug);
+  color: var(--banner-error-fg);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

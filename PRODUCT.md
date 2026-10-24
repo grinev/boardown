@@ -1925,7 +1925,8 @@ selects nothing. A theme file looks like this:
   the font when `fontFamily` is absent, come from that built-in palette.
 - **`tokens`** names the palette's own CSS variables and gives each a CSS value,
   checked against what that variable is — a colour, or a shadow for
-  `--card-shadow`, `--drag-shadow` and `--tab-active-shadow`. A value that refers
+  `--card-shadow`, `--drag-shadow`, `--tab-active-shadow`, `--popover-shadow` and
+  `--dialog-shadow`. A value that refers
   to another variable through `var()` is taken as written.
 - **`fontFamily`** replaces the font stack only. `--font-family` inside `tokens`
   is ignored.
@@ -1938,7 +1939,10 @@ selects nothing. A theme file looks like this:
 
 The selected theme is shown on every board, over each board's own `theme` and
 whatever `?embed` says. Nothing of it is ever written into a board. Epic and
-custom task-type colours stay the board's own.
+custom task-type colours stay the board's own; the four base types' colours, and
+the neutral one a type without a colour takes, are palette variables
+(`--type-bug`, `--type-feature`, `--type-docs`, `--type-tech`, `--type-fallback`)
+a theme may override.
 
 The directory, `config.yaml` and the file a theme names must exist. Nothing is
 created, and deleting a file is an error rather than a way to drop the theme;

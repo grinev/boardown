@@ -82,7 +82,7 @@
   background: var(--surface);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--popover-shadow);
   z-index: 10;
   /* Sized to the longest row, between the field's width and the cap the
      component measures against the viewport. */

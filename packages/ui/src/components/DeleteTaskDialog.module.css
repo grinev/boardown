@@ -60,7 +60,7 @@
 .error {
   margin: 0;
   font-size: 13px;
-  color: var(--type-bug);
+  color: var(--banner-error-fg);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -94,9 +94,9 @@
 }
 
 .confirmButton {
-  background: var(--type-bug);
+  background: var(--danger);
   color: var(--accent-fg);
-  border-color: var(--type-bug);
+  border-color: var(--danger);
 }
 
 .confirmButton:hover:not(:disabled) {
