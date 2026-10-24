@@ -11,6 +11,7 @@ import { HttpProjectFileReader } from './api/http-project-file-reader';
 import { HttpSharedThemeReader } from './api/http-shared-theme-reader';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
 import { isEmbedRequested } from './embed-param';
+import { PAGE_BOOT_ELEMENT_ID, parsePageBoot } from './page-boot';
 import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
 import { SHARED_THEME_ENDPOINT } from './shared-theme-endpoint';
@@ -41,6 +42,9 @@ const prefix = /^\/b\/[^/]+/.exec(window.location.pathname)?.[0] ?? '';
 // page does afterwards changes the URL, so a browser reload keeps it.
 const embedded = isEmbedRequested(window.location.search);
 
+// The theme the host stamped into this page, so ui's first frame keeps it.
+const boot = parsePageBoot(document.getElementById(PAGE_BOOT_ELEMENT_ID)?.textContent);
+
 // Names this tab to the server, so the changes it makes itself are not sent back
 // to it as external ones. Loopback is a secure context, so randomUUID is there.
 const clientId = crypto.randomUUID();
@@ -59,6 +63,8 @@ createRoot(container).render(
       gitHistory={gitHistory}
       fileSaver={fileSaver}
       sharedTheme={sharedTheme}
+      {...(boot === null ? {} : { initialTheme: boot.theme })}
+      {...(boot?.sharedTheme === undefined ? {} : { initialSharedTheme: boot.sharedTheme })}
       version={__BOARDOWN_VERSION__}
       embedded={embedded}
     />

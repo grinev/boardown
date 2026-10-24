@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import packageJson from '../package.json' with { type: 'json' };
 import { fileProblem, type ParseResult } from './problems.js';
-import { type BoardConfig, BoardConfigSchema, MIN_VERSION_REGEX } from './schemas.js';
+import { type BoardConfig, BoardConfigSchema, MIN_VERSION_REGEX, type Theme } from './schemas.js';
 
 export const CONFIG_FILENAME = 'config.yaml';
 
@@ -96,6 +96,19 @@ export const parseConfig = (text: string, filename = CONFIG_FILENAME): ParseResu
     };
   }
   return { value: result.data, problems: [] };
+};
+
+export const DEFAULT_THEME: Theme = 'light';
+
+export const boardTheme = (config: BoardConfig): Theme => config.theme ?? DEFAULT_THEME;
+
+// The theme a board with this config.yaml settles on once loaded, for a host that
+// paints the page before the loader runs: a board the loader would refuse — too
+// old, or a config that does not parse — shows the default, like its error screen.
+export const boardThemeOfConfigText = (text: string): Theme => {
+  if (checkMinVersion(text).kind === 'too-old') return DEFAULT_THEME;
+  const config = parseConfig(text).value;
+  return config === null ? DEFAULT_THEME : boardTheme(config);
 };
 
 export const serializeConfig = (config: BoardConfig): string => {

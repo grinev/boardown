@@ -11,6 +11,7 @@ import { rootsFromProjectFolder } from './roots';
 interface Reply {
   status: number;
   location?: string;
+  cacheControl?: string;
   body: string;
 }
 
@@ -40,6 +41,9 @@ const request = (
             status: res.statusCode ?? 0,
             ...(typeof res.headers.location === 'string'
               ? { location: res.headers.location }
+              : {}),
+            ...(typeof res.headers['cache-control'] === 'string'
+              ? { cacheControl: res.headers['cache-control'] }
               : {}),
             body,
           }),
@@ -162,6 +166,15 @@ describe('single-board mode', () => {
     const reply = await request('/');
     expect(reply.status).toBe(200);
     expect(reply.body).toContain('THE APP');
+  });
+
+  it("serves the page stamped with the board's theme, never to be stored", async () => {
+    const config = path.join(rootsFromProjectFolder(dir).boardRoot, 'config.yaml');
+    await fs.appendFile(config, 'theme: dark\n', 'utf-8');
+    const reply = await request('/');
+    expect(reply.body).toContain('<html data-theme="dark">');
+    expect(reply.body).toContain('"theme":"dark"');
+    expect(reply.cacheControl).toBe('no-store');
   });
 
   it('serves the board through the api', async () => {
@@ -523,5 +536,37 @@ describe('the shared theme endpoint', () => {
       theme: { id: 'light', name: 'Light', base: 'light', tokens: {} },
       error: null,
     });
+  });
+
+  it("stamps a board page with the shared theme over the board's own", async () => {
+    await start(
+      { kind: 'single', roots: rootsFromProjectFolder(path.join(dir, 'solo')) },
+      false,
+      createSharedConfigSource(configDir),
+    );
+    const { body } = await request('/');
+    expect(body).toContain('<html data-theme="dark" style="--bg: #001122">');
+    expect(body).toContain('"theme":"light","sharedTheme":{"theme":{"id":"ocean"');
+  });
+
+  it('stamps each registry board with its own theme', async () => {
+    const registryPath = path.join(dir, 'projects.yaml');
+    const dark = path.join(dir, 'dark');
+    await writeBoard(dark, 'Dark');
+    await fs.appendFile(
+      path.join(rootsFromProjectFolder(dark).boardRoot, 'config.yaml'),
+      'theme: dark\n',
+      'utf-8',
+    );
+    await fs.writeFile(
+      registryPath,
+      `projects:\n  solo: ${path.join(dir, 'solo').replace(/\\/g, '/')}\n  dark: ${dark.replace(/\\/g, '/')}\n`,
+      'utf-8',
+    );
+    await start({ kind: 'registry', registry: new RegistryFile(registryPath) }, false);
+    expect((await request('/b/solo/')).body).toContain('<html data-theme="light">');
+    const reply = await request('/b/dark/');
+    expect(reply.body).toContain('<html data-theme="dark">');
+    expect(reply.cacheControl).toBe('no-store');
   });
 });

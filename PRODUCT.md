@@ -1896,6 +1896,15 @@ board opened without it shows its title; it lasts for the life of the page and a
 browser reload keeps it with the URL. The list page ignores it, and its links do
 not carry it.
 
+A board page is served already in the theme it settles on, so its first frame —
+the loading screen included — never shows another palette first, on any open: a
+new tab, a reload, back and forward, an `iframe`. Both hosts work it out when they
+serve the page: the shared theme with its overrides and font when one is selected
+(its last valid one, after a bad edit), else the board's own `theme`, and light
+where the board would not load — no `config.yaml` yet, one that is invalid or
+unreadable, or a board that needs a newer boardown. The page is never kept in the
+browser's cache, since a stored copy would carry the theme of an earlier visit.
+
 #### Shared configuration
 
 Both hosts accept a **shared configuration directory** — settings that apply to

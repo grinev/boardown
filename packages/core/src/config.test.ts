@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APP_VERSION,
   MIN_COMPATIBLE_VERSION,
+  boardThemeOfConfigText,
   checkMinVersion,
   configNeedsMinVersionStamp,
   isVersionAtLeast,
@@ -626,5 +627,27 @@ describe('minVersion', () => {
   it('peeks an unquoted scalar that YAML keeps as a string', () => {
     expect(checkMinVersion(`${VALID}minVersion: 0.9.0\n`).kind).toBe('pass');
     expect(checkMinVersion(`${VALID}minVersion: 99.0.0\n`).kind).toBe('too-old');
+  });
+});
+
+describe('boardThemeOfConfigText', () => {
+  it("is the config's theme when the board loads", () => {
+    expect(boardThemeOfConfigText(`${VALID}theme: dark\n`)).toBe('dark');
+    expect(boardThemeOfConfigText(`${VALID}theme: light\n`)).toBe('light');
+  });
+
+  it('is light when the config names no theme', () => {
+    expect(boardThemeOfConfigText(VALID)).toBe('light');
+  });
+
+  it('is light for a config the loader would refuse, whatever its theme says', () => {
+    expect(boardThemeOfConfigText(`${VALID}theme: dark\nnextId: -1\n`)).toBe('light');
+    expect(boardThemeOfConfigText('theme: dark\n')).toBe('light');
+    expect(boardThemeOfConfigText(`${VALID}theme: dark\n: : :\n`)).toBe('light');
+    expect(boardThemeOfConfigText('')).toBe('light');
+  });
+
+  it('is light for a board that needs a newer boardown', () => {
+    expect(boardThemeOfConfigText(`${VALID}theme: dark\nminVersion: 999.0.0\n`)).toBe('light');
   });
 });

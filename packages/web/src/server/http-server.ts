@@ -9,6 +9,7 @@ import {
   sendText,
 } from '../api/board-api.js';
 import { createBoardWatchHub, type BoardWatchHub } from '../api/board-events.js';
+import { buildPageBoot, stampPage } from '../api/page-boot.js';
 import { handleSharedTheme, type SharedConfigSource } from '../api/shared-config.js';
 import { BOARD_EVENTS_ENDPOINT } from '../board-events-endpoint.js';
 import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
@@ -130,8 +131,22 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     }
   };
 
-  const sendApp = (res: http.ServerResponse): Promise<void> =>
-    sendFile(res, path.join(clientDir, 'index.html'));
+  // Stamped per request with the theme this board settles on, and never stored by
+  // the browser: a copy kept from an earlier visit would carry the theme of then.
+  const sendApp = async (res: http.ServerResponse, boardRoot: string): Promise<void> => {
+    let html: string;
+    try {
+      html = await fs.readFile(path.join(clientDir, 'index.html'), 'utf-8');
+    } catch {
+      sendText(res, 404, 'Not found');
+      return;
+    }
+    const boot = await buildPageBoot(boardRoot, options.sharedConfig);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', MIME_TYPES['.html'] ?? 'text/html');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(stampPage(html, boot));
+  };
 
   // The static route resolves a request path against a directory just like the
   // board routes do, so it goes through the same containment rule — this one is
@@ -154,7 +169,7 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     roots: BoardRoots,
   ): Promise<void> => {
     if (rest === '/' || rest === '') {
-      await sendApp(res);
+      await sendApp(res, roots.boardRoot);
       return;
     }
     if (rest.startsWith(BOARD_FS_PREFIX)) {

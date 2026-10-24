@@ -4,7 +4,12 @@ import { configureLogging, createLogger, isLogLevel, type LogRecord } from '../.
 import type { Plugin } from 'vite';
 import { BOARD_FS_PREFIX, handleBoardFs, handleProjectFile, readBody } from './api/board-api.js';
 import { createBoardWatchHub } from './api/board-events.js';
-import { handleSharedTheme, openSharedConfig } from './api/shared-config.js';
+import { buildPageBoot, stampPage } from './api/page-boot.js';
+import {
+  handleSharedTheme,
+  openSharedConfig,
+  type SharedConfigSource,
+} from './api/shared-config.js';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint.js';
 import { LOG_ENDPOINT } from './browser-log-sink.js';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint.js';
@@ -63,16 +68,21 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
   const boardRoot = path.resolve(options.boardRoot);
   const projectRoot = path.dirname(boardRoot);
   const logsDir = path.resolve(options.logsDir);
+  // Opened in configureServer, which runs before any page is served.
+  let sharedConfig: SharedConfigSource | undefined;
 
   return {
     name: 'boardown-dev-fs',
     apply: 'serve',
+    async transformIndexHtml(html) {
+      return stampPage(html, await buildPageBoot(boardRoot, sharedConfig));
+    },
     async configureServer(server) {
       await ensureBoardRoot(boardRoot);
       server.config.logger.info(`boardown data dir: ${boardRoot}`);
       // Thrown before anything is served, so Vite refuses to start with the
       // diagnostic, as boardown-web does.
-      const sharedConfig =
+      sharedConfig =
         options.configDir === undefined ? undefined : await openSharedConfig(options.configDir);
       if (sharedConfig !== undefined) {
         server.config.logger.info(`boardown config dir: ${sharedConfig.dir}`);
@@ -102,6 +112,22 @@ export function devFsPlugin(options: DevFsPluginOptions): Plugin {
       // awaited by connect.
       // eslint-disable-next-line @typescript-eslint/no-misused-promises
       server.middlewares.use(async (req, res, next) => {
+        // The page carries the theme stamped when it was served. Vite answers its
+        // HTML `no-cache`, which a history navigation may still take from the HTTP
+        // cache, so an HTML answer's caching becomes `no-store`. Keyed on the type
+        // Vite sets just before it, since it serves the page for any Accept;
+        // `server.headers` would strip caching from every dev asset as well.
+        if (req.method === 'GET') {
+          const setHeader = res.setHeader.bind(res);
+          res.setHeader = (name: string, value: number | string | readonly string[]) => {
+            const html = String(res.getHeader('content-type') ?? '').startsWith('text/html');
+            return setHeader(
+              name,
+              html && name.toLowerCase() === 'cache-control' ? 'no-store' : value,
+            );
+          };
+        }
+
         if (req.method === 'POST' && req.url === LOG_ENDPOINT) {
           // Answers 204 whatever arrives: a bad log record is not worth an error
           // path, and the browser sink ignores the response anyway.

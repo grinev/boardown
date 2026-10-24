@@ -4,9 +4,10 @@ import type {
   GitHistoryReader,
   ProjectFileReader,
   SharedThemeReader,
+  SharedThemeState,
   Theme,
 } from '@boardown/core';
-import { boardStatusKeys } from '@boardown/core';
+import { boardStatusKeys, displayedTheme, sharedThemeOverrides } from '@boardown/core';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
@@ -48,6 +49,12 @@ interface AppProps {
   // screen, and Settings shows it instead of the picker. Only the web shell
   // passes it, from its configuration directory.
   sharedTheme?: SharedThemeReader;
+  // What the host knew when it served the page — the board's own theme and the
+  // shared theme's state — so the first frame is already in the theme the page
+  // settles on. Seeds the store once, at the first load, and is never read again
+  // or written anywhere. Only the web shell passes them, from the served page.
+  initialTheme?: Theme;
+  initialSharedTheme?: SharedThemeState;
   // Host-provided fallback theme (e.g. VS Code's color theme). Seeds the theme
   // only when onboarding writes a brand-new config; ignored once a board exists.
   defaultTheme?: Theme;
@@ -78,6 +85,8 @@ export function App({
   gitHistory,
   fileSaver,
   sharedTheme: sharedThemeReader,
+  initialTheme,
+  initialSharedTheme,
   defaultTheme,
   defaultProjectName,
   defaultIdPrefix,
@@ -145,6 +154,19 @@ export function App({
   const closeCreateRelease = useBoardStore((s) => s.closeCreateRelease);
   const closeCreateEpic = useBoardStore((s) => s.closeCreateEpic);
   const closeSettings = useBoardStore((s) => s.closeSettings);
+  const seedHostTheme = useBoardStore((s) => s.seedHostTheme);
+
+  // A layout effect, so the store's set re-renders before the first paint; the ref
+  // keeps StrictMode's second mount, and any later prop change, from seeding again.
+  const seeded = useRef(false);
+  useLayoutEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    seedHostTheme({
+      ...(initialTheme !== undefined ? { theme: initialTheme } : {}),
+      ...(initialSharedTheme !== undefined ? { sharedTheme: initialSharedTheme } : {}),
+    });
+  }, [seedHostTheme, initialTheme, initialSharedTheme]);
 
   useEffect(() => {
     void load(fs, defaultTheme);
@@ -180,11 +202,10 @@ export function App({
   // Code's) over the store's 'light' default; once loaded, `theme` reflects
   // config and wins.
   useLayoutEffect(() => {
-    const resolved =
-      sharedTheme?.base ??
+    const own =
       forcedTheme ??
       (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme);
-    document.documentElement.setAttribute('data-theme', resolved);
+    document.documentElement.setAttribute('data-theme', displayedTheme(sharedTheme, own));
   }, [sharedTheme, theme, defaultTheme, forcedTheme, status]);
 
   // A shared theme's overrides sit inline on the root, which beats the
@@ -192,8 +213,7 @@ export function App({
   // the base's own value shows through again.
   const appliedOverrides = useRef<string[]>([]);
   useLayoutEffect(() => {
-    const overrides: Record<string, string> = { ...sharedTheme?.tokens };
-    if (sharedTheme?.fontFamily !== undefined) overrides['--font-family'] = sharedTheme.fontFamily;
+    const overrides = sharedThemeOverrides(sharedTheme);
     const style = document.documentElement.style;
     for (const name of appliedOverrides.current) {
       if (!(name in overrides)) style.removeProperty(name);
