@@ -77,6 +77,10 @@ interface AppProps {
   // project, so the title row above the tabs is left out. Only the web shell
   // passes it today, from the page's `?embed`.
   embedded?: boolean;
+  // A task the host was asked to open when the page loaded — the web board's
+  // `#task=<id>`. Opens once the board has loaded; a later one arrives through the
+  // store's `jumpToTask`.
+  initialTaskId?: string;
 }
 
 export function App({
@@ -94,6 +98,7 @@ export function App({
   forcedTheme,
   version,
   embedded = false,
+  initialTaskId,
 }: AppProps) {
   const status = useBoardStore((s) => s.status);
   const snapshot = useBoardStore((s) => s.snapshot);
@@ -155,6 +160,7 @@ export function App({
   const closeCreateEpic = useBoardStore((s) => s.closeCreateEpic);
   const closeSettings = useBoardStore((s) => s.closeSettings);
   const seedHostTheme = useBoardStore((s) => s.seedHostTheme);
+  const jumpToTask = useBoardStore((s) => s.jumpToTask);
 
   // A layout effect, so the store's set re-renders before the first paint; the ref
   // keeps StrictMode's second mount, and any later prop change, from seeding again.
@@ -166,7 +172,11 @@ export function App({
       ...(initialTheme !== undefined ? { theme: initialTheme } : {}),
       ...(initialSharedTheme !== undefined ? { sharedTheme: initialSharedTheme } : {}),
     });
-  }, [seedHostTheme, initialTheme, initialSharedTheme]);
+    // A jump the shell delivered before this effect ran is newer than the prop.
+    if (initialTaskId !== undefined && useBoardStore.getState().pendingTaskJump === null) {
+      jumpToTask(initialTaskId);
+    }
+  }, [seedHostTheme, initialTheme, initialSharedTheme, jumpToTask, initialTaskId]);
 
   useEffect(() => {
     void load(fs, defaultTheme);

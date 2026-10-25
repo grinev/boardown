@@ -227,6 +227,12 @@ it with `?embed` — `http://127.0.0.1:<port>/b/shop/?embed`, or `/?embed` with
 becomes the top of the page; everything else stays. It belongs to that page only:
 the same board opened without it shows its title as usual.
 
+To jump to a task, add `#task=<id>` — `http://127.0.0.1:<port>/b/shop/?embed#task=SHOP-12`.
+The page opens that task's dialog once the board has loaded, or in place when the
+fragment changes in a page already open, then drops the fragment, so setting the
+same one again opens the task again. It works with or without `?embed`; an id no
+task has opens nothing.
+
 The app hosting those pages can also own their look. `--config-dir <path>`, in
 either mode, names a **shared configuration directory** outside every board:
 

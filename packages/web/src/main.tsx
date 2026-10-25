@@ -11,6 +11,7 @@ import { HttpProjectFileReader } from './api/http-project-file-reader';
 import { HttpSharedThemeReader } from './api/http-shared-theme-reader';
 import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
 import { isEmbedRequested } from './embed-param';
+import { taskIdFromHash, urlWithoutHash } from './task-fragment';
 import { PAGE_BOOT_ELEMENT_ID, parsePageBoot } from './page-boot';
 import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
 import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
@@ -39,8 +40,18 @@ if (!container) {
 const prefix = /^\/b\/[^/]+/.exec(window.location.pathname)?.[0] ?? '';
 
 // Read once, for the life of the page: `ui` never sees the URL, and nothing the
-// page does afterwards changes the URL, so a browser reload keeps it.
+// page does afterwards changes its path or query, so a browser reload keeps it.
 const embedded = isEmbedRequested(window.location.search);
+
+// A `#task=<id>` is consumed as it is read: replacing the entry rather than
+// pushing one keeps the page from adding history of its own.
+const takeTaskFromHash = (): string | null => {
+  const id = taskIdFromHash(window.location.hash);
+  if (id !== null) window.history.replaceState(window.history.state, '', urlWithoutHash(window.location));
+  return id;
+};
+
+const initialTaskId = takeTaskFromHash();
 
 // The theme the host stamped into this page, so ui's first frame keeps it.
 const boot = parsePageBoot(document.getElementById(PAGE_BOOT_ELEMENT_ID)?.textContent);
@@ -67,9 +78,15 @@ createRoot(container).render(
       {...(boot?.sharedTheme === undefined ? {} : { initialSharedTheme: boot.sharedTheme })}
       version={__BOARDOWN_VERSION__}
       embedded={embedded}
+      {...(initialTaskId === null ? {} : { initialTaskId })}
     />
   </StrictMode>,
 );
+
+window.addEventListener('hashchange', () => {
+  const id = takeTaskFromHash();
+  if (id !== null) useBoardStore.getState().jumpToTask(id);
+});
 
 // The same receiving end the VS Code and Electron shells use: the shell only
 // delivers the event, and the store already knows how to answer it.

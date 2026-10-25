@@ -117,7 +117,9 @@ export function TaskDetailsDialog({
     archived ||
     (release?.frontmatter.status !== 'current' &&
       config?.statusOutsideActiveRelease !== true);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteOpen = useBoardStore((s) => s.deleteTaskConfirmOpen);
+  const openDeleteTaskConfirm = useBoardStore((s) => s.openDeleteTaskConfirm);
+  const closeDeleteTaskConfirm = useBoardStore((s) => s.closeDeleteTaskConfirm);
   const { copied, copy, reset: resetCopied } = useCopyToClipboard();
   // Opening another task from a link reuses this dialog rather than remounting it,
   // so a confirmation still on screen would follow the user onto a task nothing
@@ -243,7 +245,7 @@ export function TaskDetailsDialog({
         <div className={styles.headerActions}>
           <TaskActionsMenu
             deleteDisabled={archived}
-            onDelete={() => setDeleteOpen(true)}
+            onDelete={openDeleteTaskConfirm}
           />
           <button
             type="button"
@@ -295,6 +297,7 @@ export function TaskDetailsDialog({
             onTaskClick={onTaskClick}
           />
           <Notes
+            key={id}
             task={task}
             readOnly={archived}
             onChange={(notes) => updateTask(id, { notes })}
@@ -486,7 +489,7 @@ export function TaskDetailsDialog({
         </aside>
       </div>
       {deleteOpen && (
-        <DeleteTaskDialog task={task} onClose={() => setDeleteOpen(false)} />
+        <DeleteTaskDialog task={task} onClose={closeDeleteTaskConfirm} />
       )}
     </Modal>
   );
