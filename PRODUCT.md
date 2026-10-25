@@ -1911,6 +1911,25 @@ board opened without it shows its title; it lasts for the life of the page and a
 browser reload keeps it with the URL. The list page ignores it, and its links do
 not carry it.
 
+A board page opened with **`#task=<id>`**, or handed one later, opens that task's
+dialog — the way an app embedding the board jumps to a task, and a link that works
+in a plain tab too, with or without `?embed`. On page open the dialog appears once
+the board has loaded; a fragment arriving in an open page opens it in place, with
+no reload, so the tab, the scroll, the filters and the live refresh carry on. The
+page then drops the fragment from its address, path and query kept and no history
+entry added, so the same id sent again opens it again. Any task on the board
+opens, wherever it sits — finished ones read-only, as everywhere — over whatever
+tab is showing. The id is matched ignoring case, and the fragment is read like a
+query: the first `task` counts, a percent-encoded value is decoded, an empty one
+or a fragment without the key is left alone. An id no task has opens nothing. A
+detail dialog already on screen is replaced and kept behind it, as when a task link
+is followed inside it, and a field being edited there is saved first, as leaving
+it does; the same task already open is left as it is. Over any other dialog — a
+Create dialog, Settings, Start or Complete release, a Docs dialog, a confirmation,
+the conflict or "File cannot be written" modal, the conversion notice — nothing
+opens, and neither does a page on onboarding or an error screen; the fragment is
+dropped all the same.
+
 A board page is served already in the theme it settles on, so its first frame —
 the loading screen included — never shows another palette first, on any open: a
 new tab, a reload, back and forward, an `iframe`. Both hosts work it out when they

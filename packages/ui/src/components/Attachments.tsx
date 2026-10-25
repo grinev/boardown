@@ -137,7 +137,9 @@ export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
   const [attachments, setAttachments] = useState<Attachment[] | null>(null);
   const [previews, setPreviews] = useState<Map<string, Uint8Array>>(new Map());
   const [messages, setMessages] = useState<string[]>([]);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const deleting = useBoardStore((s) => s.deleteAttachmentName);
+  const openDeleteAttachmentConfirm = useBoardStore((s) => s.openDeleteAttachmentConfirm);
+  const closeDeleteAttachmentConfirm = useBoardStore((s) => s.closeDeleteAttachmentConfirm);
   const live = useRef(true);
 
   // The rows show as soon as the folder is listed; thumbnails replace their icons
@@ -221,7 +223,7 @@ export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
                   onDownload={() => void handleDownload(attachment.name)}
                   onDelete={() => {
                     setMessages([]);
-                    setDeleting(attachment.name);
+                    openDeleteAttachmentConfirm(attachment.name);
                   }}
                 />
               </div>
@@ -233,9 +235,9 @@ export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
         <DeleteAttachmentDialog
           taskId={taskId}
           name={deleting}
-          onClose={() => setDeleting(null)}
+          onClose={closeDeleteAttachmentConfirm}
           onDeleted={() => {
-            setDeleting(null);
+            closeDeleteAttachmentConfirm();
             void refresh();
           }}
         />

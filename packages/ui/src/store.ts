@@ -88,7 +88,7 @@ import {
   serializeRelease,
 } from '@boardown/core';
 import { create, type StateCreator } from 'zustand';
-import { findTaskById } from './utils/find-task';
+import { findTaskById, findTaskByIdIgnoringCase } from './utils/find-task';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
 
@@ -186,6 +186,10 @@ interface BoardState {
   // Dialogs navigated away from, oldest first. Still one dialog on screen — this
   // is history, not a pile of windows. Back only; there is no forward.
   dialogStack: DialogRef[];
+  // Confirmations nested in the task dialog: the task's own deletion, and the
+  // attachment whose deletion is being confirmed.
+  deleteTaskConfirmOpen: boolean;
+  deleteAttachmentName: string | null;
   createTaskForReleaseFilename: string | null;
   createTaskForEpicSlug: string | null;
   createTaskOpen: boolean;
@@ -205,6 +209,9 @@ interface BoardState {
   // seen the notice yet. Not a dialog flag: the refusal modals and a reload leave
   // it standing, and the notice shows whenever no dialog is open.
   conversionNoticeOwed: boolean;
+  // A task the host asked for before the board finished loading; the load's
+  // outcome either opens it or drops it.
+  pendingTaskJump: string | null;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
   setProjectFiles: (reader: ProjectFileReader) => void;
   setGitHistory: (reader: GitHistoryReader) => void;
@@ -238,7 +245,15 @@ interface BoardState {
   setEditFinishedReleases: (enabled: boolean) => Promise<void>;
   setDocsTab: (enabled: boolean) => Promise<void>;
   openTask: (id: string) => void;
+  // A task the host asks for — a URL fragment on the web board. Unlike `openTask`
+  // it waits for the load, resolves the id ignoring case, and opens nothing over a
+  // dialog that is not a detail dialog.
+  jumpToTask: (id: string) => void;
   closeTask: () => void;
+  openDeleteTaskConfirm: () => void;
+  closeDeleteTaskConfirm: () => void;
+  openDeleteAttachmentConfirm: (name: string) => void;
+  closeDeleteAttachmentConfirm: () => void;
   openEpic: (slug: string) => void;
   closeEpic: () => void;
   openRelease: (filename: string) => void;
@@ -688,17 +703,29 @@ const currentDialog = (state: BoardState): DialogRef | null => {
   return null;
 };
 
+const DETAIL_DIALOG_KEYS = {
+  selectedTaskId: null,
+  selectedEpicSlug: null,
+  selectedReleaseFilename: null,
+  docPopupPath: null,
+  repoFilePopupPath: null,
+};
+
+// A confirmation nested in a detail dialog goes away with it, so every switch or
+// close of a detail dialog clears these as well.
+const NESTED_CONFIRMATIONS_CLOSED = {
+  deleteTaskConfirmOpen: false,
+  deleteAttachmentName: null,
+};
+
 const pushCurrent = (state: BoardState): DialogRef[] => {
   const current = currentDialog(state);
   return current === null ? state.dialogStack : [...state.dialogStack, current];
 };
 
 const NO_DIALOG = {
-  selectedTaskId: null,
-  selectedEpicSlug: null,
-  selectedReleaseFilename: null,
-  docPopupPath: null,
-  repoFilePopupPath: null,
+  ...DETAIL_DIALOG_KEYS,
+  ...NESTED_CONFIRMATIONS_CLOSED,
 };
 
 const selectionFor = (ref: DialogRef) => {
@@ -718,7 +745,8 @@ const selectionFor = (ref: DialogRef) => {
 
 // Every dialog's visibility in one place: the initial state spreads it, and so
 // does the conflict, which has to close whatever is on screen. A new dialog flag
-// belongs here rather than inline, or the conflict will not know about it.
+// belongs here rather than inline, or the conflict will not know about it —
+// including a confirmation nested inside another dialog.
 const ALL_DIALOGS_CLOSED = {
   ...NO_DIALOG,
   unwritableFile: null as { path: string; problems: ParseProblem[] } | null,
@@ -737,14 +765,71 @@ const ALL_DIALOGS_CLOSED = {
   deleteDocPath: null,
 };
 
+type DialogKey = keyof typeof ALL_DIALOGS_CLOSED;
+
+const DIALOG_KEYS = Object.keys(ALL_DIALOGS_CLOSED) as DialogKey[];
+
+const isDialogOpen = (state: BoardState, key: DialogKey): boolean => {
+  const value = state[key];
+  return Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
+};
+
 // Read off ALL_DIALOGS_CLOSED rather than a list of its own, so a dialog added
 // there is counted here too.
 export const isAnyDialogOpen = (state: BoardState): boolean =>
-  state.conflictOpen ||
-  (Object.keys(ALL_DIALOGS_CLOSED) as (keyof typeof ALL_DIALOGS_CLOSED)[]).some((key) => {
-    const value = state[key];
-    return Array.isArray(value) ? value.length > 0 : value !== null && value !== false;
+  state.conflictOpen || DIALOG_KEYS.some((key) => isDialogOpen(state, key));
+
+// A host's jump replaces a detail dialog the way a link inside it would, but must
+// never land on top of a form, a confirmation or a refusal modal.
+const blocksTaskJump = (state: BoardState, snapshot: BoardSnapshot): boolean => {
+  if (state.conflictOpen) return true;
+  if (state.conversionNoticeOwed && !isAnyDialogOpen(state)) return true;
+  // A nested confirmation is on screen only while its task dialog is: a task
+  // deleted on disk under an open dialog leaves the flag behind with nothing shown.
+  const taskDialogShown =
+    state.selectedTaskId !== null && findTaskById(snapshot, state.selectedTaskId) !== null;
+  return DIALOG_KEYS.some((key) => {
+    if (key in DETAIL_DIALOG_KEYS || key === 'dialogStack') return false;
+    if (key in NESTED_CONFIRMATIONS_CLOSED && !taskDialogShown) return false;
+    return isDialogOpen(state, key);
   });
+};
+
+// The jump moves no focus, so an editor in the dialog being replaced would keep
+// its draft and later save it into the next task. Blurring first saves it the way
+// a click on a link inside the dialog does. Focus outside a dialog — the search
+// box, a Docs page — is not being replaced and is left alone.
+const blurFocusInDialog = (): void => {
+  if (typeof document === 'undefined') return;
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement && focused.closest('dialog[open]') !== null) focused.blur();
+};
+
+const applyTaskJump = (get: () => BoardState, id: string): void => {
+  const state = get();
+  const { snapshot } = state;
+  if (snapshot === null) return;
+  const task = findTaskByIdIgnoringCase(snapshot, id);
+  if (task === null) {
+    log.info(`task jump: no task ${id} on the board`);
+    return;
+  }
+  const taskId = task.frontmatter.id;
+  if (blocksTaskJump(state, snapshot)) {
+    log.info(`task jump to ${taskId} refused: another dialog is open`);
+    return;
+  }
+  if (state.selectedTaskId === taskId) return;
+  blurFocusInDialog();
+  get().openTask(taskId);
+};
+
+const pendingJumpDropped = (state: BoardState) => {
+  if (state.pendingTaskJump !== null) {
+    log.info(`task jump to ${state.pendingTaskJump} dropped: no board is shown`);
+  }
+  return { pendingTaskJump: null };
+};
 
 const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
   switch (ref.kind) {
@@ -789,6 +874,7 @@ export const useBoardStore = create<BoardState>(
     ...ALL_DIALOGS_CLOSED,
     selectedDocPath: null,
     conversionNoticeOwed: false,
+    pendingTaskJump: null,
 
     setProjectFiles: (reader) => set({ projectFiles: reader }),
 
@@ -844,6 +930,9 @@ export const useBoardStore = create<BoardState>(
         rawFs: fs,
         conflictOpen: false,
         unwritableFile: null,
+        // The loading screen unmounts the task dialog, and a confirmation used to go
+        // with it; coming back from Reload or an error must not find one waiting.
+        ...NESTED_CONFIRMATIONS_CLOSED,
         // Keep a previously captured default when the caller (e.g. reload) omits it.
         // Seed `theme` from it too so the loading screen matches the host theme
         // (e.g. VS Code dark) instead of flashing the light-theme default before
@@ -859,6 +948,7 @@ export const useBoardStore = create<BoardState>(
             problems: [],
             errorMessage: null,
             theme: get().defaultTheme ?? DEFAULT_THEME,
+            ...pendingJumpDropped(get()),
           });
           return;
         }
@@ -868,6 +958,7 @@ export const useBoardStore = create<BoardState>(
             snapshot: null,
             problems: result.problems,
             errorMessage: formatProblems(result.problems) || 'Failed to load board',
+            ...pendingJumpDropped(get()),
           });
           return;
         }
@@ -877,12 +968,14 @@ export const useBoardStore = create<BoardState>(
             snapshot: null,
             problems: [],
             errorMessage: versionTooOldMessage(result.required, result.running),
+            ...pendingJumpDropped(get()),
           });
           return;
         }
         // From here on writes go through a guard that refuses to clobber files
         // changed on disk since this load, surfacing the conflict modal instead.
         const guarded = boardFs(fs, result, get, set);
+        const pending = get().pendingTaskJump;
         set({
           status: 'ready',
           fs: guarded,
@@ -893,7 +986,9 @@ export const useBoardStore = create<BoardState>(
           unwritableFile: null,
           theme: boardTheme(result.snapshot.config),
           activeTab: tabFor(get().activeTab, result.snapshot.config),
+          pendingTaskJump: null,
         });
+        if (pending !== null) applyTaskJump(get, pending);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({
@@ -901,6 +996,7 @@ export const useBoardStore = create<BoardState>(
           snapshot: null,
           problems: [],
           errorMessage: message,
+          ...pendingJumpDropped(get()),
         });
       }
     },
@@ -1172,7 +1268,29 @@ export const useBoardStore = create<BoardState>(
         dialogStack: pushCurrent(state),
       })),
 
-    closeTask: () => set({ selectedTaskId: null, dialogStack: [] }),
+    jumpToTask: (id) => {
+      const { status } = get();
+      if (status === 'idle' || status === 'loading') {
+        set({ pendingTaskJump: id });
+        return;
+      }
+      if (status !== 'ready') {
+        log.info(`task jump to ${id} dropped: no board is shown`);
+        return;
+      }
+      applyTaskJump(get, id);
+    },
+
+    closeTask: () =>
+      set({ selectedTaskId: null, dialogStack: [], ...NESTED_CONFIRMATIONS_CLOSED }),
+
+    openDeleteTaskConfirm: () => set({ deleteTaskConfirmOpen: true }),
+
+    closeDeleteTaskConfirm: () => set({ deleteTaskConfirmOpen: false }),
+
+    openDeleteAttachmentConfirm: (name) => set({ deleteAttachmentName: name }),
+
+    closeDeleteAttachmentConfirm: () => set({ deleteAttachmentName: null }),
 
     openEpic: (slug) =>
       set((state) => ({
@@ -2098,7 +2216,13 @@ export const useBoardStore = create<BoardState>(
       };
       // A deleted task is the end of the chain, not a step in it: close out of the
       // whole history rather than stepping back into a dialog the user was done with.
-      set({ snapshot: nextSnapshot, errorMessage: null, selectedTaskId: null, dialogStack: [] });
+      set({
+        snapshot: nextSnapshot,
+        errorMessage: null,
+        selectedTaskId: null,
+        dialogStack: [],
+        ...NESTED_CONFIRMATIONS_CLOSED,
+      });
     },
 
     listTaskAttachments: async (taskId) => {

@@ -2632,3 +2632,245 @@ describe('minVersion', () => {
     );
   });
 });
+
+describe('jumpToTask', () => {
+  const closeEverything = (): void => {
+    useBoardStore.setState({
+      conflictOpen: false,
+      conversionNoticeOwed: false,
+      pendingTaskJump: null,
+      deleteTaskConfirmOpen: false,
+      deleteAttachmentName: null,
+      createTaskForReleaseFilename: null,
+      createTaskForEpicSlug: null,
+      createTaskOpen: false,
+      createTaskBacklog: false,
+      createReleaseOpen: false,
+      createEpicOpen: false,
+      completeReleaseForFilename: null,
+      startReleaseForFilename: null,
+      settingsOpen: false,
+      createDocPageOpen: false,
+      createDocFolderOpen: false,
+      deleteDocPath: null,
+    });
+  };
+
+  describe('before the board is shown', () => {
+    beforeEach(() => {
+      closeEverything();
+      useBoardStore.setState({
+        status: 'idle',
+        snapshot: null,
+        selectedTaskId: null,
+        dialogStack: [],
+      });
+    });
+
+    it('waits for the load and opens the task once the board is ready', async () => {
+      state().jumpToTask('BD-1');
+      expect(state().pendingTaskJump).toBe('BD-1');
+      expect(state().selectedTaskId).toBeNull();
+
+      await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+
+      expect(state().selectedTaskId).toBe('BD-1');
+      expect(state().pendingTaskJump).toBeNull();
+    });
+
+    it('keeps the last id asked for while loading', async () => {
+      state().jumpToTask('BD-1');
+      state().jumpToTask('BD-404');
+
+      await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+
+      expect(state().selectedTaskId).toBeNull();
+    });
+
+    it('drops the id when the board lands on onboarding', async () => {
+      state().jumpToTask('BD-1');
+
+      await state().load(new MemFs());
+
+      expect(state().status).toBe('onboarding');
+      expect(state().pendingTaskJump).toBeNull();
+      expect(state().selectedTaskId).toBeNull();
+    });
+
+    it('drops the id when the board fails to load', async () => {
+      state().jumpToTask('BD-1');
+
+      await loadFrom({ [CONFIG_FILENAME]: 'idPrefix: [' });
+
+      expect(state().status).toBe('error');
+      expect(state().pendingTaskJump).toBeNull();
+    });
+
+    it('opens nothing on an onboarding or error screen, and keeps nothing for later', async () => {
+      useBoardStore.setState({ status: 'onboarding' });
+      state().jumpToTask('BD-1');
+      expect(state().pendingTaskJump).toBeNull();
+
+      await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+
+      expect(state().selectedTaskId).toBeNull();
+    });
+  });
+
+  describe('on a loaded board', () => {
+    beforeEach(() => {
+      setup(
+        snap({
+          releases: [
+            release('0.9', 'finished', [task('BD-3')]),
+            release('1.0', 'current', [task('BD-1'), task('BD-2')]),
+          ],
+          backlog: backlog([task('BD-4')]),
+          epics: [epic('ui')],
+          docs: docs(),
+        }),
+      );
+      closeEverything();
+    });
+
+    it.each(['BD-2', 'BD-3', 'BD-4'])('opens %s wherever it sits', (id) => {
+      state().jumpToTask(id);
+      expect(state().selectedTaskId).toBe(id);
+    });
+
+    it('matches the id ignoring case and opens the canonical one', () => {
+      state().jumpToTask('bd-2');
+      expect(state().selectedTaskId).toBe('BD-2');
+    });
+
+    it('opens nothing for an id no task has', () => {
+      state().jumpToTask('BD-404');
+      expect(state().selectedTaskId).toBeNull();
+      expect(isAnyDialogOpen(state())).toBe(false);
+    });
+
+    it('replaces a detail dialog and keeps it behind, as a link inside it would', () => {
+      state().openEpic('ui');
+
+      state().jumpToTask('BD-2');
+
+      expect(state().selectedTaskId).toBe('BD-2');
+      expect(state().selectedEpicSlug).toBeNull();
+      expect(state().dialogStack).toEqual([{ kind: 'epic', slug: 'ui' }]);
+    });
+
+    it('leaves the task alone when it is already open', () => {
+      state().openEpic('ui');
+      state().openTask('BD-1');
+
+      state().jumpToTask('bd-1');
+
+      expect(state().selectedTaskId).toBe('BD-1');
+      expect(state().dialogStack).toEqual([{ kind: 'epic', slug: 'ui' }]);
+    });
+
+    it.each<[string, Partial<ReturnType<typeof state>>]>([
+      ['Create task', { createTaskOpen: true }],
+      ['Create task in a release', { createTaskForReleaseFilename: 'releases/1.0.md' }],
+      ['Create task in an epic', { createTaskForEpicSlug: 'ui' }],
+      ['Create task in the backlog', { createTaskBacklog: true }],
+      ['Create epic', { createEpicOpen: true }],
+      ['Create release', { createReleaseOpen: true }],
+      ['Start release', { startReleaseForFilename: 'releases/1.0.md' }],
+      ['Complete release', { completeReleaseForFilename: 'releases/1.0.md' }],
+      ['Settings', { settingsOpen: true }],
+      ['Docs New page', { createDocPageOpen: true }],
+      ['Docs New folder', { createDocFolderOpen: true }],
+      ['Docs delete', { deleteDocPath: 'guide.md' }],
+      ['the conflict modal', { conflictOpen: true }],
+      ['File cannot be written', { unwritableFile: { path: 'releases/1.0.md', problems: [] } }],
+      ['the conversion notice', { conversionNoticeOwed: true }],
+    ])('opens nothing while %s is open', (_name, open) => {
+      useBoardStore.setState(open);
+
+      state().jumpToTask('BD-2');
+
+      expect(state().selectedTaskId).toBeNull();
+    });
+
+    it('opens nothing over a confirmation nested in the task dialog', () => {
+      state().openTask('BD-1');
+      state().openDeleteTaskConfirm();
+      state().jumpToTask('BD-2');
+      expect(state().selectedTaskId).toBe('BD-1');
+
+      state().closeDeleteTaskConfirm();
+      state().openDeleteAttachmentConfirm('shot.png');
+      state().jumpToTask('BD-2');
+      expect(state().selectedTaskId).toBe('BD-1');
+    });
+
+    it('is not held back by a confirmation whose task is gone from the board', () => {
+      useBoardStore.setState({ selectedTaskId: 'BD-77', deleteTaskConfirmOpen: true });
+
+      state().jumpToTask('BD-2');
+
+      expect(state().selectedTaskId).toBe('BD-2');
+      expect(state().deleteTaskConfirmOpen).toBe(false);
+    });
+
+    it('replaces a detail dialog while the conversion notice waits behind it', () => {
+      state().openEpic('ui');
+      useBoardStore.setState({ conversionNoticeOwed: true });
+
+      state().jumpToTask('BD-2');
+
+      expect(state().selectedTaskId).toBe('BD-2');
+    });
+  });
+});
+
+describe('confirmations nested in the task dialog', () => {
+  beforeEach(() => {
+    setup(board());
+    useBoardStore.setState({ conflictOpen: false });
+    state().openTask('BD-1');
+    state().openDeleteTaskConfirm();
+    state().openDeleteAttachmentConfirm('shot.png');
+  });
+
+  const closed = (): void => {
+    expect(state().deleteTaskConfirmOpen).toBe(false);
+    expect(state().deleteAttachmentName).toBeNull();
+  };
+
+  it('count as an open dialog', () => {
+    useBoardStore.setState({ selectedTaskId: null });
+    expect(isAnyDialogOpen(state())).toBe(true);
+  });
+
+  it('close with the task dialog', () => {
+    state().closeTask();
+    closed();
+  });
+
+  it('close when another dialog replaces it', () => {
+    state().openEpic('ui');
+    closed();
+  });
+
+  it('close when the dialog steps back', () => {
+    state().goBack();
+    closed();
+  });
+
+  it('close under the conflict modal', () => {
+    state().openConflict();
+    closed();
+  });
+
+  it('close once the task is deleted', async () => {
+    await state().deleteTask('BD-1');
+    closed();
+  });
+
+  it('do not survive a load, which unmounts the dialog under them', async () => {
+    await loadFrom({ [CONFIG_FILENAME]: CONFIG_MD, 'releases/1.0.md': RELEASE_MD });
+    closed();
+  });
+});
