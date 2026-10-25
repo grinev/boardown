@@ -1,13 +1,22 @@
 ---
 name: boardown
-description: The project's task board, managed by the `boardown` CLI. Use whenever the user names boardown explicitly - including asking to set up a new board - and, in a project that has a `.boardown/` directory, whenever the user mentions tasks, the board, the backlog, releases, epics, labels, files attached to a task, or a task id like BD-39 or other prefix ("add a task", "what's in the backlog", "move BD-12 to in progress", "what's in the current release", "label this task", "attach a screenshot to the task", "what's on the board"). Explains the board model and gives the full command list so the CLI never has to be rediscovered.
+description: The project's task board, managed by the `boardown` CLI. Use whenever the user names boardown explicitly - including asking to set up a new board - and, in a project that has a `.boardown/` directory, whenever the user mentions tasks, the board, the backlog, releases, epics, labels, files attached to a task, docs pages, or a task id like BD-39 or other prefix ("add a task", "what's in the backlog", "move BD-12 to in progress", "what's in the current release", "label this task", "attach a screenshot to the task", "write a docs page with the findings", "what's on the board"). Explains the board model and gives the full command list so the CLI never has to be rediscovered.
 ---
 
 The board lives in `.boardown/` at the project root and is plain Markdown under
 git. Never edit those files by hand - always go through the `boardown` CLI. When
-the CLI has no command for what is asked (a docs page, renaming or removing a
-label in the registry, deleting an epic or a release), tell the user it cannot be
-done through the CLI and stop there.
+the CLI has no command for what is asked (renaming or removing a label in the
+registry, deleting an epic or a release), tell the user it cannot be done through
+the CLI and stop there.
+
+The one exception is docs pages, which the CLI has no commands for: create and
+edit them directly as plain Markdown under `.boardown/docs/`, in subfolders if
+useful. The only frontmatter is an optional `title`, written as a double-quoted
+string (`title: "Release process"`) - unquoted, a colon or a leading `[` makes the
+page unreadable. Name a new page's file after the title's slug; when that name is
+taken, add `-2`, `-3`, … instead of replacing the file. Link one with
+`[[<path under docs/ without .md>]]`, e.g. `[[guides/release-process]]`.
+Everything else under `.boardown/` stays CLI-only.
 
 This page follows boardown 0.12. Labels, attachments, `--label` / `--link` /
 `--attach` on `task add` and `editFinishedReleases` do not exist before 0.11, task
@@ -122,7 +131,7 @@ boardown task commits <id>                                               # local
 Releases and epics:
 
 ```bash
-boardown release list [--full]
+boardown release list [--full]                               # by version, lowest first
 boardown release get <ref> [--full]
 boardown release add <name> [--description TEXT]            # a future release
 boardown release edit <ref> [--name NAME] [--description TEXT]
