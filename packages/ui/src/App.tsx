@@ -326,6 +326,7 @@ export function App({
         activeTab={activeTab}
         onSelect={setActiveTab}
         hideSettings={forcedTheme !== undefined}
+        atPageTop={embedded}
       />
       <TabContent
         activeTab={activeTab}
