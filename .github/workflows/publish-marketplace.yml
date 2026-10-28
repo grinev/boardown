@@ -45,7 +45,7 @@ jobs:
             exit 0
           fi
 
-          PUBLISHED=$(npx --yes @vscode/vsce@3.9.1 show grinev.boardown --json \
+          PUBLISHED=$(npx --yes @vscode/vsce@3.9.2 show grinev.boardown --json \
             | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).versions[0].version')
           if [[ "$PUBLISHED" == "$VERSION" ]]; then
             echo "Skipping: $VERSION is already published on the Marketplace."
@@ -60,7 +60,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Download .vsix from the GitHub Release
         if: steps.guard.outputs.skip != 'true'
@@ -76,4 +76,4 @@ jobs:
         run: |
           set -euo pipefail
           VSIX=$(ls vsix/*.vsix)
-          npx --yes @vscode/vsce@3.9.1 publish --packagePath "$VSIX" --pat "$VSCE_PAT"
+          npx --yes @vscode/vsce@3.9.2 publish --packagePath "$VSIX" --pat "$VSCE_PAT"

@@ -68,7 +68,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Download .vsix from the GitHub Release
         if: steps.guard.outputs.skip != 'true'
