@@ -871,8 +871,9 @@ slug) with a trailing `No epic` lane, which also takes a task whose `epic` names
 epic file. By type, they follow the type pickers' order — the base types, then the
 board's own — with a disabled type that still has tasks keeping its place and an
 undeclared type following by key, under its raw key and the fallback circle icon.
-A lane header carries a collapse chevron, the epic's badge or the type's icon and
-label, and the lane's task count; the whole header toggles the lane, by click or by
+A lane header carries a collapse chevron, the epic's name after a small marker in its
+colour (as the Backlog's epic filter lists it; `No epic` has no marker) or the type's
+icon and label, and the lane's task count; the whole header toggles the lane, by click or by
 Enter / Space. Every lane starts expanded; collapse survives an auto-refresh and task
 edits, and starts over on leaving the tab, changing the grouping or switching (or
 renaming) the release. Cells show no count and no placeholder; one Create task sits
