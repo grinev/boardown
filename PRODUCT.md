@@ -1901,7 +1901,8 @@ so which file was opened never has to be guessed.
 A board page opened with **`?embed`** is rendered for another app's window that
 already names the project: the row holding the project name above the tabs is not
 there, on the board and on its loading, onboarding and error screens alike, and
-the tab bar is the top of the page. Everything else — tabs, search, Create,
+the tab bar is the top of the page, keeping the same 8px from its top edge as
+from its sides. Everything else — tabs, search, Create,
 Reload, Settings, the theme — is as it is without it. It is a parameter of the
 page, read the same way at `/` of a single board, under `/b/<id>/` of a registry
 (`/b/<id>?embed` redirects with the parameter kept) and in the dev shell: `?embed`,

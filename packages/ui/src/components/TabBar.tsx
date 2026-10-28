@@ -12,6 +12,9 @@ interface TabBarProps {
   // Hosts that own the theme themselves (e.g. the desktop shell) hide the
   // per-board settings, whose only control is the theme.
   hideSettings?: boolean;
+  // Nothing sits above the bar (an embedded page has no title row), so it keeps
+  // the same gap to the top edge as to the sides.
+  atPageTop?: boolean;
 }
 
 const TABS: ReadonlyArray<{ key: ActiveTab; label: string; icon: LucideIcon }> = [
@@ -24,12 +27,12 @@ const TABS: ReadonlyArray<{ key: ActiveTab; label: string; icon: LucideIcon }> =
 const tabClass = (active: boolean): string =>
   [styles.tab, active && styles.tabActive].filter(Boolean).join(' ');
 
-export function TabBar({ activeTab, onSelect, hideSettings }: TabBarProps) {
+export function TabBar({ activeTab, onSelect, hideSettings, atPageTop }: TabBarProps) {
   const docsTab = useBoardStore((s) => s.snapshot?.config.docsTab ?? true);
   const tabs = docsTab ? TABS : TABS.filter(({ key }) => key !== 'docs');
 
   return (
-    <div className={styles.bar}>
+    <div className={atPageTop ? `${styles.bar} ${styles.barAtPageTop}` : styles.bar}>
       <div className={styles.tabs}>
         {tabs.map(({ key, label, icon: Icon }) => (
           <button

@@ -224,7 +224,7 @@ edit, and a project you add by hand and one you add from the page look the same.
 To show a board inside another app's window that already names the project, open
 it with `?embed` — `http://127.0.0.1:<port>/b/shop/?embed`, or `/?embed` with
 `--data-dir`. The project-name row above the tabs is left out and the tab bar
-becomes the top of the page; everything else stays. It belongs to that page only:
+becomes the top of the page, 8px from its edge; everything else stays. It belongs to that page only:
 the same board opened without it shows its title as usual.
 
 To jump to a task, add `#task=<id>` — `http://127.0.0.1:<port>/b/shop/?embed#task=SHOP-12`.

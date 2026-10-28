@@ -7,6 +7,10 @@
   background: var(--surface);
 }
 
+.barAtPageTop {
+  padding-top: 8px;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
