@@ -1075,7 +1075,7 @@ What is written is what the edit added and removed, applied to the task as it
 stands on disk then, so a label that arrived from outside while the row was open
 survives.
 
-Below Type / Epic / Release, the Details card lists the board's **custom
+Below the built-in rows — Release, then Created / Updated — the Details card lists the board's **custom
 fields** (see "Custom fields" under Configuration) — one row per declared field,
 in declaration order, labelled by the declaration's `label` or its `key`. Each is
 an inline-editable single-line text field, left **blank** when unset — the row is
@@ -1087,8 +1087,8 @@ as links in view mode, exactly as they do in the description (see "Task links",
 "Doc links" and "Repo file links"), and typing `[[` while editing offers the same
 doc-page suggestions.
 
-The Details card ends with two read-only rows, **Created** and **Updated** —
-below the custom fields, in the active and the Archive's dialog alike. Each shows
+Two read-only rows, **Created** and **Updated**, follow Release and close the
+built-in rows, above the custom fields, in the active and the Archive's dialog alike. Each shows
 its date as `DD.MM.YYYY HH:MM` in the viewer's local time; a hand-written value no
 date can be read from shows as written. A task without the date keeps the row, its
 value empty, as an unset custom field's row is. With `trackUpdatedAt` off the
