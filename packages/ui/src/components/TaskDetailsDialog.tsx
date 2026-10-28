@@ -448,6 +448,20 @@ export function TaskDetailsDialog({
                   )}
                 </dd>
               </div>
+              <div className={styles.detailRow}>
+                <dt className={styles.detailLabel}>Created</dt>
+                <dd className={styles.detailValue}>
+                  <TaskDate value={task.frontmatter.createdAt} />
+                </dd>
+              </div>
+              {(config === undefined || isUpdateTracked(config)) && (
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Updated</dt>
+                  <dd className={styles.detailValue}>
+                    <TaskDate value={task.frontmatter.updatedAt} />
+                  </dd>
+                </div>
+              )}
               {customFields.map((field) => (
                 <div key={field.key} className={styles.detailRowWrapping}>
                   <dt className={styles.detailLabel}>{customFieldLabel(field)}</dt>
@@ -464,20 +478,6 @@ export function TaskDetailsDialog({
                   </dd>
                 </div>
               ))}
-              <div className={styles.detailRow}>
-                <dt className={styles.detailLabel}>Created</dt>
-                <dd className={styles.detailValue}>
-                  <TaskDate value={task.frontmatter.createdAt} />
-                </dd>
-              </div>
-              {(config === undefined || isUpdateTracked(config)) && (
-                <div className={styles.detailRow}>
-                  <dt className={styles.detailLabel}>Updated</dt>
-                  <dd className={styles.detailValue}>
-                    <TaskDate value={task.frontmatter.updatedAt} />
-                  </dd>
-                </div>
-              )}
             </dl>
           </div>
           {/* Not mounted when the setting is off, so "no Git read" is true rather
