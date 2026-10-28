@@ -351,20 +351,24 @@
   min-width: 0;
 }
 
-.laneEpicBadge {
+/* The epic filter's spacing between marker and name. */
+.laneEpicTitle {
+  gap: 8px;
+}
+
+.laneTitleText {
   max-width: 240px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 3px;
-  background: var(--epic-bg);
-  color: var(--epic-fg);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.epicSwatch {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
 }
 
 .laneCells {

@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { isWipLimitReached, wipLimitFor, type StatusConfig } from '@boardown/core';
 import type { BoardConfig, Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { taskTypeDisplay } from '../task-types';
-import { pickContrastText } from '../utils/contrast-color';
 import { statusDisplayLabel } from '../utils/status-style';
 import { wipLimitHint } from '../utils/wip-limit';
 import { BoardDndContext } from '../dnd/BoardDndContext';
@@ -409,14 +408,14 @@ function BoardLaneRow({
 function LaneTitle({ lane, config }: { lane: BoardLane; config: BoardConfig | undefined }) {
   if (lane.kind === 'no-epic') return <span className={styles.laneTitle}>No epic</span>;
   if (lane.kind === 'epic') {
-    const color = lane.epic.frontmatter.color;
-    const style = {
-      '--epic-bg': color,
-      '--epic-fg': pickContrastText(color),
-    } as CSSProperties;
     return (
-      <span className={styles.laneEpicBadge} style={style}>
-        {lane.epic.frontmatter.name}
+      <span className={`${styles.laneTitle} ${styles.laneEpicTitle}`}>
+        <span
+          className={styles.epicSwatch}
+          style={{ background: lane.epic.frontmatter.color }}
+          aria-hidden="true"
+        />
+        <span className={styles.laneTitleText}>{lane.epic.frontmatter.name}</span>
       </span>
     );
   }
