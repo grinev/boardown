@@ -47,8 +47,10 @@ instead of overwriting.
   in your browser.
 - **Epics** that group tasks across releases, usable as a filter dimension,
   with an editable colour.
-- **Labels**: tag tasks with free-form labels, shown on board cards and
-  suggested from a board-wide list as you type.
+- **Swimlanes**: split the Board into collapsible lanes by epic or by task
+  type.
+- **Labels**: tag tasks with free-form labels, shown on board cards, suggested
+  from a board-wide list as you type, and usable as a backlog filter.
 - **Task search**: a search field in the top bar finds any task by id, title or
   description — finished releases included — and opens it in one click.
 - **Task priority**: four levels (Critical / High / Medium / Low) shown as a

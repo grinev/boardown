@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.0
+
+- **Swimlanes**: a **Swimlanes** dropdown in the Board's release header splits
+  the columns into collapsible lanes by **Epic** or by **Type**, each lane
+  showing its badge or icon and a task count. The choice is saved in
+  `config.yaml`.
+- **Filter the backlog by labels**: the Backlog's filter bar gains a **label**
+  filter that matches tasks carrying any of the picked labels, or **No labels**.
+- **Created and Updated dates**: the task dialog shows when a task was created
+  and last changed. A new **Track update date** checkbox in Settings stops the
+  Updated stamp so parallel branches never conflict on it.
+- **Hide the Docs tab**: a new **Docs tab** checkbox in Settings hides the tab;
+  the pages stay on disk and `[[page]]` links still open them in a popup.
+- **Releases in version order**: releases now sort by version (`v0.9.0` before
+  `v0.10.0`) in the Backlog, the Board switcher, the release pickers and search,
+  and the Archive lists the most recently completed release first.
+- **Conflict during onboarding**: if `config.yaml` appears on disk while the
+  setup form is open, Create now offers the Reload conflict dialog instead of an
+  inline error, and never overwrites the file.
+
 ## 0.11.0
 
 - **Attachments**: a task dialog's new **Attachments** section, below
