@@ -71,21 +71,6 @@ links:
     to: BD-143
 ---
 
-## No DOM test environment for packages/ui
-
----
-id: BD-111
-type: tech
-status: todo
-epic: tests
-order: 300
-links:
-  - type: relates
-    to: BD-100
----
-
-All five packages run vitest with environment: 'node', and the repo has no jsdom, happy-dom or testing-library dependency, so nothing that renders React can be covered automatically. Hooks that measure the DOM ship with the manual tester as their only witness — packages/ui/src/hooks/use-auto-grow.ts, added by BD-100, is the current example. Decide whether packages/ui gets a DOM environment plus a first set of component and hook tests, or whether Playwright stays the only UI coverage.
-
 ## Match the project list page styling to the board
 
 ---
@@ -97,6 +82,9 @@ order: 400
 links:
   - type: relates
     to: BD-144
+  - type: relates
+    to: BD-152
+updatedAt: "2026-11-20T09:15:15.342Z"
 ---
 
 The project list page at / in registry mode carries its own minimal styling — rows, buttons and dialogs assembled from currentColor and the system Canvas/CanvasText colours — so it only resembles the board rather than looking like it. It should read as the same product: the surfaces, controls and dialogs of the board UI, in light and in dark. The page serves several boards at once while a theme belongs to one board's config, so what it follows when the boards disagree is part of the task.
@@ -109,6 +97,10 @@ type: bug
 status: todo
 epic: web-app
 order: 700
+links:
+  - type: relates
+    to: BD-152
+updatedAt: "2026-11-20T09:15:15.342Z"
 ---
 
 The boardown-web list page (served at the registry root) stays blank when opened in the browser built into Orca, while the same URL renders normally in an ordinary browser. The server is not at fault: it answers 200 with the full HTML, and the log records no error. Worth checking what the embedded browser restricts — the inline <script> and inline <style> the page is built from, the <dialog> element the Add/Remove flows use, or the modern CSS the page leans on (color-mix(), color-scheme). The host check may also matter: the server accepts only 127.0.0.1, localhost and ::1 in the Host header, so an embedded browser reaching it by any other name is refused.
@@ -213,44 +205,6 @@ status: todo
 epic: localization
 order: 1700
 ---
-
-## Make task IDs survive parallel branches
-
----
-id: BD-63
-type: tech
-status: todo
-order: 1800
-links:
-  - type: blocked-by
-    to: BD-125
-  - type: relates
-    to: BD-131
----
-
-`nextId` in `config.yaml` is a single global counter, so every task created on a
-branch collides with one created on `main`: the same line conflicts in
-`config.yaml`, and both tasks end up carrying the same ID. `verifyNextId` only
-moves the counter forward — it never notices that two tasks already share an ID,
-and nothing else validates uniqueness, so wiki-links and lookups silently
-resolve to whichever copy comes first.
-
-- Report a duplicate task ID as a `problem` at load time instead of letting it
-  pass, and add a CLI command that reassigns the duplicate and repairs the links
-  pointing at it.
-- Drop `nextId` from `config.yaml` and derive the next ID from the highest one on
-  the board, so creating a task stops touching a shared file at all. Only worth
-  doing together with the check above — on its own it trades a loud conflict for
-  a quiet duplicate.
-
-Keep the IDs human-readable (`BD-62`); random suffixes would dodge the collision
-but cost the thing people actually use IDs for.
-
-The counter is only half of it: a new task is appended to the tail of its
-container file, so two sessions creating unrelated tasks also conflict on the
-last lines of `no_epic.md` (27 tasks today). Splitting storage further — a file
-per task — is not the answer; it breaks docs/decisions/storage-format.md and
-principle 2. Close this first and see what pain is left.
 
 ## Surface core invariant refusals in the UI
 
@@ -362,3 +316,72 @@ order: 3100
 ---
 
 Allow deleting a release. Deleting asks where its tasks go, with the same dialog as completing a release (CompleteReleaseDialog): move every task of the release into another release or into the backlog, then remove the release file.
+
+## CLI: apply a batch of operations from stdin
+
+---
+id: BD-107
+type: feature
+status: todo
+epic: cli
+order: 3200
+links:
+  - type: relates
+    to: BD-130
+updatedAt: "2026-11-16T12:34:55.946Z"
+---
+
+Setting up one board took 23 CLI calls: 4 epics, 10 tasks, 6 checklist items, 2 status marks, 1 link. Each round-trip can fail and leave the board half-built. `boardown apply -` reads a JSON array of operations from stdin and applies them through `writeAll` — all of them or none.
+
+Needs grooming: how an operation references an id created earlier in the same batch, `--dry-run`, the shape of the response (one result per operation), and what happens when a core invariant refuses mid-batch. Widening the published command set is the human's call.
+
+## Defer non-visible task containers after board startup
+
+---
+id: BD-153
+type: tech
+status: todo
+epic: web-app
+order: 3300
+links:
+  - type: blocked-by
+    to: BD-151
+  - type: relates
+    to: BD-63
+createdAt: "2026-11-20T09:55:16.607Z"
+updatedAt: "2026-11-20T10:48:24.249Z"
+---
+
+Follow-up to BD-151 after the Docs-only startup improvement. Make the first usable Board depend on validated settings, the necessary release and epic metadata, and the selected active release, not on task bodies from unselected active releases, future releases, finished releases or the backlog. Load deferred tasks when their views, global search, links, or writes need them; keep the same coverage and distinguish loading or errors from confirmed absence. Preserve ID uniqueness across all containers, mirrored links, legacy backlog conversion, write-version and unreadable-file protection, and silent refresh. Do not eagerly crawl the deferred task bodies in the background. Use the same realistic-board benchmark as BD-151. Scope and implementation details still need their own grooming; no Dev Studio changes or npm publication.
+
+## Guide repair of ambiguous duplicate task IDs
+
+---
+id: BD-154
+type: feature
+status: todo
+order: 3400
+links:
+  - type: blocked-by
+    to: BD-63
+createdAt: "2026-11-20T10:33:25.091Z"
+updatedAt: "2026-11-20T10:33:25.091Z"
+---
+
+Follow-up to BD-63 for duplicate numeric task IDs that cannot be repaired automatically. Let the user explicitly choose which task keeps the original ID and decide ownership of ambiguous structured links, references in board text and docs, and attachments sharing the old ID directory. Show the affected tasks, references and files before saving; never guess link or attachment ownership or rewrite external URLs or Git history. Preserve human-readable numeric IDs and guarded all-or-nothing writes. This task still needs its own grooming; allocation across independent clones and merge conflicts in shared container files are separate problems.
+
+## No DOM test environment for packages/ui
+
+---
+id: BD-111
+type: tech
+status: todo
+epic: tests
+order: 3500
+links:
+  - type: relates
+    to: BD-100
+updatedAt: "2026-11-20T11:28:45.788Z"
+---
+
+All five packages run vitest with environment: 'node', and the repo has no jsdom, happy-dom or testing-library dependency, so nothing that renders React can be covered automatically. Hooks that measure the DOM ship with the manual tester as their only witness — packages/ui/src/hooks/use-auto-grow.ts, added by BD-100, is the current example. Decide whether packages/ui gets a DOM environment plus a first set of component and hook tests, or whether Playwright stays the only UI coverage.
