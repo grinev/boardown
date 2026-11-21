@@ -42,6 +42,7 @@ interface WatchEntry {
 export interface BoardWatchHub {
   /** Serves the long-lived GET the browser holds open on one board. */
   openStream: (res: ServerResponse, params: URLSearchParams, boardRoot: string) => void;
+  openThemeStream: (res: ServerResponse) => void;
   /** Records a write so the tab that made it does not see its own change. */
   noteWrite: (boardRoot: string, clientId: string | undefined, absolutePath: string) => void;
   /**
@@ -68,6 +69,7 @@ export const createBoardWatchHub = (options: BoardWatchHubOptions = {}): BoardWa
   // Keyed by resolved board root, not by registry id: two ids naming one board
   // are one board, and share the watcher.
   const entries = new Map<string, WatchEntry>();
+  const themeStreams = new Set<ServerResponse>();
   const configDir = options.configDir === undefined ? undefined : path.resolve(options.configDir);
   // Held while any stream is open, like a board's: a tab that reconnects later
   // catches up on its own, so nobody needs the changes made while none was.
@@ -98,8 +100,11 @@ export const createBoardWatchHub = (options: BoardWatchHubOptions = {}): BoardWa
     clearTimeout(configTimer);
     configTimer = setTimeout(() => {
       configTimer = undefined;
-      for (const connection of openConnections()) {
-        connection.res.write(`event: ${SHARED_CONFIG_CHANGED_EVENT}
+      for (const res of [
+        ...openConnections().map((connection) => connection.res),
+        ...themeStreams,
+      ]) {
+        res.write(`event: ${SHARED_CONFIG_CHANGED_EVENT}
 data: 1
 
 `);
@@ -115,7 +120,7 @@ data: 1
   }
 
   const stopConfigWatchIfIdle = (): void => {
-    if (configWatcher === undefined || entries.size > 0) return;
+    if (configWatcher === undefined || entries.size > 0 || themeStreams.size > 0) return;
     configWatcher.close();
     configWatcher = undefined;
     clearTimeout(configTimer);
@@ -176,18 +181,19 @@ data: 1
     stopConfigWatchIfIdle();
   };
 
+  const startStream = (res: ServerResponse): void => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.flushHeaders();
+  };
+
   return {
     openStream: (res, params, boardRoot) => {
       const key = path.resolve(boardRoot);
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      });
-      // Without this the browser's `open` waits for the first event, and the
-      // refresh-on-reconnect would fire late.
-      res.flushHeaders();
-
+      startStream(res);
       let entry = entries.get(key);
       if (entry === undefined) {
         entry = { watcher: watchBoard(key, onChange(key)), connections: new Set() };
@@ -206,6 +212,16 @@ data: 1
 
       res.on('close', () => {
         drop(key, connection);
+      });
+    },
+
+    openThemeStream: (res) => {
+      startStream(res);
+      themeStreams.add(res);
+      startConfigWatch(false);
+      res.on('close', () => {
+        themeStreams.delete(res);
+        stopConfigWatchIfIdle();
       });
     },
 
@@ -232,6 +248,8 @@ data: 1
         }
       }
       entries.clear();
+      for (const res of themeStreams) res.end();
+      themeStreams.clear();
       stopConfigWatchIfIdle();
     },
   };

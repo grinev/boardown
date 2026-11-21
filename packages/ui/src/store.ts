@@ -213,6 +213,7 @@ interface BoardState {
   // outcome either opens it or drops it.
   pendingTaskJump: string | null;
   load: (fs: FsAdapter, defaultTheme?: Theme) => Promise<void>;
+  unload: (fs: FsAdapter) => void;
   setProjectFiles: (reader: ProjectFileReader) => void;
   setGitHistory: (reader: GitHistoryReader) => void;
   setFileSaver: (saver: FileSaver) => void;
@@ -321,11 +322,7 @@ interface BoardState {
   updateEpic: (slug: string, patch: EpicPatch) => Promise<void>;
   updateRelease: (filename: string, patch: ReleasePatch) => Promise<void>;
   addTaskLink: (taskId: string, otherTaskId: string, type: LinkType) => Promise<void>;
-  removeTaskLink: (
-    taskId: string,
-    otherTaskId: string,
-    type: LinkType,
-  ) => Promise<void>;
+  removeTaskLink: (taskId: string, otherTaskId: string, type: LinkType) => Promise<void>;
 }
 
 export type BacklogMoveTarget = { kind: 'release'; filename: string } | { kind: 'backlog' };
@@ -406,8 +403,7 @@ const withContainers = (
 // it lands. It reads the task from the snapshot as it is when it builds the write,
 // and only its stamp goes into the snapshot — never the task object it built.
 const locateForAttachments =
-  (get: () => BoardState, taskId: string) =>
-  (): { container: Container; config: BoardConfig } => {
+  (get: () => BoardState, taskId: string) => (): { container: Container; config: BoardConfig } => {
     const snapshot = get().snapshot;
     const found = snapshot ? findTaskContainer(snapshot, taskId) : null;
     if (!snapshot || found === null) throw new Error(`Task not found: ${taskId}`);
@@ -519,30 +515,41 @@ const boardFs = (
   },
   get: () => BoardState,
   set: (partial: Partial<BoardState>) => void,
-): GuardedFs =>
-  wrapMinVersionWrites(
+): GuardedFs => {
+  const session = boardSession;
+  const isCurrent = () => session === boardSession && get().rawFs === rawFs;
+  return wrapMinVersionWrites(
     createConvertingFs(
       createGuardedFs(rawFs, {
         versions: result.fileVersions,
         problems: result.problems,
-        onConflict: () => get().openConflict(),
-        onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+        onConflict: () => {
+          if (isCurrent()) get().openConflict();
+        },
+        onUnreadable: (path, problems) => {
+          if (isCurrent()) get().openUnwritable(path, problems);
+        },
       }),
       result.conversion,
-      () => get().snapshot?.backlog ?? null,
+      () => (isCurrent() ? (get().snapshot?.backlog ?? null) : null),
       (landed) => {
-        if (landed.complete) set({ conversionNoticeOwed: true });
+        if (isCurrent() && landed.complete) set({ conversionNoticeOwed: true });
       },
     ),
-    () => get().snapshot?.config ?? null,
+    () => (isCurrent() ? (get().snapshot?.config ?? null) : null),
     (config) => {
+      if (!isCurrent()) return;
       const snapshot = get().snapshot;
       if (!snapshot) return;
       set({ snapshot: { ...snapshot, config } });
     },
   );
+};
 
-const filesFor = (snapshot: BoardSnapshot, filenames: Iterable<string>): GuardedChange['writes'] => {
+const filesFor = (
+  snapshot: BoardSnapshot,
+  filenames: Iterable<string>,
+): GuardedChange['writes'] => {
   const files: { path: string; content: string }[] = [];
   for (const path of filenames) {
     const release = snapshot.releases.find((r) => r.filename === path);
@@ -550,10 +557,9 @@ const filesFor = (snapshot: BoardSnapshot, filenames: Iterable<string>): Guarded
       files.push({ path, content: serializeRelease(release) });
       continue;
     }
-    const backlog = [
-      ...(snapshot.backlog ? [snapshot.backlog] : []),
-      ...snapshot.heldBack,
-    ].find((b) => b.filename === path);
+    const backlog = [...(snapshot.backlog ? [snapshot.backlog] : []), ...snapshot.heldBack].find(
+      (b) => b.filename === path,
+    );
     if (backlog) {
       files.push({ path, content: serializeBacklog(backlog) });
       continue;
@@ -652,15 +658,20 @@ const describeArg = (value: unknown): string => {
 // Every action the user triggers goes through a function on the store, so
 // wrapping them at creation gives the trail that makes an error further down the
 // file readable — without an added log call in each of the ~40 actions.
-const withActionLogging = (state: BoardState): BoardState => {
+type StoreAction = (...args: unknown[]) => unknown;
+
+const withActionLogging = (
+  state: BoardState,
+  resolve: (name: keyof BoardState, action: StoreAction) => StoreAction,
+): BoardState => {
   const wrapped = Object.entries(state).map(([name, value]) => {
     if (typeof value !== 'function') return [name, value] as const;
-    const action = value as (...args: unknown[]) => unknown;
+    const action = value as StoreAction;
     return [
       name,
       (...args: unknown[]) => {
         log.info(`${name}(${args.map(describeArg).join(', ')})`);
-        return action(...args);
+        return resolve(name as keyof BoardState, action)(...args);
       },
     ] as const;
   });
@@ -668,6 +679,10 @@ const withActionLogging = (state: BoardState): BoardState => {
   // the BoardState type cannot express.
   return Object.fromEntries(wrapped) as BoardState;
 };
+
+const LIFECYCLE_ACTIONS = new Set<keyof BoardState>([
+  'load', 'unload', 'reload', 'reloadSilent', 'refreshSharedTheme',
+]);
 
 // Single instrumentation point: every failure in this store surfaces by setting
 // errorMessage, so logging that transition covers all of them — including call
@@ -683,7 +698,26 @@ const logErrors =
       if (typeof message === 'string' && message !== '') log.error(message);
       (set as (p: typeof partial, r?: boolean) => void)(partial, replace);
     };
-    return withActionLogging(creator(loggingSet, get, api));
+    let bound: { session: number; actions: BoardState } | undefined;
+    return withActionLogging(creator(loggingSet, get, api), (name, action) => {
+      if (LIFECYCLE_ACTIONS.has(name)) return action;
+      if (bound?.session !== boardSession) {
+        const session = boardSession;
+        const current = () => session === boardSession;
+        // Every action gets the same board-scoped get/set for its lifetime. A
+        // late read must not borrow the next board, and an old rollback must
+        // not replace its snapshot, even when both boards use the same task ID.
+        const read: typeof get = () => {
+          if (!current()) throw new Error('The project is no longer open.');
+          return get();
+        };
+        const write: typeof set = (partial, replace) => {
+          if (current()) (loggingSet as (p: typeof partial, r?: boolean) => void)(partial, replace);
+        };
+        bound = { session, actions: creator(write, read, api) };
+      }
+      return bound.actions[name] as StoreAction;
+    });
   };
 
 // The four detail dialogs are mutually exclusive, so "which one is open" is a
@@ -852,6 +886,13 @@ const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
 // Reads of the shared theme can overlap — a burst of edits, a Reload on top of a
 // live event — and only the latest one may land.
 let sharedThemeReads = 0;
+let boardLoads = 0;
+let boardSession = 0;
+
+export function captureBoardSession(): () => boolean {
+  const session = boardSession;
+  return () => session === boardSession;
+}
 
 export const useBoardStore = create<BoardState>(
   logErrors((set, get) => ({
@@ -915,6 +956,9 @@ export const useBoardStore = create<BoardState>(
     },
 
     load: async (fs, defaultTheme) => {
+      if (get().rawFs !== fs) boardSession += 1;
+      const session = boardSession;
+      const request = ++boardLoads;
       set({
         status: 'loading',
         errorMessage: null,
@@ -924,8 +968,12 @@ export const useBoardStore = create<BoardState>(
         fs: createGuardedFs(fs, {
           versions: {},
           problems: [],
-          onConflict: () => get().openConflict(),
-          onUnreadable: (path, problems) => get().openUnwritable(path, problems),
+          onConflict: () => {
+            if (session === boardSession) get().openConflict();
+          },
+          onUnreadable: (path, problems) => {
+            if (session === boardSession) get().openUnwritable(path, problems);
+          },
         }),
         rawFs: fs,
         conflictOpen: false,
@@ -941,6 +989,7 @@ export const useBoardStore = create<BoardState>(
       });
       try {
         const result = await loadBoard(fs);
+        if (request !== boardLoads) return;
         if (result.kind === 'missing-config') {
           set({
             status: 'onboarding',
@@ -990,6 +1039,7 @@ export const useBoardStore = create<BoardState>(
         });
         if (pending !== null) applyTaskJump(get, pending);
       } catch (err) {
+        if (request !== boardLoads) return;
         const message = err instanceof Error ? err.message : String(err);
         set({
           status: 'error',
@@ -999,6 +1049,35 @@ export const useBoardStore = create<BoardState>(
           ...pendingJumpDropped(get()),
         });
       }
+    },
+
+    unload: (fs) => {
+      if (get().rawFs !== fs) return;
+      boardSession += 1;
+      boardLoads += 1;
+      sharedThemeReads += 1;
+      set({
+        status: 'idle',
+        snapshot: null,
+        problems: [],
+        errorMessage: null,
+        activeTab: 'board',
+        theme: DEFAULT_THEME,
+        defaultTheme: null,
+        fs: null,
+        rawFs: null,
+        projectFiles: null,
+        gitHistory: null,
+        fileSaver: null,
+        sharedThemeReader: null,
+        sharedTheme: null,
+        sharedThemeError: null,
+        conflictOpen: false,
+        ...ALL_DIALOGS_CLOSED,
+        selectedDocPath: null,
+        pendingTaskJump: null,
+        conversionNoticeOwed: false,
+      });
     },
 
     // The manual Reload re-reads everything the page shows, the host's shared
@@ -1021,8 +1100,10 @@ export const useBoardStore = create<BoardState>(
         await get().load(rawFs);
         return;
       }
+      const request = ++boardLoads;
       try {
         const result = await loadBoard(rawFs);
+        if (request !== boardLoads) return;
         if (result.kind !== 'loaded') {
           await get().load(rawFs);
           return;
@@ -1039,6 +1120,7 @@ export const useBoardStore = create<BoardState>(
           activeTab: tabFor(get().activeTab, result.snapshot.config),
         });
       } catch (err) {
+        if (request !== boardLoads) return;
         // The only failure in this store that never reaches errorMessage: it
         // degrades into a visible load(), so without this line the original cause
         // is lost entirely.
@@ -1064,8 +1146,8 @@ export const useBoardStore = create<BoardState>(
     dismissConversionNotice: () => set({ conversionNoticeOwed: false }),
 
     completeOnboarding: async (input) => {
-      const { fs } = get();
-      if (!fs) {
+      const { fs, rawFs } = get();
+      if (!fs || !rawFs) {
         throw new Error('Filesystem adapter is not initialized');
       }
       const dt = get().defaultTheme;
@@ -1076,10 +1158,11 @@ export const useBoardStore = create<BoardState>(
         ...(dt ? { theme: dt } : {}),
       });
       await fs.write(CONFIG_FILENAME, serializeConfig(config));
-      await get().load(fs);
+      if (get().rawFs !== rawFs) return;
+      await get().load(rawFs);
       // A freshly created board has no releases yet, so land on the Backlog tab
       // instead of the empty Board.
-      set({ activeTab: 'backlog' });
+      if (get().rawFs === rawFs) set({ activeTab: 'backlog' });
     },
 
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1281,8 +1364,7 @@ export const useBoardStore = create<BoardState>(
       applyTaskJump(get, id);
     },
 
-    closeTask: () =>
-      set({ selectedTaskId: null, dialogStack: [], ...NESTED_CONFIRMATIONS_CLOSED }),
+    closeTask: () => set({ selectedTaskId: null, dialogStack: [], ...NESTED_CONFIRMATIONS_CLOSED }),
 
     openDeleteTaskConfirm: () => set({ deleteTaskConfirmOpen: true }),
 
@@ -1630,6 +1712,7 @@ export const useBoardStore = create<BoardState>(
           ],
           removes: [],
         });
+        get();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save task: ${message}` });
@@ -2148,15 +2231,27 @@ export const useBoardStore = create<BoardState>(
     addTaskLink: async (taskId, otherTaskId, type) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
-      await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
-        addTaskLinkInBoard(s, t, snapshot.config, a, b, type), set);
+      await applyLinkOp(
+        snapshot,
+        fs,
+        taskId,
+        otherTaskId,
+        (s, t, a, b) => addTaskLinkInBoard(s, t, snapshot.config, a, b, type),
+        set,
+      );
     },
 
     removeTaskLink: async (taskId, otherTaskId, type) => {
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
-      await applyLinkOp(snapshot, fs, taskId, otherTaskId, (s, t, a, b) =>
-        removeTaskLinkInBoard(s, t, snapshot.config, a, b, type), set);
+      await applyLinkOp(
+        snapshot,
+        fs,
+        taskId,
+        otherTaskId,
+        (s, t, a, b) => removeTaskLinkInBoard(s, t, snapshot.config, a, b, type),
+        set,
+      );
     },
 
     deleteTask: async (taskId) => {
@@ -2201,7 +2296,11 @@ export const useBoardStore = create<BoardState>(
       // snapshot unmounts its dialog, and with it the confirm dialog that would have
       // shown a failed write. A refused delete must leave the user where they were.
       try {
-        await fs.commit({ writes: files, removes: [], unversionedRemoves: result.unversionedRemoves });
+        await fs.commit({
+          writes: files,
+          removes: [],
+          unversionedRemoves: result.unversionedRemoves,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to delete task: ${message}` });
@@ -2238,7 +2337,9 @@ export const useBoardStore = create<BoardState>(
         return await readAttachmentPreviews(fs, attachments);
       } catch (err) {
         // Swallowed: the rows keep their icons, so the log is the only record.
-        log.error(`read attachment previews failed: ${err instanceof Error ? err.message : String(err)}`);
+        log.error(
+          `read attachment previews failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return new Map();
       }
     },
@@ -2258,6 +2359,7 @@ export const useBoardStore = create<BoardState>(
           taskId,
           files,
         );
+        get();
         return added.names;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -2281,6 +2383,7 @@ export const useBoardStore = create<BoardState>(
           taskId,
           name,
         );
+        get();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ errorMessage: `Failed to delete attachment: ${message}` });
@@ -2294,6 +2397,7 @@ export const useBoardStore = create<BoardState>(
       try {
         const content = await readAttachment(fs, taskId, name);
         if (content === null) return 'not-found';
+        get();
         await fileSaver.save(name, content);
         return 'saved';
       } catch (err) {
@@ -2406,6 +2510,7 @@ export const useBoardStore = create<BoardState>(
       // about would leave the two out of step for every later write.
       if (moved && boardReleaseMoved && !configNeedsMinVersionStamp(snapshot.config)) {
         try {
+          get();
           await fs.write(CONFIG_FILENAME, serializeConfig(nextConfig));
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

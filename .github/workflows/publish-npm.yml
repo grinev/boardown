@@ -1,6 +1,6 @@
 name: Publish to npm
 
-# Publishes the CLI package (@grinev/boardown-cli) to the npm registry.
+# Publishes boardown-cli and boardown-web independently to the npm registry.
 # Reusable: the Release workflow calls it (workflow_call) right after creating
 # the GitHub Release, and it can be re-run on its own (workflow_dispatch) against
 # any tag if the npm publish fails after the release already exists.
@@ -29,13 +29,23 @@ permissions:
 
 jobs:
   npm:
-    name: Publish @grinev/boardown-cli to npm
+    name: Publish ${{ matrix.package }} to npm
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: '@grinev/boardown-cli'
+            directory: cli
+          - package: '@grinev/boardown-web'
+            directory: web
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -60,6 +70,8 @@ jobs:
         id: guard
         env:
           TAG: ${{ inputs.tag }}
+          PACKAGE: ${{ matrix.package }}
+          DIRECTORY: ${{ matrix.directory }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -71,11 +83,15 @@ jobs:
             echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-          if npm view "@grinev/boardown-cli@$VERSION" version >/dev/null 2>&1; then
-            echo "Skipping: @grinev/boardown-cli@$VERSION is already published on npm."
+          MANIFEST="./packages/$DIRECTORY/package.json"
+          if [[ ! -f "$MANIFEST" ]] || ! node -e 'const manifest = require(process.argv[1]); process.exit(manifest.name === process.argv[2] && manifest.private !== true ? 0 : 1)' "$MANIFEST" "$PACKAGE"; then
+            echo "Skipping: $PACKAGE is not a public package in $TAG."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+            echo "Skipping: $PACKAGE@$VERSION is already published on npm."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Publishing @grinev/boardown-cli@$VERSION."
+            echo "Publishing $PACKAGE@$VERSION."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -84,15 +100,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build the CLI bundle
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.skip != 'true' && matrix.directory == 'cli'
         run: pnpm --filter @grinev/boardown-cli build
 
-      # pnpm pack rewrites the workspace:* devDependency to a concrete version so
-      # the tarball manifest is valid for npm; the esbuild bundle already inlines
-      # @boardown/core, so the published package has no runtime dependencies.
+      # The Web package builds its server and assets during prepack. Both
+      # packages bundle their workspace code instead of installing it at runtime.
       - name: Pack the tarball
         if: steps.guard.outputs.skip != 'true'
-        run: pnpm --filter @grinev/boardown-cli pack --pack-destination "$RUNNER_TEMP/npm-pack"
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: pnpm --filter "$PACKAGE" pack --pack-destination "$RUNNER_TEMP/npm-pack"
 
       - name: Publish to npm
         if: steps.guard.outputs.skip != 'true'

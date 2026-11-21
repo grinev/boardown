@@ -88,6 +88,9 @@ importers:
       '@boardown/core':
         specifier: workspace:*
         version: link:../core
+      '@boardown/projects':
+        specifier: workspace:*
+        version: link:../projects
       '@boardown/ui':
         specifier: workspace:*
         version: link:../ui
@@ -125,6 +128,22 @@ importers:
       vite:
         specifier: ^6.4.5
         version: 6.4.5(@types/node@20.19.39)(jiti@2.7.0)
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@20.19.39)(vite@6.4.5(@types/node@20.19.39)(jiti@2.7.0))
+
+  packages/projects:
+    dependencies:
+      '@boardown/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.10
+        version: 20.19.39
       vitest:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@20.19.39)(vite@6.4.5(@types/node@20.19.39)(jiti@2.7.0))
@@ -214,6 +233,9 @@ importers:
       '@boardown/core':
         specifier: workspace:*
         version: link:../core
+      '@boardown/projects':
+        specifier: workspace:*
+        version: link:../projects
       '@boardown/ui':
         specifier: workspace:*
         version: link:../ui

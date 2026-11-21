@@ -21,10 +21,12 @@ import {
   MIN_COMPATIBLE_VERSION,
   createGuardedFs,
   emptyDocsTree,
+  serializeBacklog,
   serializeConfig,
 } from '@boardown/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isAnyDialogOpen, useBoardStore } from './store';
+import { captureBoardSession, isAnyDialogOpen, useBoardStore } from './store';
+import { deliverAttachmentPick } from './utils/attachment-pick';
 
 // In-memory adapter mirroring packages/core's reference impl, plus a switch to
 // simulate write failures so we can assert optimistic-update rollback.
@@ -66,8 +68,10 @@ class MemFs implements GuardedFs {
   }
 
   async remove(path: string): Promise<void> {
-    if (this.failWritesMatching !== null &&
-      (this.failWritesMatching === '*' || path.includes(this.failWritesMatching))) {
+    if (
+      this.failWritesMatching !== null &&
+      (this.failWritesMatching === '*' || path.includes(this.failWritesMatching))
+    ) {
       throw new Error('disk full');
     }
     this.files.delete(path);
@@ -81,13 +85,17 @@ class MemFs implements GuardedFs {
   async read(path: string): Promise<string> {
     const entry = this.files.get(path);
     if (entry === undefined) throw new Error(`ENOENT: ${path}`);
-    return typeof entry.content === 'string' ? entry.content : new TextDecoder().decode(entry.content);
+    return typeof entry.content === 'string'
+      ? entry.content
+      : new TextDecoder().decode(entry.content);
   }
 
   async readBytes(path: string): Promise<Uint8Array> {
     const entry = this.files.get(path);
     if (entry === undefined) throw new Error(`ENOENT: ${path}`);
-    return typeof entry.content === 'string' ? new TextEncoder().encode(entry.content) : entry.content;
+    return typeof entry.content === 'string'
+      ? new TextEncoder().encode(entry.content)
+      : entry.content;
   }
 
   async write(path: string, content: string): Promise<void> {
@@ -143,17 +151,150 @@ const config = (): BoardConfig => ({
   projectName: 'My Project',
 });
 
+it('can detach an older board while its load is still pending', async () => {
+  let finish = () => {};
+  const hold = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  class DelayedBoard extends MemFs {
+    override async read(file: string) {
+      await hold;
+      return super.read(file);
+    }
+  }
+  const old = new DelayedBoard();
+  const next = new MemFs();
+  await old.write(CONFIG_FILENAME, serializeConfig({ ...config(), projectName: 'Old board' }));
+  await next.write(CONFIG_FILENAME, serializeConfig({ ...config(), projectName: 'New board' }));
+  const store = useBoardStore.getState();
+  const stale = store.load(old);
+  store.jumpToTask('BD-9');
+  store.unload(old);
+  expect(useBoardStore.getState()).toMatchObject({ status: 'idle', pendingTaskJump: null });
+  await store.load(next);
+  finish();
+  await stale;
+  expect(useBoardStore.getState().snapshot?.config.projectName).toBe('New board');
+  store.unload(next);
+});
+
+it('keeps the original adapter attached after onboarding so the board can be closed', async () => {
+  const fs = new MemFs();
+  const store = useBoardStore.getState();
+  await store.load(fs);
+  await store.completeOnboarding({ idPrefix: 'BD', projectName: 'First run' });
+  expect(useBoardStore.getState().rawFs).toBe(fs);
+  store.unload(fs);
+  expect(useBoardStore.getState()).toMatchObject({ status: 'idle', snapshot: null, rawFs: null });
+});
+
+class DelayedAttachmentListing extends MemFs {
+  resume = () => {};
+  private readonly paused = new Promise<void>((resolve) => { this.resume = resolve; });
+
+  override async list(dir: string) {
+    if (dir.startsWith('attachments/')) await this.paused;
+    return super.list(dir);
+  }
+}
+
+async function seedSession(fs: MemFs, name: string) {
+  await fs.write(CONFIG_FILENAME, serializeConfig({ ...config(), projectName: name, trackUpdatedAt: true }));
+  await fs.write(BACKLOG_PATH, serializeBacklog(backlog([{ ...task('BD-1'), title: name }])));
+}
+
+it.each(['attach to an existing task', 'create a task'])(
+  'does not %s after the originating board has been closed',
+  async (mode) => {
+    const old = new DelayedAttachmentListing();
+    const next = new MemFs();
+    await seedSession(old, 'Old board');
+    await seedSession(next, 'New board');
+    const store = useBoardStore.getState();
+    await store.load(old);
+    const file = { name: 'proof.txt', content: new Uint8Array([42]) };
+    const pending = mode === 'create a task'
+      ? store.createTask({ title: 'Late task', type: 'feature', attachments: [file] })
+      : store.addTaskAttachments('BD-1', [file]);
+    const refused = expect(pending).rejects.toThrow(/no longer open/);
+    store.unload(old);
+    await store.load(next);
+    old.resume();
+    await refused;
+    expect(await old.read(BACKLOG_PATH)).toContain('Old board');
+    expect(await next.read(BACKLOG_PATH)).not.toContain('Late task');
+    expect(old.writes.some((file) => file.startsWith('attachments/'))).toBe(false);
+    expect(next.writes.some((file) => file.startsWith('attachments/'))).toBe(false);
+    expect(useBoardStore.getState()).toMatchObject({ errorMessage: null, snapshot: { config: { projectName: 'New board' } } });
+    store.unload(next);
+  },
+);
+
+it('does not roll back the new board when a write started on the old board fails', async () => {
+  let failWrite = () => {};
+  let startedWrite = () => {};
+  const started = new Promise<void>((resolve) => { startedWrite = resolve; });
+  class DelayedWrite extends MemFs {
+    delayWrite = false;
+    override async write(file: string, text: string) {
+      if (!this.delayWrite) return super.write(file, text);
+      return new Promise<void>((_resolve, reject) => {
+        failWrite = () => reject(new Error('disk full'));
+        startedWrite();
+      });
+    }
+  }
+  const old = new DelayedWrite();
+  const next = new MemFs();
+  await seedSession(old, 'Old board');
+  await seedSession(next, 'New board');
+  const store = useBoardStore.getState();
+  await store.load(old);
+  old.delayWrite = true;
+  const refused = expect(store.updateTask('BD-1', { title: 'Failed edit' })).rejects.toThrow(/disk full/);
+  await started;
+  store.unload(old);
+  await store.load(next);
+  failWrite();
+  await refused;
+  expect(useBoardStore.getState()).toMatchObject({ errorMessage: null, snapshot: { config: { projectName: 'New board' } } });
+  expect(useBoardStore.getState().snapshot?.backlog?.tasks[0]?.title).toBe('New board');
+  store.unload(next);
+});
+
+it('does not dispatch an attachment selected before a board switch while its File is still being read', async () => {
+  let finishReading = () => {};
+  const file = new File(['proof'], 'proof.txt');
+  file.arrayBuffer = () => new Promise<ArrayBuffer>((resolve) => {
+    finishReading = () => resolve(new ArrayBuffer(5));
+  });
+  const old = new MemFs();
+  const next = new MemFs();
+  await seedSession(old, 'Old board');
+  await seedSession(next, 'New board');
+  const store = useBoardStore.getState();
+  await store.load(old);
+  let dispatched = false;
+  const pending = deliverAttachmentPick([file], captureBoardSession(), (files) => {
+    dispatched = true;
+    void store.addTaskAttachments('BD-1', files);
+  });
+  store.unload(old);
+  await store.load(next);
+  finishReading();
+  await pending;
+  expect(dispatched).toBe(false);
+  expect(await next.list('attachments/BD-1')).toEqual([]);
+  store.unload(next);
+});
+
 const task = (id: string, over: Partial<Task['frontmatter']> = {}): Task => ({
   title: id,
   description: '',
   frontmatter: { id, type: 'feature', status: 'todo', order: 100, ...over },
 });
 
-const release = (
-  slug: string,
-  status: ReleaseStatus,
-  tasks: Task[] = [],
-): Release => ({
+const release = (slug: string, status: ReleaseStatus, tasks: Task[] = []): Release => ({
   filename: `releases/${slug}.md`,
   slug,
   frontmatter: { status, name: slug },
@@ -287,9 +428,7 @@ describe('deleteTask', () => {
   });
 
   it('keeps the task and the open dialog when the write fails', async () => {
-    const { fs } = setup(
-      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
-    );
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
     useBoardStore.setState({ selectedTaskId: 'BD-1' });
     fs.failWritesMatching = '*';
 
@@ -347,7 +486,9 @@ describe('task attachments', () => {
 
 describe('createTask', () => {
   it('starts over when a refresh lands while the folder is being read', async () => {
-    const { fs: stale } = setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'future')] }));
+    const { fs: stale } = setup(
+      snap({ releases: [release('1.0', 'current'), release('2.0', 'future')] }),
+    );
     const fresh = new MemFs();
     const refreshed = snap({
       releases: [release('1.0', 'current'), release('2.0', 'future', [task('BD-3')])],
@@ -449,9 +590,7 @@ describe('createTask', () => {
   });
 
   it('stores the epic in frontmatter when the task goes into a release', async () => {
-    const { fs } = setup(
-      snap({ releases: [release('1.0', 'current')], epics: [epic('parser')] }),
-    );
+    const { fs } = setup(snap({ releases: [release('1.0', 'current')], epics: [epic('parser')] }));
 
     await state().createTask({
       releaseFilename: 'releases/1.0.md',
@@ -530,9 +669,7 @@ describe('createTask', () => {
 
 describe('updateTask', () => {
   it('edits a field in place without relocating', async () => {
-    const { fs } = setup(
-      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
-    );
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
 
     await state().updateTask('BD-1', { title: 'Renamed' });
 
@@ -569,9 +706,7 @@ describe('updateTask', () => {
     const { fs } = setup(
       snap({
         config: { ...config(), customFields: [{ key: 'env', type: 'string' }] },
-        releases: [
-          release('1.0', 'current', [task('BD-1', { custom: { env: 'staging' } })]),
-        ],
+        releases: [release('1.0', 'current', [task('BD-1', { custom: { env: 'staging' } })])],
       }),
     );
 
@@ -581,7 +716,7 @@ describe('updateTask', () => {
     expect(fs.files.get('releases/1.0.md')?.content).not.toContain('env:');
   });
 
-  it('changes a backlog task\'s epic in place, the block staying where it is', async () => {
+  it("changes a backlog task's epic in place, the block staying where it is", async () => {
     const { fs } = setup(
       snap({ epics: [epic('parser')], backlog: backlog([task('BD-1'), task('BD-2')]) }),
     );
@@ -596,7 +731,7 @@ describe('updateTask', () => {
     expect(fs.writes).toEqual([BACKLOG_PATH]);
   });
 
-  it('clears a backlog task\'s epic in place', async () => {
+  it("clears a backlog task's epic in place", async () => {
     const { fs } = setup(snap({ backlog: backlog([task('BD-1', { epic: 'parser' })]) }));
 
     await state().updateTask('BD-1', { epic: null });
@@ -690,10 +825,7 @@ describe('moveTaskOnBacklog', () => {
   it('reorders tasks within the flat backlog list', async () => {
     setup(
       snap({
-        backlog: backlog([
-          task('BD-1', { order: 100 }),
-          task('BD-2', { order: 200 }),
-        ]),
+        backlog: backlog([task('BD-1', { order: 100 }), task('BD-2', { order: 200 })]),
       }),
     );
 
@@ -701,10 +833,7 @@ describe('moveTaskOnBacklog', () => {
     await state().moveTaskOnBacklog('BD-2', { kind: 'backlog' }, 'BD-1');
 
     const orderById = new Map(
-      current().backlog!.tasks.map((t) => [
-        t.frontmatter.id,
-        t.frontmatter.order,
-      ]),
+      current().backlog!.tasks.map((t) => [t.frontmatter.id, t.frontmatter.order]),
     );
     expect(orderById.get('BD-2')!).toBeLessThan(orderById.get('BD-1')!);
   });
@@ -720,9 +849,7 @@ describe('moveTaskOnBacklog', () => {
     await state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null);
 
     expect(current().releases[0]!.tasks).toHaveLength(0);
-    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
-      'BD-1',
-    );
+    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain('BD-1');
     // Both ends of the move reach disk. The reorder only reports files whose
     // orders changed, and landing at the end of the list means BD-1 keeps the
     // order it was given — the destination must be written all the same.
@@ -773,9 +900,7 @@ describe('moveTaskOnBacklog', () => {
     );
     fs.failWritesMatching = '*';
 
-    await expect(
-      state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null),
-    ).rejects.toThrow();
+    await expect(state().moveTaskOnBacklog('BD-1', { kind: 'backlog' }, null)).rejects.toThrow();
 
     expect(current().releases[0]!.tasks.map((t) => t.frontmatter.id)).toEqual(['BD-1']);
     expect(state().errorMessage).toMatch(/Failed to move task/);
@@ -811,9 +936,7 @@ describe('release lifecycle', () => {
     await state().completeRelease('releases/1.0.md', { kind: 'backlog' });
 
     expect(current().releases[0]!.frontmatter.status).toBe('finished');
-    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain(
-      'BD-1',
-    );
+    expect(current().backlog!.tasks.map((t) => t.frontmatter.id)).toContain('BD-1');
     expect(fs.writes.sort()).toEqual([BACKLOG_PATH, 'releases/1.0.md'].sort());
   });
 
@@ -881,9 +1004,7 @@ describe('release lifecycle', () => {
 
 describe('updateRelease', () => {
   it('moves the file and re-points the open dialog when the name changes', async () => {
-    const { fs } = setup(
-      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
-    );
+    const { fs } = setup(snap({ releases: [release('1.0', 'current', [task('BD-1')])] }));
     await fs.write('releases/1.0.md', 'on disk');
     useBoardStore.setState({
       selectedReleaseFilename: 'releases/1.0.md',
@@ -899,9 +1020,7 @@ describe('updateRelease', () => {
     expect(fs.files.has('releases/1.0.md')).toBe(false);
     expect(fs.files.get('releases/beta-2.md')?.content).toMatch(/name: Beta 2/);
     expect(state().selectedReleaseFilename).toBe('releases/beta-2.md');
-    expect(state().dialogStack).toEqual([
-      { kind: 'release', filename: 'releases/beta-2.md' },
-    ]);
+    expect(state().dialogStack).toEqual([{ kind: 'release', filename: 'releases/beta-2.md' }]);
   });
 
   it('keeps the file where it is when the name derives the same slug', async () => {
@@ -915,14 +1034,12 @@ describe('updateRelease', () => {
   });
 
   it('rejects a name taken by another release, writing nothing', async () => {
-    const { fs } = setup(
-      snap({ releases: [release('1.0', 'future'), release('2.0', 'future')] }),
-    );
+    const { fs } = setup(snap({ releases: [release('1.0', 'future'), release('2.0', 'future')] }));
     useBoardStore.setState({ selectedReleaseFilename: 'releases/1.0.md' });
 
-    await expect(
-      state().updateRelease('releases/1.0.md', { name: '2.0' }),
-    ).rejects.toThrow(/already exists/i);
+    await expect(state().updateRelease('releases/1.0.md', { name: '2.0' })).rejects.toThrow(
+      /already exists/i,
+    );
 
     expect(current().releases[0]!.frontmatter.name).toBe('1.0');
     expect(fs.writes).toEqual([]);
@@ -935,9 +1052,7 @@ describe('updateRelease', () => {
     useBoardStore.setState({ selectedReleaseFilename: 'releases/1.0.md' });
     fs.failWritesMatching = '*';
 
-    await expect(
-      state().updateRelease('releases/1.0.md', { name: 'Beta' }),
-    ).rejects.toThrow();
+    await expect(state().updateRelease('releases/1.0.md', { name: 'Beta' })).rejects.toThrow();
 
     expect(current().releases[0]!.filename).toBe('releases/1.0.md');
     expect(current().releases[0]!.frontmatter.name).toBe('1.0');
@@ -969,7 +1084,12 @@ describe('setTheme', () => {
 });
 
 describe('the shared theme', () => {
-  const ocean: SharedTheme = { id: 'ocean', name: 'Ocean', base: 'dark', tokens: { '--bg': '#000' } };
+  const ocean: SharedTheme = {
+    id: 'ocean',
+    name: 'Ocean',
+    base: 'dark',
+    tokens: { '--bg': '#000' },
+  };
 
   // Each read answers the next queued result.
   const readerOf = (...answers: (SharedThemeState | Error)[]) => ({
@@ -1017,7 +1137,9 @@ describe('the shared theme', () => {
       }),
       Promise.resolve({ theme: null, error: null }),
     ];
-    state().setSharedThemeReader({ read: () => answers.shift() ?? Promise.reject(new Error('extra')) });
+    state().setSharedThemeReader({
+      read: () => answers.shift() ?? Promise.reject(new Error('extra')),
+    });
 
     const first = state().refreshSharedTheme();
     await state().refreshSharedTheme();
@@ -1048,7 +1170,12 @@ describe('the shared theme', () => {
 });
 
 describe('seedHostTheme', () => {
-  const ocean: SharedTheme = { id: 'ocean', name: 'Ocean', base: 'dark', tokens: { '--bg': '#000' } };
+  const ocean: SharedTheme = {
+    id: 'ocean',
+    name: 'Ocean',
+    base: 'dark',
+    tokens: { '--bg': '#000' },
+  };
 
   afterEach(() => {
     useBoardStore.setState({ sharedTheme: null, sharedThemeError: null, defaultTheme: null });
@@ -1101,7 +1228,9 @@ describe('setWipLimit', () => {
 
 describe('setBoardRelease and setMultipleActiveReleases', () => {
   it('stores the board release and rolls back on a failed write', async () => {
-    const { fs } = setup(snap({ releases: [release('1.0', 'current'), release('2.0', 'current')] }));
+    const { fs } = setup(
+      snap({ releases: [release('1.0', 'current'), release('2.0', 'current')] }),
+    );
 
     await state().setBoardRelease('2.0');
     expect(current().config.boardRelease).toBe('2.0');
@@ -1571,9 +1700,7 @@ describe('external-change conflict', () => {
     // would already have finished the release by the time this one is refused.
     fs.files.get(BACKLOG_PATH)!.lastModified += 1000;
 
-    await expect(
-      state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
-    ).rejects.toThrow();
+    await expect(state().completeRelease('releases/1.0.md', { kind: 'backlog' })).rejects.toThrow();
 
     expect(state().conflictOpen).toBe(true);
     expect(state().snapshot).toBe(before);
@@ -1664,9 +1791,7 @@ describe('external-change conflict', () => {
     state().openTask('BD-1');
 
     fs.files.get(BACKLOG_PATH)!.lastModified += 1000;
-    await expect(
-      state().completeRelease('releases/1.0.md', { kind: 'backlog' }),
-    ).rejects.toThrow();
+    await expect(state().completeRelease('releases/1.0.md', { kind: 'backlog' })).rejects.toThrow();
 
     expect(state().conflictOpen).toBe(true);
     expect(state().completeReleaseForFilename).toBeNull();
@@ -1799,7 +1924,6 @@ describe('task links', () => {
       { type: 'relates', to: 'BD-1' },
     ]);
   });
-
 });
 
 describe('docs', () => {
@@ -2013,9 +2137,7 @@ const docs = () => ({
   path: 'docs',
   name: 'docs',
   folders: [],
-  pages: [
-    { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
-  ],
+  pages: [{ path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' }],
   otherEntries: [],
 });
 
@@ -2395,7 +2517,9 @@ order: 100
     expect(fs.files.has('epics/no_epic.md')).toBe(false);
     expect(fs.files.get('epics/ui.md')!.content).toBe('---\nname: UI\ncolor: "#1f6feb"\n---\n');
     expect(fs.files.get(BACKLOG_PATH)!.content).toMatch(/^epic: ui$/m);
-    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(
+      `minVersion: ${MIN_COMPATIBLE_VERSION}`,
+    );
 
     fs.writes = [];
     await state().setTheme('light');
@@ -2428,7 +2552,9 @@ order: 100
 
     await state().setTheme('dark');
     expect(fs.files.get('epics/ui.md')!.content).not.toContain('BD-5');
-    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+    expect(fs.files.get(CONFIG_FILENAME)!.content).toContain(
+      `minVersion: ${MIN_COMPATIBLE_VERSION}`,
+    );
   });
 
   it('takes a fresh conversion from a silent reload, never the stale one', async () => {
@@ -2442,7 +2568,8 @@ order: 100
       lastModified: Date.now() + 1,
     });
     fs.files.set(BACKLOG_PATH, {
-      content: '## Buttons\n\n---\nid: BD-5\ntype: feature\nstatus: todo\nepic: ui\norder: 200\n---\n',
+      content:
+        '## Buttons\n\n---\nid: BD-5\ntype: feature\nstatus: todo\nepic: ui\norder: 200\n---\n',
       lastModified: Date.now() + 1,
     });
     await state().reloadSilent();
@@ -2627,9 +2754,11 @@ describe('minVersion', () => {
     fs.failWritesMatching = CONFIG_FILENAME;
     await expect(state().updateRelease('releases/1.0.md', { name: '1.1' })).rejects.toThrow();
     expect(fs.files.has('releases/1.0.md')).toBe(true);
-    expect([...fs.files.keys()].some((path) => path.startsWith('releases/1') && path !== 'releases/1.0.md')).toBe(
-      false,
-    );
+    expect(
+      [...fs.files.keys()].some(
+        (path) => path.startsWith('releases/1') && path !== 'releases/1.0.md',
+      ),
+    ).toBe(false);
   });
 });
 

@@ -7,7 +7,7 @@ import type {
   SharedThemeState,
   Theme,
 } from '@boardown/core';
-import { boardStatusKeys, displayedTheme, sharedThemeOverrides } from '@boardown/core';
+import { boardStatusKeys } from '@boardown/core';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
@@ -32,6 +32,7 @@ import { isAnyDialogOpen, useBoardStore } from './store';
 import { findReleaseOfTask } from './utils/find-release-of-task';
 import { findTaskById } from './utils/find-task';
 import { findTasksByEpic } from './utils/find-tasks-by-epic';
+import { useDocumentTheme } from './theme/useDocumentTheme';
 
 interface AppProps {
   fs: FsAdapter;
@@ -64,7 +65,7 @@ interface AppProps {
   defaultProjectName?: string;
   defaultIdPrefix?: string;
   // When provided, onboarding can be cancelled (shells with somewhere to go
-  // back to, e.g. the desktop sidebar). Omitted by web/vscode.
+  // back to, e.g. a project sidebar). Omitted by board-only shells.
   onCancel?: () => void;
   // When provided, the shell owns the theme app-wide: this value drives
   // data-theme and the board's own config.theme is ignored for display. The
@@ -120,9 +121,7 @@ export function App({
   const selectedEpicSlug = useBoardStore((s) => s.selectedEpicSlug);
   const selectedReleaseFilename = useBoardStore((s) => s.selectedReleaseFilename);
   const docPopupPath = useBoardStore((s) => s.docPopupPath);
-  const createTaskForReleaseFilename = useBoardStore(
-    (s) => s.createTaskForReleaseFilename,
-  );
+  const createTaskForReleaseFilename = useBoardStore((s) => s.createTaskForReleaseFilename);
   const createTaskForEpicSlug = useBoardStore((s) => s.createTaskForEpicSlug);
   const createTaskOpen = useBoardStore((s) => s.createTaskOpen);
   const createTaskBacklog = useBoardStore((s) => s.createTaskBacklog);
@@ -133,14 +132,13 @@ export function App({
   const unwritableFile = useBoardStore((s) => s.unwritableFile);
   // Owed until dismissed, shown only between dialogs: one opening on top of it
   // hides it, and it comes back once that one closes.
-  const conversionNoticeShown = useBoardStore(
-    (s) => s.conversionNoticeOwed && !isAnyDialogOpen(s),
-  );
+  const conversionNoticeShown = useBoardStore((s) => s.conversionNoticeOwed && !isAnyDialogOpen(s));
   const completeReleaseForFilename = useBoardStore((s) => s.completeReleaseForFilename);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
   const closeStartRelease = useBoardStore((s) => s.closeStartRelease);
   const load = useBoardStore((s) => s.load);
+  const unload = useBoardStore((s) => s.unload);
   const setProjectFiles = useBoardStore((s) => s.setProjectFiles);
   const setGitHistory = useBoardStore((s) => s.setGitHistory);
   const setFileSaver = useBoardStore((s) => s.setFileSaver);
@@ -162,75 +160,50 @@ export function App({
   const seedHostTheme = useBoardStore((s) => s.seedHostTheme);
   const jumpToTask = useBoardStore((s) => s.jumpToTask);
 
-  // A layout effect, so the store's set re-renders before the first paint; the ref
-  // keeps StrictMode's second mount, and any later prop change, from seeding again.
-  const seeded = useRef(false);
+  const boot = useRef({ initialTheme, initialSharedTheme, initialTaskId });
+  // Start the new session before paint rather than exposing the previous
+  // project's snapshot to a newly mounted board or to its task jump.
   useLayoutEffect(() => {
-    if (seeded.current) return;
-    seeded.current = true;
+    const { initialTheme, initialSharedTheme, initialTaskId } = boot.current;
     seedHostTheme({
       ...(initialTheme !== undefined ? { theme: initialTheme } : {}),
       ...(initialSharedTheme !== undefined ? { sharedTheme: initialSharedTheme } : {}),
     });
+    void load(fs, defaultTheme);
     // A jump the shell delivered before this effect ran is newer than the prop.
     if (initialTaskId !== undefined && useBoardStore.getState().pendingTaskJump === null) {
       jumpToTask(initialTaskId);
     }
-  }, [seedHostTheme, initialTheme, initialSharedTheme, jumpToTask, initialTaskId]);
-
-  useEffect(() => {
-    void load(fs, defaultTheme);
-  }, [fs, load, defaultTheme]);
-
-  // The store outlives this App: a shell that switches boards remounts it, and a
-  // notice owed for the board left behind must not open on the next one. A reload
-  // of the same board keeps the App, and with it the notice.
-  const dismissConversionNotice = useBoardStore((s) => s.dismissConversionNotice);
-  useEffect(() => dismissConversionNotice, [dismissConversionNotice]);
+    return () => unload(fs);
+  }, [fs, defaultTheme, load, unload, seedHostTheme, jumpToTask]);
 
   useEffect(() => {
     setProjectFiles(projectFiles);
-  }, [projectFiles, setProjectFiles]);
+  }, [fs, projectFiles, setProjectFiles]);
 
   useEffect(() => {
     setGitHistory(gitHistory);
-  }, [gitHistory, setGitHistory]);
+  }, [fs, gitHistory, setGitHistory]);
 
   useEffect(() => {
     setFileSaver(fileSaver);
-  }, [fileSaver, setFileSaver]);
+  }, [fs, fileSaver, setFileSaver]);
 
   useEffect(() => {
     if (sharedThemeReader === undefined) return;
     setSharedThemeReader(sharedThemeReader);
     void refreshSharedTheme();
-  }, [sharedThemeReader, setSharedThemeReader, refreshSharedTheme]);
+  }, [fs, sharedThemeReader, setSharedThemeReader, refreshSharedTheme]);
 
   // useLayoutEffect so the attribute is set before the browser paints the first
   // frame — a plain effect runs after paint and flashes the light-theme default.
   // While the board is still loading, prefer the host-provided theme (e.g. VS
   // Code's) over the store's 'light' default; once loaded, `theme` reflects
   // config and wins.
-  useLayoutEffect(() => {
-    const own =
-      forcedTheme ??
-      (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme);
-    document.documentElement.setAttribute('data-theme', displayedTheme(sharedTheme, own));
-  }, [sharedTheme, theme, defaultTheme, forcedTheme, status]);
-
-  // A shared theme's overrides sit inline on the root, which beats the
-  // [data-theme] blocks; whatever an update no longer overrides is removed, so
-  // the base's own value shows through again.
-  const appliedOverrides = useRef<string[]>([]);
-  useLayoutEffect(() => {
-    const overrides = sharedThemeOverrides(sharedTheme);
-    const style = document.documentElement.style;
-    for (const name of appliedOverrides.current) {
-      if (!(name in overrides)) style.removeProperty(name);
-    }
-    for (const [name, value] of Object.entries(overrides)) style.setProperty(name, value);
-    appliedOverrides.current = Object.keys(overrides);
-  }, [sharedTheme]);
+  useDocumentTheme(
+    forcedTheme ?? (status === 'idle' || status === 'loading' ? (defaultTheme ?? theme) : theme),
+    sharedTheme,
+  );
 
   if (status === 'idle' || status === 'loading') {
     return (
@@ -296,9 +269,7 @@ export function App({
   const selectedEpic = selectedEpicSlug
     ? snapshot.epics.find((e) => e.slug === selectedEpicSlug)
     : undefined;
-  const selectedEpicTasks = selectedEpic
-    ? findTasksByEpic(snapshot, selectedEpic.slug)
-    : [];
+  const selectedEpicTasks = selectedEpic ? findTasksByEpic(snapshot, selectedEpic.slug) : [];
   const selectedRelease = selectedReleaseFilename
     ? snapshot.releases.find((r) => r.filename === selectedReleaseFilename)
     : undefined;
@@ -328,11 +299,7 @@ export function App({
         hideSettings={forcedTheme !== undefined}
         atPageTop={embedded}
       />
-      <TabContent
-        activeTab={activeTab}
-        epics={snapshot.epics}
-        statuses={statuses}
-      />
+      <TabContent activeTab={activeTab} epics={snapshot.epics} statuses={statuses} />
       {(problems.length > 0 || sharedThemeError !== null) && (
         <section className={styles.problems} data-testid="problems-banner">
           {sharedThemeError !== null && (
@@ -387,9 +354,7 @@ export function App({
           onTaskClick={openTask}
         />
       )}
-      {selectedRelease && (
-        <ReleaseDetailsDialog release={selectedRelease} onClose={closeRelease} />
-      )}
+      {selectedRelease && <ReleaseDetailsDialog release={selectedRelease} onClose={closeRelease} />}
       {docPopupPath && <DocPopupDialog />}
       {repoFilePopupPath && <RepoFilePopupDialog />}
       {createTaskRelease && (
@@ -415,37 +380,22 @@ export function App({
         />
       )}
       {createTaskBacklog && (
-        <CreateTaskDialog
-          backlogLocked
-          epics={snapshot.epics}
-          onClose={closeCreateTask}
-        />
+        <CreateTaskDialog backlogLocked epics={snapshot.epics} onClose={closeCreateTask} />
       )}
       {createReleaseOpen && <CreateReleaseDialog onClose={closeCreateRelease} />}
       {createEpicOpen && <CreateEpicDialog onClose={closeCreateEpic} />}
       {completeReleaseTarget && (
-        <CompleteReleaseDialog
-          release={completeReleaseTarget}
-          onClose={closeCompleteRelease}
-        />
+        <CompleteReleaseDialog release={completeReleaseTarget} onClose={closeCompleteRelease} />
       )}
       {startReleaseTarget && (
-        <StartReleaseDialog
-          release={startReleaseTarget}
-          onClose={closeStartRelease}
-        />
+        <StartReleaseDialog release={startReleaseTarget} onClose={closeStartRelease} />
       )}
-      {settingsOpen && !forcedTheme && (
-        <SettingsDialog onClose={closeSettings} version={version} />
-      )}
+      {settingsOpen && !forcedTheme && <SettingsDialog onClose={closeSettings} version={version} />}
       {conflictOpen ? (
         <ConflictDialog />
       ) : (
         unwritableFile && (
-          <UnwritableFileDialog
-            path={unwritableFile.path}
-            problems={unwritableFile.problems}
-          />
+          <UnwritableFileDialog path={unwritableFile.path} problems={unwritableFile.problems} />
         )
       )}
       {conversionNoticeShown && <ConversionNoticeDialog />}

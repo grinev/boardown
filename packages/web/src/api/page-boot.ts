@@ -26,14 +26,16 @@ const readBoardTheme = async (boardRoot: string): Promise<Theme> => {
 };
 
 export const buildPageBoot = async (
-  boardRoot: string,
+  boardRoot: string | undefined,
   sharedConfig: SharedConfigSource | undefined,
 ): Promise<PageBoot> => {
   const [theme, sharedTheme] = await Promise.all([
-    readBoardTheme(boardRoot),
+    boardRoot === undefined ? DEFAULT_THEME : readBoardTheme(boardRoot),
     sharedConfig?.read(),
   ]);
-  log.debug(`page theme for ${boardRoot}: ${theme}, shared ${sharedTheme?.theme?.id ?? 'none'}`);
+  log.debug(
+    `page theme for ${boardRoot ?? 'project selection'}: ${theme}, shared ${sharedTheme?.theme?.id ?? 'none'}`,
+  );
   return sharedTheme === undefined ? { theme } : { theme, sharedTheme };
 };
 

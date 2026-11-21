@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { describeEntry, isProjectDirectory, type RegistryFile } from '@boardown/projects';
 import {
   BOARD_FS_PREFIX,
   handleBoardFs,
@@ -16,15 +17,15 @@ import { PROJECT_FILE_ENDPOINT } from '../project-file-endpoint.js';
 import { GIT_COMMITS_ENDPOINT } from '../git-history-endpoint.js';
 import { SHARED_THEME_ENDPOINT } from '../shared-theme-endpoint.js';
 import { handleGitCommits } from '../api/git-history.js';
-import { describeEntries } from './board-list.js';
-import { renderListPage } from './list-page.js';
+import { isEmbedRequested } from '../embed-param.js';
 import {
-  PROJECTS_ADD,
-  PROJECTS_REMOVE,
-  handleProjectAdd,
-  handleProjectRemove,
-} from './projects-api.js';
-import type { RegistryFile } from './registry.js';
+  PROJECTS_ENDPOINT,
+  PROJECTS_THEME_EVENTS,
+  type RegistryBoot,
+} from '../projects-endpoint.js';
+import { chooseFolder } from './folder-chooser.js';
+import type { ProjectPreference } from './project-preference.js';
+import { handleProjects } from './projects-api.js';
 import type { BoardRoots } from './roots.js';
 
 export type ServeMode =
@@ -43,6 +44,8 @@ export interface ServerOptions {
   watch?: boolean;
   /** `--config-dir`, already read once: a host that could not read it never starts. */
   sharedConfig?: SharedConfigSource;
+  preference?: ProjectPreference;
+  pickFolder?: () => Promise<string | null>;
 }
 
 export const LOOPBACK_HOST = '127.0.0.1';
@@ -133,7 +136,12 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
 
   // Stamped per request with the theme this board settles on, and never stored by
   // the browser: a copy kept from an earlier visit would carry the theme of then.
-  const sendApp = async (res: http.ServerResponse, boardRoot: string): Promise<void> => {
+  const sendApp = async (
+    res: http.ServerResponse,
+    boardRoot: string | undefined,
+    registry?: RegistryBoot,
+    status = 200,
+  ): Promise<void> => {
     let html: string;
     try {
       html = await fs.readFile(path.join(clientDir, 'index.html'), 'utf-8');
@@ -142,10 +150,10 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
       return;
     }
     const boot = await buildPageBoot(boardRoot, options.sharedConfig);
-    res.statusCode = 200;
+    res.statusCode = status;
     res.setHeader('Content-Type', MIME_TYPES['.html'] ?? 'text/html');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(stampPage(html, boot));
+    res.end(stampPage(html, registry === undefined ? boot : { ...boot, registry }));
   };
 
   // The static route resolves a request path against a directory just like the
@@ -222,22 +230,43 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     const registry = options.mode.registry;
     const board = BOARD_PATH_PATTERN.exec(pathname);
     if (board === null) {
-      // The registry's own endpoints: they edit the file this server runs on, so
-      // they belong to no board and exist in no other mode.
-      if (req.method === 'POST' && pathname === PROJECTS_ADD) {
-        await handleProjectAdd(req, res, registry);
+      if (req.method === 'GET' && pathname === SHARED_THEME_ENDPOINT) {
+        await handleSharedTheme(res, options.sharedConfig);
         return;
       }
-      if (req.method === 'POST' && pathname === PROJECTS_REMOVE) {
-        await handleProjectRemove(req, res, registry);
+      if (req.method === 'GET' && pathname === PROJECTS_THEME_EVENTS) {
+        if (watch === undefined || options.sharedConfig === undefined)
+          sendText(res, 404, 'Not found');
+        else watch.openThemeStream(res);
+        return;
+      }
+      if (pathname === PROJECTS_ENDPOINT || pathname.startsWith(`${PROJECTS_ENDPOINT}/`)) {
+        await handleProjects(req, res, url, {
+          registry,
+          pickFolder: options.pickFolder ?? chooseFolder,
+          ...(options.preference === undefined ? {} : { preference: options.preference }),
+        });
         return;
       }
       if (pathname === '/') {
         const state = await registry.read();
-        const rows = await describeEntries(state.entries);
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.end(renderListPage(rows, state.staleReason));
+        let error = state.staleReason;
+        let remembered: string | null = null;
+        try {
+          remembered = (await options.preference?.read()) ?? null;
+        } catch (err) {
+          error ??= err instanceof Error ? err.message : String(err);
+        }
+        const entry = state.entries.find((candidate) => candidate.id === remembered);
+        const row = entry === undefined ? null : await describeEntry(entry);
+        const project = row?.available === true ? row : null;
+        await sendApp(res, project === null ? undefined : entry?.boardRoot, {
+          id: project?.id ?? null,
+          project,
+          restored: project !== null,
+          embedded: false,
+          error,
+        });
         return;
       }
       await sendStatic(res, pathname);
@@ -263,8 +292,28 @@ export const createBoardownServer = (options: ServerOptions): http.Server => {
     }
     const state = await registry.read();
     const entry = state.entries.find((candidate) => candidate.id === id);
+    if (rest === '/') {
+      const project = entry === undefined ? null : await describeEntry(entry);
+      await sendApp(
+        res,
+        project?.available === true ? entry?.boardRoot : undefined,
+        {
+          id,
+          project,
+          restored: false,
+          embedded: isEmbedRequested(url.search),
+          error: state.staleReason,
+        },
+        entry === undefined ? 404 : 200,
+      );
+      return;
+    }
     if (entry === undefined) {
       sendText(res, 404, `No board registered as "${id}"`);
+      return;
+    }
+    if (!(await isProjectDirectory(entry.projectRoot))) {
+      sendText(res, 404, 'Project folder is unavailable');
       return;
     }
     await serveBoard(req, res, rest, url.searchParams, entry);

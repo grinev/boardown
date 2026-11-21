@@ -43,7 +43,7 @@ const child = spawn(
   'pnpm',
   [
     '--filter',
-    '@boardown/web',
+    '@grinev/boardown-web',
     'dev',
     '--',
     '--data-dir',

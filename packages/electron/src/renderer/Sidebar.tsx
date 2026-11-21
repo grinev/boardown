@@ -9,17 +9,22 @@ import {
   StatusOutsideActiveReleaseField,
   TrackUpdatedAtField,
   WipLimitField,
+  ProjectSidebar,
+  type SidebarProject,
 } from '@boardown/ui';
-import type { ProjectEntry, ThemeChoice } from '../bridge';
+import type { ThemeChoice } from '../bridge';
 import styles from './Sidebar.module.css';
 
 interface SidebarProps {
-  projects: ProjectEntry[];
-  activeFolder: string | null;
+  projects: readonly SidebarProject[];
+  activeId: string | null;
   width: number;
-  onSelect: (folder: string) => void;
+  error: string | null;
+  opening: boolean;
+  onSelect: (id: string) => void;
   onOpenFolder: () => void;
-  onRemove: (folder: string) => void;
+  onClose: () => void;
+  onRemove: (id: string) => Promise<void>;
   themeChoice: ThemeChoice;
   onThemeChoice: (choice: ThemeChoice) => void;
   autoRefresh: boolean;
@@ -37,10 +42,13 @@ const THEME_OPTIONS: ReadonlyArray<{ value: ThemeChoice; label: string }> = [
 
 export function Sidebar({
   projects,
-  activeFolder,
+  activeId,
   width,
+  error,
+  opening,
   onSelect,
   onOpenFolder,
+  onClose,
   onRemove,
   themeChoice,
   onThemeChoice,
@@ -52,75 +60,31 @@ export function Sidebar({
 }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Stable alphabetical order so selecting a project never makes it jump in the
-  // list (recents are stored most-recent-first; we don't reorder on click).
-  const sorted = [...projects].sort(
-    (a, b) => a.name.localeCompare(b.name) || a.folder.localeCompare(b.folder),
-  );
-
   return (
-    <aside className={styles.sidebar} style={{ width }}>
-      <div className={styles.header}>
-        <div className={styles.titleRow}>
-          {showMenuButton && (
-            <button
-              type="button"
-              className={styles.menuButton}
-              onClick={onMenuButton}
-              title="Menu"
-              aria-label="Open menu"
-            >
-              <Menu size={18} aria-hidden="true" />
-            </button>
-          )}
-          <h1 className={styles.title}>boardown</h1>
-        </div>
-        <button type="button" className={styles.openButton} onClick={onOpenFolder}>
-          + Open Folder…
-        </button>
-      </div>
-
-      <div className={styles.scroll}>
-        <div className={styles.sectionLabel}>Projects</div>
-        {sorted.length === 0 ? (
-          <p className={styles.emptyList}>No projects yet — open a folder to start.</p>
-        ) : (
-          <ul className={styles.list}>
-            {sorted.map((project) => {
-              const active = project.folder === activeFolder;
-              return (
-                <li key={project.folder} className={styles.row}>
-                  <button
-                    type="button"
-                    className={active ? `${styles.item} ${styles.itemActive}` : styles.item}
-                    onClick={() => onSelect(project.folder)}
-                    title={project.folder}
-                    aria-current={active || undefined}
-                  >
-                    <span className={styles.nameRow}>
-                      <span className={styles.name}>{project.name}</span>
-                      {!project.hasBoard && <span className={styles.badge}>Needs setup</span>}
-                    </span>
-                    <span className={styles.path}>{project.folder}</span>
-                  </button>
-                  {!active && (
-                    <button
-                      type="button"
-                      className={styles.remove}
-                      onClick={() => onRemove(project.folder)}
-                      title="Remove from list"
-                      aria-label={`Remove ${project.name} from the list`}
-                    >
-                      ×
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
+    <ProjectSidebar
+      projects={projects}
+      activeId={activeId}
+      width={width}
+      error={error}
+      opening={opening}
+      onSelect={onSelect}
+      onOpenFolder={onOpenFolder}
+      onClose={onClose}
+      onRemove={onRemove}
+      menu={
+        showMenuButton && (
+          <button
+            type="button"
+            className={styles.menuButton}
+            onClick={onMenuButton}
+            title="Menu"
+            aria-label="Open menu"
+          >
+            <Menu size={18} aria-hidden="true" />
+          </button>
+        )
+      }
+    >
       <div className={styles.footer}>
         {settingsOpen && (
           <div className={styles.settingsPanel}>
@@ -154,14 +118,10 @@ export function Sidebar({
             {/* Unlike its neighbours this one is stored in the board's
                 config.yaml, so it only exists while a board is open. */}
             {boardOpen && <WipLimitField className={styles.boardSettingRow} />}
-            {boardOpen && (
-              <MultipleActiveReleasesField className={styles.boardSettingRow} />
-            )}
+            {boardOpen && <MultipleActiveReleasesField className={styles.boardSettingRow} />}
             {boardOpen && <GitIntegrationField className={styles.boardSettingRow} />}
             {boardOpen && <TrackUpdatedAtField className={styles.boardSettingRow} />}
-            {boardOpen && (
-              <StatusOutsideActiveReleaseField className={styles.boardSettingRow} />
-            )}
+            {boardOpen && <StatusOutsideActiveReleaseField className={styles.boardSettingRow} />}
             {boardOpen && <EditFinishedReleasesField className={styles.boardSettingRow} />}
             {boardOpen && <DocsTabField className={styles.boardSettingRow} />}
             {/* Describes the installation rather than the board, so unlike the
@@ -180,6 +140,6 @@ export function Sidebar({
           Settings
         </button>
       </div>
-    </aside>
+    </ProjectSidebar>
   );
 }

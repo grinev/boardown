@@ -1,11 +1,16 @@
 import type { Server } from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { defaultRegistryPath } from './default-registry.js';
+import {
+  ProjectStateFile,
+  canonicalPath,
+  defaultStatePath,
+  openDefaultRegistry,
+} from '@boardown/projects';
 import { openSharedConfig } from '../api/shared-config.js';
 import { createBoardownServer, LOOPBACK_HOST } from './http-server.js';
 import { UsageError, parseArgs, resolveMode } from './options.js';
+import { projectPreference } from './project-preference.js';
 
 const listen = (server: Server, port: number): Promise<number> =>
   new Promise((resolve, reject) => {
@@ -22,23 +27,26 @@ const out = (line: string): void => {
 
 const run = async (argv: readonly string[]): Promise<void> => {
   const args = parseArgs(argv);
-  const { mode, registry, singleRoots } = await resolveMode(args, process.cwd(), () =>
-    defaultRegistryPath({
-      platform: process.platform,
-      env: process.env,
-      homedir: () => os.homedir(),
-    }),
+  const { mode, registry, singleRoots } = await resolveMode(
+    args,
+    process.cwd(),
+    openDefaultRegistry,
   );
   const sharedConfig =
     args.configDir === undefined
       ? undefined
       : await openSharedConfig(path.resolve(process.cwd(), args.configDir));
 
+  const preference =
+    registry === null
+      ? undefined
+      : projectPreference(new ProjectStateFile(await canonicalPath(defaultStatePath())), registry);
   const server = createBoardownServer({
     mode,
     clientDir: path.join(__dirname, 'client'),
     watch: args.noWatch !== true,
     ...(sharedConfig === undefined ? {} : { sharedConfig }),
+    ...(preference === undefined ? {} : { preference }),
   });
   const port = await listen(server, args.port ?? 0);
   const origin = `http://${LOOPBACK_HOST}:${port}`;

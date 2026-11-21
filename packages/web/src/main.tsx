@@ -1,26 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { configureLogging } from '@boardown/core';
-import { App, useBoardStore } from '@boardown/ui';
 import { createBrowserLogSink } from './browser-log-sink';
-import { subscribeToBoardChanges } from './api/board-event-source';
-import { BrowserFileSaver } from './api/browser-file-saver';
-import { HttpFsAdapter } from './api/http-fs-adapter';
-import { HttpGitHistoryReader } from './api/http-git-history-reader';
-import { HttpProjectFileReader } from './api/http-project-file-reader';
-import { HttpSharedThemeReader } from './api/http-shared-theme-reader';
-import { BOARD_EVENTS_ENDPOINT } from './board-events-endpoint';
 import { isEmbedRequested } from './embed-param';
-import { taskIdFromHash, urlWithoutHash } from './task-fragment';
 import { PAGE_BOOT_ELEMENT_ID, parsePageBoot } from './page-boot';
-import { GIT_COMMITS_ENDPOINT } from './git-history-endpoint';
-import { PROJECT_FILE_ENDPOINT } from './project-file-endpoint';
-import { SHARED_THEME_ENDPOINT } from './shared-theme-endpoint';
 import { resolveDevLogLevel } from './log-level';
+import { ProjectWorkspace, EmbeddedProject } from './ProjectWorkspace';
+import { projectUrl } from './projects-endpoint';
+import { takeTaskFromHash, WebBoard } from './WebBoard';
 
-// Only the dev shell installs a sink; the server has no endpoint to post to, and
-// a shipped shell emitting log output to a user is a bug. Installed before
-// anything renders, so a failure during the first load is already covered.
 if (import.meta.env.DEV) {
   configureLogging({
     sink: createBrowserLogSink(),
@@ -29,72 +17,38 @@ if (import.meta.env.DEV) {
 }
 
 const container = document.getElementById('root');
-if (!container) {
-  throw new Error('Root container #root not found');
-}
+if (!container) throw new Error('Root container #root not found');
 
-// The same bundle is served at `/` for one board and under `/b/<id>/` for one of
-// several, so the page reads its own prefix off the path it was loaded at rather
-// than being handed it. Assets stay at an absolute /assets/…, shared by every
-// prefix; only the endpoints move.
-const prefix = /^\/b\/[^/]+/.exec(window.location.pathname)?.[0] ?? '';
-
-// Read once, for the life of the page: `ui` never sees the URL, and nothing the
-// page does afterwards changes its path or query, so a browser reload keeps it.
-const embedded = isEmbedRequested(window.location.search);
-
-// A `#task=<id>` is consumed as it is read: replacing the entry rather than
-// pushing one keeps the page from adding history of its own.
-const takeTaskFromHash = (): string | null => {
-  const id = taskIdFromHash(window.location.hash);
-  if (id !== null) window.history.replaceState(window.history.state, '', urlWithoutHash(window.location));
-  return id;
-};
-
-const initialTaskId = takeTaskFromHash();
-
-// The theme the host stamped into this page, so ui's first frame keeps it.
 const boot = parsePageBoot(document.getElementById(PAGE_BOOT_ELEMENT_ID)?.textContent);
-
-// Names this tab to the server, so the changes it makes itself are not sent back
-// to it as external ones. Loopback is a secure context, so randomUUID is there.
-const clientId = crypto.randomUUID();
-
-const fs = new HttpFsAdapter(`${prefix}/api/fs`, clientId);
-const projectFiles = new HttpProjectFileReader(`${prefix}${PROJECT_FILE_ENDPOINT}`);
-const gitHistory = new HttpGitHistoryReader(`${prefix}${GIT_COMMITS_ENDPOINT}`);
-const fileSaver = new BrowserFileSaver();
-const sharedTheme = new HttpSharedThemeReader(`${prefix}${SHARED_THEME_ENDPOINT}`);
+const registry = boot?.registry;
+if (registry !== undefined && window.location.pathname === '/') {
+  const query = new URLSearchParams(window.location.search);
+  if (registry.restored || query.has('embed')) {
+    query.delete('embed');
+    const path = registry.id !== null && registry.restored ? projectUrl(registry.id) : '/';
+    const search = query.size === 0 ? '' : `?${query.toString()}`;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${path}${search}${window.location.hash}`,
+    );
+  }
+}
+const taskId = takeTaskFromHash();
 
 createRoot(container).render(
   <StrictMode>
-    <App
-      fs={fs}
-      projectFiles={projectFiles}
-      gitHistory={gitHistory}
-      fileSaver={fileSaver}
-      sharedTheme={sharedTheme}
-      {...(boot === null ? {} : { initialTheme: boot.theme })}
-      {...(boot?.sharedTheme === undefined ? {} : { initialSharedTheme: boot.sharedTheme })}
-      version={__BOARDOWN_VERSION__}
-      embedded={embedded}
-      {...(initialTaskId === null ? {} : { initialTaskId })}
-    />
+    {boot === null || registry === undefined ? (
+      <WebBoard
+        prefix=""
+        boot={boot}
+        taskId={taskId}
+        embedded={isEmbedRequested(window.location.search)}
+      />
+    ) : registry.embedded ? (
+      <EmbeddedProject boot={boot} registry={registry} taskId={taskId} />
+    ) : (
+      <ProjectWorkspace boot={boot} registry={registry} taskId={taskId} />
+    )}
   </StrictMode>,
 );
-
-window.addEventListener('hashchange', () => {
-  const id = takeTaskFromHash();
-  if (id !== null) useBoardStore.getState().jumpToTask(id);
-});
-
-// The same receiving end the VS Code and Electron shells use: the shell only
-// delivers the event, and the store already knows how to answer it.
-subscribeToBoardChanges(`${prefix}${BOARD_EVENTS_ENDPOINT}`, clientId, {
-  onBoardChange: () => {
-    void useBoardStore.getState().reloadSilent();
-  },
-  onSharedConfigChange: () => {
-    void useBoardStore.getState().refreshSharedTheme();
-  },
-});

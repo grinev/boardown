@@ -1,14 +1,9 @@
 import { File as FileIcon, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
-import {
-  ATTACHMENT_MAX_BYTES,
-  AttachmentTooLargeError,
-  attachmentProjectPath,
-  type Attachment,
-  type NewAttachment,
-} from '@boardown/core';
+import { attachmentProjectPath, type Attachment, type NewAttachment } from '@boardown/core';
 import { useImageUrl } from '../hooks/use-image-url';
-import { useBoardStore } from '../store';
+import { captureBoardSession, useBoardStore } from '../store';
+import { deliverAttachmentPick } from '../utils/attachment-pick';
 import { formatFileSize } from '../utils/file-size';
 import { AttachmentRowMenu } from './AttachmentRowMenu';
 import { DeleteAttachmentDialog } from './DeleteAttachmentDialog';
@@ -16,23 +11,6 @@ import styles from './Attachments.module.css';
 
 const byName = (a: string, b: string): number =>
   a.toLowerCase().localeCompare(b.toLowerCase()) || a.localeCompare(b);
-
-// A file over the cap is refused before its bytes are read, and the rest of the
-// pick goes on without it.
-const readPicked = async (
-  list: FileList,
-): Promise<{ accepted: NewAttachment[]; refused: string[] }> => {
-  const accepted: NewAttachment[] = [];
-  const refused: string[] = [];
-  for (const file of Array.from(list)) {
-    if (file.size > ATTACHMENT_MAX_BYTES) {
-      refused.push(new AttachmentTooLargeError(file.name).message);
-      continue;
-    }
-    accepted.push({ name: file.name, content: new Uint8Array(await file.arrayBuffer()) });
-  }
-  return { accepted, refused };
-};
 
 interface HeadingProps {
   count: number;
@@ -49,10 +27,16 @@ function AttachmentsHeading({ count, onPick, messages, headingClassName }: Headi
     const input = event.currentTarget;
     const list = input.files;
     if (onPick === null || list === null || list.length === 0) return;
-    const { accepted, refused } = await readPicked(list);
-    // Cleared so picking the same file again still reports a change.
-    input.value = '';
-    onPick(accepted, refused);
+    const sameBoard = captureBoardSession();
+    // Reading bytes outlives the picker; do not dispatch from a detached dialog.
+    await deliverAttachmentPick(
+      Array.from(list),
+      () => inputRef.current === input && sameBoard(),
+      (accepted, refused) => {
+        input.value = '';
+        onPick(accepted, refused);
+      },
+    );
   };
 
   return (
@@ -145,6 +129,7 @@ export function TaskAttachments({ taskId, readOnly }: TaskAttachmentsProps) {
   // The rows show as soon as the folder is listed; thumbnails replace their icons
   // once the pictures are read.
   const refresh = useCallback(async () => {
+    if (!live.current) return;
     let next: Attachment[];
     try {
       next = await listTaskAttachments(taskId);
@@ -254,7 +239,11 @@ interface CreateTaskAttachmentsProps {
 
 // Create task's field: the picked files stay in the form, and nothing is written
 // until Create. Nothing exists yet to preview or download, so a row only drops.
-export function CreateTaskAttachments({ files, onChange, headingClassName }: CreateTaskAttachmentsProps) {
+export function CreateTaskAttachments({
+  files,
+  onChange,
+  headingClassName,
+}: CreateTaskAttachmentsProps) {
   const [messages, setMessages] = useState<string[]>([]);
   const sorted = [...files].sort((a, b) => byName(a.name, b.name));
 

@@ -146,15 +146,11 @@ boardown skill install claude --global   # under your home directory, for every 
 ### Local server (`boardown-web`)
 
 A local HTTP server that serves the board UI in an ordinary browser tab, for one
-project or for several at once. It is **not published to npm**: you build a
-tarball from a checkout and install that, which is the whole of its distribution
-story.
+project or for several at once. The npm package includes the server and the UI;
+no checkout is required.
 
 ```sh
-pnpm install
-pnpm --filter @boardown/web build
-cd packages/web && npm pack          # → boardown-web-<version>.tgz
-npm i -g ./boardown-web-<version>.tgz
+npm install -g @grinev/boardown-web
 ```
 
 With no argument it serves your **registry** of projects — the list of boards you
@@ -170,13 +166,13 @@ boardown-web --no-watch                           # do not watch; Reload only
 boardown-web --config-dir /home/me/studio-config  # one theme for every board
 ```
 
-The default registry file lives where your OS keeps user configuration:
+The default registry is shared with Electron and lives where your OS keeps user configuration:
 
 | OS | File |
 | --- | --- |
-| Windows | `%APPDATA%\boardown-web\projects.yaml` |
-| macOS | `~/Library/Application Support/boardown-web/projects.yaml` |
-| Linux and the rest | `${XDG_CONFIG_HOME:-~/.config}/boardown-web/projects.yaml` |
+| Windows | `%APPDATA%\boardown\projects.yaml` |
+| macOS | `~/Library/Application Support/boardown/projects.yaml` |
+| Linux and the rest | `${XDG_CONFIG_HOME:-~/.config}/boardown/projects.yaml` |
 
 It prints the address it is listening on, and the registry file it opened. It
 binds the loopback interface only and refuses a request from anywhere else, so it
@@ -186,11 +182,12 @@ An open board refreshes itself when its files change on disk — from git, an
 editor, or the CLI — updating in place without the Reload button, as in the
 VS Code and desktop shells. Pass `--no-watch` to turn that off for the run.
 
-Nothing is created for you up front: until that file exists the server starts
-anyway and `/` lists no projects — the file, and the folder above it, are written
-the first time you add a project. A file that is there but does not parse refuses
-the start instead, naming the reason — the same as one you passed with
-`--registry`.
+On first use, either shell imports the existing Electron folders and the old
+default `boardown-web/projects.yaml`; the original files stay intact. A folder
+already in the shared registry keeps its ID; otherwise its old Web ID is kept if
+free. Without legacy projects, the default YAML is created only when a project
+is added. An invalid registry is reported, never overwritten. A named
+`--registry` must already exist and does not import or modify the default registry.
 
 The registry is a list of projects, whether it is the default file or one you
 name with `--registry`:
@@ -205,27 +202,37 @@ projects:
 Each key is the id that appears in the URL — lowercase letters, digits and dashes
 — and each value is an absolute path to the **project** folder, whose board is
 the `.boardown/` inside it. The boards are then at `http://127.0.0.1:<port>/b/boardown/`
-and `/b/shop/`, and `/` lists them with each project's name taken from its own
-`config.yaml`. A project whose board cannot be read still gets a row, with the
-reason on it, so one bad line never costs the others. Editing the file is enough:
-a project added to it shows up without a restart, and one removed from it stops
-being served, and reloading `/` is what re-renders the list.
+and `/b/shop/`. The sidebar sorts them by board name (or folder name if no board
+name is available) and shows the reason when a folder or board is unavailable.
+Registry changes reach open sidebars without a restart, and a removed board's URL
+stops serving it.
 
-You do not have to edit it by hand, though. The list page keeps it for you: every
-row has a **Remove** button, and under the list an **Add project** button opens a
-dialog taking a path and an id, filling the id in from the folder's name as you
-type. A folder
-with no board yet is fine — it is registered like any other, and opens onboarding
-when you click it. Removing a project takes it out of the list and nothing else;
-your files stay exactly where they are. Both write one line of the registry file
-and leave the rest of it, comments included, alone — so the file is still yours to
-edit, and a project you add by hand and one you add from the page look the same.
+Use **Open Folder…** to choose a folder through the system dialog. A new folder
+opens onboarding; cancelling onboarding keeps the registration and writes no
+board files. **Close Board** returns to project selection without removing the
+project. **Remove** asks for confirmation and unregisters it without deleting
+anything in the project. The chooser needs Windows PowerShell with WinForms on
+Windows, `osascript` on macOS, or Zenity or KDialog on Linux, all in an interactive
+desktop session. If none is available, the workspace reports it without a path form.
+
+Opening `/` restores the last available standalone Web project. Switching projects
+keeps the workspace loaded and records a browser history entry; Back and Forward
+go to the recorded screen. `boardown/project-state.json` stores the migration
+marker and the separate Web preference for each registry path. Closing a board
+clears that preference; Electron and embedded pages do not write it.
 
 To show a board inside another app's window that already names the project, open
 it with `?embed` — `http://127.0.0.1:<port>/b/shop/?embed`, or `/?embed` with
 `--data-dir`. The project-name row above the tabs is left out and the tab bar
 becomes the top of the page, 8px from its edge; everything else stays. It belongs to that page only:
 the same board opened without it shows its title as usual.
+
+To register a project from a local backend without the chooser, send
+`POST /api/projects/add` with JSON `{ "path": "/absolute/project/path",
+"id": "shop" }`. It returns `200` and `{ "id": "shop" }`. Use the returned ID
+in the embed URL; on retry it can differ from the requested one if the path
+was already registered. An ID held by a different folder is rejected. This
+registry API does not allow cross-origin browser writes.
 
 To jump to a task, add `#task=<id>` — `http://127.0.0.1:<port>/b/shop/?embed#task=SHOP-12`.
 The page opens that task's dialog once the board has loaded, or in place when the
@@ -500,7 +507,7 @@ Install dependencies once if you skipped the quick start above:
 pnpm install
 ```
 
-The repo is a pnpm workspace with six packages:
+The repo is a pnpm workspace with seven packages:
 
 - [`packages/core`](./packages/core) — platform-agnostic logic (schemas,
   parser, board operations). Pure TypeScript, runs in Node.
@@ -510,8 +517,11 @@ The repo is a pnpm workspace with six packages:
 - [`packages/web`](./packages/web) — the browser shell, in two roles over one set
   of endpoints: the Vite dev app that mounts `@boardown/ui` over a middleware
   serving a local `.boardown/` data directory, used for iterating on the UI from
-  sources, and `boardown-web`, a local server for one board or a registry of
-  several. Nothing here is published to a registry.
+  sources, and `boardown-web`, the local server published as
+  `@grinev/boardown-web`.
+- [`packages/projects`](./packages/projects) — private Node adapter shared by
+  Electron and the local Web server, with registry filesystem access, migration
+  and coordinated project state.
 - [`packages/vscode`](./packages/vscode) — the primary MVP distribution target,
   a VS Code extension shell next to `web` (extension host via esbuild + webview
   via Vite), reusing `@boardown/ui` unchanged. Packages into an installable
@@ -545,7 +555,7 @@ The repo is a pnpm workspace with six packages:
 Use pnpm's `--filter`:
 
 ```sh
-pnpm --filter @boardown/web dev      # only the web dev server
+pnpm --filter @grinev/boardown-web dev  # only the web dev server
 pnpm --filter @boardown/core build   # only the core build
 pnpm --filter @boardown/core test    # only core tests
 pnpm --filter @boardown/ui test      # only ui tests
@@ -750,14 +760,19 @@ Releases are driven by a version bump on `main`, not by pushing tags by hand:
 
 7. `Release` finally calls the reusable
    [`Publish to npm`](./.github/workflows/publish-npm.yml) workflow, which builds
-   and publishes the CLI package (`@grinev/boardown-cli`, the `boardown` command)
-   to the [npm registry](https://www.npmjs.com/package/@grinev/boardown-cli).
+   and publishes `@grinev/boardown-cli` (`boardown`) and `@grinev/boardown-web`
+   (`boardown-web`) independently to the npm registry.
    Auth is **tokenless** via [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers)
    (OIDC) — the repo is registered as a trusted publisher for the package, so no
    npm secret is needed; the workflow only mints an `id-token` for auth and build
    provenance. Stable versions publish under the `latest` dist-tag and RC
    prereleases under `next`; versions already on npm are skipped. Re-runnable on
    its own from **Actions → Publish to npm → Run workflow** against any tag.
+   For a new npm package, the maintainer must make the first authenticated public
+   publish (pack the release tag with `pnpm --filter @grinev/boardown-web pack`)
+   and register the GitHub workflow as a Trusted Publisher in that package's
+   settings. Allow direct `npm publish` for the calling `release.yml` and for
+   manual `publish-npm.yml` retries. For the first RC, use the `next` dist-tag.
 
 boardown tracks its own work on a board stored in `.boardown/`. Commits that
 only touch that board data use the `chore(board): …` scope and are excluded

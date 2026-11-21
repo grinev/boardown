@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { ServeMode } from './http-server.js';
-import { RegistryFile } from './registry.js';
+import { openNamedRegistry, type RegistryFile } from '@boardown/projects';
 import { rootsFromBoardFolder, type BoardRoots } from './roots.js';
 
 export class UsageError extends Error {}
@@ -77,7 +77,7 @@ export interface ResolvedMode {
 export const resolveMode = async (
   args: CliArgs,
   cwd: string,
-  defaultRegistryPath: () => string,
+  openDefault: () => Promise<RegistryFile>,
 ): Promise<ResolvedMode> => {
   if (args.dataDir !== undefined) {
     const singleRoots = rootsFromBoardFolder(path.resolve(cwd, args.dataDir));
@@ -85,8 +85,8 @@ export const resolveMode = async (
   }
   const registry =
     args.registry !== undefined
-      ? new RegistryFile(path.resolve(cwd, args.registry))
-      : new RegistryFile(defaultRegistryPath(), { absentIsEmpty: true });
+      ? await openNamedRegistry(path.resolve(cwd, args.registry))
+      : await openDefault();
   const state = await registry.read();
   if (!registry.loaded) {
     throw new Error(`Registry ${registry.filePath} cannot be used: ${state.staleReason ?? ''}`);

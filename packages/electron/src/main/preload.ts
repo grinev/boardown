@@ -1,80 +1,86 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type {
-  FileStat,
-  FsEntry,
-  GitHistoryResult,
-  ProjectFileRead,
-  Theme,
-} from '@boardown/core';
+import type { FileStat, FsEntry, GitHistoryResult, ProjectFileRead, Theme } from '@boardown/core';
 import {
   IPC,
   type BoardownBridge,
+  type BoardCapabilities,
   type BootstrapState,
   type FsRequest,
-  type ProjectEntry,
+  type OpenProject,
+  type ProjectListSnapshot,
 } from '../bridge';
 
 const bootstrap = ipcRenderer.sendSync(IPC.bootstrap) as BootstrapState;
 
-const fsCall = (req: FsRequest): Promise<unknown> => ipcRenderer.invoke(IPC.fs, req);
+const connectBoard = (scope: string): BoardCapabilities => {
+  const fsCall = (req: FsRequest): Promise<unknown> => ipcRenderer.invoke(IPC.fs, scope, req);
+  return {
+    fs: {
+      read: async (filePath) => {
+        // Host returns null for a missing file (no IPC error log); restore the
+        // rejection FsAdapter.read promises so the loader's try/catch still works.
+        const result = await fsCall({ method: 'read', path: filePath });
+        if (result === null) throw new Error(`ENOENT: ${filePath}`);
+        return result as string;
+      },
+      write: async (filePath, content) => {
+        await fsCall({ method: 'write', path: filePath, content });
+      },
+      readBytes: async (filePath) => {
+        const result = await fsCall({ method: 'readBytes', path: filePath });
+        if (result === null) throw new Error(`ENOENT: ${filePath}`);
+        return result as Uint8Array;
+      },
+      writeBytes: async (filePath, content) => {
+        await fsCall({ method: 'writeBytes', path: filePath, content });
+      },
+      list: (dir) => fsCall({ method: 'list', path: dir }) as Promise<FsEntry[]>,
+      stat: (filePath) => fsCall({ method: 'stat', path: filePath }) as Promise<FileStat | null>,
+      mkdir: async (dir) => {
+        await fsCall({ method: 'mkdir', path: dir });
+      },
+      remove: async (filePath) => {
+        await fsCall({ method: 'remove', path: filePath });
+      },
+    },
+    projectFiles: {
+      readFile: (filePath) =>
+        ipcRenderer.invoke(IPC.projectFile, scope, filePath) as Promise<ProjectFileRead>,
+    },
+    gitHistory: {
+      commitsForTask: (taskId) =>
+        ipcRenderer.invoke(IPC.gitCommits, scope, taskId) as Promise<GitHistoryResult>,
+    },
+  };
+};
 
 const bridge: BoardownBridge = {
   theme: bootstrap.theme,
   themeChoice: bootstrap.themeChoice,
-  initialFolder: bootstrap.initialFolder,
+  initialProject: bootstrap.initialProject,
   showMenuButton: bootstrap.showMenuButton,
   autoRefresh: bootstrap.autoRefresh,
-  fs: {
-    read: async (filePath) => {
-      // Host returns null for a missing file (no IPC error log); restore the
-      // rejection FsAdapter.read promises so the loader's try/catch still works.
-      const result = await fsCall({ method: 'read', path: filePath });
-      if (result === null) throw new Error(`ENOENT: ${filePath}`);
-      return result as string;
-    },
-    write: async (filePath, content) => {
-      await fsCall({ method: 'write', path: filePath, content });
-    },
-    readBytes: async (filePath) => {
-      const result = await fsCall({ method: 'readBytes', path: filePath });
-      if (result === null) throw new Error(`ENOENT: ${filePath}`);
-      return result as Uint8Array;
-    },
-    writeBytes: async (filePath, content) => {
-      await fsCall({ method: 'writeBytes', path: filePath, content });
-    },
-    list: (dir) => fsCall({ method: 'list', path: dir }) as Promise<FsEntry[]>,
-    stat: (filePath) => fsCall({ method: 'stat', path: filePath }) as Promise<FileStat | null>,
-    mkdir: async (dir) => {
-      await fsCall({ method: 'mkdir', path: dir });
-    },
-    remove: async (filePath) => {
-      await fsCall({ method: 'remove', path: filePath });
-    },
-  },
-  projectFiles: {
-    readFile: (filePath) =>
-      ipcRenderer.invoke(IPC.projectFile, filePath) as Promise<ProjectFileRead>,
-  },
-  gitHistory: {
-    commitsForTask: (taskId) =>
-      ipcRenderer.invoke(IPC.gitCommits, taskId) as Promise<GitHistoryResult>,
-  },
+  connectBoard,
   fileSaver: {
     save: (name, content) => ipcRenderer.invoke(IPC.saveFile, { name, content }) as Promise<void>,
   },
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder) as Promise<void>,
   popupMenu: () => ipcRenderer.send(IPC.popupMenu),
-  openRecent: (folder) => ipcRenderer.invoke(IPC.openRecent, folder) as Promise<void>,
-  cancelBoard: () => ipcRenderer.invoke(IPC.cancelBoard) as Promise<void>,
-  removeRecent: (folder) => ipcRenderer.invoke(IPC.removeRecent, folder) as Promise<void>,
-  getRecents: () => ipcRenderer.invoke(IPC.getRecents) as Promise<ProjectEntry[]>,
+  openProject: (id) => ipcRenderer.invoke(IPC.openProject, id) as Promise<void>,
+  closeBoard: () => ipcRenderer.invoke(IPC.closeBoard) as Promise<void>,
+  removeProject: (id) => ipcRenderer.invoke(IPC.removeProject, id) as Promise<void>,
+  getProjects: () => ipcRenderer.invoke(IPC.getProjects) as Promise<ProjectListSnapshot>,
   setThemeChoice: (choice) => ipcRenderer.invoke(IPC.setThemeChoice, choice) as Promise<void>,
   setAutoRefresh: (enabled) => ipcRenderer.invoke(IPC.setAutoRefresh, enabled) as Promise<void>,
   onBoardOpened: (listener) => {
-    const handler = (_event: IpcRendererEvent, folder: string): void => listener(folder);
+    const handler = (_event: IpcRendererEvent, project: OpenProject): void => listener(project);
     ipcRenderer.on(IPC.boardOpened, handler);
     return () => ipcRenderer.removeListener(IPC.boardOpened, handler);
+  },
+  onProjectsChanged: (listener) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(IPC.projectsChanged, handler);
+    return () => ipcRenderer.removeListener(IPC.projectsChanged, handler);
   },
   onBoardClosed: (listener) => {
     const handler = (): void => listener();

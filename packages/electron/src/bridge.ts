@@ -5,6 +5,7 @@ import type {
   ProjectFileReader,
   Theme,
 } from '@boardown/core';
+import type { BoardListRow } from '@boardown/projects';
 
 export type FsMethod =
   | 'read'
@@ -31,17 +32,21 @@ export interface SaveFileRequest {
   content: Uint8Array;
 }
 
-export interface RecentEntry {
-  folder: string;
-  name: string;
-  lastOpened: number;
+export interface OpenProject {
+  id: string;
+  projectRoot: string;
+  scope: string;
 }
 
-// A recent entry enriched for the sidebar: whether the folder already has a
-// board (a .boardown/config.yaml) or still needs onboarding. Not persisted —
-// computed per listing.
-export interface ProjectEntry extends RecentEntry {
-  hasBoard: boolean;
+export interface ProjectListSnapshot {
+  projects: BoardListRow[];
+  error: string | null;
+}
+
+export interface BoardCapabilities {
+  fs: FsAdapter;
+  projectFiles: ProjectFileReader;
+  gitHistory: GitHistoryReader;
 }
 
 // Synchronous startup state the preload reads before first paint, so the
@@ -50,7 +55,7 @@ export interface ProjectEntry extends RecentEntry {
 export interface BootstrapState {
   theme: Theme;
   themeChoice: ThemeChoice;
-  initialFolder: string | null;
+  initialProject: OpenProject | null;
   // Whether the shell renders its own ☰ menu button. True on Windows/Linux,
   // where the native menu bar is removed; false on macOS, which keeps its
   // system menu bar at the top of the screen.
@@ -67,17 +72,10 @@ export interface BoardownBridge {
   readonly theme: Theme;
   // The user's chosen theme mode, for the settings UI (resolved value = theme).
   readonly themeChoice: ThemeChoice;
-  readonly initialFolder: string | null;
+  readonly initialProject: OpenProject | null;
   // See BootstrapState.showMenuButton.
   readonly showMenuButton: boolean;
-  readonly fs: FsAdapter;
-  // Read-only access to the open project folder (the parent of .boardown/), for
-  // repo file links. Deliberately not part of `fs`: no write path may reach
-  // outside the board.
-  readonly projectFiles: ProjectFileReader;
-  // Read-only access to the repository around the open project folder, for the
-  // task dialog's Commits panel. Separate from `fs` for the same reason.
-  readonly gitHistory: GitHistoryReader;
+  readonly connectBoard: (scope: string) => BoardCapabilities;
   // Download: a copy of an attachment, to where the user picks in a Save-as
   // dialog. The one write that leaves the board, and only to the user's choice.
   readonly fileSaver: FileSaver;
@@ -85,13 +83,10 @@ export interface BoardownBridge {
   // Pop up the native application menu at the cursor (the ☰ button). Win/Linux
   // only — macOS reaches the same menu through its system menu bar.
   readonly popupMenu: () => void;
-  readonly openRecent: (folder: string) => Promise<void>;
-  // Abandon onboarding for the open folder: forget it (drop from recents) and
-  // clear the window's board context.
-  readonly cancelBoard: () => Promise<void>;
-  // Drop a project from the sidebar list (does not touch the folder on disk).
-  readonly removeRecent: (folder: string) => Promise<void>;
-  readonly getRecents: () => Promise<ProjectEntry[]>;
+  readonly openProject: (id: string) => Promise<void>;
+  readonly closeBoard: () => Promise<void>;
+  readonly removeProject: (id: string) => Promise<void>;
+  readonly getProjects: () => Promise<ProjectListSnapshot>;
   // Change the app-wide theme mode (persisted). The resolved value arrives via
   // `theme` / onThemeChange; the current mode is `themeChoice`.
   readonly setThemeChoice: (choice: ThemeChoice) => Promise<void>;
@@ -100,8 +95,9 @@ export interface BoardownBridge {
   // Toggle auto-refresh on external file changes (persisted, applies to all
   // open windows). Rejects/throws on a failed save so the UI can revert.
   readonly setAutoRefresh: (enabled: boolean) => Promise<void>;
-  readonly onBoardOpened: (listener: (folder: string) => void) => () => void;
+  readonly onBoardOpened: (listener: (project: OpenProject) => void) => () => void;
   readonly onBoardClosed: (listener: () => void) => () => void;
+  readonly onProjectsChanged: (listener: () => void) => () => void;
   readonly onThemeChange: (listener: (theme: Theme) => void) => () => void;
   // The board's .boardown/ files changed on disk outside this window (git, the
   // CLI, another editor). The renderer refreshes in place; see Root.tsx.
@@ -116,15 +112,16 @@ export const IPC = {
   saveFile: 'boardown:save-file',
   pickFolder: 'boardown:pick-folder',
   popupMenu: 'boardown:popup-menu',
-  openRecent: 'boardown:open-recent',
-  cancelBoard: 'boardown:cancel-board',
-  removeRecent: 'boardown:remove-recent',
-  getRecents: 'boardown:get-recents',
+  openProject: 'boardown:open-project',
+  closeBoard: 'boardown:close-board',
+  removeProject: 'boardown:remove-project',
+  getProjects: 'boardown:get-projects',
   setThemeChoice: 'boardown:set-theme-choice',
   setAutoRefresh: 'boardown:set-auto-refresh',
   boardOpened: 'boardown:board-opened',
   boardClosed: 'boardown:board-closed',
   boardChanged: 'boardown:board-changed',
+  projectsChanged: 'boardown:projects-changed',
   themeChanged: 'boardown:theme-changed',
 } as const;
 

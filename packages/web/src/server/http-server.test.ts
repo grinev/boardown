@@ -3,9 +3,16 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ProjectStateFile, RegistryFile } from '@boardown/projects';
 import { createSharedConfigSource, type SharedConfigSource } from '../api/shared-config';
-import { createBoardownServer, isAllowedOrigin, isLoopbackHost } from './http-server';
-import { RegistryFile } from './registry';
+import { parsePageBoot } from '../page-boot';
+import {
+  createBoardownServer,
+  isAllowedOrigin,
+  isLoopbackHost,
+  type ServerOptions,
+} from './http-server';
+import { projectPreference } from './project-preference';
 import { rootsFromProjectFolder } from './roots';
 
 interface Reply {
@@ -39,9 +46,7 @@ const request = (
         res.on('end', () =>
           resolve({
             status: res.statusCode ?? 0,
-            ...(typeof res.headers.location === 'string'
-              ? { location: res.headers.location }
-              : {}),
+            ...(typeof res.headers.location === 'string' ? { location: res.headers.location } : {}),
             ...(typeof res.headers['cache-control'] === 'string'
               ? { cacheControl: res.headers['cache-control'] }
               : {}),
@@ -99,6 +104,7 @@ const start = async (
   mode: Parameters<typeof createBoardownServer>[0]['mode'],
   watch = true,
   sharedConfig?: SharedConfigSource,
+  extras: Pick<ServerOptions, 'preference' | 'pickFolder'> = {},
 ): Promise<void> => {
   // A test that starts a second server drops the first one, so it is closed here
   // rather than left listening for the rest of the run.
@@ -107,10 +113,14 @@ const start = async (
     mode,
     clientDir: clientDir(),
     watch,
+    ...extras,
     ...(sharedConfig === undefined ? {} : { sharedConfig }),
   });
   port = await listen(server);
 };
+
+const bootOf = (reply: Reply) =>
+  parsePageBoot(/<script[^>]+id="boardown-boot">([^<]*)<\/script>/.exec(reply.body)?.[1]);
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'boardown-server-'));
@@ -233,11 +243,16 @@ describe('registry mode', () => {
   });
 
   it('lists the projects, naming the readable one and explaining the other', async () => {
-    const reply = await request('/');
-    expect(reply.status).toBe(200);
-    expect(reply.body).toContain('Shop');
-    expect(reply.body).toContain('no board yet');
-    expect(reply.body).toContain('/b/shop/');
+    const root = await request('/?embed');
+    expect(root.status).toBe(200);
+    expect(bootOf(root)?.registry).toMatchObject({ id: null, embedded: false, restored: false });
+    const list = await request('/api/projects');
+    expect(JSON.parse(list.body)).toMatchObject({
+      projects: [
+        { id: 'shop', name: 'Shop', reason: null },
+        { id: 'empty', name: 'empty', reason: 'no board yet' },
+      ],
+    });
   });
 
   it('serves a board under its prefix', async () => {
@@ -280,6 +295,17 @@ describe('registry mode', () => {
     const reply = await request('/b/shop?embed');
     expect(reply.status).toBe(308);
     expect(reply.location).toBe('/b/shop/?embed');
+  });
+
+  it('serves the same project with and without the standalone workspace', async () => {
+    expect(bootOf(await request('/b/shop/'))?.registry).toMatchObject({
+      id: 'shop',
+      embedded: false,
+    });
+    expect(bootOf(await request('/b/shop/?embed'))?.registry).toMatchObject({
+      id: 'shop',
+      embedded: true,
+    });
   });
 
   it('answers an unknown id with 404', async () => {
@@ -339,7 +365,17 @@ describe('registry mode', () => {
     await fs.writeFile(registryPath, `projects:\n  empty: ${empty.replace(/\\/g, '/')}\n`, 'utf-8');
     await fs.utimes(registryPath, new Date(), new Date(Date.now() + 1000));
     expect((await request('/b/shop/api/fs/read?path=config.yaml')).status).toBe(404);
-    expect((await request('/')).body).not.toContain('/b/shop/');
+    expect(JSON.parse((await request('/api/projects/registered?id=shop')).body)).toEqual({
+      registered: false,
+      available: false,
+    });
+    const removedEmbed = await request('/b/shop/?embed');
+    expect(removedEmbed.status).toBe(404);
+    expect(bootOf(removedEmbed)?.registry).toMatchObject({
+      id: 'shop',
+      embedded: true,
+      project: null,
+    });
   });
 
   it('keeps serving the last good registry when a re-read fails', async () => {
@@ -348,9 +384,9 @@ describe('registry mode', () => {
     expect((await request('/')).status).toBe(200);
     await fs.writeFile(registryPath, 'projects:\n  - [unclosed\n', 'utf-8');
     await fs.utimes(registryPath, new Date(), new Date(Date.now() + 1000));
-    const list = await request('/');
+    const list = await request('/api/projects');
     expect(list.status).toBe(200);
-    expect(list.body).toContain('last version that loaded');
+    expect(list.body).toContain('invalid YAML');
     expect((await request('/b/shop/api/fs/read?path=config.yaml')).status).toBe(200);
   });
 });
@@ -380,18 +416,19 @@ describe('the registry endpoints', () => {
     await start({ kind: 'registry', registry: new RegistryFile(registryFile) });
   });
 
-  it('adds a project and answers with the list it is now', async () => {
+  it('adds a project with a canonical ID and does not initialize a board', async () => {
     const reply = await post('/api/projects/add', { path: projectB, id: 'beta' });
     expect(reply.status).toBe(200);
-    const html = (JSON.parse(reply.body) as { html: string }).html;
-    expect(html).toContain('/b/beta/');
-    expect(html).toContain('no board yet');
-    expect(await registryText()).toBe(`# mine\nprojects:\n  alpha: ${projectA}\n  beta: ${projectB}\n`);
+    expect(JSON.parse(reply.body)).toEqual({ id: 'beta' });
+    expect(await registryText()).toBe(
+      `# mine\nprojects:\n  alpha: ${projectA}\n  beta: ${await fs.realpath(projectB)}\n`,
+    );
+    await expect(fs.stat(path.join(projectB, '.boardown'))).rejects.toThrow();
   });
 
   it('shows the new project on the page too', async () => {
     await post('/api/projects/add', { path: projectB, id: 'beta' });
-    expect((await request('/')).body).toContain('/b/beta/');
+    expect((await request('/api/projects')).body).toContain('"id":"beta"');
   });
 
   it('creates a registry file that was not there', async () => {
@@ -399,29 +436,31 @@ describe('the registry endpoints', () => {
     await start({ kind: 'registry', registry: new RegistryFile(fresh, { absentIsEmpty: true }) });
     const reply = await post('/api/projects/add', { path: projectA, id: 'alpha' });
     expect(reply.status).toBe(200);
-    expect(await fs.readFile(fresh, 'utf-8')).toBe(`projects:\n  alpha: ${projectA}\n`);
+    expect(await fs.readFile(fresh, 'utf-8')).toBe(
+      `projects:\n  alpha: ${await fs.realpath(projectA)}\n`,
+    );
   });
 
-  it('refuses a path that names nothing, at the path field', async () => {
+  it('refuses a path that names nothing', async () => {
     const reply = await post('/api/projects/add', {
       path: path.join(dir, 'nowhere'),
       id: 'gamma',
     });
     expect(reply.status).toBe(400);
-    expect(JSON.parse(reply.body)).toMatchObject({ field: 'path' });
+    expect(reply.body).toContain('available folder');
   });
 
-  it('refuses a folder already registered, at the path field', async () => {
+  it('answers a retry with the existing canonical ID', async () => {
+    const before = await registryText();
     const reply = await post('/api/projects/add', { path: projectA, id: 'second' });
-    expect(reply.status).toBe(400);
-    expect(JSON.parse(reply.body)).toMatchObject({ field: 'path' });
+    expect(reply.status).toBe(200);
+    expect(JSON.parse(reply.body)).toEqual({ id: 'alpha' });
+    expect(await registryText()).toBe(before);
   });
 
   it('refuses an id already taken, and one that is no URL segment', async () => {
-    expect(JSON.parse((await post('/api/projects/add', { path: projectB, id: 'alpha' })).body))
-      .toMatchObject({ field: 'id' });
-    expect(JSON.parse((await post('/api/projects/add', { path: projectB, id: 'Beta One' })).body))
-      .toMatchObject({ field: 'id' });
+    expect((await post('/api/projects/add', { path: projectB, id: 'alpha' })).status).toBe(409);
+    expect((await post('/api/projects/add', { path: projectB, id: 'Beta One' })).status).toBe(400);
     expect(await registryText()).not.toContain('beta');
   });
 
@@ -444,7 +483,7 @@ describe('the registry endpoints', () => {
     const remove = await post('/api/projects/remove', { id: 'alpha' });
     expect(add.status).toBe(409);
     expect(remove.status).toBe(409);
-    expect(JSON.parse(add.body)).toMatchObject({ field: null });
+    expect(add.body).toContain('could not be read');
     expect(await registryText()).toBe('projects:\n  - [unclosed\n');
   });
 
@@ -468,6 +507,62 @@ describe('the registry endpoints', () => {
   it('has no such endpoints in single-board mode', async () => {
     await start({ kind: 'single', roots: rootsFromProjectFolder(projectA) });
     expect((await post('/api/projects/add', { path: projectB, id: 'beta' })).status).toBe(404);
+  });
+
+  it('rejects a registry write from another origin even if it is on loopback', async () => {
+    const before = await registryText();
+    const reply = await request('/api/projects/add', {
+      method: 'POST',
+      headers: { Origin: `http://127.0.0.1:${port + 1}`, 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ path: projectB, id: 'beta' }),
+    });
+    expect(reply.status).toBe(403);
+    expect(await registryText()).toBe(before);
+  });
+
+  it('returns cancellation without a write, then opens a chosen folder without making a board', async () => {
+    const registry = new RegistryFile(registryFile);
+    let choice: string | null = null;
+    await start({ kind: 'registry', registry }, false, undefined, {
+      pickFolder: () => Promise.resolve(choice),
+    });
+    const before = await registryText();
+    expect(JSON.parse((await post('/api/projects/pick', {})).body)).toEqual({ id: null });
+    expect(await registryText()).toBe(before);
+    choice = projectB;
+    expect(JSON.parse((await post('/api/projects/pick', {})).body)).toEqual({ id: 'beta' });
+    expect(JSON.parse((await post('/api/projects/pick', {})).body)).toEqual({ id: 'beta' });
+    await expect(fs.stat(path.join(projectB, '.boardown'))).rejects.toThrow();
+  });
+
+  it('restores only the named registry preference across restarts and clears it on close', async () => {
+    const statePath = path.join(dir, 'project-state.json');
+    const first = new RegistryFile(registryFile);
+    const secondFile = path.join(dir, 'second.yaml');
+    await fs.copyFile(registryFile, secondFile);
+    const second = new RegistryFile(secondFile);
+    const run = (registry: RegistryFile) =>
+      start({ kind: 'registry', registry }, false, undefined, {
+        preference: projectPreference(new ProjectStateFile(statePath), registry),
+      });
+    await run(first);
+    expect((await post('/api/projects/preference', { id: 'alpha' })).status).toBe(200);
+    await run(second);
+    expect(bootOf(await request('/'))?.registry).toMatchObject({ id: null, restored: false });
+    await run(first);
+    expect(bootOf(await request('/?embed'))?.registry).toMatchObject({
+      id: 'alpha',
+      embedded: false,
+      restored: true,
+    });
+    expect(bootOf(await request('/b/alpha/?embed'))?.registry).toMatchObject({
+      id: 'alpha',
+      embedded: true,
+    });
+    expect((await post('/api/projects/preference', { id: null })).status).toBe(200);
+    expect(bootOf(await request('/'))?.registry).toMatchObject({ id: null, restored: false });
+    await request('/b/alpha/?embed');
+    expect(bootOf(await request('/'))?.registry).toMatchObject({ id: null, restored: false });
   });
 });
 

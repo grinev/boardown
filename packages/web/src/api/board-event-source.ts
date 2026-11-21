@@ -16,7 +16,7 @@ export const subscribeToBoardChanges = (
   base: string,
   clientId: string,
   { onBoardChange, onSharedConfigChange }: BoardChangeHandlers,
-): void => {
+): (() => void) => {
   const url = `${base}?${CLIENT_ID_PARAM}=${encodeURIComponent(clientId)}`;
   let source: EventSource | null = null;
   // Whether what is on screen is known to be the board on disk: true while a
@@ -69,7 +69,7 @@ export const subscribeToBoardChanges = (
     });
   };
 
-  document.addEventListener('visibilitychange', () => {
+  const onVisibility = () => {
     if (document.visibilityState === 'hidden') {
       source?.close();
       source = null;
@@ -77,7 +77,12 @@ export const subscribeToBoardChanges = (
       return;
     }
     open();
-  });
+  };
 
+  document.addEventListener('visibilitychange', onVisibility);
   open();
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    source?.close();
+  };
 };

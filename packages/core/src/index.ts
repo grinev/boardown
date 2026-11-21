@@ -19,6 +19,8 @@ export * from './task-filters.js';
 export * from './conflicts.js';
 export * from './docs.js';
 export * from './project-file.js';
+export * from './project-registry.js';
+export * from './project-registry-edit.js';
 export * from './git-history.js';
 export * from './file-saver.js';
 export * from './shared-theme.js';

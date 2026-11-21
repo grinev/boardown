@@ -3,7 +3,7 @@
 Cross-platform desktop shell for boardown (macOS / Windows / Linux). A sibling of
 the `web` and `vscode` shells: it reuses `@boardown/ui` unchanged and only
 provides the platform layer — an `FsAdapter` over Electron IPC, an OS-native
-folder picker, a recent-folders list, and the application menu. On macOS the
+folder picker, the shared project registry, and the application menu. On macOS the
 menu lives in the system menu bar; on Windows/Linux the menu bar is removed and
 the same menu is reached through a ☰ button in the sidebar (a native popup).
 
@@ -11,18 +11,24 @@ the same menu is reached through a ☰ button in the sidebar (a native popup).
 
 - **Main process** (`src/main/`, bundled with esbuild → `dist/main.js`,
   `dist/preload.js`) owns all OS integration: window lifecycle, the native
-  `Open Folder…` dialog, recent-folders persistence (in `app.getPath('userData')`),
+  `Open Folder…` dialog, registry access through `@boardown/projects`,
   the menu, an optional CLI folder argument, and the file-system IPC handlers.
   Every path is resolved against the open board's `.boardown/` directory and
   guarded against `..`/absolute-path escapes.
 - **Preload** (`src/main/preload.ts`) exposes a single `window.boardown` bridge
   via `contextBridge` (context isolation on, no node integration, sandboxed).
 - **Renderer** (`src/renderer/`, bundled with Vite → `dist/renderer/`) shows a
-  welcome screen (recent folders + Open Folder) until a board is chosen, then
-  mounts the real `@boardown/ui` `App` with the bridge's `FsAdapter`.
+  project sidebar and a welcome screen until a board is chosen, then mounts the
+  real `@boardown/ui` `App` with board-scoped capabilities from the bridge.
 
 The board root is `<chosen folder>/.boardown/` — the same convention the VS Code
 shell uses for its workspace folder.
+
+Electron shares `boardown/projects.yaml` with `boardown-web` in the OS user
+configuration directory. First use imports the old recent-folders file and
+old Web registry without altering either. Closing a board keeps it registered;
+removing a registration never deletes project files. Electron's window and
+theme preferences remain in its own settings.
 
 ## Scripts
 

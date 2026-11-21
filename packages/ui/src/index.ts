@@ -1,5 +1,7 @@
 export { App } from './App';
 export { useBoardStore } from './store';
+export { ProjectSidebar, type SidebarProject } from './components/ProjectSidebar';
+export { useDocumentTheme } from './theme/useDocumentTheme';
 // The Electron shell hides the shared Settings dialog but still needs this one
 // board-scoped control in its own settings popover.
 export { WipLimitField } from './components/WipLimitField';

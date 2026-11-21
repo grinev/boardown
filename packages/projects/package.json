@@ -1,0 +1,23 @@
+{
+  "name": "@boardown/projects",
+  "version": "0.12.0",
+  "minCompatibleVersion": "0.12.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@boardown/core": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "vitest": "^4.1.12"
+  }
+}

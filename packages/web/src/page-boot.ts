@@ -1,5 +1,6 @@
 import type { Theme } from '../../core/src/schemas';
 import type { SharedThemeState } from '../../core/src/shared-theme';
+import type { RegistryBoot } from './projects-endpoint';
 
 // The theme a host knew when it served a board page, embedded in that page so the
 // shell can hand it to ui before the first frame. Shared by the two Node hosts,
@@ -11,6 +12,7 @@ export interface PageBoot {
   theme: Theme;
   /** Absent when the host has no shared configuration. */
   sharedTheme?: SharedThemeState;
+  registry?: RegistryBoot;
 }
 
 // The host's own JSON, trusted like the shared-theme endpoint's answer. A page

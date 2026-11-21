@@ -1,12 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { App, useBoardStore } from '@boardown/ui';
-import type { ProjectEntry, ThemeChoice } from '../bridge';
+import type { OpenProject, ProjectListSnapshot, ThemeChoice } from '../bridge';
 import { Sidebar } from './Sidebar';
 import { folderName, suggestIdPrefix } from './project-name';
 import styles from './Root.module.css';
@@ -28,13 +29,12 @@ function readStoredWidth(): number {
   return Number.isFinite(stored) && stored > 0 ? clampWidth(stored) : SIDEBAR_DEFAULT;
 }
 
-// Claude-Desktop-style shell: a persistent left sidebar lists the known projects
-// (the persisted recent folders); the main area shows the active project's
-// @boardown/ui board, or an empty state when none is selected.
 export function Root() {
-  const [activeFolder, setActiveFolder] = useState<string | null>(bridge.initialFolder);
+  const [active, setActive] = useState<OpenProject | null>(bridge.initialProject);
+  const [snapshot, setSnapshot] = useState<ProjectListSnapshot>({ projects: [], error: null });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
   const [theme, setTheme] = useState(bridge.theme);
-  const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [themeChoice, setThemeChoiceState] = useState<ThemeChoice>(bridge.themeChoice);
   const [autoRefresh, setAutoRefreshState] = useState(bridge.autoRefresh);
 
@@ -43,11 +43,18 @@ export function Root() {
   // re-fire App's load effect and reload the board mid-edit. Re-capture the
   // current theme only when the board changes (App is keyed by activeFolder).
   const openThemeRef = useRef(theme);
-  const openFolderRef = useRef(activeFolder);
-  if (openFolderRef.current !== activeFolder) {
-    openFolderRef.current = activeFolder;
+  const scope = active?.scope;
+  const openScopeRef = useRef(scope);
+  if (openScopeRef.current !== scope) {
+    openScopeRef.current = scope;
     openThemeRef.current = theme;
   }
+  const capabilities = useMemo(
+    () => (scope === undefined ? null : bridge.connectBoard(scope)),
+    [scope],
+  );
+  const boardName = useBoardStore((state) => state.snapshot?.config.projectName);
+  const listRead = useRef(0);
 
   const [sidebarWidth, setSidebarWidth] = useState(readStoredWidth);
   const draggingRef = useRef(false);
@@ -81,7 +88,16 @@ export function Root() {
   }, []);
 
   const refreshProjects = useCallback(() => {
-    void bridge.getRecents().then(setProjects);
+    const request = ++listRead.current;
+    void bridge
+      .getProjects()
+      .then((result) => {
+        if (request === listRead.current) setSnapshot(result);
+      })
+      .catch((error: unknown) => {
+        if (request === listRead.current)
+          setActionError(error instanceof Error ? error.message : String(error));
+      });
   }, []);
 
   const chooseTheme = useCallback(
@@ -104,53 +120,74 @@ export function Root() {
 
   useEffect(() => {
     refreshProjects();
-  }, [refreshProjects]);
+  }, [refreshProjects, boardName]);
 
-  // The host sets the board root before emitting boardOpened, so the App can
-  // mount and hit fs straight away. Refresh the list so a freshly opened folder
-  // shows up (and jumps to the top) in the sidebar.
   useEffect(
     () =>
-      bridge.onBoardOpened((folder) => {
-        setActiveFolder(folder);
+      bridge.onBoardOpened((project) => {
+        setActive(project);
         refreshProjects();
       }),
     [refreshProjects],
   );
-  useEffect(() => bridge.onBoardClosed(() => setActiveFolder(null)), []);
+  useEffect(() => bridge.onBoardClosed(() => setActive(null)), []);
+  useEffect(() => bridge.onProjectsChanged(refreshProjects), [refreshProjects]);
   useEffect(() => bridge.onThemeChange(setTheme), []);
   // The host signals when .boardown/ changed on disk outside this window; refresh
   // the board in place via reloadSilent (no loading flash). A no-op when no board
   // is mounted (store has no rawFs yet).
-  useEffect(() => bridge.onBoardChanged(() => void useBoardStore.getState().reloadSilent()), []);
+  useEffect(
+    () =>
+      bridge.onBoardChanged(() => {
+        void useBoardStore.getState().reloadSilent();
+        refreshProjects();
+      }),
+    [refreshProjects],
+  );
 
   // With no board mounted, @boardown/ui's theme.css isn't loaded; keep the shell
   // palette in sync with the OS theme. Once App mounts it drives data-theme from
   // the board's own config.
   useEffect(() => {
-    if (activeFolder === null) {
+    if (active === null) {
       document.documentElement.setAttribute('data-theme', theme);
     }
-  }, [activeFolder, theme]);
+  }, [active, theme]);
+
+  const act = async (run: () => Promise<void>) => {
+    setActionError(null);
+    try {
+      await run();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const pick = () => {
+    if (opening) return;
+    setOpening(true);
+    void act(() => bridge.pickFolder()).finally(() => setOpening(false));
+  };
+  const close = () => void act(() => bridge.closeBoard());
 
   return (
     <div className={styles.layout}>
       <Sidebar
-        projects={projects}
-        activeFolder={activeFolder}
+        projects={snapshot.projects}
+        activeId={active?.id ?? null}
         width={sidebarWidth}
-        onSelect={(folder) => {
-          if (folder !== activeFolder) void bridge.openRecent(folder);
+        error={actionError ?? snapshot.error}
+        opening={opening}
+        onSelect={(id) => {
+          if (id !== active?.id) void act(() => bridge.openProject(id));
         }}
-        onOpenFolder={() => void bridge.pickFolder()}
-        onRemove={(folder) => {
-          void bridge.removeRecent(folder).then(refreshProjects);
-        }}
+        onOpenFolder={pick}
+        onClose={close}
+        onRemove={(id) => bridge.removeProject(id)}
         themeChoice={themeChoice}
         onThemeChoice={chooseTheme}
         autoRefresh={autoRefresh}
         onAutoRefresh={chooseAutoRefresh}
-        boardOpen={activeFolder !== null}
+        boardOpen={active !== null}
         showMenuButton={bridge.showMenuButton}
         onMenuButton={() => bridge.popupMenu()}
       />
@@ -163,44 +200,30 @@ export function Root() {
         aria-orientation="vertical"
         aria-label="Resize sidebar"
       />
-      <main className={styles.main}>
-        {activeFolder === null ? (
-          <div className={styles.empty}>
+      <div className={styles.main}>
+        {active === null || capabilities === null ? (
+          <main className={styles.empty}>
             <p className={styles.emptyTitle}>No project open</p>
             <p className={styles.emptyHint}>
               Pick a project on the left, or open a folder to load its board.
             </p>
-            <button
-              type="button"
-              className={styles.emptyButton}
-              onClick={() => void bridge.pickFolder()}
-            >
+            <button type="button" className={styles.emptyButton} onClick={pick} disabled={opening}>
               Open Folder…
             </button>
-          </div>
+          </main>
         ) : (
           <App
-            key={activeFolder}
-            fs={bridge.fs}
-            projectFiles={bridge.projectFiles}
-            gitHistory={bridge.gitHistory}
+            key={active.scope}
+            {...capabilities}
             fileSaver={bridge.fileSaver}
             forcedTheme={theme}
             defaultTheme={openThemeRef.current}
-            defaultProjectName={folderName(activeFolder)}
-            defaultIdPrefix={suggestIdPrefix(folderName(activeFolder))}
-            onCancel={() => {
-              // Always return to the welcome screen, even if the recents cleanup
-              // fails — the host has already dropped this window's board context.
-              const reset = () => {
-                setActiveFolder(null);
-                refreshProjects();
-              };
-              void bridge.cancelBoard().then(reset, reset);
-            }}
+            defaultProjectName={folderName(active.projectRoot)}
+            defaultIdPrefix={suggestIdPrefix(folderName(active.projectRoot))}
+            onCancel={close}
           />
         )}
-      </main>
+      </div>
     </div>
   );
 }

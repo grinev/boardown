@@ -1,35 +1,22 @@
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import yaml from 'js-yaml';
 import {
-  REGISTRY_ID_PATTERN,
-  parseRegistry,
-  sameEntries,
-  type RegistryEntry,
-} from './registry.js';
-import { rootsFromProjectFolder } from './roots.js';
+  parseProjectRegistry,
+  sameRegistrations,
+  type IsAbsolutePath,
+  type ProjectRegistration,
+} from './project-registry.js';
 
 // The registry file is patched as text, never re-serialized from what it parsed
 // to: it is the user's file, it may hold comments and an order chosen by hand,
 // and a status change that shows up as a one-line diff is the same promise the
-// board files make. Everything here is strings in, strings out — the filesystem
-// belongs to RegistryFile, and the only thing that touches it is the folder check
-// a refusal is built on.
+// board files make.
 //
 // Whatever the patcher does is checked before it lands: `verify` re-parses the
 // text it produced and compares the entries against the ones the edit meant to
 // leave behind. A shape of file it reads wrongly becomes a refusal rather than a
 // corrupted registry, which is what lets it stay this simple.
 
-/** The field a refusal belongs to, so the page can put it under that input. */
-export type RefusalField = 'path' | 'id' | null;
-
-export interface Refusal {
-  field: RefusalField;
-  message: string;
-}
-
-export type EditResult = { ok: true; text: string } | ({ ok: false } & Refusal);
+type EditResult = { ok: true; text: string } | { ok: false; message: string };
 
 // The value is matched with `[^\n]` rather than `.`, which does not match the
 // '\r' every line of a CRLF file still ends with after the split.
@@ -48,7 +35,7 @@ interface Block {
   entryIndent: string;
 }
 
-const indentOf = (line: string): string => (/^\s*/.exec(line)?.[0] ?? '');
+const indentOf = (line: string): string => /^\s*/.exec(line)?.[0] ?? '';
 
 const isBlank = (line: string): boolean => line.trim() === '';
 
@@ -134,58 +121,60 @@ const entryLine = (id: string, folder: string): string =>
     .dump({ [id]: folder }, { lineWidth: -1, noRefs: true, sortKeys: false, quotingType: '"' })
     .replace(/\n+$/, '');
 
-const refuse = (message: string, field: RefusalField = null): EditResult => ({
+const unpatchable: EditResult = {
   ok: false,
-  field,
-  message,
-});
-
-const UNPATCHABLE =
-  'The registry file is not in a shape this page can edit — edit it by hand instead.';
+  message: 'The registry file is not in a shape the app can edit — edit it by hand instead.',
+};
 
 /** The patch is only allowed to land if the file it produced holds exactly the
  *  entries the edit meant to leave behind. */
-const verify = (text: string, expected: readonly RegistryEntry[]): EditResult => {
-  const parsed = parseRegistry(text);
-  if (!parsed.ok || !sameEntries(parsed.entries, expected)) return refuse(UNPATCHABLE);
+const verify = (
+  text: string,
+  expected: readonly ProjectRegistration[],
+  isAbsolute: IsAbsolutePath,
+): EditResult => {
+  const parsed = parseProjectRegistry(text, isAbsolute);
+  if (!parsed.ok || !sameRegistrations(parsed.entries, expected)) return unpatchable;
   return { ok: true, text };
 };
 
 /**
- * Appends one entry. `text` is null when the file does not exist yet, and then
- * the whole file is the entry — the smallest registry that holds it.
+ * Appends new entries in one verified patch, including on first migration.
  */
-export const addEntry = (
+export const appendRegistrations = (
   text: string | null,
-  current: readonly RegistryEntry[],
-  id: string,
-  folder: string,
+  current: readonly ProjectRegistration[],
+  additions: readonly ProjectRegistration[],
+  isAbsolute: IsAbsolutePath,
 ): EditResult => {
-  const expected = [...current, { id, ...rootsFromProjectFolder(folder) }];
+  const expected = [...current, ...additions];
   if (text === null) {
-    return verify(`projects:\n  ${entryLine(id, folder)}\n`, expected);
+    const lines = additions.map(({ id, projectRoot }) => `  ${entryLine(id, projectRoot)}`);
+    return verify(`projects:\n${lines.join('\n')}\n`, expected, isAbsolute);
   }
   const lines = linesOf(text);
   const block = findBlock(lines);
-  if (block === null) return refuse(UNPATCHABLE);
+  if (block === null) return unpatchable;
   const cr = crOf(text);
-  const added = `${block.entryIndent}${entryLine(id, folder)}${cr}`;
+  const added = additions.map(
+    ({ id, projectRoot }) => `${block.entryIndent}${entryLine(id, projectRoot)}${cr}`,
+  );
   const last = block.entryLines[block.entryLines.length - 1];
   if (last === undefined) {
     // No entries yet, so the key still carries a `{}` that has to give way to a
     // block before a line can be inserted under it. Any trailing comment on that
     // line is the user's and stays.
     const empty = EMPTY_FLOW.exec(block.value);
-    if (block.value.trim() !== '' && empty === null) return refuse(UNPATCHABLE);
+    if (block.value.trim() !== '' && empty === null) return unpatchable;
     const comment = empty?.[1];
     lines[block.keyLine] =
       `${block.keyIndent}projects:${comment === undefined ? '' : ` ${comment}`}${cr}`;
-    lines.splice(block.keyLine + 1, 0, added);
+    lines.splice(block.keyLine + 1, 0, ...added);
   } else {
-    lines.splice(last + 1, 0, added);
+    lines.splice(last + 1, 0, ...added);
   }
   settleEnd(lines, text);
-  return verify(joinLines(lines), expected);
+  return verify(joinLines(lines), expected, isAbsolute);
 };
 
 /**
@@ -193,17 +182,18 @@ export const addEntry = (
  * bare `projects:` parses as null and would leave the file unreadable — a Remove
  * that breaks the file it edits is not a Remove.
  */
-export const removeEntry = (
+export const dropRegistration = (
   text: string,
-  current: readonly RegistryEntry[],
+  current: readonly ProjectRegistration[],
   id: string,
+  isAbsolute: IsAbsolutePath,
 ): EditResult => {
   const expected = current.filter((entry) => entry.id !== id);
   const lines = linesOf(text);
   const block = findBlock(lines);
-  if (block === null) return refuse(UNPATCHABLE);
+  if (block === null) return unpatchable;
   const target = block.entryLines.find((i) => keyOf(lines[i] ?? '') === id);
-  if (target === undefined) return refuse(UNPATCHABLE);
+  if (target === undefined) return unpatchable;
   lines.splice(target, 1);
   if (block.entryLines.length === 1) {
     const trailing = block.value.trim();
@@ -211,59 +201,5 @@ export const removeEntry = (
       `${block.keyIndent}projects: {}${trailing === '' ? '' : ` ${trailing}`}${crOf(text)}`;
   }
   settleEnd(lines, text);
-  return verify(joinLines(lines), expected);
-};
-
-const sameFolder = (a: string, b: string): boolean =>
-  process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
-
-/**
- * What the page is allowed to add. The folder must be one that exists now — a
- * typo caught while typing is correctable, unlike an entry whose folder goes
- * missing later, which keeps its row. Only the first refusal is reported, and
- * the path is checked before the id, the order the two fields are read in.
- */
-export const validateAdd = async (
-  current: readonly RegistryEntry[],
-  rawPath: string,
-  rawId: string,
-): Promise<{ ok: true; id: string; folder: string } | ({ ok: false } & Refusal)> => {
-  const typed = rawPath.trim();
-  const id = rawId.trim();
-  if (typed === '') return { ok: false, field: 'path', message: 'Enter a path.' };
-  if (!path.isAbsolute(typed)) {
-    return { ok: false, field: 'path', message: 'The path must be absolute.' };
-  }
-  const folder = path.resolve(typed);
-  try {
-    if (!(await fs.stat(folder)).isDirectory()) {
-      return { ok: false, field: 'path', message: 'That path is not a folder.' };
-    }
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    return {
-      ok: false,
-      field: 'path',
-      message:
-        code === 'ENOENT' || code === 'ENOTDIR'
-          ? 'There is no folder at that path.'
-          : 'That folder could not be read.',
-    };
-  }
-  const taken = current.find((entry) => sameFolder(entry.projectRoot, folder));
-  if (taken !== undefined) {
-    return { ok: false, field: 'path', message: `Already registered as "${taken.id}".` };
-  }
-  if (id === '') return { ok: false, field: 'id', message: 'Enter an id.' };
-  if (!REGISTRY_ID_PATTERN.test(id)) {
-    return {
-      ok: false,
-      field: 'id',
-      message: 'An id is lowercase letters, digits and dashes.',
-    };
-  }
-  if (current.some((entry) => entry.id === id)) {
-    return { ok: false, field: 'id', message: 'That id is already in the registry.' };
-  }
-  return { ok: true, id, folder };
+  return verify(joinLines(lines), expected, isAbsolute);
 };

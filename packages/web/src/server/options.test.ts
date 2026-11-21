@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { RegistryFile } from '@boardown/projects';
 import { UsageError, parseArgs, resolveMode } from './options';
 import { BOARD_DIR_NAME } from './roots';
 
@@ -83,7 +84,7 @@ const writeRegistry = async (file: string, project: string): Promise<void> => {
 };
 
 /** Nothing under test may ask for it; a case that expects it to be asked names its own. */
-const noDefault = (): string => {
+const noDefault = (): never => {
   throw new Error('the default registry path was asked for');
 };
 
@@ -134,7 +135,7 @@ describe('resolveMode', () => {
     const project = path.join(dir, 'shop');
     const file = path.join(dir, 'default.yaml');
     await writeRegistry(file, project);
-    const resolved = await resolveMode({}, dir, () => file);
+    const resolved = await resolveMode({}, dir, () => Promise.resolve(new RegistryFile(file)));
     expect(resolved.singleRoots).toBeNull();
     expect(resolved.registry?.filePath).toBe(file);
     const entries = (await resolved.registry?.read())?.entries ?? [];
@@ -144,7 +145,9 @@ describe('resolveMode', () => {
   it('starts on a default registry that is not there, listing nothing', async () => {
     const dir = await tempDir();
     const file = path.join(dir, 'default.yaml');
-    const resolved = await resolveMode({}, dir, () => file);
+    const resolved = await resolveMode({}, dir, () =>
+      Promise.resolve(new RegistryFile(file, { absentIsEmpty: true })),
+    );
     expect(resolved.registry?.filePath).toBe(file);
     expect(await resolved.registry?.read()).toEqual({ entries: [], staleReason: null });
     await expect(fs.stat(file)).rejects.toThrow();
@@ -154,13 +157,15 @@ describe('resolveMode', () => {
     const dir = await tempDir();
     const file = path.join(dir, 'default.yaml');
     await fs.writeFile(file, 'projects:\n  "My Shop": /somewhere\n', 'utf-8');
-    await expect(resolveMode({}, dir, () => file)).rejects.toThrow(file);
+    await expect(
+      resolveMode({}, dir, () => Promise.resolve(new RegistryFile(file))),
+    ).rejects.toThrow(file);
   });
 
   it('lets the default path refuse to resolve, and does not ask for it otherwise', async () => {
     const dir = await tempDir();
     const board = path.join(dir, BOARD_DIR_NAME);
-    const unresolvable = (): string => {
+    const unresolvable = (): never => {
       throw new Error('no home directory is set');
     };
     await expect(resolveMode({}, dir, unresolvable)).rejects.toThrow(/no home directory/);

@@ -1,28 +1,23 @@
-import { promises as fs } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { addEntry, removeEntry, validateAdd } from './registry-edit';
-import { parseRegistry, type RegistryEntry } from './registry';
-import { rootsFromProjectFolder } from './roots';
+import { describe, expect, it } from 'vitest';
+import { appendRegistrations, dropRegistration } from './project-registry-edit.js';
+import { parseProjectRegistry, type ProjectRegistration } from './project-registry.js';
 
-const made: string[] = [];
-
-const tempDir = async (): Promise<string> => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'boardown-registry-edit-'));
-  made.push(dir);
-  return dir;
-};
-
-afterEach(async () => {
-  await Promise.all(made.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
-});
-
-const entries = (text: string): RegistryEntry[] => {
-  const parsed = parseRegistry(text);
+const isAbsolute = (value: string) => path.isAbsolute(value);
+const entries = (text: string): ProjectRegistration[] => {
+  const parsed = parseProjectRegistry(text, isAbsolute);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.entries;
 };
+
+const addEntry = (
+  text: string | null,
+  current: ProjectRegistration[],
+  id: string,
+  projectRoot: string,
+) => appendRegistrations(text, current, [{ id, projectRoot }], isAbsolute);
+const removeEntry = (text: string, current: ProjectRegistration[], id: string) =>
+  dropRegistration(text, current, id, isAbsolute);
 
 const added = (text: string, id: string, folder: string): string => {
   const result = addEntry(text, entries(text), id, folder);
@@ -47,7 +42,8 @@ describe('addEntry', () => {
   });
 
   it('keeps comments and blank lines inside the block', () => {
-    const before = 'projects:\n  # the shop\n  shop: /projects/shop\n\n  # the site\n  site: /projects/site\n';
+    const before =
+      'projects:\n  # the shop\n  shop: /projects/shop\n\n  # the site\n  site: /projects/site\n';
     const after = added(before, 'blog', B);
     expect(after).toContain('# the shop');
     expect(after).toContain('# the site');
@@ -74,7 +70,7 @@ describe('addEntry', () => {
   it('refuses a flow mapping that has entries in it', () => {
     const before = 'projects: {shop: /projects/shop}\n';
     const result = addEntry(before, entries(before), 'blog', B);
-    expect(result).toMatchObject({ ok: false, field: null });
+    expect(result).toMatchObject({ ok: false });
   });
 
   it('keeps the indentation the file already uses', () => {
@@ -106,7 +102,7 @@ describe('addEntry', () => {
   it('writes a path carrying backslashes so that it reads back unchanged', () => {
     const folder = process.platform === 'win32' ? 'C:\\Users\\me\\shop' : '/projects/a\\b';
     const after = added('projects: {}\n', 'shop', folder);
-    expect(entries(after)[0]?.projectRoot).toBe(rootsFromProjectFolder(folder).projectRoot);
+    expect(entries(after)[0]?.projectRoot).toBe(folder);
   });
 
   it('takes an id of digits alone, which the parser reads back before the rest', () => {
@@ -172,86 +168,16 @@ describe('removeEntry', () => {
   });
 });
 
-describe('validateAdd', () => {
-  const registered = (folder: string, id = 'taken'): RegistryEntry[] => [
-    { id, ...rootsFromProjectFolder(folder) },
-  ];
-
-  it('accepts an existing folder under a fresh id', async () => {
-    const dir = await tempDir();
-    await expect(validateAdd([], dir, 'shop')).resolves.toMatchObject({ ok: true, id: 'shop' });
-  });
-
-  it('refuses a blank path at the path field', async () => {
-    await expect(validateAdd([], '   ', 'shop')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-    });
-  });
-
-  it('refuses a relative path at the path field', async () => {
-    await expect(validateAdd([], 'projects/shop', 'shop')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-    });
-  });
-
-  it('refuses a path that names nothing', async () => {
-    const dir = await tempDir();
-    await expect(validateAdd([], path.join(dir, 'nope'), 'shop')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-      message: 'There is no folder at that path.',
-    });
-  });
-
-  it('refuses a path that names a file', async () => {
-    const dir = await tempDir();
-    const file = path.join(dir, 'notes.txt');
-    await fs.writeFile(file, 'x', 'utf-8');
-    await expect(validateAdd([], file, 'shop')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-      message: 'That path is not a folder.',
-    });
-  });
-
-  it('refuses a folder already registered, however it was typed', async () => {
-    const dir = await tempDir();
-    const typed = path.join(dir, 'sub', '..', '.');
-    await expect(validateAdd(registered(dir), typed, 'other')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-      message: 'Already registered as "taken".',
-    });
-  });
-
-  it('refuses a blank id at the id field', async () => {
-    const dir = await tempDir();
-    await expect(validateAdd([], dir, ' ')).resolves.toMatchObject({ ok: false, field: 'id' });
-  });
-
-  it('refuses an id that is not a URL segment', async () => {
-    const dir = await tempDir();
-    await expect(validateAdd([], dir, 'My Shop')).resolves.toMatchObject({
-      ok: false,
-      field: 'id',
-    });
-  });
-
-  it('refuses an id already in the registry', async () => {
-    const dir = await tempDir();
-    await expect(validateAdd(registered(path.resolve('/elsewhere')), dir, 'taken')).resolves.toMatchObject({
-      ok: false,
-      field: 'id',
-      message: 'That id is already in the registry.',
-    });
-  });
-
-  it('reports the path before the id when both are wrong', async () => {
-    await expect(validateAdd([], 'relative', 'Not An Id')).resolves.toMatchObject({
-      ok: false,
-      field: 'path',
-    });
-  });
+it('adds a complete migration in one patch without changing earlier lines', () => {
+  const before = '# original\nprojects:\n  shop: /projects/shop\n';
+  const result = appendRegistrations(
+    before,
+    entries(before),
+    [
+      { id: 'a', projectRoot: A },
+      { id: 'b', projectRoot: B },
+    ],
+    isAbsolute,
+  );
+  expect(result).toEqual({ ok: true, text: `${before}  a: ${A}\n  b: ${B}\n` });
 });

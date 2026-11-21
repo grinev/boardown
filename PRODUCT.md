@@ -24,9 +24,10 @@ License: MIT.
   file, `backlog.md` and three subfolders (`releases/`, `epics/`, `docs/`).
   Everything is committed to git as-is.
 - **Distribution:** a **VS Code extension** (the canonical way to use boardown),
-  a standalone **Electron desktop app** (Windows / macOS / Linux), and a headless
-  **CLI** for agents and scripts, published to npm. A slim browser shell exists
-  as a development tool for working on the UI from sources. See
+  a standalone **Electron desktop app** (Windows / macOS / Linux), a local
+  **Web workspace** and a headless **CLI** for agents and scripts. The latter
+  two are published to npm. A slim Vite browser shell exists as a development
+  tool for working on the UI from sources. See
   "Distribution & shells" below.
 
 ## Core concepts
@@ -1604,10 +1605,13 @@ and [Open VSX](https://open-vsx.org/extension/grinev/boardown).
 ### Electron desktop app
 
 A standalone cross-platform desktop app (Windows / macOS / Linux). It reuses
-`@boardown/ui` unchanged behind a Node `FsAdapter` and follows the standard
-IDE-class pattern: a recent-folders list on launch, an "Open Folder…" button
-using the OS native dialog, and an optional CLI argument for opening a specific
-folder. It auto-refreshes on external changes like the VS Code shell. The app
+`@boardown/ui` behind a Node `FsAdapter` and follows the standard IDE pattern:
+a sidebar over the same project registry as `boardown-web`, an **Open Folder…**
+button using the OS dialog, and an optional CLI argument for opening a folder.
+**Close Board** and cancelling onboarding keep the folder registered; confirmed
+removal unregisters it in both shells without deleting project files. Electron's
+window, theme and last-open settings remain separate from the Web preference.
+It auto-refreshes on external changes like the VS Code shell. The app
 menu carries **About boardown** (under Help on Windows/Linux, in the system
 application menu on macOS), which opens the OS-native About window with the app's
 version. Links behave the way a desktop app's do: clicking an `http(s)` link in
@@ -1810,12 +1814,10 @@ on an external change, like the other shells, and there is no switch to turn tha
 off — a dev shell is started by a script, not by a user typing flags.
 
 The package carries a second role next to that dev shell: **`boardown-web`, a
-local server** that serves the same UI, built, over the same endpoints. It is
-installed from a tarball packed on the machine that runs it — nothing is
-published to a registry, so this is still not a distribution channel. It binds
-the loopback interface and nothing else, prints the address it listens on, and
-refuses a request whose `Host` or `Origin` names anything but `127.0.0.1`,
-`localhost` or `[::1]`.
+local server** that serves the bundled UI over the same board endpoints. The
+public npm package `@grinev/boardown-web` installs the executable and assets
+without a checkout. It binds the loopback interface, prints its address and
+refuses non-loopback hosts and foreign origins, including different loopback ports.
 
 It watches each board somebody has open and refreshes that board's tabs on an
 external change, the same behaviour as the VS Code and Electron shells: the board's
@@ -1831,18 +1833,19 @@ when it is looked at again, so that a browser's small budget of connections to o
 address is not spent by tabs nobody is watching. Nothing about any of this is
 announced on screen.
 
-It serves either one board or several. With no flag it serves the **default
-registry**: the file where this shell keeps the projects of the machine it runs
-on — `%APPDATA%\boardown-web\projects.yaml` on Windows,
-`~/Library/Application Support/boardown-web/projects.yaml` on macOS, and
-`${XDG_CONFIG_HOME:-~/.config}/boardown-web/projects.yaml` elsewhere. It is a
-server started once from a shortcut, where the directory it happened to start in
-means nothing, so the source of a board is the machine's own list rather than the
-current folder. `--data-dir` serves one named `.boardown/` folder at `/`, and
-`--registry <file>` serves another registry file the same way the default one is
-served; the two flags name different things and passing both is refused. Every
-registry, default or named, is the same YAML file — every project under its own
-`/b/<id>/`, with `/` listing them:
+It serves either one board or several. With no flag it opens the **default
+registry**, an uncapped list shared with Electron: `%APPDATA%\boardown\projects.yaml`
+on Windows, `~/Library/Application Support/boardown/projects.yaml` on macOS, and
+`${XDG_CONFIG_HOME:-~/.config}/boardown/projects.yaml` elsewhere. First use in
+either shell imports the saved Electron folders and the old default
+`boardown-web/projects.yaml` once, without overwriting the originals. An existing
+shared ID takes precedence over a legacy ID; a Web ID that is not already taken
+survives, and any collision receives a new suffixed ID.
+
+`--data-dir` serves one named `.boardown/` folder at `/` without project
+management. `--registry <file>` serves only that existing registry, without
+importing or modifying the default; the two flags cannot be combined. Both
+registry modes use the same YAML layout:
 
 ```yaml
 projects:
@@ -1852,51 +1855,42 @@ projects:
 
 The key is the id in the URL — lowercase letters, digits and dashes — and the
 value is an absolute path to the **project** folder, whose board is the
-`.boardown/` inside it. Each project's display name on the list page comes from
-its own `config.yaml`; a project whose board cannot be read keeps its row and
-carries the reason instead — `no board yet`, `config.yaml is invalid`,
-`needs a newer boardown`, `folder not found`, `could not be read` — so one bad
-entry never costs the others. A file that does not parse, has no `projects` key, or carries an id that
-is not a URL segment is invalid configuration and refuses the start, naming the
-reason and the path. The file is
-re-read when it changes: a project added to it appears without a restart, and one
-removed from it stops being served at once. A re-read that fails leaves the last
-mapping that worked in place and says so on the list page; a file that never
-loaded has no mapping to keep, so the page carries the reason alone. The list page
-itself is not live: it reflects the registry as of the moment it was rendered, and
-reloading the page is how it is brought up to date. The server creates nothing
-inside a project folder — a registered folder with no board opens onboarding, like
-any other empty board.
+`.boardown/` inside it. The standalone workspace shows a sorted project sidebar
+and the selected board. A row shows the board's name from `config.yaml`, or the
+folder name and a visible reason when a name or folder is unavailable.
 
-The list page **maintains** that file. Each row carries a **Remove** control at
-its right edge, beside the link rather than inside it, and below the list an
-**Add project** button opens a dialog taking an absolute path and an id. Typing
-the path fills
-the id in from the folder's name — lowercased, anything outside `a-z0-9` becoming
-a dash — and the field stays editable, keeping whatever is typed into it. Adding
-appends the entry and the row appears without a reload. It does not require a
-board: a folder with no `.boardown/` is registered like any other and its row
-reads `no board yet`. It refuses, saying why under the field that caused it, a
-path that is not absolute, a path that is not an existing folder, a folder already
-registered under some id however it was typed, an id already in the registry, and
-an id that is not a URL segment. Removing asks first in a dialog of the page's
-own, naming the project, and then drops that one entry — the project folder, its `.boardown/` and everything under
-it are untouched, and nothing on this page ever deletes a file of a project's own.
-Both edits patch the registry in place, one line inserted or one line deleted,
-leaving every comment and the order of everything else as they were, and both
-re-read the file first, so an entry added to it by hand meanwhile is still there
-afterwards. While the file cannot be read, both refuse and say so on the page: a
-file the server cannot parse is not one it writes back over from what it
-remembers.
+**Open Folder…** selects through the system dialog, not a path form. Web uses
+Windows PowerShell/WinForms, macOS `osascript`, or Linux Zenity or KDialog when
+available in an interactive desktop session; otherwise it reports the limitation.
+Choosing a known folder reuses its ID. New IDs come from the folder name and use
+suffixes for collisions. Cancelling the chooser leaves selection and registry
+alone. Adding writes no board data; a missing board opens onboarding, and
+cancelling onboarding keeps the registration. **Close Board** returns to project
+selection; confirmed removal unregisters without deleting any project files.
 
-The two registries differ in one thing only: what an **absent** file means. A
-`--registry` path that names nothing is a mistake in the argument and refuses the
-start. The default file is this shell's own state and starts out not existing, so
-the server starts on it, `/` lists no projects, and neither the folder nor the
-file is created — they are written the first time a project is added. A default
-file that exists but cannot be read is not absence, and refuses the start like any
-other invalid one. The startup lines name the registry's absolute path either way,
-so which file was opened never has to be guessed.
+Both shells see external registry changes without restarting, even when automatic
+board refresh is off. Removing an open registration returns standalone Web and
+Electron to selection; an open embed shows it is no longer registered. The old
+URL no longer gives access to the board. Both shells coordinate writes, patching
+the YAML without changing unrelated entries or comments. An unreadable YAML file
+is reported and never overwritten; an already-open host retains the last good
+mapping while the file is malformed. An initially missing default YAML is empty;
+an absent named registry or invalid initial registry refuses server startup.
+
+Opening a standalone `/` restores the last available Web project by replacing the
+current history entry with `/b/<id>/`, or shows project selection. Standalone
+sidebar navigation updates the URL without reloading the page; Back and Forward
+restore the board or selection recorded there, not the last-project default.
+`boardown/project-state.json`, separate from registry YAML and Electron settings,
+holds the migration marker and Web selections keyed by canonical registry path.
+The preference survives server restart and port change, is cleared on close,
+and is never written by Electron or an embed.
+
+A local backend can register a project without the dialog using
+`POST /api/projects/add` with JSON `{ path: string, id: string }`. Registry mode
+replies `200` and `{ id: string }`, using the canonical ID even when retrying with
+a different free ID for the same path. An ID held by a different folder is refused
+without a write. It does not allow cross-origin browser writes.
 
 A board page opened with **`?embed`** is rendered for another app's window that
 already names the project: the row holding the project name above the tabs is not
@@ -1910,8 +1904,8 @@ page, read the same way at `/` of a single board, under `/b/<id>/` of a registry
 case, and anything else — `0`, `false`, `yes` — leaves the page as it is; a
 repeated parameter counts by its first occurrence. Nothing is stored, so the same
 board opened without it shows its title; it lasts for the life of the page and a
-browser reload keeps it with the URL. The list page ignores it, and its links do
-not carry it.
+browser reload keeps it with the URL. A registry root ignores `?embed` and does
+not carry it forward. The project sidebar does not appear in embeds.
 
 A board page opened with **`#task=<id>`**, or handed one later, opens that task's
 dialog — the way an app embedding the board jumps to a task, and a link that works

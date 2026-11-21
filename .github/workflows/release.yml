@@ -252,7 +252,7 @@ jobs:
       tag: ${{ needs.determine.outputs.tag_name }}
     secrets: inherit
 
-  # Publish the CLI package to npm. Auth is tokenless via npm Trusted Publishing
+  # Publish the CLI and Web packages to npm. Auth is tokenless via npm Trusted Publishing
   # (OIDC), so no secret is inherited — the caller only forwards its id-token
   # permission. Same shape as the store publishers: a separate reusable workflow
   # re-runnable on its own (workflow_dispatch) against a tag.

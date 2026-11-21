@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@boardown/core": "workspace:*",
+    "@boardown/projects": "workspace:*",
     "@boardown/ui": "workspace:*",
     "lucide-react": "^1.14.0",
     "react": "^18.3.1",

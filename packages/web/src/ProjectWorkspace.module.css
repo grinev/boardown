@@ -1,0 +1,40 @@
+.layout {
+  display: flex;
+  height: 100vh;
+}
+
+.board {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.empty {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.empty button {
+  padding: 8px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}

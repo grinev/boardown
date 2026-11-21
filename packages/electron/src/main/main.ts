@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { promises as fsp, statSync, readdirSync, watch, type FSWatcher } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,9 +23,16 @@ import {
   readTaskCommits,
 } from '@boardown/core';
 import {
+  describeEntries,
+  openDefaultRegistry,
+  type RegistryEntry,
+  type RegistryFile,
+} from '@boardown/projects';
+import {
   IPC,
   type BootstrapState,
   type FsRequest,
+  type OpenProject,
   type SaveFileRequest,
   type ThemeChoice,
 } from '../bridge';
@@ -33,7 +41,6 @@ import { readProjectFile } from './project-file';
 import { gitRunIn } from './git-history';
 import { classifyNavigation } from './external-links';
 import { buildAppMenu } from './menu';
-import { addRecent, isKnownRecent, listRecents, removeRecent } from './recent-folders';
 import {
   isThemeChoice,
   loadSettings,
@@ -45,7 +52,7 @@ import {
 // Pin the app name before anything reads app.getPath('userData') (Electron
 // caches it on first access). Otherwise dev (`electron .`) would derive it from
 // package.json (`@boardown/electron`) while the packaged app uses productName
-// ('boardown'), so the two would keep their recent-folders list in different
+// ('boardown'), so the two would keep their preferences in different
 // directories. Setting it here makes both use the same `boardown` userData dir.
 app.setName('boardown');
 
@@ -61,15 +68,12 @@ const log = createLogger('electron.main');
 // instead of the packaged files, and we skip the production CSP (Vite needs its
 // own for HMR).
 const DEV_SERVER_URL = process.env.BOARDOWN_RENDERER_URL;
-const BOARD_DIR = '.boardown';
 
 // Per-window board context, keyed by webContents id: the project folder the user
 // opened and the .boardown root every fs request for that window resolves to.
-interface BoardContext {
-  folder: string;
-  boardRoot: string;
-}
+type BoardContext = RegistryEntry & OpenProject;
 const boards = new Map<number, BoardContext>();
+let registry: RegistryFile;
 
 // How long after the host writes a file its own watch event is ignored, so the
 // renderer's own saves don't bounce back as an "external change" refresh.
@@ -231,7 +235,13 @@ async function setAutoRefresh(enabled: boolean): Promise<void> {
 
 function buildMenu(): void {
   appMenu = buildAppMenu({
-    openFolder: (window) => void showOpenDialog(window),
+    openFolder: (window) =>
+      void showOpenDialog(window).catch((error: unknown) => {
+        dialog.showErrorBox(
+          'Cannot open project',
+          error instanceof Error ? error.message : String(error),
+        );
+      }),
     closeBoard: (window) => closeBoard(window),
   });
   // macOS keeps the app menu as its system menu bar; Windows/Linux drop the bar
@@ -239,31 +249,66 @@ function buildMenu(): void {
   Menu.setApplicationMenu(process.platform === 'darwin' ? appMenu : null);
 }
 
-function setBoard(window: BrowserWindow, folder: string): void {
-  boards.set(window.webContents.id, { folder, boardRoot: path.join(folder, BOARD_DIR) });
+function setBoard(window: BrowserWindow, entry: RegistryEntry): OpenProject {
+  const scope = randomUUID();
+  boards.set(window.webContents.id, { ...entry, scope });
+  return { id: entry.id, projectRoot: entry.projectRoot, scope };
 }
 
-async function openBoard(window: BrowserWindow, folder: string): Promise<void> {
-  setBoard(window, folder);
-  // Remember it as the last-open project so it reopens on next launch.
-  settings = { ...settings, lastFolder: folder };
-  await addRecent(folder);
-  void saveSettings(settings);
+function openBoard(window: BrowserWindow, entry: RegistryEntry): void {
+  if (window.isDestroyed()) return;
+  const current = boards.get(window.webContents.id);
+  if (current?.id === entry.id && current.projectRoot === entry.projectRoot) return;
+  const openProject = setBoard(window, entry);
+  settings = { ...settings, lastFolder: entry.projectRoot };
+  void saveSettings(settings).catch((error: unknown) =>
+    log.error('Could not save selected project', error),
+  );
   // Switch the watcher to the new board (replaces any prior one for this window).
   applyWatcher(window);
-  window.webContents.send(IPC.boardOpened, folder);
+  window.webContents.send(IPC.boardOpened, openProject);
 }
 
 // Drop the window's board and send it back to the welcome screen. The board
-// stays in recents, so reopening it is one click away — but closing is
+// stays in the registry, so reopening it is one click away — but closing is
 // deliberate, so don't auto-reopen it on next launch.
 function closeBoard(window: BrowserWindow): void {
-  disposeWatcher(window.webContents.id);
-  boards.delete(window.webContents.id);
-  const { lastFolder, ...rest } = settings;
-  settings = rest;
-  void saveSettings(settings);
+  const id = window.webContents.id;
+  const current = boards.get(id);
+  if (current === undefined) return;
+  disposeWatcher(id);
+  boards.delete(id);
+  if (settings.lastFolder === current.projectRoot) {
+    const { lastFolder, ...rest } = settings;
+    settings = rest;
+    void saveSettings(settings).catch((error: unknown) =>
+      log.error('Could not clear selected project', error),
+    );
+  }
   window.webContents.send(IPC.boardClosed);
+}
+
+async function selectProject(window: BrowserWindow, id: string): Promise<void> {
+  const entry = (await registry.read()).entries.find((candidate) => candidate.id === id);
+  if (entry === undefined) throw new Error('Project is no longer registered');
+  if (!isDirectory(entry.projectRoot)) throw new Error('Project folder is unavailable');
+  openBoard(window, entry);
+}
+
+async function projectsChanged(): Promise<void> {
+  const state = await registry.read();
+  for (const window of BrowserWindow.getAllWindows()) {
+    const open = boards.get(window.webContents.id);
+    if (
+      open !== undefined &&
+      !state.entries.some(
+        ({ id, projectRoot }) => id === open.id && projectRoot === open.projectRoot,
+      )
+    ) {
+      closeBoard(window);
+    }
+    window.webContents.send(IPC.projectsChanged);
+  }
 }
 
 async function showOpenDialog(window: BrowserWindow): Promise<void> {
@@ -273,7 +318,8 @@ async function showOpenDialog(window: BrowserWindow): Promise<void> {
   });
   const folder = result.filePaths[0];
   if (result.canceled || folder === undefined) return;
-  await openBoard(window, folder);
+  await selectProject(window, await registry.register(folder));
+  await projectsChanged();
 }
 
 function isDirectory(target: string): boolean {
@@ -303,11 +349,12 @@ function parseFolderArg(argv: string[]): string | null {
 
 // The project to reopen on launch when no folder is passed on the CLI: the last
 // one that was open, if it still exists on disk.
-function lastOpenedFolder(): string | null {
-  return settings.lastFolder && isDirectory(settings.lastFolder) ? settings.lastFolder : null;
+async function lastOpenedProject(): Promise<RegistryEntry | null> {
+  const folder = settings.lastFolder;
+  return folder && isDirectory(folder) ? registry.findFolder(folder) : null;
 }
 
-function createWindow(initialFolder: string | null): void {
+function createWindow(initialEntry: RegistryEntry | null): void {
   const saved = settings.windowBounds;
   const window = new BrowserWindow({
     width: saved?.width ?? 1100,
@@ -326,13 +373,15 @@ function createWindow(initialFolder: string | null): void {
   });
 
   const id = window.webContents.id;
-  if (initialFolder !== null) {
-    setBoard(window, initialFolder);
-    settings = { ...settings, lastFolder: initialFolder };
-    void addRecent(initialFolder);
-    void saveSettings(settings);
+  if (initialEntry !== null) {
+    setBoard(window, initialEntry);
+    settings = { ...settings, lastFolder: initialEntry.projectRoot };
+    void saveSettings(settings).catch((error: unknown) =>
+      log.error('Could not save selected project', error),
+    );
     applyWatcher(window);
   }
+  window.on('focus', () => window.webContents.send(IPC.projectsChanged));
 
   // Remember size/position across launches. Debounce resize/move (they fire in
   // bursts) and also save on close; writes are atomic, so a force-quit can't
@@ -403,7 +452,8 @@ function registerIpc(): void {
     const state: BootstrapState = {
       theme: effectiveTheme(),
       themeChoice: settings.themeChoice,
-      initialFolder: ctx?.folder ?? null,
+      initialProject:
+        ctx === undefined ? null : { id: ctx.id, projectRoot: ctx.projectRoot, scope: ctx.scope },
       showMenuButton: process.platform !== 'darwin',
       autoRefresh: autoRefreshEnabled(),
     };
@@ -415,30 +465,39 @@ function registerIpc(): void {
     if (window) appMenu.popup({ window });
   });
 
-  ipcMain.handle(IPC.fs, async (event: IpcMainInvokeEvent, req: FsRequest) => {
+  ipcMain.handle(IPC.fs, async (event: IpcMainInvokeEvent, scope: string, req: FsRequest) => {
     const ctx = boards.get(event.sender.id);
-    if (!ctx) throw new Error('No board is open for this window');
+    if (ctx?.scope !== scope || ctx === undefined)
+      throw new Error('This project is no longer open');
     const id = event.sender.id;
     // Record the host's own writes so the watcher can tell them apart from
     // external changes. No-op when this window has no watcher (auto-refresh off).
     return handleFsRequest(ctx.boardRoot, req, (abs) => {
-      boardWatchers.get(id)?.recentWrites.set(abs, Date.now());
+      if (boards.get(id) === ctx) boardWatchers.get(id)?.recentWrites.set(abs, Date.now());
     });
   });
 
-  ipcMain.handle(IPC.projectFile, async (event: IpcMainInvokeEvent, filePath: string) => {
-    const ctx = boards.get(event.sender.id);
-    // Scoped to the project folder, not the board root — and read-only.
-    if (!ctx) return { kind: 'unreadable' } satisfies ProjectFileRead;
-    return readProjectFile(ctx.folder, filePath);
-  });
+  ipcMain.handle(
+    IPC.projectFile,
+    async (event: IpcMainInvokeEvent, scope: string, filePath: string) => {
+      const ctx = boards.get(event.sender.id);
+      // Scoped to the project folder, not the board root — and read-only.
+      if (ctx?.scope !== scope || ctx === undefined)
+        return { kind: 'unreadable' } satisfies ProjectFileRead;
+      return readProjectFile(ctx.projectRoot, filePath);
+    },
+  );
 
-  ipcMain.handle(IPC.gitCommits, async (event: IpcMainInvokeEvent, taskId: string) => {
-    const ctx = boards.get(event.sender.id);
-    // No board open means no project folder to run git in; the panel says so.
-    if (!ctx) return { state: 'git-unavailable', commits: [] } satisfies GitHistoryResult;
-    return readTaskCommits(taskId, gitRunIn(ctx.folder));
-  });
+  ipcMain.handle(
+    IPC.gitCommits,
+    async (event: IpcMainInvokeEvent, scope: string, taskId: string) => {
+      const ctx = boards.get(event.sender.id);
+      // No board open means no project folder to run git in; the panel says so.
+      if (ctx?.scope !== scope || ctx === undefined)
+        return { state: 'git-unavailable', commits: [] } satisfies GitHistoryResult;
+      return readTaskCommits(taskId, gitRunIn(ctx.projectRoot));
+    },
+  );
 
   // Download: the destination is whatever the user picks in the native dialog —
   // never a path the renderer names — and a cancelled dialog writes nothing.
@@ -457,32 +516,26 @@ function registerIpc(): void {
     if (window) await showOpenDialog(window);
   });
 
-  ipcMain.handle(IPC.openRecent, async (event: IpcMainInvokeEvent, folder: string) => {
+  ipcMain.handle(IPC.openProject, async (event: IpcMainInvokeEvent, id: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return;
-    // Only honor folders we actually offered; never let the renderer point the
-    // board root at an arbitrary path without going through the native dialog.
-    if (await isKnownRecent(folder)) await openBoard(window, folder);
+    if (window && typeof id === 'string') await selectProject(window, id);
   });
 
-  ipcMain.handle(IPC.cancelBoard, async (event: IpcMainInvokeEvent) => {
-    const ctx = boards.get(event.sender.id);
-    if (!ctx) return;
-    disposeWatcher(event.sender.id);
-    boards.delete(event.sender.id);
-    if (settings.lastFolder === ctx.folder) {
-      const { lastFolder, ...rest } = settings;
-      settings = rest;
-    }
-    await removeRecent(ctx.folder);
-    void saveSettings(settings);
+  ipcMain.handle(IPC.closeBoard, (event: IpcMainInvokeEvent) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window) closeBoard(window);
   });
 
-  ipcMain.handle(IPC.removeRecent, async (_event: IpcMainInvokeEvent, folder: string) => {
-    await removeRecent(folder);
+  ipcMain.handle(IPC.removeProject, async (_event: IpcMainInvokeEvent, id: string) => {
+    if (typeof id !== 'string') return;
+    await registry.remove(id);
+    await projectsChanged();
   });
 
-  ipcMain.handle(IPC.getRecents, () => listRecents());
+  ipcMain.handle(IPC.getProjects, async () => {
+    const state = await registry.read();
+    return { projects: await describeEntries(state.entries), error: state.staleReason };
+  });
 
   ipcMain.handle(IPC.setThemeChoice, async (_event: IpcMainInvokeEvent, choice: ThemeChoice) => {
     // IPC is an untrusted, stringly-typed boundary — validate before persisting.
@@ -506,6 +559,7 @@ app
   .whenReady()
   .then(async () => {
     settings = await loadSettings();
+    registry = await openDefaultRegistry();
     // app.getName() is the scoped package name in a from-sources run, so the
     // product name is stated here rather than derived.
     app.setAboutPanelOptions({
@@ -520,14 +574,38 @@ app
     // Windows/Linux drop the menu bar entirely; the renderer's ☰ button pops
     // the same menu up via IPC.popupMenu.
     Menu.setApplicationMenu(process.platform === 'darwin' ? appMenu : null);
-    createWindow(parseFolderArg(process.argv) ?? lastOpenedFolder());
+    const folder = parseFolderArg(process.argv);
+    let initial = await lastOpenedProject();
+    if (folder !== null) {
+      try {
+        const id = await registry.register(folder);
+        initial = (await registry.read()).entries.find((entry) => entry.id === id) ?? null;
+      } catch (error) {
+        dialog.showErrorBox(
+          'Cannot open project',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
+    const unsubscribe = registry.watch(
+      () =>
+        void projectsChanged().catch((error: unknown) =>
+          log.error('Could not refresh projects', error),
+        ),
+    );
+    app.once('before-quit', unsubscribe);
+    createWindow(initial);
 
     // In 'system' mode the effective theme tracks the OS; in fixed modes
     // broadcastTheme re-sends the same value, which is a harmless no-op.
     nativeTheme.on('updated', () => broadcastTheme());
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow(lastOpenedFolder());
+      if (BrowserWindow.getAllWindows().length === 0) {
+        void lastOpenedProject()
+          .then(createWindow)
+          .catch((error: unknown) => log.error('Could not restore project', error));
+      }
     });
   })
   .catch((err: unknown) => {

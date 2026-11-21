@@ -1,0 +1,172 @@
+.sidebar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  width: clamp(172px, 25vw, 256px);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--shell-sidebar-bg, var(--surface));
+  color: var(--shell-text, var(--text-primary));
+  border-right: 1px solid var(--shell-border, var(--divider));
+  font-family: var(--font-family);
+}
+
+.header {
+  padding: 16px 12px 8px;
+}
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 12px;
+}
+.titleRow h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.action {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--shell-border, var(--divider));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action:hover,
+.item:hover,
+.remove:hover {
+  background: var(--shell-item-hover, var(--surface-muted));
+}
+
+.scroll {
+  flex: 1;
+  overflow: auto;
+}
+.sectionLabel {
+  padding: 12px 16px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sectionLabel,
+.empty,
+.path,
+.reason {
+  color: var(--shell-text-muted, var(--text-muted));
+}
+.sectionLabel,
+.path,
+.reason {
+  font-size: 11px;
+}
+.empty {
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 12px;
+}
+.list {
+  display: grid;
+  gap: 2px;
+  padding: 0 8px 8px;
+  margin: 0;
+  list-style: none;
+}
+.row {
+  position: relative;
+  min-width: 0;
+}
+
+.item {
+  box-sizing: border-box;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 32px 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.item:disabled {
+  cursor: default;
+}
+.current,
+.current:hover {
+  background: var(--shell-active-bg, var(--accent-bg));
+  color: var(--shell-active-fg, var(--text-primary));
+}
+.name,
+.path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.reason {
+  overflow-wrap: anywhere;
+}
+.current .path,
+.current .reason {
+  color: inherit;
+}
+
+.remove {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+}
+.remove:hover,
+.remove:focus-visible {
+  opacity: 1;
+}
+.error {
+  color: var(--banner-error-fg);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.confirm {
+  width: min(420px, 92vw);
+  min-height: 0;
+}
+.confirmBody {
+  padding: 16px;
+}
+.confirmBody h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirmActions button {
+  padding: 6px 12px;
+}

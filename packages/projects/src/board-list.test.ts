@@ -2,8 +2,8 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeEntry } from './board-list';
-import { rootsFromProjectFolder } from './roots';
+import { describeEntry } from './board-list.js';
+import { rootsFromProjectFolder } from './registry-file.js';
 
 const made: string[] = [];
 
@@ -40,7 +40,8 @@ describe('describeEntry', () => {
     const folder = await tempProject();
     const missing = path.join(folder, 'nowhere');
     expect(await describeEntry(entryFor(missing))).toMatchObject({
-      name: null,
+      name: 'nowhere',
+      available: false,
       reason: 'folder not found',
     });
   });
@@ -50,15 +51,17 @@ describe('describeEntry', () => {
     const file = path.join(folder, 'a-file');
     await fs.writeFile(file, 'x', 'utf-8');
     expect(await describeEntry(entryFor(file))).toMatchObject({
-      name: null,
-      reason: 'could not be read',
+      name: 'a-file',
+      available: false,
+      reason: 'not a folder',
     });
   });
 
   it('reports a folder with no board', async () => {
     const folder = await tempProject();
     expect(await describeEntry(entryFor(folder))).toMatchObject({
-      name: null,
+      name: path.basename(folder),
+      available: true,
       reason: 'no board yet',
     });
   });
@@ -67,19 +70,16 @@ describe('describeEntry', () => {
     const folder = await tempProject();
     await writeConfig(folder, 'idPrefix: 12\n');
     expect(await describeEntry(entryFor(folder))).toMatchObject({
-      name: null,
+      name: path.basename(folder),
       reason: 'config.yaml is invalid',
     });
   });
 
   it('reports a board that needs a newer boardown', async () => {
     const folder = await tempProject();
-    await writeConfig(
-      folder,
-      'idPrefix: SH\nnextId: 1\nprojectName: Shop\nminVersion: 99.0.0\n',
-    );
+    await writeConfig(folder, 'idPrefix: SH\nnextId: 1\nprojectName: Shop\nminVersion: 99.0.0\n');
     expect(await describeEntry(entryFor(folder))).toMatchObject({
-      name: null,
+      name: path.basename(folder),
       reason: 'needs a newer boardown',
     });
   });

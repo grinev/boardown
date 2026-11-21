@@ -5,7 +5,7 @@ import {
   REGISTRY_FILE_NAME,
   defaultRegistryPath,
   type RegistryHost,
-} from './default-registry';
+} from './default-registry.js';
 
 // Expectations are built with the flavour the case is about, so the suite says
 // the same thing whatever machine runs it.

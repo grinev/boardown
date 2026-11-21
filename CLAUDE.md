@@ -42,10 +42,9 @@ CLI. The **browser shell (`packages/web`) is a development and
 local-from-sources tool** — it boots `@boardown/ui` against a selected
 `.boardown/` over a Vite middleware, and is not a distribution channel. It has
 no folder picker and no File System Access API integration. The same package
-also carries **`boardown-web`**, a local HTTP server that serves the built UI
-over those same endpoints, for one board or for several listed in a registry
-file; it is installed from a tarball packed on the machine that runs it, so
-nothing about it reaches a registry either.
+also carries **`boardown-web`**, a loopback-only HTTP server distributed as
+`@grinev/boardown-web` on npm. It serves the bundled UI for a single board, or a
+project workspace whose default registry is shared with Electron.
 
 ## Repo layout
 
@@ -61,8 +60,10 @@ boardown/
 │   │                  # shell (HttpFsAdapter over a Vite middleware serving a
 │   │                  # selected .boardown/), and boardown-web, a local server
 │   │                  # for one board or a registry of several. Watches the
-│   │                  # board and pushes a refresh over SSE. Mounts
-│   │                  # @boardown/ui. Nothing is published.
+│   │                  # board and pushes a refresh over SSE. Publishes
+│   │                  # @grinev/boardown-web to npm.
+│   ├── projects/      # private Node adapter: registry I/O, locks, migration,
+│   │                  # board metadata and shared project state
 │   ├── vscode/        # Primary shell: extension host (esbuild) + webview
 │   │                  # (Vite) hosting @boardown/ui. Shipped (.vsix per
 │   │                  # release; Marketplace + Open VSX).
@@ -80,10 +81,11 @@ boardown/
 └── PRODUCT.md
 ```
 
-`@boardown/core` and `@boardown/ui` are both consumed source-only:
+`@boardown/core`, `@boardown/ui` and the private Node-only `@boardown/projects`
+are consumed source-only:
 `main`/`exports` point at `src/index.ts`, no separate build step. The shell's
 bundler (Vite for `web`, esbuild for the VS Code host) transpiles them, and
-`tsc`/ESLint resolve their types straight from source. Neither package emits a
+`tsc`/ESLint resolve their types straight from source. None of them emits a
 `dist/`. Only the shells (`web`, `vscode`, `electron`, `cli`) have a `build`
 script — they bundle the source-only libraries into their own artifacts.
 
@@ -125,20 +127,20 @@ roots stay apart on purpose: no write path is ever handed the project root. This
 the **only** browser-side path — it is the working environment for `@boardown/ui`
 development, not a stepping stone to a deployable browser app.
 
-Next to those, `boardown-web` in registry mode serves `/api/projects/{add,remove}`,
-which the list page's inline script calls. They are a **third** root: the only file
-they write is the registry the server was started on — no board and no project
-folder is ever a write target — which is why they sit outside `/b/<id>/`, live in
-`src/server/` rather than the shared `src/api/`, and exist in no other mode. They
-do *read* outside it: a folder is stat'd before it is registered, and each row's
-name comes from that project's own `config.yaml`. The registry is patched as text —
-one line in or out, the rest of the file including its comments untouched — and
-every patch is re-parsed and compared against what the edit meant before it is
-allowed to land, so a file shape the patcher misreads becomes a refusal instead of
-a corrupted registry.
+Next to those, `boardown-web` in registry mode serves the project workspace and
+`/api/projects/*`, outside `/b/<id>/`. Electron and Web share
+`@boardown/projects`, which accesses two host-owned files outside the board and
+project roots: `projects.yaml` (or the explicitly named Web registry) and
+`boardown/project-state.json` for one-time migration and registry-scoped Web
+preferences. Registry mutations cannot write a board or project folder; the host
+supplies the system chooser and only reads project metadata to describe rows.
+Platform-neutral registry decisions live in `core`: each text patch is re-parsed
+and compared against its intended changes before the Node adapter commits it
+under a cross-process lock. The browser and Electron renderer share the
+project sidebar but own their navigation separately.
 
 The **shared configuration directory** (`--config-dir`, or `BOARDOWN_CONFIG_DIR`
-for the dev shell) is a fourth root, and a read-only one. It holds settings that
+for the dev shell) is another root, and a read-only one. It holds settings that
 apply to every board the process serves — today only a theme — and `src/api/shared-config.ts`
 reads it with `node:fs` for both hosts, re-reading it on every `/api/shared-theme`
 request. That module validates CSS values with `css-tree`, server side only, and it
@@ -341,7 +343,8 @@ directory. Where it sits in the package, nothing discovers it.
   the built `.vsix` and desktop installers to a GitHub Release, then calls the
   reusable per-target `publish-*.yml` workflows: `publish-marketplace.yml`
   (VS Code Marketplace) and `publish-openvsx.yml` (Open VSX) publish the `.vsix`,
-  and `publish-npm.yml` publishes the CLI package (`@grinev/boardown-cli`) to npm
+  and `publish-npm.yml` publishes the CLI and Web packages (`@grinev/boardown-cli`,
+  `@grinev/boardown-web`) to npm
   via tokenless Trusted Publishing (OIDC). See [README](./README.md#releasing).
 
 ## Verifying changes

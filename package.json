@@ -33,7 +33,7 @@
     "url": "https://github.com/grinev/boardown.git"
   },
   "scripts": {
-    "dev": "pnpm --filter @boardown/web dev",
+    "dev": "pnpm --filter @grinev/boardown-web dev",
     "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "build": "pnpm -r build",
     "test": "pnpm -r test && node --test scripts/min-compatible.test.mjs",
