@@ -2,7 +2,8 @@ import { FileCode2, FileText } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { docPageTitle, isTerminalStatus, resolveDocRef } from '@boardown/core';
+import { isTerminalStatus } from '@boardown/core';
+import { wikiDocLink } from '../docs-state';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
 import {
@@ -38,6 +39,8 @@ const isExternalHref = (href: string): boolean => EXTERNAL_HREF.test(href);
 // product's requirement and react-markdown's default, so no sanitizer is needed.
 export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
+  const docsTree = useBoardStore((s) => s.docsTree);
+  const docPages = useBoardStore((s) => s.docPages);
   const openTask = useBoardStore((s) => s.openTask);
   const openRepoFilePopup = useBoardStore((s) => s.openRepoFilePopup);
 
@@ -45,10 +48,10 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
     (segment) => {
       if (snapshot === null) return null;
       if (segment.kind === 'doc-ref') {
-        const page = resolveDocRef(snapshot.docs, segment.token);
+        const page = wikiDocLink(docsTree, docPages, segment.token);
         return page === null
           ? null
-          : { href: `${DOC_HREF}${page.path}`, label: docPageTitle(page) };
+          : { href: `${DOC_HREF}${page.path}`, label: page.title };
       }
       if (segment.kind === 'repo-ref') {
         return { href: `${REPO_HREF}${segment.path}`, label: segment.name };
@@ -58,7 +61,7 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         ? null
         : { href: `${TASK_HREF}${segment.id}`, label: `${segment.id} ${task.title}` };
     },
-    [snapshot],
+    [snapshot, docsTree, docPages],
   );
 
   const remarkPlugins = useMemo(

@@ -12,6 +12,7 @@ import { docRefCandidates, type DocRefCandidate } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { caretPoint, type CaretPoint } from '../utils/caret-position';
 import { findOpenDocRefToken, type OpenDocRefToken } from '../utils/doc-ref-token';
+import { useDocsTree } from './use-docs';
 
 // Same cap as the linked-tasks search: a suggestion list is a shortlist.
 const MAX_SUGGESTIONS = 8;
@@ -20,6 +21,8 @@ export interface DocRefSuggestions {
   open: boolean;
   items: DocRefCandidate[];
   activeIndex: number;
+  status: 'loading' | 'error' | 'ready';
+  retry: () => void;
   point: CaretPoint | null;
   // Where the popup is portalled. A dialog opened with `showModal()` lives in the
   // browser's top layer, which wins hit-testing against anything outside it no
@@ -42,8 +45,14 @@ export const useDocRefSuggestions = (
   value: string,
   setValue: (next: string) => void,
 ): DocRefSuggestions => {
-  const docs = useBoardStore((s) => s.snapshot?.docs ?? null);
   const [token, setToken] = useState<OpenDocRefToken | null>(null);
+  const tree = useDocsTree(token !== null);
+  const docs = tree.kind === 'ready' ? tree.tree : null;
+  const status = tree.kind === 'error' || (tree.kind === 'ready' && tree.problems.length > 0)
+    ? 'error'
+    : tree.kind === 'ready' ? 'ready' : 'loading';
+  const load = useBoardStore((s) => s.loadDocsTree);
+  const retry = useCallback(() => { void load(true); }, [load]);
   const [point, setPoint] = useState<CaretPoint | null>(null);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -133,18 +142,21 @@ export const useDocRefSuggestions = (
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         if (items.length > 0) accept(activeIndex);
+        else if (e.key === 'Enter' && status === 'error') retry();
         else close();
         return true;
       }
       return false;
     },
-    [token, items, activeIndex, accept, close],
+    [token, items, activeIndex, accept, close, status, retry],
   );
 
   return {
     open: token !== null,
     items,
     activeIndex,
+    status,
+    retry,
     point,
     container,
     sync,

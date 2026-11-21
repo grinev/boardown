@@ -1,5 +1,4 @@
 import type { BoardSnapshot, Task } from '@boardown/core';
-import { emptyDocsTree } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import { findTasksByEpic } from './find-tasks-by-epic';
 
@@ -50,7 +49,6 @@ const snapshot: BoardSnapshot = {
       tasks: [task('BD-7', 'parser')],
     },
   ],
-  docs: emptyDocsTree(),
   problems: [],
 };
 

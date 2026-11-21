@@ -9,6 +9,7 @@ import type { BoardListRow } from '@boardown/projects';
 
 export type FsMethod =
   | 'read'
+  | 'readFrontmatter'
   | 'write'
   | 'readBytes'
   | 'writeBytes'

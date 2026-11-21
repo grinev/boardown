@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createGuardedFs } from './conflicts.js';
+import { readDocPage } from './docs.js';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
 import { createConvertingFs } from './layout.js';
 import { loadBoard, type LoadBoardResult } from './loader.js';
@@ -340,6 +341,9 @@ Split the input.`);
   it('never carries a deletion or a folder creation', async () => {
     const disk = await board({ 'epics/parser.md': PARSER, 'docs/old.md': 'x\n' });
     const { fs } = await open(disk);
+    const loaded = await readDocPage(fs, 'docs/old.md');
+    if (loaded.kind !== 'ready') throw new Error('expected page');
+    fs.observe('docs/old.md', loaded.version, []);
     await fs.remove('docs/old.md');
     expect(disk.text('epics/parser.md')).toBe(PARSER);
     expect(disk.files.has('backlog.md')).toBe(false);

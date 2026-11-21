@@ -238,12 +238,12 @@ export const createConvertingFs = (
   return {
     ...inner,
     commit,
-    async write(path, content) {
+    async write(path, content, expectedVersion) {
       if (pending === null && inFlight === null) {
-        await inner.write(path, content);
+        await inner.write(path, content, expectedVersion);
         return;
       }
-      await commit({ writes: [{ path, content }], removes: [] });
+      await commit({ writes: [{ path, content, expectedVersion }], removes: [] });
     },
     writeAll: (files) => commit({ writes: files, removes: [] }),
     moveFile: (from, to, content) =>

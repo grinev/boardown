@@ -1,6 +1,6 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
-import type { FileStat } from '@boardown/core';
+import { readFrontmatterPrefix, type FileStat } from '@boardown/core';
 import type { FsRequest } from '../bridge';
 
 // Join a renderer-supplied relative path onto the board root, rejecting absolute
@@ -48,6 +48,21 @@ export async function handleFsRequest(
     case 'read':
       try {
         return await fsp.readFile(target, 'utf-8');
+      } catch (err) {
+        if (isENOENT(err)) return null;
+        throw err;
+      }
+    case 'readFrontmatter':
+      try {
+        const file = await fsp.open(target, 'r');
+        try {
+          return await readFrontmatterPrefix(async (position, length) => {
+            const { buffer, bytesRead } = await file.read({ buffer: new Uint8Array(length), position });
+            return buffer.subarray(0, bytesRead);
+          });
+        } finally {
+          await file.close();
+        }
       } catch (err) {
         if (isENOENT(err)) return null;
         throw err;

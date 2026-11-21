@@ -33,6 +33,7 @@ export interface GuardedFile {
 // all — the caller picked the path for a file that is not there.
 export interface GuardedWrite extends GuardedFile {
   createOnly?: boolean;
+  expectedVersion?: number | undefined;
 }
 
 // A set of writes and removals that land together or not at all. The removals are
@@ -52,6 +53,10 @@ export interface GuardedChange {
 // plain FsAdapter; these live on the guard, which is the only thing that owns
 // the version map.
 export interface GuardedFs extends FsAdapter {
+  observe(path: string, version: number | undefined, problems: readonly ParseProblem[]): void;
+  observedVersion(path: string): number | undefined;
+  write(path: string, content: string, expectedVersion?: number): Promise<void>;
+  remove(path: string, expectedVersion?: number): Promise<void>;
   // Every target is checked before a byte moves; writes land before removals, and a
   // step failing part-way undoes the steps already taken, so a set of files is
   // never left half-applied. `writeAll` and `moveFile` are its narrow forms.
@@ -88,19 +93,22 @@ export interface GuardOptions {
 // clobber that change. Either refusal calls its callback and throws.
 export function createGuardedFs(inner: FsAdapter, options: GuardOptions): GuardedFs {
   const { versions, problems, onConflict, onUnreadable } = options;
+  const observedProblems = new Map<string, readonly ParseProblem[]>();
 
   // Deletion is deliberate and total, so only the write paths use this: what it
   // guards against is a silent partial loss, not a removal the user asked for.
   const checkReadable = (path: string): void => {
-    const matching = problems.filter((p) => p.file === path && p.level === 'error');
+    const matching = (observedProblems.get(path) ?? problems).filter(
+      (p) => p.file === path && p.level === 'error',
+    );
     if (matching.length === 0) return;
     onUnreadable(path, matching);
     throw new UnreadableFileError(path, matching);
   };
 
-  const check = async (path: string): Promise<void> => {
+  const check = async (path: string, expectedVersion?: number): Promise<void> => {
     const current = await inner.stat(path);
-    const known = versions[path];
+    const known = expectedVersion ?? versions[path];
     if (current === null && known === undefined) return;
     // Known file whose mtime moved, a known file deleted since we loaded it, or a
     // file that appeared on disk without us ever loading it — each means the
@@ -123,6 +131,7 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
   const drop = async (path: string): Promise<void> => {
     await inner.remove(path);
     delete versions[path];
+    observedProblems.delete(path);
   };
 
   // What a path held before the commit touched it, so a failed step can put it back.
@@ -156,7 +165,7 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
         onConflict(file.path);
         throw new ConflictError(file.path);
       }
-      await check(file.path);
+      await check(file.path, file.expectedVersion);
     }
     for (const path of change.removes) await check(path);
 
@@ -208,15 +217,22 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
   };
 
   return {
-    read: (path) => inner.read(path),
+    read: (path, part) => inner.read(path, part),
     readBytes: (path) => inner.readBytes(path),
     list: (dir) => inner.list(dir),
     stat: (path) => inner.stat(path),
     mkdir: (dir) => inner.mkdir(dir),
 
-    async write(path, content) {
+    observe(path, version, observed) {
+      if (version === undefined) delete versions[path];
+      else versions[path] = version;
+      observedProblems.set(path, observed);
+    },
+    observedVersion: (path) => versions[path],
+
+    async write(path, content, expectedVersion) {
       checkReadable(path);
-      await check(path);
+      await check(path, expectedVersion);
       await put(path, content);
     },
 
@@ -235,8 +251,8 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
     moveFile: (from, to, content) =>
       commit({ writes: [{ path: to, content, createOnly: true }], removes: [from] }),
 
-    async remove(path) {
-      await check(path);
+    async remove(path, expectedVersion) {
+      await check(path, expectedVersion);
       await drop(path);
     },
 

@@ -1,5 +1,6 @@
 # Everything is bundled into dist/ — keep only the runtime + metadata.
 src/**
+test/**
 build/**
 .vscode/**
 tsconfig.json

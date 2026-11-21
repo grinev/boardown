@@ -53,6 +53,8 @@ import {
   readAttachment,
   readAttachmentPreviews,
   removeAttachment,
+  readDocPage,
+  readDocsTree,
   createConvertingFs,
   createGuardedFs,
   createLogger,
@@ -83,11 +85,13 @@ import {
   serializeBacklog,
   serializeDocPage,
   targetDocFolder,
+  validateDocFolderName,
   serializeConfig,
   serializeEpic,
   serializeRelease,
 } from '@boardown/core';
 import { create, type StateCreator } from 'zustand';
+import { docsProblems, type DocPages, type DocsTreeState } from './docs-state';
 import { findTaskById, findTaskByIdIgnoringCase } from './utils/find-task';
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
@@ -205,6 +209,9 @@ interface BoardState {
   createDocPageOpen: boolean;
   createDocFolderOpen: boolean;
   deleteDocPath: string | null;
+  deleteDocVersion: number | undefined;
+  docsTree: DocsTreeState;
+  docPages: DocPages;
   // A write of this session completed the layout conversion and the user has not
   // seen the notice yet. Not a dialog flag: the refusal modals and a reload leave
   // it standing, and the notice shows whenever no dialog is open.
@@ -278,6 +285,9 @@ interface BoardState {
   openSettings: () => void;
   closeSettings: () => void;
   selectDoc: (path: string | null) => void;
+  demandDocsTree: () => () => void;
+  loadDocsTree: (retry?: boolean) => Promise<void>;
+  loadDocPage: (path: string, retry?: boolean) => Promise<void>;
   openDocPage: (path: string) => void;
   openDocPopup: (path: string) => void;
   closeDocPopup: () => void;
@@ -291,7 +301,7 @@ interface BoardState {
   closeDeleteDoc: () => void;
   createDocPage: (title: string) => Promise<void>;
   createDocFolder: (name: string) => Promise<void>;
-  saveDocPage: (path: string, title: string, body: string) => Promise<void>;
+  saveDocPage: (path: string, title: string, body: string, expectedVersion?: number) => Promise<void>;
   deleteDocPage: (path: string) => Promise<void>;
   deleteDocFolder: (path: string) => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<void>;
@@ -489,13 +499,13 @@ const wrapMinVersionWrites = (
   return {
     ...fs,
     commit,
-    async write(path, content) {
+    async write(path, content, expectedVersion) {
       const config = readConfig();
       if (config === null || !configNeedsMinVersionStamp(config)) {
-        await fs.write(path, content);
+        await fs.write(path, content, expectedVersion);
         return;
       }
-      await commit({ writes: [{ path, content }], removes: [] });
+      await commit({ writes: [{ path, content, expectedVersion }], removes: [] });
     },
     writeAll: (files) => commit({ writes: files, removes: [] }),
     moveFile: (from, to, content) =>
@@ -874,11 +884,9 @@ const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
     case 'release':
       return snapshot.releases.some((r) => r.filename === ref.filename);
     case 'doc':
-      return findDocPage(snapshot.docs, ref.path) !== null;
     case 'repo-file':
-      // Nothing to check: a project file is outside the snapshot, and a
-      // filesystem round trip inside a state transition is not worth the
-      // certainty. A file that has since gone reports it in the popup.
+      // Neither file is in the task snapshot. The popup reads on demand and
+      // handles a target that has moved or gone away.
       return true;
   }
 };
@@ -888,6 +896,20 @@ const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
 let sharedThemeReads = 0;
 let boardLoads = 0;
 let boardSession = 0;
+let docsTreeUsers = 0;
+let docsTreeRequest: { controller: AbortController; promise: Promise<void> } | null = null;
+const docRequests = new Map<string, Promise<void>>();
+
+const emptyDocsState = (): Pick<BoardState, 'docsTree' | 'docPages'> => ({
+  docsTree: { kind: 'idle' },
+  docPages: {},
+});
+
+const resetDocsRequests = () => {
+  docsTreeRequest?.controller.abort();
+  docsTreeRequest = null;
+  docRequests.clear();
+};
 
 export function captureBoardSession(): () => boolean {
   const session = boardSession;
@@ -897,6 +919,8 @@ export function captureBoardSession(): () => boolean {
 export const useBoardStore = create<BoardState>(
   logErrors((set, get) => ({
     status: 'idle',
+    ...emptyDocsState(),
+    deleteDocVersion: undefined,
     snapshot: null,
     problems: [],
     errorMessage: null,
@@ -956,11 +980,21 @@ export const useBoardStore = create<BoardState>(
     },
 
     load: async (fs, defaultTheme) => {
-      if (get().rawFs !== fs) boardSession += 1;
+      const changedBoard = get().rawFs !== fs;
+      if (changedBoard) boardSession += 1;
       const session = boardSession;
       const request = ++boardLoads;
+      resetDocsRequests();
       set({
         status: 'loading',
+        ...emptyDocsState(),
+        ...(changedBoard ? {
+          selectedDocPath: null,
+          docPopupPath: null,
+          dialogStack: [],
+          deleteDocPath: null,
+          deleteDocVersion: undefined,
+        } : {}),
         errorMessage: null,
         // Guarded with an empty version map until the board loads: the only write
         // possible before that is onboarding's config.yaml, which does not exist
@@ -1056,8 +1090,10 @@ export const useBoardStore = create<BoardState>(
       boardSession += 1;
       boardLoads += 1;
       sharedThemeReads += 1;
+      resetDocsRequests();
       set({
         status: 'idle',
+        ...emptyDocsState(),
         snapshot: null,
         problems: [],
         errorMessage: null,
@@ -1109,8 +1145,10 @@ export const useBoardStore = create<BoardState>(
           return;
         }
         const guarded = boardFs(rawFs, result, get, set);
+        resetDocsRequests();
         set({
           fs: guarded,
+          ...emptyDocsState(),
           snapshot: result.snapshot,
           problems: result.snapshot.problems,
           errorMessage: null,
@@ -1443,6 +1481,88 @@ export const useBoardStore = create<BoardState>(
 
     closeSettings: () => set({ settingsOpen: false }),
 
+    demandDocsTree: () => {
+      docsTreeUsers += 1;
+      void get().loadDocsTree();
+      return () => {
+        docsTreeUsers -= 1;
+        if (docsTreeUsers !== 0 || docsTreeRequest === null) return;
+        docsTreeRequest.controller.abort();
+        docsTreeRequest = null;
+        if (get().docsTree.kind === 'loading') set({ docsTree: { kind: 'idle' } });
+      };
+    },
+
+    loadDocsTree: (retry) => {
+      const { fs, status, docsTree } = get();
+      if (!fs || status !== 'ready') return Promise.resolve();
+      if (docsTreeRequest) return docsTreeRequest.promise;
+      if (!retry && docsTree.kind !== 'idle') return Promise.resolve();
+      const controller = new AbortController();
+      set({ docsTree: { kind: 'loading' } });
+      const isCurrent = () => !controller.signal.aborted && get().fs === fs;
+      const promise = readDocsTree(fs, controller.signal).then((result) => {
+        if (!isCurrent()) return;
+        const { docPages, snapshot } = get();
+        const tree: DocsTreeState = { kind: 'ready', ...result };
+        const byPath = new Map(result.problems.map((problem) => [problem.file, problem]));
+        for (const path of new Set([...Object.keys(result.versions), ...byPath.keys()])) {
+          const page = docPages[path];
+          if (page?.kind === 'ready' || page?.kind === 'error') continue;
+          const problem = byPath.get(path);
+          fs.observe(path, result.versions[path], problem === undefined ? [] : [problem]);
+        }
+        set({ docsTree: tree, problems: [...(snapshot?.problems ?? []), ...docsProblems(tree, docPages)] });
+      }).catch((err: unknown) => {
+        if (!isCurrent()) return;
+        const message = err instanceof Error ? err.message : String(err);
+        log.error(`Could not load Docs: ${message}`);
+        set({ docsTree: { kind: 'error', message } });
+      }).finally(() => {
+        if (docsTreeRequest?.controller === controller) docsTreeRequest = null;
+      });
+      docsTreeRequest = { controller, promise };
+      return promise;
+    },
+
+    loadDocPage: (path, retry) => {
+      const { fs, status, docPages } = get();
+      if (!fs || status !== 'ready') return Promise.resolve();
+      const pending = docRequests.get(path);
+      if (pending) return pending;
+      if (!retry && docPages[path] !== undefined) return Promise.resolve();
+      set({ docPages: { ...docPages, [path]: { kind: 'loading' } } });
+      const promise = readDocPage(fs, path).then((result) => {
+        if (docRequests.get(path) !== promise || get().fs !== fs) return;
+        const current = get();
+        const pages = { ...current.docPages, [path]: result };
+        let tree = current.docsTree;
+        if (result.kind === 'ready') {
+          fs.observe(path, result.version, []);
+          if (tree.kind === 'ready' && findDocPage(tree.tree, path) !== null) {
+            const { body: _body, ...metadata } = result.value;
+            tree = {
+              ...tree,
+              tree: replaceDocPage(tree.tree, metadata),
+              versions: { ...tree.versions, [path]: result.version },
+            };
+          }
+        } else if (result.kind === 'error') {
+          fs.observe(path, result.version, [result.problem]);
+          log.error(result.problem.message);
+        }
+        set({
+          docsTree: tree,
+          docPages: pages,
+          problems: [...(current.snapshot?.problems ?? []), ...docsProblems(tree, pages)],
+        });
+      }).finally(() => {
+        if (docRequests.get(path) === promise) docRequests.delete(path);
+      });
+      docRequests.set(path, promise);
+      return promise;
+    },
+
     selectDoc: (path) => set({ selectedDocPath: path }),
 
     // Following a doc link from anywhere: land on the page, and get out of the
@@ -1485,111 +1605,160 @@ export const useBoardStore = create<BoardState>(
     closeCreateDocPage: () => set({ createDocPageOpen: false }),
     openCreateDocFolder: () => set({ createDocFolderOpen: true }),
     closeCreateDocFolder: () => set({ createDocFolderOpen: false }),
-    openDeleteDoc: (path) => set({ deleteDocPath: path }),
+    openDeleteDoc: (path) => {
+      const { docsTree } = get();
+      if (docsTree.kind !== 'ready') return;
+      set({ deleteDocPath: path, deleteDocVersion: docsTree.versions[path] });
+    },
     closeDeleteDoc: () => set({ deleteDocPath: null }),
 
     createDocPage: async (title) => {
-      const { snapshot, fs, selectedDocPath } = get();
-      if (!snapshot || !fs) return;
+      const { docsTree, fs, selectedDocPath } = get();
+      if (!fs || docsTree.kind !== 'ready') return;
 
-      const folder = targetDocFolder(snapshot.docs, selectedDocPath);
+      const folder = targetDocFolder(docsTree.tree, selectedDocPath);
       const filename = docFilenameForTitle(title, folder);
       const path = docPagePath(folder, filename);
-      const page: DocPage = {
+      const metadata = {
         path,
         slug: filename.replace(/\.md$/, ''),
         frontmatter: { title },
-        body: '',
       };
-
-      const nextSnapshot: BoardSnapshot = {
-        ...snapshot,
-        docs: addDocPage(snapshot.docs, folder.path, page),
-      };
-      set({ snapshot: nextSnapshot, selectedDocPath: path, errorMessage: null });
+      const page: DocPage = { ...metadata, body: '' };
 
       try {
-        await fs.write(path, serializeDocPage(page));
+        await fs.commit({ writes: [{ path, content: serializeDocPage(page), createOnly: true }], removes: [] });
+        const current = get();
+        if (current.fs !== fs || current.docsTree.kind !== 'ready') return;
+        const version = fs.observedVersion(path);
+        const tree = addDocPage(current.docsTree.tree, folder.path, metadata);
+        docRequests.delete(path);
+        set({
+          docsTree: {
+            ...current.docsTree,
+            tree,
+            versions: version === undefined ? current.docsTree.versions : { ...current.docsTree.versions, [path]: version },
+          },
+          docPages: {
+            ...current.docPages,
+            [path]: version === undefined ? undefined : { kind: 'ready', value: page, version },
+          },
+          selectedDocPath: path,
+          errorMessage: null,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, selectedDocPath, errorMessage: `Failed to create page: ${message}` });
+        if (get().fs === fs) set({ errorMessage: `Failed to create page: ${message}` });
         throw err;
       }
     },
 
     createDocFolder: async (name) => {
-      const { snapshot, fs, selectedDocPath } = get();
-      if (!snapshot || !fs) return;
+      const { docsTree, fs, selectedDocPath } = get();
+      if (!fs || docsTree.kind !== 'ready') return;
 
-      const parent = targetDocFolder(snapshot.docs, selectedDocPath);
+      const parent = targetDocFolder(docsTree.tree, selectedDocPath);
+      if (validateDocFolderName(name, parent) !== null) throw new Error('Invalid folder name.');
       const path = `${parent.path}/${name}`;
 
-      const nextSnapshot: BoardSnapshot = {
-        ...snapshot,
-        docs: addDocFolder(snapshot.docs, parent.path, name),
-      };
-      set({ snapshot: nextSnapshot, selectedDocPath: path, errorMessage: null });
-
       try {
+        if (await fs.stat(path) !== null) {
+          if (get().fs === fs) get().openConflict();
+          throw new Error(`File changed on disk: ${path}`);
+        }
         await fs.mkdir(path);
+        const current = get();
+        if (current.fs !== fs || current.docsTree.kind !== 'ready') return;
+        set({
+          docsTree: { ...current.docsTree, tree: addDocFolder(current.docsTree.tree, parent.path, name) },
+          selectedDocPath: path,
+          errorMessage: null,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, selectedDocPath, errorMessage: `Failed to create folder: ${message}` });
+        if (get().fs === fs) set({ errorMessage: `Failed to create folder: ${message}` });
         throw err;
       }
     },
 
-    saveDocPage: async (path, title, body) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+    saveDocPage: async (path, title, body, expectedVersion) => {
+      const { docPages, fs } = get();
+      if (!fs) return;
+      const loaded = docPages[path];
+      const version = expectedVersion ?? (loaded?.kind === 'ready' ? loaded.version : undefined);
+      if (version === undefined) return;
 
-      const next: DocPage = {
+      const metadata = {
         path,
         slug: path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, ''),
         frontmatter: { title },
-        body,
       };
-
-      const nextSnapshot: BoardSnapshot = {
-        ...snapshot,
-        docs: replaceDocPage(snapshot.docs, next),
-      };
-      set({ snapshot: nextSnapshot, errorMessage: null });
+      const next: DocPage = { ...metadata, body };
 
       try {
-        await fs.write(path, serializeDocPage(next));
+        await fs.write(path, serializeDocPage(next), version);
+        const current = get();
+        if (current.fs !== fs) return;
+        const landed = fs.observedVersion(path);
+        const tree = current.docsTree;
+        docRequests.delete(path);
+        set({
+          docsTree: tree.kind !== 'ready' ? tree : {
+            ...tree,
+            tree: replaceDocPage(tree.tree, metadata),
+            versions: landed === undefined ? tree.versions : { ...tree.versions, [path]: landed },
+          },
+          docPages: {
+            ...current.docPages,
+            [path]: landed === undefined ? undefined : { kind: 'ready', value: next, version: landed },
+          },
+          errorMessage: null,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, errorMessage: `Failed to save page: ${message}` });
+        if (get().fs === fs) set({ errorMessage: `Failed to save page: ${message}` });
         throw err;
       }
     },
 
     deleteDocPage: async (path) => {
-      const { snapshot, fs, selectedDocPath } = get();
-      if (!snapshot || !fs) return;
-
-      const nextSelected = selectedDocPath === path ? null : selectedDocPath;
-      const nextSnapshot: BoardSnapshot = {
-        ...snapshot,
-        docs: removeDocPage(snapshot.docs, path),
-      };
-      set({ snapshot: nextSnapshot, selectedDocPath: nextSelected, errorMessage: null });
+      const { docsTree, fs, deleteDocPath, deleteDocVersion } = get();
+      if (!fs || docsTree.kind !== 'ready') return;
+      const expected = deleteDocPath === path ? deleteDocVersion : docsTree.versions[path];
+      if (expected === undefined || findDocPage(docsTree.tree, path) === null) return;
 
       try {
-        await fs.remove(path);
+        await fs.remove(path, expected);
+        const current = get();
+        if (current.fs !== fs || current.docsTree.kind !== 'ready') return;
+        const { [path]: _removed, ...versions } = current.docsTree.versions;
+        docRequests.delete(path);
+        const tree: DocsTreeState = {
+          ...current.docsTree,
+          tree: removeDocPage(current.docsTree.tree, path),
+          problems: current.docsTree.problems.filter((problem) => problem.file !== path),
+          versions,
+        };
+        const pages: DocPages = { ...current.docPages, [path]: { kind: 'missing' } };
+        set({
+          docsTree: tree,
+          docPages: pages,
+          problems: [...(current.snapshot?.problems ?? []), ...docsProblems(tree, pages)],
+          selectedDocPath: current.selectedDocPath === path ? null : current.selectedDocPath,
+          errorMessage: null,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, selectedDocPath, errorMessage: `Failed to delete page: ${message}` });
+        if (get().fs === fs) set({ errorMessage: `Failed to delete page: ${message}` });
         throw err;
       }
     },
 
     deleteDocFolder: async (path) => {
-      const { snapshot, fs, selectedDocPath } = get();
-      if (!snapshot || !fs) return;
+      const { docsTree, fs } = get();
+      if (!fs || docsTree.kind !== 'ready') return;
 
-      const folder = findDocFolder(snapshot.docs, path);
+      const folder = findDocFolder(docsTree.tree, path);
       if (folder === null) return;
 
       // Only an empty folder is deletable, so a deletion can never take content the
@@ -1599,19 +1768,18 @@ export const useBoardStore = create<BoardState>(
         return;
       }
 
-      const nextSelected = selectedDocPath === path ? null : selectedDocPath;
-
-      const nextSnapshot: BoardSnapshot = {
-        ...snapshot,
-        docs: removeDocFolder(snapshot.docs, path),
-      };
-      set({ snapshot: nextSnapshot, selectedDocPath: nextSelected, errorMessage: null });
-
       try {
         await fs.removeDir(path);
+        const current = get();
+        if (current.fs !== fs || current.docsTree.kind !== 'ready') return;
+        set({
+          docsTree: { ...current.docsTree, tree: removeDocFolder(current.docsTree.tree, path) },
+          selectedDocPath: current.selectedDocPath === path ? null : current.selectedDocPath,
+          errorMessage: null,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        set({ snapshot, selectedDocPath, errorMessage: `Failed to delete folder: ${message}` });
+        if (get().fs === fs) set({ errorMessage: `Failed to delete folder: ${message}` });
         throw err;
       }
     },

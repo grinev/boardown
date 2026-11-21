@@ -201,6 +201,14 @@ directory. Where it sits in the package, nothing discovers it.
   fixed file per agent — uses its platform's filesystem directly, and a capability
   interface is declared in `core` only when `core` or `ui` needs it injected, as
   `FileSaver` is.
+- Docs are not part of the start-up board load. On demand the UI uses `FsAdapter`
+  text reads in frontmatter-only mode for tree titles and ordinary reads for
+  selected pages. Core owns the fence rules; native hosts supply positional
+  reads and return only the frontmatter for metadata requests. Desktop VS Code
+  virtual providers only expose whole-file reads, so the extension host may read
+  a whole file there for an explicit metadata request but never passes its body
+  to the webview in that mode. The shared write guard tracks stable lazy
+  observations and protects a draft against the version it actually started on.
 - Lucide icon names that `config.yaml` may use live in
   `packages/core/src/lucide-icon-names.ts`, generated from lucide-react so core
   never imports it. After bumping lucide-react, run

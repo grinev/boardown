@@ -1,6 +1,6 @@
 import { promises as fsp } from 'node:fs';
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path';
-import type { FileStat, FsAdapter, FsEntry } from '@boardown/core';
+import { readFrontmatterPrefix, type FileStat, type FsAdapter, type FsEntry } from '@boardown/core';
 
 // Join a board-relative path onto the board root, rejecting absolute paths and
 // any '..' escape — mirrors packages/electron's board-fs guard so a caller can
@@ -23,8 +23,18 @@ export const isENOENT = (err: unknown): boolean =>
 export class NodeFsAdapter implements FsAdapter {
   constructor(private readonly boardRoot: string) {}
 
-  read(path: string): Promise<string> {
-    return fsp.readFile(this.target(path), 'utf8');
+  async read(path: string, part?: 'frontmatter'): Promise<string> {
+    const target = this.target(path);
+    if (part === undefined) return fsp.readFile(target, 'utf8');
+    const file = await fsp.open(target, 'r');
+    try {
+      return await readFrontmatterPrefix(async (position, length) => {
+        const { buffer, bytesRead } = await file.read({ buffer: new Uint8Array(length), position });
+        return buffer.subarray(0, bytesRead);
+      });
+    } finally {
+      await file.close();
+    }
   }
 
   async write(path: string, content: string): Promise<void> {

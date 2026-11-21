@@ -16,10 +16,13 @@ const connectBoard = (scope: string): BoardCapabilities => {
   const fsCall = (req: FsRequest): Promise<unknown> => ipcRenderer.invoke(IPC.fs, scope, req);
   return {
     fs: {
-      read: async (filePath) => {
+      read: async (filePath, part) => {
         // Host returns null for a missing file (no IPC error log); restore the
         // rejection FsAdapter.read promises so the loader's try/catch still works.
-        const result = await fsCall({ method: 'read', path: filePath });
+        const result = await fsCall({
+          method: part === 'frontmatter' ? 'readFrontmatter' : 'read',
+          path: filePath,
+        });
         if (result === null) throw new Error(`ENOENT: ${filePath}`);
         return result as string;
       },

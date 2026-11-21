@@ -10,11 +10,13 @@ export interface FsEntry {
 }
 
 export interface FsAdapter {
-  read(path: string): Promise<string>;
+  // Frontmatter mode returns the leading fenced block, or an empty string.
+  read(path: string, part?: 'frontmatter'): Promise<string>;
   // Creates missing parent folders, as `write` does.
   write(path: string, content: string): Promise<void>;
   readBytes(path: string): Promise<Uint8Array>;
   writeBytes(path: string, content: Uint8Array): Promise<void>;
+  // A missing directory lists as empty; other read failures reject.
   list(dir: string): Promise<FsEntry[]>;
   stat(path: string): Promise<FileStat | null>;
   mkdir(dir: string): Promise<void>;

@@ -1,5 +1,6 @@
 export type FsMethod =
   | 'read'
+  | 'readFrontmatter'
   | 'write'
   | 'readBytes'
   | 'writeBytes'

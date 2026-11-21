@@ -10,7 +10,7 @@ export function DeleteDocDialog() {
   const onClose = useBoardStore((s) => s.closeDeleteDoc);
   const deleteDocPage = useBoardStore((s) => s.deleteDocPage);
   const deleteDocFolder = useBoardStore((s) => s.deleteDocFolder);
-  const docs = useBoardStore((s) => s.snapshot?.docs ?? null);
+  const docs = useBoardStore((s) => s.docsTree.kind === 'ready' ? s.docsTree.tree : null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

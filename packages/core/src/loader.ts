@@ -1,4 +1,4 @@
-import { BACKLOG_PATH, DOCS_DIR, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
+import { BACKLOG_PATH, EPICS_DIR, RELEASES_DIR } from './board-ops.js';
 import {
   CONFIG_FILENAME,
   checkMinVersion,
@@ -6,7 +6,6 @@ import {
   serializeConfig,
   withMinVersionStamp,
 } from './config.js';
-import { type DocFolder, sortDocsTree } from './docs.js';
 import type { FsAdapter, FsEntry } from './fs-adapter.js';
 import { verifyNextId } from './id-generator.js';
 import {
@@ -15,7 +14,7 @@ import {
   type LayoutConversion,
   type LegacyEpicFile,
 } from './layout.js';
-import { parseBacklog, parseDocPage, parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseEpic, parseRelease } from './parser.js';
 import { fileProblem, type ParseProblem } from './problems.js';
 import type { Backlog, BoardConfig, Epic, Release, Task } from './schemas.js';
 
@@ -28,7 +27,6 @@ export interface BoardSnapshot {
   backlog: Backlog | null;
   // Old-layout files that could not be gathered; shown, never written.
   heldBack: Backlog[];
-  docs: DocFolder;
   problems: ParseProblem[];
 }
 
@@ -192,43 +190,6 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   problems.push(...gathered.problems);
   const { backlog, heldBack } = gathered;
 
-  const readDocsFolder = async (path: string, name: string): Promise<DocFolder> => {
-    const entries = await safeList(fs, path);
-    const folder: DocFolder = { path, name, folders: [], pages: [], otherEntries: [] };
-
-    for (const entry of entries) {
-      const childPath = `${path}/${entry.name}`;
-      if (entry.isDirectory) {
-        folder.folders.push(await readDocsFolder(childPath, entry.name));
-        continue;
-      }
-      // A file the tree does not show still occupies its name on disk, so it is
-      // recorded: creating a page or folder must not be allowed to clobber it.
-      if (!isMarkdownFile(entry.name)) {
-        folder.otherEntries.push(entry.name);
-        continue;
-      }
-      let text: string;
-      try {
-        text = await fs.read(childPath);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        problems.push(fileProblem(childPath, `Cannot read file: ${message}`));
-        folder.otherEntries.push(entry.name);
-        continue;
-      }
-      await recordVersion(childPath);
-      const parsed = parseDocPage(text, childPath, entry.name.replace(/\.md$/, ''));
-      problems.push(...parsed.problems);
-      if (parsed.value !== null) folder.pages.push(parsed.value);
-      else folder.otherEntries.push(entry.name);
-    }
-
-    return folder;
-  };
-
-  const docs = sortDocsTree(await readDocsFolder(DOCS_DIR, DOCS_DIR));
-
   const verified = verifyNextId(config, collectTasks(releases, backlog, heldBack));
   // Through the raw adapter, never a shell's write path: opening a board must not
   // carry the layout conversion, which lands with the first write of content.
@@ -253,7 +214,7 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
 
   return {
     kind: 'loaded',
-    snapshot: { config, releases, epics, backlog, heldBack, docs, problems },
+    snapshot: { config, releases, epics, backlog, heldBack, problems },
     problems,
     fileVersions,
     conversion: gathered.conversion,

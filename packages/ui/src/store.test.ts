@@ -20,11 +20,12 @@ import {
   ConflictError,
   MIN_COMPATIBLE_VERSION,
   createGuardedFs,
-  emptyDocsTree,
+  fileFrontmatterPrefix,
   serializeBacklog,
   serializeConfig,
 } from '@boardown/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { wikiDocLink } from './docs-state';
 import { captureBoardSession, isAnyDialogOpen, useBoardStore } from './store';
 import { deliverAttachmentPick } from './utils/attachment-pick';
 
@@ -38,6 +39,16 @@ class MemFs implements GuardedFs {
   removes: string[] = [];
   // When set, any write whose path includes this substring throws.
   failWritesMatching: string | null = null;
+  observed = new Map<string, number>();
+
+  observe(path: string, version: number | undefined): void {
+    if (version === undefined) this.observed.delete(path);
+    else this.observed.set(path, version);
+  }
+
+  observedVersion(path: string): number | undefined {
+    return this.observed.get(path);
+  }
 
   async writeAll(files: readonly GuardedFile[]): Promise<void> {
     this.writeAllCalls.push(files.map((file) => file.path));
@@ -82,12 +93,13 @@ class MemFs implements GuardedFs {
     this.removes.push(path);
   }
 
-  async read(path: string): Promise<string> {
+  async read(path: string, part?: 'frontmatter'): Promise<string> {
     const entry = this.files.get(path);
     if (entry === undefined) throw new Error(`ENOENT: ${path}`);
-    return typeof entry.content === 'string'
+    const text = typeof entry.content === 'string'
       ? entry.content
       : new TextDecoder().decode(entry.content);
+    return part === 'frontmatter' ? fileFrontmatterPrefix(text) : text;
   }
 
   async readBytes(path: string): Promise<Uint8Array> {
@@ -322,7 +334,6 @@ const snap = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
   epics: [],
   backlog: null,
   heldBack: [],
-  docs: emptyDocsTree(),
   problems: [],
   ...over,
 });
@@ -343,6 +354,10 @@ const setup = (snapshot: BoardSnapshot): { fs: MemFs } => {
     repoFilePopupPath: null,
     unwritableFile: null,
     selectedDocPath: null,
+    deleteDocPath: null,
+    deleteDocVersion: undefined,
+    docsTree: { kind: 'idle' },
+    docPages: {},
     dialogStack: [],
   });
   return { fs };
@@ -1927,44 +1942,39 @@ describe('task links', () => {
 });
 
 describe('docs', () => {
-  const docsTree = () => ({
-    path: 'docs',
-    name: 'docs',
-    folders: [
-      {
-        path: 'docs/guides',
-        name: 'guides',
-        folders: [],
-        pages: [
-          {
-            path: 'docs/guides/setup.md',
-            slug: 'setup',
-            frontmatter: { title: 'Setup' },
-            body: 'steps',
-          },
-        ],
-        otherEntries: [],
-      },
-    ],
-    pages: [
-      { path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' },
-    ],
-    otherEntries: [],
-  });
+  const setupDocs = async (snapshot = snap()) => {
+    const { fs } = setup(snapshot);
+    fs.files.set('docs/intro.md', { content: '---\ntitle: Intro\n---\n\nhello', lastModified: 1 });
+    fs.files.set('docs/guides/setup.md', { content: '---\ntitle: Setup\n---\n\nsteps', lastModified: 1 });
+    useBoardStore.setState({ fs: createGuardedFs(fs, {
+      versions: {},
+      problems: [],
+      onConflict: state().openConflict,
+      onUnreadable: state().openUnwritable,
+    }) });
+    await state().loadDocsTree();
+    return { fs };
+  };
+
+  const tree = () => {
+    const { docsTree } = state();
+    if (docsTree.kind !== 'ready') throw new Error('Docs not ready');
+    return docsTree.tree;
+  };
 
   it('creates a page in the docs root when nothing is selected', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
 
     await state().createDocPage('Release Process');
 
     expect(fs.writes).toEqual(['docs/release-process.md']);
     expect(state().selectedDocPath).toBe('docs/release-process.md');
-    expect(current().docs.pages.map((p) => p.path)).toContain('docs/release-process.md');
+    expect(tree().pages.map((p) => p.path)).toContain('docs/release-process.md');
     expect(fs.files.get('docs/release-process.md')!.content).toContain('title: Release Process');
   });
 
   it('creates a page inside the selected folder', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
     state().selectDoc('docs/guides');
 
     await state().createDocPage('Deploy');
@@ -1973,7 +1983,7 @@ describe('docs', () => {
   });
 
   it('creates a page beside the selected page', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
     state().selectDoc('docs/guides/setup.md');
 
     await state().createDocPage('Deploy');
@@ -1982,26 +1992,27 @@ describe('docs', () => {
   });
 
   it('suffixes a colliding filename instead of overwriting the existing page', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
 
     await state().createDocPage('Intro');
 
     expect(fs.writes).toEqual(['docs/intro-2.md']);
-    expect(current().docs.pages).toHaveLength(2);
+    expect(tree().pages).toHaveLength(2);
   });
 
   it('creates an empty folder with mkdir, writing no file', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
 
     await state().createDocFolder('drafts');
 
     expect(fs.dirs.has('docs/drafts')).toBe(true);
-    expect(fs.files.size).toBe(0);
-    expect(current().docs.folders.map((f) => f.name)).toEqual(['drafts', 'guides']);
+    expect(fs.files.size).toBe(2);
+    expect(tree().folders.map((f) => f.name)).toEqual(['drafts', 'guides']);
   });
 
   it('saves a page title and body in one write, keeping the filename', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
+    await state().loadDocPage('docs/intro.md');
 
     await state().saveDocPage('docs/intro.md', 'Introduction', '# New body');
 
@@ -2009,22 +2020,23 @@ describe('docs', () => {
     const written = fs.files.get('docs/intro.md')!.content;
     expect(written).toContain('title: Introduction');
     expect(written).toContain('# New body');
-    expect(current().docs.pages[0]!.path).toBe('docs/intro.md');
+    expect(tree().pages[0]!.path).toBe('docs/intro.md');
+    expect(tree().pages[0]).not.toHaveProperty('body');
   });
 
   it('deletes a page and clears the selection when it was selected', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
     state().selectDoc('docs/intro.md');
 
     await state().deleteDocPage('docs/intro.md');
 
     expect(fs.removes).toEqual(['docs/intro.md']);
     expect(state().selectedDocPath).toBeNull();
-    expect(current().docs.pages).toEqual([]);
+    expect(tree().pages).toEqual([]);
   });
 
   it('keeps the selection when another page is deleted', async () => {
-    setup(snap({ docs: docsTree() }));
+    await setupDocs();
     state().selectDoc('docs/guides/setup.md');
 
     await state().deleteDocPage('docs/intro.md');
@@ -2032,45 +2044,60 @@ describe('docs', () => {
     expect(state().selectedDocPath).toBe('docs/guides/setup.md');
   });
 
+  it('clears a failed body read from the problem banner after the page is deleted', async () => {
+    const { fs } = await setupDocs();
+    const path = 'docs/intro.md';
+    vi.spyOn(fs, 'read').mockRejectedValueOnce(new Error('Offline'));
+    await state().loadDocPage(path);
+    expect(state().problems).toEqual([expect.objectContaining({ file: path })]);
+
+    await state().deleteDocPage(path);
+
+    expect(fs.files.has(path)).toBe(false);
+    expect(state().docPages[path]).toEqual({ kind: 'missing' });
+    expect(state().problems).toEqual([]);
+  });
+
   it('deletes an empty folder and clears the selection when it was selected', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
     await state().createDocFolder('drafts');
 
     await state().deleteDocFolder('docs/drafts');
 
     expect(fs.removes).toEqual(['docs/drafts']);
     expect(state().selectedDocPath).toBeNull();
-    expect(current().docs.folders.map((f) => f.name)).toEqual(['guides']);
+    expect(tree().folders.map((f) => f.name)).toEqual(['guides']);
   });
 
   it('refuses to delete a folder that still has pages in it', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
 
     await state().deleteDocFolder('docs/guides');
 
     expect(fs.removes).toEqual([]);
-    expect(current().docs.folders.map((f) => f.name)).toEqual(['guides']);
+    expect(tree().folders.map((f) => f.name)).toEqual(['guides']);
     expect(state().errorMessage).toMatch(/empty folder/);
   });
 
   it('restores the previous tree and selection when a write fails', async () => {
-    const { fs } = setup(snap({ docs: docsTree() }));
+    const { fs } = await setupDocs();
     fs.failWritesMatching = '*';
 
     await expect(state().createDocPage('Doomed')).rejects.toThrow();
 
-    expect(current().docs.pages.map((p) => p.path)).toEqual(['docs/intro.md']);
+    expect(tree().pages.map((p) => p.path)).toEqual(['docs/intro.md']);
     expect(state().selectedDocPath).toBeNull();
     expect(state().errorMessage).toMatch(/Failed to create page/);
   });
 
   it('touches only paths under docs/ — never releases, epics or the config', async () => {
-    const { fs } = setup(
-      snap({ docs: docsTree(), releases: [release('1.0', 'current', [task('BD-1')])] }),
+    const { fs } = await setupDocs(
+      snap({ releases: [release('1.0', 'current', [task('BD-1')])] }),
     );
 
     await state().createDocPage('One');
     await state().createDocFolder('drafts');
+    await state().loadDocPage('docs/intro.md');
     await state().saveDocPage('docs/intro.md', 'Intro', 'x');
     await state().deleteDocPage('docs/intro.md');
     await state().deleteDocPage('docs/guides/setup.md');
@@ -2080,6 +2107,128 @@ describe('docs', () => {
       expect(path.startsWith('docs/')).toBe(true);
     }
     expect(fs.files.has(CONFIG_FILENAME)).toBe(false);
+  });
+
+  it('keeps startup, task navigation and idle refresh free of Docs reads', async () => {
+    const fs = new MemFs();
+    fs.files.set(CONFIG_FILENAME, { content: serializeConfig(config()), lastModified: 1 });
+    fs.files.set('docs/intro.md', { content: 'hello', lastModified: 1 });
+    const list = vi.spyOn(fs, 'list');
+    const read = vi.spyOn(fs, 'read');
+    await state().load(fs);
+    state().setActiveTab('backlog');
+    state().openTask('BD-1');
+    await state().reloadSilent();
+    expect(state().status).toBe('ready');
+    expect(state().docsTree.kind).toBe('idle');
+    expect([...list.mock.calls, ...read.mock.calls].some(([path]) => path.startsWith('docs'))).toBe(false);
+    state().unload(fs);
+  });
+
+  it('shares a pending tree request and stops its traversal when both consumers leave', async () => {
+    const { fs } = setup(snap());
+    fs.files.set('docs/intro.md', { content: 'Hello', lastModified: 1 });
+    let release = () => {};
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    const list = vi.spyOn(fs, 'list').mockImplementationOnce(async () => {
+      await waiting;
+      return [{ name: 'intro.md', isDirectory: false }];
+    });
+    const read = vi.spyOn(fs, 'read');
+    const leaveDocs = state().demandDocsTree();
+    const closeSuggestions = state().demandDocsTree();
+    const pending = state().loadDocsTree();
+    expect(state().docsTree.kind).toBe('loading');
+    expect(list).toHaveBeenCalledTimes(1);
+    leaveDocs();
+    expect(state().docsTree.kind).toBe('loading');
+    closeSuggestions();
+    release();
+    await pending;
+    expect(read).not.toHaveBeenCalled();
+    expect(state().docsTree.kind).toBe('idle');
+  });
+
+  it('uses a single read per pending page and updates wiki labels without a tree scan', async () => {
+    const { fs } = setup(snap());
+    fs.files.set('docs/intro.md', { content: '---\ntitle: Real introduction\n---\n\nBody', lastModified: 1 });
+    fs.files.set('docs/other.md', { content: 'Not requested', lastModified: 1 });
+    const read = vi.spyOn(fs, 'read');
+    const link = (token: string) => wikiDocLink(state().docsTree, state().docPages, token);
+    expect(link('intro')).toMatchObject({ title: 'intro' });
+    expect(read).not.toHaveBeenCalled();
+    state().openDocPopup('docs/intro.md');
+    await Promise.all([state().loadDocPage('docs/intro.md'), state().loadDocPage('docs/intro.md')]);
+    expect(read.mock.calls).toEqual([['docs/intro.md', undefined]]);
+    expect(link('intro')).toMatchObject({ title: 'Real introduction' });
+    expect(state().docsTree.kind).toBe('idle');
+
+    await state().loadDocPage('docs/missing.md');
+    expect(link('missing')).toBeNull();
+    read.mockRejectedValueOnce(new Error('Offline'));
+    await state().loadDocPage('docs/other.md');
+    expect(state().docPages['docs/other.md']).toMatchObject({ kind: 'error' });
+    expect(link('other')).toMatchObject({ title: 'other' });
+    await state().loadDocPage('docs/other.md', true);
+    expect(state().docPages['docs/other.md']).toMatchObject({ kind: 'ready' });
+  });
+
+  it('discards tree and page results from a board that was switched away from', async () => {
+    const first = new MemFs();
+    const next = new MemFs();
+    for (const fs of [first, next]) {
+      fs.files.set(CONFIG_FILENAME, { content: serializeConfig(config()), lastModified: 1 });
+      fs.files.set('docs/intro.md', { content: fs === first ? 'Old' : 'New', lastModified: 1 });
+    }
+    await state().load(first);
+    let release = () => {};
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    const originalList = first.list.bind(first);
+    vi.spyOn(first, 'list').mockImplementation(async (path) => {
+      if (path === 'docs') await waiting;
+      return originalList(path);
+    });
+    state().openDocPopup('docs/intro.md');
+    const treeLoad = state().loadDocsTree();
+    const pageLoad = state().loadDocPage('docs/intro.md');
+    await state().load(next);
+    release();
+    await Promise.all([treeLoad, pageLoad]);
+    expect(state().docPopupPath).toBeNull();
+    expect(state().docsTree.kind).toBe('idle');
+    expect(state().docPages).toEqual({});
+    await state().loadDocPage('docs/intro.md');
+    expect(state().docPages['docs/intro.md']).toMatchObject({ kind: 'ready', value: { body: 'New' } });
+    state().unload(next);
+  });
+
+  it('refuses a draft and a delete confirmation based on a version before silent refresh', async () => {
+    const path = 'docs/intro.md';
+    const fs = new MemFs();
+    fs.files.set(CONFIG_FILENAME, { content: serializeConfig(config()), lastModified: 1 });
+    fs.files.set(path, { content: 'Original', lastModified: 4 });
+    await state().load(fs);
+    await state().loadDocsTree();
+    await state().loadDocPage(path);
+    state().openDeleteDoc(path);
+    fs.files.set(path, { content: 'New on disk', lastModified: 5 });
+    await state().reloadSilent();
+    await state().loadDocsTree();
+    await state().loadDocPage(path);
+    await expect(state().deleteDocPage(path)).rejects.toBeInstanceOf(ConflictError);
+    await expect(state().saveDocPage(path, 'Intro', 'Stale draft', 4)).rejects.toBeInstanceOf(ConflictError);
+    expect(fs.files.get(path)?.content).toBe('New on disk');
+    state().unload(fs);
+  });
+
+  it('does not let a lazy observation overwrite an unreadable page', async () => {
+    const path = 'docs/intro.md';
+    const { fs } = await setupDocs();
+    fs.files.set(path, { content: '---\ntitle: [\n---\n\nUnreadable', lastModified: 3 });
+    await state().loadDocPage(path);
+    await expect(state().saveDocPage(path, 'Intro', 'Draft', 1)).rejects.toThrow();
+    expect(state().unwritableFile?.path).toBe(path);
+    expect(fs.files.get(path)?.content).toContain('Unreadable');
   });
 });
 
@@ -2133,19 +2282,10 @@ describe('doc popup', () => {
   });
 });
 
-const docs = () => ({
-  path: 'docs',
-  name: 'docs',
-  folders: [],
-  pages: [{ path: 'docs/intro.md', slug: 'intro', frontmatter: { title: 'Intro' }, body: 'hello' }],
-  otherEntries: [],
-});
-
 const board = () =>
   snap({
     releases: [release('1.0', 'current', [task('BD-1'), task('BD-2')])],
     epics: [epic('ui')],
-    docs: docs(),
   });
 
 describe('dialog back stack', () => {
@@ -2232,7 +2372,6 @@ describe('dialog back stack', () => {
       snapshot: snap({
         releases: [release('1.0', 'current', [task('BD-2')])],
         epics: [],
-        docs: docs(),
       }),
     });
 
@@ -2319,7 +2458,6 @@ describe('repo file popup', () => {
       snapshot: snap({
         releases: [release('1.0', 'current', [task('BD-1')])],
         epics: [],
-        docs: docs(),
       }),
     });
 
@@ -2856,7 +2994,6 @@ describe('jumpToTask', () => {
           ],
           backlog: backlog([task('BD-4')]),
           epics: [epic('ui')],
-          docs: docs(),
         }),
       );
       closeEverything();

@@ -40,8 +40,8 @@ export class VsCodeFsAdapter implements FsAdapter {
     });
   }
 
-  async read(path: string): Promise<string> {
-    return (await this.request('read', path)) as string;
+  async read(path: string, part?: 'frontmatter'): Promise<string> {
+    return (await this.request(part === 'frontmatter' ? 'readFrontmatter' : 'read', path)) as string;
   }
 
   async write(path: string, content: string): Promise<void> {

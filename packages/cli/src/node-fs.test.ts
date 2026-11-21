@@ -37,6 +37,16 @@ describe('NodeFsAdapter', () => {
     expect(await fs.read('epics/no_epic.md')).toBe('hello');
   });
 
+  it('keeps native frontmatter-only reads in the same root as full reads', async () => {
+    const fs = new NodeFsAdapter(root);
+    const header = '---\ntitle: Setup\n---';
+    const content = `${header}\n\n${'body'.repeat(5000)}`;
+    await fs.write('docs/page.md', content);
+    expect(await fs.read('docs/page.md', 'frontmatter')).toBe(header);
+    expect(await fs.read('docs/page.md')).toBe(content);
+    await expect(fs.read('../outside.md', 'frontmatter')).rejects.toThrow();
+  });
+
   it('list returns [] for a missing directory', async () => {
     expect(await new NodeFsAdapter(root).list('releases')).toEqual([]);
   });

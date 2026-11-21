@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { readBoardFrontmatter } from './board-frontmatter';
 import {
   projectFileMaxBytes,
   classifyProjectFile,
@@ -148,6 +149,9 @@ async function handleFsRequest(
         respond(true, new TextDecoder('utf-8').decode(bytes));
         return;
       }
+      case 'readFrontmatter':
+        respond(true, await readBoardFrontmatter(target, () => vscode.workspace.fs.readFile(target)));
+        return;
       case 'readBytes': {
         // A fresh Uint8Array rather than the Buffer the API hands back, so the
         // channel carries plain bytes.

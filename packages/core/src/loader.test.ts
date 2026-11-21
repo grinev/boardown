@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
 import { MIN_COMPATIBLE_VERSION } from './config.js';
 import { loadBoard } from './loader.js';
+import { readDocPage, readDocsTree } from './docs.js';
+import { fileFrontmatterPrefix } from './parser.js';
 
 class InMemoryFs implements FsAdapter {
   async readBytes(path: string): Promise<Uint8Array> {
@@ -13,16 +15,16 @@ class InMemoryFs implements FsAdapter {
   files = new Map<string, string>();
   dirs = new Set<string>();
 
-  async read(path: string): Promise<string> {
+  async read(path: string, part?: 'frontmatter'): Promise<string> {
     const content = this.files.get(path);
     if (content === undefined) throw new Error(`ENOENT: ${path}`);
-    return content;
+    return part === 'frontmatter' ? fileFrontmatterPrefix(content) : content;
   }
   async write(path: string, content: string): Promise<void> {
     this.files.set(path, content);
   }
   async list(dir: string): Promise<FsEntry[]> {
-    const prefix = dir.endsWith('/') ? dir : `${dir}/`;
+    const prefix = dir === '.' ? '' : dir.endsWith('/') ? dir : `${dir}/`;
     const out = new Map<string, boolean>();
     for (const key of this.files.keys()) {
       if (!key.startsWith(prefix)) continue;
@@ -303,7 +305,20 @@ body
     expect(result.snapshot.backlog!.tasks).toHaveLength(1);
   });
 
-  it('builds a nested docs tree, ignoring non-markdown files', async () => {
+  it('does not list or read Docs at board startup', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('config.yaml', CONFIG);
+    await fs.write('docs/intro.md', 'hello');
+    const read = vi.spyOn(fs, 'read');
+    const list = vi.spyOn(fs, 'list');
+    const stat = vi.spyOn(fs, 'stat');
+    expect((await loadBoard(fs)).kind).toBe('loaded');
+    for (const call of [...read.mock.calls, ...list.mock.calls, ...stat.mock.calls]) {
+      expect(call[0]).not.toMatch(/^docs(?:\/|$)/);
+    }
+  });
+
+  it('builds a nested docs tree from headers only, ignoring non-markdown files', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     await fs.write('docs/intro.md', '---\ntitle: Intro\n---\n\nHello\n');
@@ -311,10 +326,11 @@ body
     await fs.write('docs/guides/deep/more.md', 'no frontmatter here');
     await fs.write('docs/diagram.png', 'binary-ish');
 
-    const result = await loadBoard(fs);
-    if (result.kind !== 'loaded') throw new Error('expected loaded');
-
-    const docs = result.snapshot.docs;
+    const reads = vi.spyOn(fs, 'read');
+    const { tree: docs } = await readDocsTree(fs);
+    expect(reads.mock.calls).toHaveLength(3);
+    expect(reads.mock.calls.every(([, part]) => part === 'frontmatter')).toBe(true);
+    expect(docs.pages[0]).not.toHaveProperty('body');
     expect(docs.pages.map((p) => p.path)).toEqual(['docs/intro.md']);
     expect(docs.folders.map((f) => f.name)).toEqual(['guides']);
     const guides = docs.folders[0]!;
@@ -331,19 +347,20 @@ body
     await fs.write('docs/intro.md', 'hello');
     await fs.write('docs/guides/setup.md', 'steps');
 
-    const result = await loadBoard(fs);
-    if (result.kind !== 'loaded') throw new Error('expected loaded');
-    expect(result.fileVersions).toHaveProperty('docs/intro.md');
-    expect(result.fileVersions).toHaveProperty('docs/guides/setup.md');
+    const result = await readDocsTree(fs);
+    expect(result.versions).toEqual({ 'docs/intro.md': 0, 'docs/guides/setup.md': 0 });
   });
 
   it('treats a missing docs dir as an empty tree', async () => {
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
-    const result = await loadBoard(fs);
-    if (result.kind !== 'loaded') throw new Error('expected loaded');
-    expect(result.snapshot.docs.pages).toEqual([]);
-    expect(result.snapshot.docs.folders).toEqual([]);
+    const result = await readDocsTree(fs);
+    expect(result.tree.pages).toEqual([]);
+    expect(result.tree.folders).toEqual([]);
+    await fs.write('docs', 'A file, not a directory');
+    await expect(readDocsTree(fs)).rejects.toThrow('not a directory');
+    vi.spyOn(fs, 'list').mockRejectedValue(new Error('Permission denied'));
+    await expect(readDocsTree(fs)).rejects.toThrow('Permission denied');
   });
 
   it('keeps good pages when one has broken frontmatter, and reports it', async () => {
@@ -352,12 +369,12 @@ body
     await fs.write('docs/good.md', '---\ntitle: Good\n---\n\nfine');
     await fs.write('docs/bad.md', '---\ntitle: [unclosed\n---\n\nbroken');
 
-    const result = await loadBoard(fs);
-    if (result.kind !== 'loaded') throw new Error('expected loaded');
-    expect(result.snapshot.docs.pages.map((p) => p.path)).toEqual(['docs/good.md']);
+    const result = await readDocsTree(fs);
+    expect(result.tree.pages.map((p) => p.path)).toEqual(['docs/good.md']);
     expect(result.problems.some((p) => p.file === 'docs/bad.md')).toBe(true);
     // Unreadable, but its name is still taken — a new page must not clobber it.
-    expect(result.snapshot.docs.otherEntries).toEqual(['bad.md']);
+    expect(result.tree.otherEntries).toEqual(['bad.md']);
+    await expect(readDocPage(fs, 'docs/bad.md')).resolves.toMatchObject({ kind: 'error' });
   });
 
   it('returns version-too-old and writes nothing when minVersion is above this build', async () => {
@@ -385,9 +402,40 @@ body
     const fs = new InMemoryFs();
     await fs.write('config.yaml', CONFIG);
     await fs.mkdir('docs/drafts');
-    const result = await loadBoard(fs);
-    if (result.kind !== 'loaded') throw new Error('expected loaded');
-    expect(result.snapshot.docs.folders.map((f) => f.name)).toEqual(['drafts']);
-    expect(result.snapshot.docs.folders[0]!.pages).toEqual([]);
+    const result = await readDocsTree(fs);
+    expect(result.tree.folders.map((f) => f.name)).toEqual(['drafts']);
+    expect(result.tree.folders[0]!.pages).toEqual([]);
+  });
+
+  it('reads only the requested exact path and distinguishes failure from absence', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('docs/guides/Title.md', '---\ntitle: Real title\n---\n\nBody');
+    await fs.write('docs/other/page.md', 'Unselected');
+    const read = vi.spyOn(fs, 'read');
+    const list = vi.spyOn(fs, 'list');
+    await expect(readDocPage(fs, 'docs/guides/Title.md')).resolves.toMatchObject({
+      kind: 'ready', value: { body: 'Body', frontmatter: { title: 'Real title' } },
+    });
+    expect(read.mock.calls).toEqual([['docs/guides/Title.md', undefined]]);
+    expect(list.mock.calls).toEqual([['docs'], ['docs/guides']]);
+    await expect(readDocPage(fs, 'docs/guides/title.md')).resolves.toEqual({ kind: 'missing' });
+    await expect(readDocPage(fs, 'docs/../config.yaml')).resolves.toEqual({ kind: 'missing' });
+    read.mockRejectedValueOnce(new Error('Offline'));
+    await expect(readDocPage(fs, 'docs/guides/Title.md')).resolves.toMatchObject({
+      kind: 'error', problem: { message: 'Cannot read file: Offline' },
+    });
+  });
+
+  it('stops a cancelled tree walk before requesting any more entries', async () => {
+    const fs = new InMemoryFs();
+    await fs.write('docs/one.md', 'One');
+    await fs.write('docs/two.md', 'Two');
+    const controller = new AbortController();
+    const read = vi.spyOn(fs, 'read').mockImplementationOnce(async () => {
+      controller.abort();
+      return '';
+    });
+    await expect(readDocsTree(fs, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(read.mock.calls).toEqual([['docs/one.md', 'frontmatter']]);
   });
 });

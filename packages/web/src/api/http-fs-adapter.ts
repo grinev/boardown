@@ -38,8 +38,10 @@ export class HttpFsAdapter implements FsAdapter {
     };
   }
 
-  async read(path: string): Promise<string> {
-    const res = await fetch(`${this.base}/read?path=${encodeURIComponent(path)}`);
+  async read(path: string, part?: 'frontmatter'): Promise<string> {
+    const params = new URLSearchParams({ path });
+    if (part !== undefined) params.set('part', part);
+    const res = await fetch(`${this.base}/read?${params}`);
     if (isMissing(res)) throw missing('read', path);
     if (!res.ok) {
       throw await failed('read', path, res);

@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { createLogger } from '../../../core/src/logger';
+import { readFrontmatterPrefix } from '../../../core/src/parser';
 import {
   classifyProjectFile,
   projectFileMaxBytes,
@@ -183,7 +184,20 @@ export const handleBoardFs = async (
         return;
       }
       try {
-        const content = await fs.readFile(target.abs, 'utf-8');
+        let content: string;
+        if (params.get('part') === 'frontmatter') {
+          const file = await fs.open(target.abs, 'r');
+          try {
+            content = await readFrontmatterPrefix(async (position, length) => {
+              const { buffer, bytesRead } = await file.read({ buffer: new Uint8Array(length), position });
+              return buffer.subarray(0, bytesRead);
+            }, true);
+          } finally {
+            await file.close();
+          }
+        } else {
+          content = await fs.readFile(target.abs, 'utf-8');
+        }
         log.debug(`read ${target.rel}: 200`);
         sendText(res, 200, content);
       } catch (err) {

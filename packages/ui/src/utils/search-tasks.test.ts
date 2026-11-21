@@ -1,5 +1,4 @@
 import type { BoardSnapshot, Release, Task } from '@boardown/core';
-import { emptyDocsTree } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import { isSearchable, searchTasks } from './search-tasks';
 
@@ -27,7 +26,6 @@ const snapshotOf = (over: Partial<BoardSnapshot> = {}): BoardSnapshot => ({
   epics: [],
   backlog: null,
   heldBack: [],
-  docs: emptyDocsTree(),
   problems: [],
   ...over,
 });

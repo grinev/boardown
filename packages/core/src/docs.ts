@@ -1,5 +1,10 @@
 import { DOCS_DIR, sanitizeFilenameForFs } from './board-ops.js';
+import type { FsAdapter } from './fs-adapter.js';
+import { parseDocMetadata, parseDocPage } from './parser.js';
+import { fileProblem, type ParseProblem, type ParseResult } from './problems.js';
 import type { DocPage } from './schemas.js';
+
+export type DocMetadata = Omit<DocPage, 'body'>;
 
 // The docs tree mirrors the folder structure under `.boardown/docs/`. Folders
 // are real entities the user creates and deletes, so an empty one is a valid
@@ -8,7 +13,7 @@ export interface DocFolder {
   path: string;
   name: string;
   folders: DocFolder[];
-  pages: DocPage[];
+  pages: DocMetadata[];
   // Files present in this folder that the tree does not show: non-markdown, and
   // markdown the parser could not understand. They are invisible to the user but
   // still own their names, so creating a page or a folder must avoid them —
@@ -24,7 +29,7 @@ export const emptyDocsTree = (): DocFolder => ({
   otherEntries: [],
 });
 
-export const docPageTitle = (page: DocPage): string => {
+export const docPageTitle = (page: DocMetadata): string => {
   const title = page.frontmatter.title;
   return title !== undefined && title.trim() !== '' ? title : page.slug;
 };
@@ -48,7 +53,7 @@ export const findDocFolder = (root: DocFolder, path: string): DocFolder | null =
   return null;
 };
 
-export const findDocPage = (root: DocFolder, path: string): DocPage | null => {
+export const findDocPage = (root: DocFolder, path: string): DocMetadata | null => {
   const page = root.pages.find((p) => p.path === path);
   if (page !== undefined) return page;
   for (const child of root.folders) {
@@ -68,7 +73,7 @@ export const targetDocFolder = (root: DocFolder, selectedPath: string | null): D
   return findDocFolder(root, parentPath) ?? root;
 };
 
-export const docPagesBeneath = (folder: DocFolder): DocPage[] => [
+export const docPagesBeneath = (folder: DocFolder): DocMetadata[] => [
   ...folder.pages,
   ...folder.folders.flatMap(docPagesBeneath),
 ];
@@ -89,6 +94,8 @@ export const docFilenameForTitle = (title: string, folder: DocFolder): string =>
   const base = sanitizeFilenameForFs(title) || 'page';
   const taken = new Set([
     ...folder.pages.map((p) => p.slug.toLowerCase()),
+    ...folder.folders.filter((f) => f.name.toLowerCase().endsWith('.md'))
+      .map((f) => f.name.slice(0, -3).toLowerCase()),
     ...folder.otherEntries
       .filter((n) => n.toLowerCase().endsWith('.md'))
       .map((n) => n.slice(0, -3).toLowerCase()),
@@ -131,7 +138,7 @@ const replaceFolder = (root: DocFolder, target: string, next: DocFolder): DocFol
   };
 };
 
-export const addDocPage = (root: DocFolder, folderPath: string, page: DocPage): DocFolder => {
+export const addDocPage = (root: DocFolder, folderPath: string, page: DocMetadata): DocFolder => {
   const folder = findDocFolder(root, folderPath);
   if (folder === null) throw new Error(`Unknown docs folder: ${folderPath}`);
   return sortDocsTree(replaceFolder(root, folderPath, { ...folder, pages: [...folder.pages, page] }));
@@ -152,7 +159,7 @@ export const addDocFolder = (root: DocFolder, parentPath: string, name: string):
   );
 };
 
-export const replaceDocPage = (root: DocFolder, page: DocPage): DocFolder =>
+export const replaceDocPage = (root: DocFolder, page: DocMetadata): DocFolder =>
   sortDocsTree({
     ...root,
     pages: root.pages.map((p) => (p.path === page.path ? page : p)),
@@ -172,9 +179,14 @@ export const removeDocFolder = (root: DocFolder, path: string): DocFolder => ({
 
 const MD_EXT = '.md';
 
+const safeDocSegments = (segments: string[]): boolean =>
+  segments.every((segment) =>
+    segment !== '' && segment !== '.' && segment !== '..' && !/[:\\\0]/.test(segment),
+  );
+
 // A doc reference token is the page's path relative to `docs/`, without the `.md`
 // extension — `guides/release-process` for `docs/guides/release-process.md`.
-export const docRefToken = (page: DocPage): string =>
+export const docRefToken = (page: DocMetadata): string =>
   page.path.slice(DOCS_DIR.length + 1, -MD_EXT.length);
 
 // The inverse. A token typed by hand may well carry the `docs/` prefix or the
@@ -184,11 +196,11 @@ export const docPathFromRefToken = (token: string): string | null => {
   let rest = token.trim();
   if (rest.startsWith(`${DOCS_DIR}/`)) rest = rest.slice(DOCS_DIR.length + 1);
   if (rest.endsWith(MD_EXT)) rest = rest.slice(0, -MD_EXT.length);
-  if (rest === '') return null;
+  if (!safeDocSegments(rest.split('/'))) return null;
   return `${DOCS_DIR}/${rest}${MD_EXT}`;
 };
 
-export const resolveDocRef = (root: DocFolder, token: string): DocPage | null => {
+export const resolveDocRef = (root: DocFolder, token: string): DocMetadata | null => {
   const path = docPathFromRefToken(token);
   return path === null ? null : findDocPage(root, path);
 };
@@ -205,3 +217,106 @@ export const docRefCandidates = (root: DocFolder): DocRefCandidate[] =>
     title: docPageTitle(page),
     path: page.path,
   }));
+
+export type DocRead<T> =
+  | { kind: 'ready'; value: T; version: number }
+  | { kind: 'missing' }
+  | { kind: 'error'; problem: ParseProblem; version?: number };
+
+export interface DocsTreeRead {
+  tree: DocFolder;
+  problems: ParseProblem[];
+  versions: Record<string, number>;
+}
+
+const readFailure = (path: string, error: unknown): ParseProblem =>
+  fileProblem(path, `Cannot read file: ${error instanceof Error ? error.message : String(error)}`);
+
+const observeDoc = async <T>(
+  fs: FsAdapter,
+  path: string,
+  parse: (text: string, path: string, slug: string) => ParseResult<T>,
+  part?: 'frontmatter',
+  signal?: AbortSignal,
+): Promise<DocRead<T>> => {
+  try {
+    signal?.throwIfAborted();
+    const before = await fs.stat(path);
+    if (before === null) return { kind: 'missing' };
+    signal?.throwIfAborted();
+    const text = await fs.read(path, part);
+    signal?.throwIfAborted();
+    const after = await fs.stat(path);
+    if (after === null) return { kind: 'missing' };
+    if (before.lastModified !== after.lastModified || before.size !== after.size) {
+      return { kind: 'error', problem: fileProblem(path, 'Page changed while it was being read.') };
+    }
+    const slug = path.slice(path.lastIndexOf('/') + 1, -MD_EXT.length);
+    const { value, problems } = parse(text, path, slug);
+    return value === null
+      ? { kind: 'error', problem: problems[0] ?? fileProblem(path, 'Invalid page'), version: after.lastModified }
+      : { kind: 'ready', value, version: after.lastModified };
+  } catch (error) {
+    signal?.throwIfAborted();
+    return { kind: 'error', problem: readFailure(path, error) };
+  }
+};
+
+export async function readDocsTree(fs: FsAdapter, signal?: AbortSignal): Promise<DocsTreeRead> {
+  const problems: ParseProblem[] = [];
+  const versions: Record<string, number> = {};
+  const walk = async (path: string, name: string): Promise<DocFolder> => {
+    signal?.throwIfAborted();
+    const entries = await fs.list(path);
+    if (path === DOCS_DIR && entries.length === 0) {
+      signal?.throwIfAborted();
+      // Some hosts report a non-directory like a missing directory. The parent
+      // shows which one it is without hiding an unreadable tree as empty.
+      if ((await fs.list('.')).some((entry) => entry.name === name && !entry.isDirectory)) {
+        throw new Error(`${path} is not a directory.`);
+      }
+    }
+    const folder: DocFolder = { path, name, folders: [], pages: [], otherEntries: [] };
+    for (const entry of entries) {
+      signal?.throwIfAborted();
+      const childPath = `${path}/${entry.name}`;
+      if (entry.isDirectory) {
+        folder.folders.push(await walk(childPath, entry.name));
+      } else if (!entry.name.endsWith(MD_EXT)) {
+        folder.otherEntries.push(entry.name);
+      } else {
+        const result = await observeDoc(fs, childPath, parseDocMetadata, 'frontmatter', signal);
+        if (result.kind === 'ready') folder.pages.push(result.value);
+        else folder.otherEntries.push(entry.name);
+        if (result.kind === 'error') problems.push(result.problem);
+        if (result.kind !== 'missing' && result.version !== undefined) {
+          versions[childPath] = result.version;
+        }
+      }
+    }
+    signal?.throwIfAborted();
+    return folder;
+  };
+  return { tree: sortDocsTree(await walk(DOCS_DIR, DOCS_DIR)), problems, versions };
+}
+
+export async function readDocPage(fs: FsAdapter, path: string): Promise<DocRead<DocPage>> {
+  const [root, ...segments] = path.split('/');
+  if (root !== DOCS_DIR || !path.endsWith(MD_EXT) || !safeDocSegments(segments)) {
+    return { kind: 'missing' };
+  }
+  // Path lookup must stay case-sensitive even on a case-insensitive filesystem.
+  let parent = root;
+  try {
+    for (const [index, name] of segments.entries()) {
+      const isDirectory = index !== segments.length - 1;
+      if (!(await fs.list(parent)).some((entry) => entry.name === name && entry.isDirectory === isDirectory)) {
+        return { kind: 'missing' };
+      }
+      parent += `/${name}`;
+    }
+    return await observeDoc(fs, path, parseDocPage);
+  } catch (error) {
+    return { kind: 'error', problem: readFailure(path, error) };
+  }
+}

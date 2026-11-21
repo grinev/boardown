@@ -80,6 +80,22 @@ const callBoardFs = async (
   return { status: res.statusCode, headers, body: Buffer.concat(chunks) };
 };
 
+it('serves only the frontmatter over the scoped board text route', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'bd-web-frontmatter-'));
+  try {
+    const header = '---\ntitle: Setup 🌱\n---';
+    const content = `${header}\n\n${'Do not send this body.\n'.repeat(5000)}`;
+    await writeFile(path.join(root, 'page.md'), content);
+    const reply = await callBoardFs(root, 'GET', '/api/fs/read?path=page.md&part=frontmatter');
+    expect(reply.status).toBe(200);
+    expect(reply.body.toString('utf8')).toBe(header);
+    expect((await callBoardFs(root, 'GET', '/api/fs/read?path=page.md')).body.toString('utf8')).toBe(content);
+    expect((await callBoardFs(root, 'GET', '/api/fs/read?path=../page.md&part=frontmatter')).status).toBe(400);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 describe('handleBoardFs bytes', () => {
   const call = callBoardFs;
 

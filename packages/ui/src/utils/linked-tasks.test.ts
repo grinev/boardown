@@ -1,5 +1,5 @@
 import type { BoardSnapshot, Release, Task, TaskLink } from '@boardown/core';
-import { emptyDocsTree, LINK_TYPE_META } from '@boardown/core';
+import { LINK_TYPE_META } from '@boardown/core';
 import { describe, expect, it } from 'vitest';
 import {
   LINK_TYPES_IN_GROUP_ORDER,
@@ -38,7 +38,6 @@ const snapshot = (releases: Release[]): BoardSnapshot => ({
   epics: [],
   backlog: null,
   heldBack: [],
-  docs: emptyDocsTree(),
   problems: [],
 });
 

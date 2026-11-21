@@ -9,7 +9,7 @@ export function CreateDocPageDialog() {
   const open = useBoardStore((s) => s.createDocPageOpen);
   const onClose = useBoardStore((s) => s.closeCreateDocPage);
   const createDocPage = useBoardStore((s) => s.createDocPage);
-  const docs = useBoardStore((s) => s.snapshot?.docs ?? null);
+  const docs = useBoardStore((s) => s.docsTree.kind === 'ready' ? s.docsTree.tree : null);
   const selectedDocPath = useBoardStore((s) => s.selectedDocPath);
 
   const [title, setTitle] = useState('');

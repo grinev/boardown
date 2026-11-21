@@ -71,6 +71,19 @@ describe('handleFsRequest', () => {
     expect(await handleFsRequest(root, { method: 'read', path: 'releases/r.md' })).toBe('hi');
   });
 
+  it('returns only the frontmatter through the scoped filesystem bridge', async () => {
+    const file = 'docs/page.md';
+    const header = '---\ntitle: Setup\n---';
+    const content = `${header}\n\n${'body'.repeat(5000)}`;
+    const onWrite = vi.fn();
+    await handleFsRequest(root, { method: 'write', path: file, content });
+    expect(await handleFsRequest(root, { method: 'readFrontmatter', path: file }, onWrite)).toBe(header);
+    expect(await handleFsRequest(root, { method: 'read', path: file })).toBe(content);
+    expect(await handleFsRequest(root, { method: 'readFrontmatter', path: 'docs/no.md' })).toBeNull();
+    await expect(handleFsRequest(root, { method: 'readFrontmatter', path: '../no.md' })).rejects.toThrow();
+    expect(onWrite).not.toHaveBeenCalled();
+  });
+
   it('list returns [] for a missing directory', async () => {
     expect(await handleFsRequest(root, { method: 'list', path: 'releases' })).toEqual([]);
   });

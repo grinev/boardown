@@ -5,6 +5,7 @@ import {
   buildCustomValuesSchema,
   type CustomField,
   type DocPage,
+  type DocPageFrontmatter,
   DocPageFrontmatterSchema,
   type Epic,
   EpicFrontmatterSchema,
@@ -23,6 +24,40 @@ import {
 } from './problems.js';
 
 const FRONTMATTER_FENCE = '---';
+const OPENING_FENCE = `${FRONTMATTER_FENCE}\n`;
+const CLOSING_FENCE = `\n${FRONTMATTER_FENCE}`;
+
+export const fileFrontmatterPrefix = (text: string): string => {
+  if (!text.startsWith(OPENING_FENCE)) return '';
+  const end = text.indexOf(`${CLOSING_FENCE}\n`, FRONTMATTER_FENCE.length);
+  if (end !== -1) return text.slice(0, end + CLOSING_FENCE.length);
+  return text.length >= 7 && text.endsWith(CLOSING_FENCE) ? text : '';
+};
+
+// A host supplies only positional byte reads; the fence rules are the same for
+// every shell. Read ahead by at most one chunk and never return the page body.
+export async function readFrontmatterPrefix(
+  read: (offset: number, length: number) => Promise<Uint8Array>,
+  stripBom = false,
+): Promise<string> {
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: !stripBom });
+  let text = '';
+  let searchFrom = FRONTMATTER_FENCE.length;
+  for (let offset = 0;;) {
+    const bytes = await read(offset, offset === 0 ? (stripBom ? 7 : 4) : 1024);
+    if (bytes.length === 0) return fileFrontmatterPrefix(text + decoder.decode());
+    offset += bytes.length;
+    text += decoder.decode(bytes, { stream: true });
+    if (text.length < OPENING_FENCE.length) {
+      if (!OPENING_FENCE.startsWith(text)) return '';
+      continue;
+    }
+    if (!text.startsWith(OPENING_FENCE)) return '';
+    const end = text.indexOf(`${CLOSING_FENCE}\n`, searchFrom);
+    if (end !== -1) return text.slice(0, end + CLOSING_FENCE.length);
+    searchFrom = Math.max(searchFrom, text.length - CLOSING_FENCE.length);
+  }
+}
 
 interface FileSplit {
   fileFrontmatterText: string | null;
@@ -384,21 +419,15 @@ export const parseEpic = (
   };
 };
 
-export const parseDocPage = (
-  text: string,
+const parseDocFrontmatter = (
+  fileFrontmatterText: string | null,
   path: string,
-  slug: string,
-): ParseResult<DocPage> => {
+): ParseResult<DocPageFrontmatter> => {
   const problems: ParseProblem[] = [];
-  const { fileFrontmatterText, body } = splitFileFrontmatter(text);
-
-  // The serializer writes exactly one trailing newline; dropping it here is what
-  // makes body → file → body stable, so the editor shows what round-trips.
-  const pageBody = body.replace(/\n+$/, '');
 
   // No frontmatter at all is a normal hand-authored page, not a problem.
   if (fileFrontmatterText === null) {
-    return { value: { path, slug, frontmatter: {}, body: pageBody }, problems };
+    return { value: {}, problems };
   }
 
   let rawFm: unknown;
@@ -421,5 +450,29 @@ export const parseDocPage = (
     return { value: null, problems };
   }
 
-  return { value: { path, slug, frontmatter: fmResult.data, body: pageBody }, problems };
+  return { value: fmResult.data, problems };
+};
+
+export const parseDocMetadata = (
+  text: string,
+  path: string,
+  slug: string,
+): ParseResult<Omit<DocPage, 'body'>> => {
+  const { fileFrontmatterText } = splitFileFrontmatter(text);
+  const { value, problems } = parseDocFrontmatter(fileFrontmatterText, path);
+  return { value: value === null ? null : { path, slug, frontmatter: value }, problems };
+};
+
+export const parseDocPage = (
+  text: string,
+  path: string,
+  slug: string,
+): ParseResult<DocPage> => {
+  const { fileFrontmatterText, body } = splitFileFrontmatter(text);
+  const { value, problems } = parseDocFrontmatter(fileFrontmatterText, path);
+  // Match the serializer's trailing newline so editor content round-trips.
+  return {
+    value: value === null ? null : { path, slug, frontmatter: value, body: body.replace(/\n+$/, '') },
+    problems,
+  };
 };

@@ -14,7 +14,7 @@ export function CreateDocFolderDialog() {
   const open = useBoardStore((s) => s.createDocFolderOpen);
   const onClose = useBoardStore((s) => s.closeCreateDocFolder);
   const createDocFolder = useBoardStore((s) => s.createDocFolder);
-  const docs = useBoardStore((s) => s.snapshot?.docs ?? null);
+  const docs = useBoardStore((s) => s.docsTree.kind === 'ready' ? s.docsTree.tree : null);
   const selectedDocPath = useBoardStore((s) => s.selectedDocPath);
 
   const [name, setName] = useState('');

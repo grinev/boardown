@@ -1,6 +1,7 @@
 import { FileCode2, FileText } from 'lucide-react';
 import { Fragment, type KeyboardEvent } from 'react';
-import { docPageTitle, isTerminalStatus, resolveDocRef } from '@boardown/core';
+import { isTerminalStatus } from '@boardown/core';
+import { wikiDocLink } from '../docs-state';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
 import { splitRefs } from '../utils/refs';
@@ -12,6 +13,8 @@ interface LinkedTextProps {
 
 export function LinkedText({ text }: LinkedTextProps) {
   const snapshot = useBoardStore((s) => s.snapshot);
+  const docsTree = useBoardStore((s) => s.docsTree);
+  const docPages = useBoardStore((s) => s.docPages);
   const openTask = useBoardStore((s) => s.openTask);
   const openDocPopup = useBoardStore((s) => s.openDocPopup);
   const openRepoFilePopup = useBoardStore((s) => s.openRepoFilePopup);
@@ -52,7 +55,7 @@ export function LinkedText({ text }: LinkedTextProps) {
         }
 
         if (segment.kind === 'doc-ref') {
-          const page = snapshot ? resolveDocRef(snapshot.docs, segment.token) : null;
+          const page = wikiDocLink(docsTree, docPages, segment.token);
           if (!page) {
             return <Fragment key={i}>{segment.raw}</Fragment>;
           }
@@ -68,7 +71,7 @@ export function LinkedText({ text }: LinkedTextProps) {
               onKeyDown={stopEditTrigger}
             >
               <FileText size={14} className={styles.docIcon} aria-hidden="true" />
-              {docPageTitle(page)}
+              {page.title}
             </button>
           );
         }

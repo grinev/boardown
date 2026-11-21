@@ -72,6 +72,7 @@
     "watch:host": "node esbuild.mjs --watch",
     "watch:webview": "vite build --watch",
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/docs-read.test.mjs",
     "vscode:prepublish": "pnpm build",
     "package": "node -e \"require('fs').mkdirSync('build',{recursive:true})\" && vsce package --no-dependencies --out build/"
   },

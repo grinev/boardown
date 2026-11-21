@@ -907,6 +907,15 @@ with no `endDate` or completed the same day — a completion date outranks the n
 A project wiki over `.boardown/docs/`. The screen is split: a **page tree** on
 the left, the selected page's **content** filling the rest.
 
+The board does not load Docs at startup. Opening Docs or invoking doc
+autocomplete loads the tree and titles, not page bodies. Selecting a page or
+opening it through a link or dialog Back loads just that page. Pending and
+failed requests are distinct from an empty tree or an absent page; a failure
+can be retried. Reload and automatic refresh update the Docs data currently in
+use without loading dormant Docs. A desktop VS Code virtual workspace may
+read a file in full on the provider side to get its title because its provider
+has no partial-read API; the webview still receives only the metadata.
+
 The tree shows folders as collapsible nodes and pages as selectable rows, folders
 first and then alphabetically at each level, nested to any depth. Empty folders
 are listed. The pane header carries **New folder** and **New page** buttons; both
@@ -1206,7 +1215,10 @@ already.
 
 **Doc links.** A `[[…]]` token holding a doc page's path relative to `docs/`
 without the `.md` extension (e.g. `[[guides/release-process]]`) renders as a link
-showing the page's title with a page icon. Clicking it **inside a dialog** (task,
+with a page icon. Before a lookup, it shows the final segment
+(`release-process`) without starting a read. A known page shows its title; a
+confirmed missing page stays as the original token. A read failure is
+retryable, not a missing page. Clicking a link **inside a dialog** (task,
 epic or release) opens the page in a read-only **popup** — the page's title and
 its rendered body, no docs tree, the same width as the task and epic dialogs. Only
 one dialog is on screen at a time, so the popup takes over from the dialog it was

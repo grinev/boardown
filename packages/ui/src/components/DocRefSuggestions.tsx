@@ -31,7 +31,7 @@ const place = (point: CaretPoint, width: number, height: number): Placement => {
 };
 
 export function DocRefSuggestions({ suggestions }: DocRefSuggestionsProps) {
-  const { open, items, activeIndex, point, container, accept } = suggestions;
+  const { open, items, activeIndex, point, container, accept, status, retry } = suggestions;
   const listRef = useRef<HTMLUListElement | null>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
 
@@ -44,7 +44,7 @@ export function DocRefSuggestions({ suggestions }: DocRefSuggestionsProps) {
       return;
     }
     setPlacement(place(point, el.offsetWidth, el.offsetHeight));
-  }, [point, items.length]);
+  }, [point, items.length, status]);
 
   if (!open || point === null || container === null) return null;
 
@@ -69,7 +69,16 @@ export function DocRefSuggestions({ suggestions }: DocRefSuggestionsProps) {
       aria-label="Matching pages"
       onMouseDown={keepFocus}
     >
-      {items.length === 0 ? (
+      {status === 'loading' && (
+        <li className={styles.empty} role="status">Loading pages…</li>
+      )}
+      {status === 'error' && (
+        <li className={styles.empty}>
+          <span role="alert">Some pages could not be loaded. </span>
+          <button type="button" onClick={retry}>Retry</button>
+        </li>
+      )}
+      {items.length === 0 && status === 'ready' ? (
         <li className={styles.empty}>No pages found</li>
       ) : (
         items.map((item, i) => (
