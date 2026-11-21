@@ -904,9 +904,8 @@ with no `endDate` or completed the same day — a completion date outranks the n
 
 ### Docs
 
-A project wiki over `.boardown/docs/`, and the only place in the app that renders
-markdown. The screen is split: a **page tree** on the left, the selected page's
-**content** filling the rest.
+A project wiki over `.boardown/docs/`. The screen is split: a **page tree** on
+the left, the selected page's **content** filling the rest.
 
 The tree shows folders as collapsible nodes and pages as selectable rows, folders
 first and then alphabetically at each level, nested to any depth. Empty folders
@@ -927,6 +926,14 @@ the raw markdown — no toolbar, no live preview. The pencil becomes a **check**
 pressing it commits both fields in one write and returns to the rendered view.
 There is no Save or Cancel button, matching the rest of the app; an emptied title
 reverts. A draft lives only in the view, so switching tabs mid-edit writes nothing.
+
+Rendered markdown in Docs, the read-only doc popup and the repository Markdown
+preview uses the Board task-card title's size (14 CSS px) for prose, including
+lists, blockquotes and tables. The first three heading levels are 1.6, 1.3 and
+1.1 times that size; lower headings match the prose size and retain their
+emphasis. Inline code stays proportionally smaller than the surrounding text;
+fenced code keeps its own size. The Docs page title and popup headers are
+styled separately.
 
 A page's body renders the same in-app references the task dialogs do (see "Task
 links" below): a `[[page]]` token links to another doc page, a task ID opens that

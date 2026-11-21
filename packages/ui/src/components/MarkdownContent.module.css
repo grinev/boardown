@@ -1,5 +1,9 @@
 .markdown {
+  /* Match the Board task-card title size, regardless of the host default. */
+  --markdown-body-size: 14px;
+
   color: var(--text-primary);
+  font-size: var(--markdown-body-size);
   line-height: 1.6;
   overflow-wrap: break-word;
 }
@@ -24,19 +28,25 @@
 }
 
 .markdown h1 {
-  font-size: 1.6rem;
+  font-size: 1.6em;
   border-bottom: 1px solid var(--divider);
   padding-bottom: 0.3em;
 }
 
 .markdown h2 {
-  font-size: 1.3rem;
+  font-size: 1.3em;
   border-bottom: 1px solid var(--divider);
   padding-bottom: 0.3em;
 }
 
 .markdown h3 {
-  font-size: 1.1rem;
+  font-size: 1.1em;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 1em;
 }
 
 .markdown p,
