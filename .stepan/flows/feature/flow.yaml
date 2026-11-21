@@ -1,0 +1,103 @@
+description: >-
+  Develop a Boardown task with the user, including grooming when needed,
+  independent reviews, and testing. Leave the result in review without committing.
+start: prepare
+steps:
+  prepare:
+    instruction: steps/prepare.md
+    outcome:
+      route:
+        type: enum
+        values: [ready, groom]
+        required: true
+    transitions:
+      - when: { route: groom }
+        to: groom
+      - when: { route: ready }
+        to: explore
+  groom:
+    instruction: steps/groom.md
+    transitions:
+      - to: explore
+  explore:
+    instruction: steps/explore.md
+    outcome:
+      spec:
+        type: string
+        required: true
+    transitions:
+      - to: plan
+  plan:
+    instruction: steps/plan.md
+    outcome:
+      plan:
+        type: string
+        required: true
+    transitions:
+      - to: plan-review
+  plan-review:
+    instruction: steps/plan-review.md
+    outcome:
+      verdict:
+        type: enum
+        values: [pass, fail]
+        required: true
+    transitions:
+      - when: { verdict: fail }
+        to: revise-plan
+      - when: { verdict: pass }
+        to: implement
+  revise-plan:
+    instruction: steps/revise-plan.md
+    transitions:
+      - to: plan-review
+  implement:
+    instruction: steps/implement.md
+    transitions:
+      - to: verify
+  verify:
+    instruction: steps/verify.md
+    outcome:
+      result:
+        type: enum
+        values: [pass, fail]
+        required: true
+    transitions:
+      - when: { result: fail }
+        to: fix
+      - when: { result: pass }
+        to: code-review
+  code-review:
+    instruction: steps/code-review.md
+    outcome:
+      verdict:
+        type: enum
+        values: [pass, fail]
+        required: true
+    transitions:
+      - when: { verdict: fail }
+        to: fix
+      - when: { verdict: pass }
+        to: manual-test
+  manual-test:
+    instruction: steps/manual-test.md
+    outcome:
+      verdict:
+        type: enum
+        values: [pass, fail, skipped, accepted]
+        required: true
+    transitions:
+      - when: { verdict: fail }
+        to: fix
+      - when: { verdict: pass }
+        to: report
+      - when: { verdict: skipped }
+        to: report
+      - when: { verdict: accepted }
+        to: report
+  fix:
+    instruction: steps/fix.md
+    transitions:
+      - to: verify
+  report:
+    instruction: steps/report.md
