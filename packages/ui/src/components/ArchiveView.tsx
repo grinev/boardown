@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { Epic, Release, Task } from '@boardown/core';
-import { finishedReleases, sortTasksByOrder } from '@boardown/core';
+import { finishedReleases, sortTasksByOrder, taskListKey } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogRowView } from './BacklogRowView';
 import styles from './BacklogView.module.css';
@@ -149,7 +149,7 @@ function ArchiveSection({
               const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
               return (
                 <BacklogRowView
-                  key={task.frontmatter.id}
+                  key={taskListKey(task)}
                   className={styles.staticRow}
                   task={task}
                   epic={epic}

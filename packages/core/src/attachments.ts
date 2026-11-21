@@ -2,6 +2,7 @@ import {
   type Container,
   attachmentsDir,
   BoardOpError,
+  findTask,
   isFrozenRelease,
   isForbiddenFilenameChar,
   isWindowsReservedName,
@@ -141,8 +142,7 @@ const stampedTaskFile = <C extends Container>(
   taskId: string,
   now: string,
 ): { container: C; task: Task; write: GuardedWrite } => {
-  const task = container.tasks.find((t) => t.frontmatter.id === taskId);
-  if (task === undefined) throw new Error(`Task not found: ${taskId}`);
+  const task = findTask(container.tasks, taskId);
   const stamped = withUpdatedAt(task, config, now);
   const next: C = {
     ...container,

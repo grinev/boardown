@@ -4,6 +4,7 @@ import type {
   BoardSnapshot,
   BoardSwimlanes,
   Container,
+  ConvertingFs,
   CreateTaskWithLinksResult,
   DeleteTaskResult,
   DocPage,
@@ -26,6 +27,7 @@ import type {
   SharedThemeReader,
   SharedThemeState,
   Task,
+  TaskIdRepair,
   TaskLink,
   TaskLinkResult,
   TaskPatch,
@@ -49,6 +51,12 @@ import {
   addDocFolder,
   addDocPage,
   attachmentWrites,
+  ambiguousTaskMessage,
+  commitWithTaskIdRepairs,
+  DuplicateIdRepairBlocked,
+  duplicateTaskIds,
+  isDuplicateTaskId,
+  taskRepairFs,
   listAttachments,
   readAttachment,
   readAttachmentPreviews,
@@ -93,6 +101,8 @@ import {
 import { create, type StateCreator } from 'zustand';
 import { docsProblems, type DocPages, type DocsTreeState } from './docs-state';
 import { findTaskById, findTaskByIdIgnoringCase } from './utils/find-task';
+
+type BoardFiles = GuardedFs & Partial<Pick<ConvertingFs, 'sourceOf'>>;
 
 export type BoardStatus = 'idle' | 'loading' | 'ready' | 'error' | 'onboarding';
 
@@ -150,7 +160,7 @@ interface BoardState {
   // Host-provided fallback theme (e.g. VS Code's color theme), used only when
   // seeding a brand-new config at onboarding. Null when the shell omits it.
   defaultTheme: Theme | null;
-  fs: GuardedFs | null;
+  fs: BoardFiles | null;
   rawFs: FsAdapter | null;
   // The shell's read-only window onto the project folder, for repo file links.
   // Separate from `fs` on purpose: it reaches outside `.boardown/`, so no write
@@ -216,6 +226,7 @@ interface BoardState {
   // seen the notice yet. Not a dialog flag: the refusal modals and a reload leave
   // it standing, and the notice shows whenever no dialog is open.
   conversionNoticeOwed: boolean;
+  taskIdRepairs: TaskIdRepair[];
   // A task the host asked for before the board finished loading; the load's
   // outcome either opens it or drops it.
   pendingTaskJump: string | null;
@@ -236,6 +247,8 @@ interface BoardState {
   openUnwritable: (path: string, problems: readonly ParseProblem[]) => void;
   closeUnwritable: () => void;
   dismissConversionNotice: () => void;
+  dismissTaskIdRepairs: () => void;
+  repairTaskIds: (id: string) => Promise<ParseProblem[]>;
   completeOnboarding: (input: OnboardingInput) => Promise<void>;
   setActiveTab: (tab: ActiveTab) => void;
   setTheme: (theme: Theme) => Promise<void>;
@@ -349,6 +362,7 @@ const findTaskContainer = (
   snapshot: BoardSnapshot,
   taskId: string,
 ): { location: ContainerLocation; task: Task } | null => {
+  if (isDuplicateTaskId(snapshot, taskId)) return null;
   for (let i = 0; i < snapshot.releases.length; i++) {
     const release = snapshot.releases[i]!;
     const task = release.tasks.find((t) => t.frontmatter.id === taskId);
@@ -376,6 +390,26 @@ const findTaskContainer = (
     }
   }
   return null;
+};
+
+const taskLookupError = (snapshot: BoardSnapshot, id: string): string =>
+  isDuplicateTaskId(snapshot, id) ? ambiguousTaskMessage(id) : `Task not found: ${id}`;
+
+const asTaskWrite = (
+  fs: BoardFiles,
+  snapshot: BoardSnapshot,
+  get: () => BoardState,
+  set: (partial: Partial<BoardState>) => void,
+  reconciled?: () => void,
+): GuardedFs => {
+  if (!snapshot.problems.some((problem) => problem.duplicateTaskIds !== undefined)) return fs;
+  const current = captureBoardSession();
+  return taskRepairFs(fs, () => get().snapshot ?? snapshot, (repairs, updated) => {
+    if (!current()) return;
+    reconciled?.();
+    set({ snapshot: updated, problems: updated.problems, taskIdRepairs: [...get().taskIdRepairs, ...repairs] });
+    if (snapshot.heldBack.length > 0) void get().reloadSilent();
+  }, (task) => fs.sourceOf?.(task));
 };
 
 const serializeContainer = (
@@ -416,7 +450,8 @@ const locateForAttachments =
   (get: () => BoardState, taskId: string) => (): { container: Container; config: BoardConfig } => {
     const snapshot = get().snapshot;
     const found = snapshot ? findTaskContainer(snapshot, taskId) : null;
-    if (!snapshot || found === null) throw new Error(`Task not found: ${taskId}`);
+    if (!snapshot || found === null)
+      throw new Error(snapshot ? taskLookupError(snapshot, taskId) : `Task not found: ${taskId}`);
     return { container: found.location.container, config: snapshot.config };
   };
 
@@ -474,11 +509,11 @@ const tabFor = (tab: ActiveTab, config: BoardConfig): ActiveTab =>
 // The minVersion stamp rides every write of file content, as one set with it. The
 // stamped config is recorded only once that set has landed — the rule the layout
 // conversion underneath follows too — so a refused write leaves both for the next.
-const wrapMinVersionWrites = (
-  fs: GuardedFs,
+const wrapMinVersionWrites = <F extends GuardedFs>(
+  fs: F,
   readConfig: () => BoardConfig | null,
   commitConfig: (config: BoardConfig) => void,
-): GuardedFs => {
+): F => {
   const commit = async (change: GuardedChange): Promise<void> => {
     const config = readConfig();
     if (config === null || !configNeedsMinVersionStamp(config)) {
@@ -488,7 +523,7 @@ const wrapMinVersionWrites = (
     const next = withMinVersionStamp(config);
     const content = serializeConfig(next);
     const writes = change.writes.some((file) => file.path === CONFIG_FILENAME)
-      ? change.writes.map((file) => (file.path === CONFIG_FILENAME ? { ...file, content } : file))
+      ? change.writes
       : [...change.writes, { path: CONFIG_FILENAME, content }];
     await fs.commit({ ...change, writes });
     // Only the stamp is recorded, onto the config as it is now: a config change
@@ -525,7 +560,7 @@ const boardFs = (
   },
   get: () => BoardState,
   set: (partial: Partial<BoardState>) => void,
-): GuardedFs => {
+): ConvertingFs => {
   const session = boardSession;
   const isCurrent = () => session === boardSession && get().rawFs === rawFs;
   return wrapMinVersionWrites(
@@ -603,11 +638,11 @@ const applyLinkOp = async (
   const source = findTaskContainer(snapshot, taskId);
   const target = findTaskContainer(snapshot, otherTaskId);
   if (!source) {
-    set({ errorMessage: `Task not found: ${taskId}` });
+    set({ errorMessage: taskLookupError(snapshot, taskId) });
     return;
   }
   if (!target) {
-    set({ errorMessage: `Task not found: ${otherTaskId}` });
+    set({ errorMessage: taskLookupError(snapshot, otherTaskId) });
     return;
   }
 
@@ -827,7 +862,7 @@ export const isAnyDialogOpen = (state: BoardState): boolean =>
 // never land on top of a form, a confirmation or a refusal modal.
 const blocksTaskJump = (state: BoardState, snapshot: BoardSnapshot): boolean => {
   if (state.conflictOpen) return true;
-  if (state.conversionNoticeOwed && !isAnyDialogOpen(state)) return true;
+  if ((state.conversionNoticeOwed || state.taskIdRepairs.length > 0) && !isAnyDialogOpen(state)) return true;
   // A nested confirmation is on screen only while its task dialog is: a task
   // deleted on disk under an open dialog leaves the flag behind with nothing shown.
   const taskDialogShown =
@@ -854,11 +889,14 @@ const applyTaskJump = (get: () => BoardState, id: string): void => {
   const { snapshot } = state;
   if (snapshot === null) return;
   const task = findTaskByIdIgnoringCase(snapshot, id);
-  if (task === null) {
+  const matchingIds = new Set(snapshot.problems.flatMap(({ duplicateTaskIds }) =>
+    duplicateTaskIds?.id.toLowerCase() === id.toLowerCase() ? [duplicateTaskIds.id] : [],
+  ));
+  const taskId = matchingIds.size === 1 ? [...matchingIds][0] : task?.frontmatter.id;
+  if (taskId === undefined) {
     log.info(`task jump: no task ${id} on the board`);
     return;
   }
-  const taskId = task.frontmatter.id;
   if (blocksTaskJump(state, snapshot)) {
     log.info(`task jump to ${taskId} refused: another dialog is open`);
     return;
@@ -878,7 +916,7 @@ const pendingJumpDropped = (state: BoardState) => {
 const dialogExists = (snapshot: BoardSnapshot, ref: DialogRef): boolean => {
   switch (ref.kind) {
     case 'task':
-      return findTaskById(snapshot, ref.id) !== null;
+      return isDuplicateTaskId(snapshot, ref.id) || findTaskById(snapshot, ref.id) !== null;
     case 'epic':
       return snapshot.epics.some((e) => e.slug === ref.slug);
     case 'release':
@@ -923,6 +961,7 @@ export const useBoardStore = create<BoardState>(
     deleteDocVersion: undefined,
     snapshot: null,
     problems: [],
+    taskIdRepairs: [],
     errorMessage: null,
     activeTab: 'board',
     theme: DEFAULT_THEME,
@@ -994,6 +1033,8 @@ export const useBoardStore = create<BoardState>(
           dialogStack: [],
           deleteDocPath: null,
           deleteDocVersion: undefined,
+          conversionNoticeOwed: false,
+          taskIdRepairs: [],
         } : {}),
         errorMessage: null,
         // Guarded with an empty version map until the board loads: the only write
@@ -1113,6 +1154,7 @@ export const useBoardStore = create<BoardState>(
         selectedDocPath: null,
         pendingTaskJump: null,
         conversionNoticeOwed: false,
+        taskIdRepairs: [],
       });
     },
 
@@ -1145,6 +1187,10 @@ export const useBoardStore = create<BoardState>(
           return;
         }
         const guarded = boardFs(rawFs, result, get, set);
+        const { selectedTaskId, snapshot } = get();
+        const resolvedDuplicate = selectedTaskId !== null &&
+          isDuplicateTaskId(snapshot, selectedTaskId) &&
+          !isDuplicateTaskId(result.snapshot, selectedTaskId);
         resetDocsRequests();
         set({
           fs: guarded,
@@ -1156,6 +1202,7 @@ export const useBoardStore = create<BoardState>(
           unwritableFile: null,
           theme: boardTheme(result.snapshot.config),
           activeTab: tabFor(get().activeTab, result.snapshot.config),
+          ...(resolvedDuplicate ? { selectedTaskId: null, dialogStack: [] } : {}),
         });
       } catch (err) {
         if (request !== boardLoads) return;
@@ -1182,6 +1229,27 @@ export const useBoardStore = create<BoardState>(
     closeUnwritable: () => set({ unwritableFile: null }),
 
     dismissConversionNotice: () => set({ conversionNoticeOwed: false }),
+    dismissTaskIdRepairs: () => set({ taskIdRepairs: [] }),
+    repairTaskIds: async (id) => {
+      const { snapshot, fs } = get();
+      if (!snapshot || !fs || !duplicateTaskIds(snapshot, id)) return [];
+      const current = captureBoardSession();
+      try {
+        let updated: BoardSnapshot | undefined;
+        const repairs = await commitWithTaskIdRepairs(fs, snapshot, { writes: [], removes: [] }, id,
+          (task) => fs.sourceOf?.(task), (next) => { updated = next; });
+        if (updated && current()) {
+          get().closeTask();
+          set({ snapshot: updated, problems: updated.problems, taskIdRepairs: [...get().taskIdRepairs, ...repairs] });
+          if (snapshot.heldBack.length > 0) await get().reloadSilent();
+        }
+        return [];
+      } catch (error) {
+        if (error instanceof DuplicateIdRepairBlocked) return error.problems;
+        if (current()) set({ errorMessage: error instanceof Error ? error.message : String(error) });
+        throw error;
+      }
+    },
 
     completeOnboarding: async (input) => {
       const { fs, rawFs } = get();
@@ -1785,8 +1853,9 @@ export const useBoardStore = create<BoardState>(
     },
 
     createTask: async (input) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
 
       if (
         input.releaseFilename &&
@@ -1858,7 +1927,7 @@ export const useBoardStore = create<BoardState>(
         // was built from the old snapshot would put stale containers beside the new
         // guard. Start over from the board as it is now.
         const now = get();
-        if (now.snapshot !== snapshot || now.fs !== fs) return now.createTask(input);
+        if (now.snapshot !== snapshot || now.fs !== boardFiles) return now.createTask(input);
       }
 
       set({
@@ -2022,12 +2091,13 @@ export const useBoardStore = create<BoardState>(
     },
 
     updateTask: async (taskId, patch) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
 
       const found = findTaskContainer(snapshot, taskId);
       if (!found) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return;
       }
       const { location: sourceLoc } = found;
@@ -2062,12 +2132,13 @@ export const useBoardStore = create<BoardState>(
     },
 
     editTaskLabels: async (taskId, added, removed) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
 
       const found = findTaskContainer(snapshot, taskId);
       if (!found) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return;
       }
       const { location: sourceLoc } = found;
@@ -2113,8 +2184,14 @@ export const useBoardStore = create<BoardState>(
     },
 
     moveTask: async (taskId, status, beforeTaskId) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
+      const ambiguous = [taskId, beforeTaskId].find((id) => id !== null && isDuplicateTaskId(snapshot, id));
+      if (ambiguous) {
+        set({ errorMessage: ambiguousTaskMessage(ambiguous) });
+        return;
+      }
 
       const releaseIndex = snapshot.releases.findIndex((r) =>
         r.tasks.some((t) => t.frontmatter.id === taskId),
@@ -2182,12 +2259,13 @@ export const useBoardStore = create<BoardState>(
     },
 
     moveTaskToRelease: async (taskId, targetReleaseFilename) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
 
       const found = findTaskContainer(snapshot, taskId);
       if (!found) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return;
       }
       const { location: sourceLoc, task } = found;
@@ -2253,12 +2331,17 @@ export const useBoardStore = create<BoardState>(
     },
 
     moveTaskOnBacklog: async (taskId, target, beforeTaskId) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set);
+      if (beforeTaskId !== null && isDuplicateTaskId(snapshot, beforeTaskId)) {
+        set({ errorMessage: ambiguousTaskMessage(beforeTaskId) });
+        return;
+      }
 
       const found = findTaskContainer(snapshot, taskId);
       if (!found) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return;
       }
       const { location: sourceLoc, task } = found;
@@ -2401,7 +2484,7 @@ export const useBoardStore = create<BoardState>(
       if (!snapshot || !fs) return;
       await applyLinkOp(
         snapshot,
-        fs,
+        asTaskWrite(fs, snapshot, get, set),
         taskId,
         otherTaskId,
         (s, t, a, b) => addTaskLinkInBoard(s, t, snapshot.config, a, b, type),
@@ -2414,7 +2497,7 @@ export const useBoardStore = create<BoardState>(
       if (!snapshot || !fs) return;
       await applyLinkOp(
         snapshot,
-        fs,
+        asTaskWrite(fs, snapshot, get, set),
         taskId,
         otherTaskId,
         (s, t, a, b) => removeTaskLinkInBoard(s, t, snapshot.config, a, b, type),
@@ -2423,8 +2506,10 @@ export const useBoardStore = create<BoardState>(
     },
 
     deleteTask: async (taskId) => {
-      const { snapshot, fs } = get();
-      if (!snapshot || !fs) return;
+      const { snapshot, fs: boardFiles } = get();
+      if (!snapshot || !boardFiles) return;
+      let repaired = false;
+      const fs = asTaskWrite(boardFiles, snapshot, get, set, () => { repaired = true; });
 
       const backlog = snapshot.backlog;
       const containers: Container[] = [
@@ -2484,7 +2569,7 @@ export const useBoardStore = create<BoardState>(
       // A deleted task is the end of the chain, not a step in it: close out of the
       // whole history rather than stepping back into a dialog the user was done with.
       set({
-        snapshot: nextSnapshot,
+        ...(repaired ? {} : { snapshot: nextSnapshot }),
         errorMessage: null,
         selectedTaskId: null,
         dialogStack: [],
@@ -2493,8 +2578,9 @@ export const useBoardStore = create<BoardState>(
     },
 
     listTaskAttachments: async (taskId) => {
-      const { fs } = get();
+      const { fs, snapshot } = get();
       if (!fs) return [];
+      if (isDuplicateTaskId(snapshot, taskId)) throw new Error(ambiguousTaskMessage(taskId));
       return listAttachments(fs, taskId);
     },
 
@@ -2516,13 +2602,13 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return [];
       if (findTaskContainer(snapshot, taskId) === null) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return [];
       }
       try {
         const added = await addAttachments(
           fs,
-          commitWithStamp(get, set, fs),
+          commitWithStamp(get, set, asTaskWrite(fs, snapshot, get, set)),
           locateForAttachments(get, taskId),
           taskId,
           files,
@@ -2540,13 +2626,13 @@ export const useBoardStore = create<BoardState>(
       const { snapshot, fs } = get();
       if (!snapshot || !fs) return;
       if (findTaskContainer(snapshot, taskId) === null) {
-        set({ errorMessage: `Task not found: ${taskId}` });
+        set({ errorMessage: taskLookupError(snapshot, taskId) });
         return;
       }
       try {
         await removeAttachment(
           fs,
-          commitWithStamp(get, set, fs),
+          commitWithStamp(get, set, asTaskWrite(fs, snapshot, get, set)),
           locateForAttachments(get, taskId),
           taskId,
           name,
@@ -2560,8 +2646,9 @@ export const useBoardStore = create<BoardState>(
     },
 
     downloadTaskAttachment: async (taskId, name) => {
-      const { fs, fileSaver } = get();
+      const { fs, fileSaver, snapshot } = get();
       if (!fs || !fileSaver) return 'not-found';
+      if (isDuplicateTaskId(snapshot, taskId)) throw new Error(ambiguousTaskMessage(taskId));
       try {
         const content = await readAttachment(fs, taskId, name);
         if (content === null) return 'not-found';
@@ -2591,7 +2678,8 @@ export const useBoardStore = create<BoardState>(
       const nextSnapshot: BoardSnapshot = { ...snapshot, epics: nextEpics };
       set({ snapshot: nextSnapshot, errorMessage: null });
       try {
-        await fs.write(nextEpic.filename, serializeEpic(nextEpic));
+        const legacy = snapshot.heldBack.find((container) => container.filename === nextEpic.filename);
+        await fs.write(nextEpic.filename, serializeEpic(nextEpic, legacy?.tasks));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         set({ snapshot, errorMessage: `Failed to save epic: ${message}` });

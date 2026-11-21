@@ -22,8 +22,9 @@ import type { CommandHandler } from '../types';
 // shape, and the command grammar. Enum values are sourced from core so they
 // never drift from the schemas.
 const DESCRIPTOR = {
-  version: 24,
+  version: 25,
   minCompatibleVersion: MIN_COMPATIBLE_VERSION,
+  taskMutationRepairs: 'When an ordinary task write also repairs IDs, the response adds top-level repairs without changing data. Each entry is { oldId, newId, title, file }.',
   iconNames: LUCIDE_ICON_NAMES,
   taskPriorities: TASK_PRIORITIES,
   defaultTaskPriority: DEFAULT_TASK_PRIORITY,
@@ -87,7 +88,12 @@ const DESCRIPTOR = {
       name: 'task get',
       usage: 'boardown task get <id>…',
       summary:
-        'Show one or more tasks and where they live. Data is { tasks: [{ task, in: { kind, file } }], missing }; in.kind is release or backlog (every task in no release), in.file the file the task sits in. An unknown id is listed in missing, not an error. A duplicate id is returned once, at its first position.',
+        'Show one or more tasks and where they live. Data is { tasks: [{ task, in: { kind, file } }], missing }; in.kind is release or backlog (every task in no release), in.file the file the task sits in. An unknown id is listed in missing, not an error. Repeated arguments are returned once; an ambiguous board ID fails the request.',
+    },
+    {
+      name: 'task repair-ids',
+      usage: 'boardown task repair-ids <id>',
+      summary: 'Check and safely repair a single duplicate ID group. Data is { repairs: [{ oldId, newId, title, file }] }, empty for a unique ID. Missing is TASK_NOT_FOUND; an unsafe repair is DUPLICATE_ID_REPAIR_BLOCKED with problems and no changes.',
     },
     {
       name: 'task list',
@@ -250,6 +256,8 @@ const DESCRIPTOR = {
       'optional; the oldest boardown build that reads this board. Written by boardown, never by hand. Absent means no requirement.',
   },
   errorCodes: {
+    AMBIGUOUS_TASK_ID: 'More than one task carries the requested ID; no copy was selected.',
+    DUPLICATE_ID_REPAIR_BLOCKED: 'The requested ID group cannot be repaired safely; problems lists its copies and blockers.',
     VERSION_TOO_OLD:
       'the running build is older than config minVersion; no command that reads the board runs. --version and help still work.',
   },

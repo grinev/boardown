@@ -201,7 +201,8 @@ async function epicEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     throw new CliError('EPIC_INVALID', err instanceof Error ? err.message : String(err), 2);
   }
 
-  await writeEpic(board.fs, updated, board.snapshot.config);
+  const legacy = board.snapshot.heldBack.find((container) => container.filename === updated.filename);
+  await writeEpic(board.fs, updated, board.snapshot.config, legacy?.tasks);
   return {
     data: { slug: updated.slug },
     human: `Updated epic ${slug}.`,

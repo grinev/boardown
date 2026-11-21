@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_LINK_TYPE,
   LINK_TYPE_META,
+  isDuplicateTaskId,
   sortTasksByOrder,
   unscheduledTasks,
   type LinkType,
@@ -21,6 +22,7 @@ import { taskTypeDisplay } from '../task-types';
 import { statusColorStyle, statusDisplayLabel } from '../utils/status-style';
 import {
   LINK_TYPES_IN_GROUP_ORDER,
+  ambiguousLinkedIds,
   collectLinkedTasks,
   groupLinkedTasks,
   type LinkedTaskRow,
@@ -35,6 +37,7 @@ interface LinkedTasksProps {
 
 interface LinkedTasksSectionProps {
   rows: LinkedTaskRow[];
+  ambiguousIds?: string[];
   // The task the rows belong to, never offered to itself. A task still being
   // created has no id yet.
   selfId?: string | undefined;
@@ -63,9 +66,11 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
     () => (snapshot ? collectLinkedTasks(snapshot, id) : []),
     [snapshot, id],
   );
+  const ambiguousIds = useMemo(() => snapshot ? ambiguousLinkedIds(snapshot, task) : [], [snapshot, task]);
   return (
     <LinkedTasksSection
       rows={rows}
+      ambiguousIds={ambiguousIds}
       selfId={id}
       onAdd={(otherId, type) => void addTaskLink(id, otherId, type)}
       onRemove={(otherId, type) => void removeTaskLink(id, otherId, type)}
@@ -76,6 +81,7 @@ export function LinkedTasks({ task, onTaskClick }: LinkedTasksProps) {
 
 export function LinkedTasksSection({
   rows,
+  ambiguousIds,
   selfId,
   onAdd,
   onRemove,
@@ -117,7 +123,7 @@ export function LinkedTasksSection({
     return candidates
       .filter((t) => {
         const other = t.frontmatter.id;
-        if (other === selfId || linked.has(other)) return false;
+        if (other === selfId || linked.has(other) || isDuplicateTaskId(snapshot, other)) return false;
         return (
           other.toLowerCase().includes(needle) ||
           t.title.toLowerCase().includes(needle)
@@ -269,6 +275,15 @@ export function LinkedTasksSection({
         </button>
       </div>
 
+      {ambiguousIds && ambiguousIds.length > 0 && (
+        <ul aria-label="Ambiguous linked task IDs">
+          {ambiguousIds.map((id) => <li key={id}>
+            <button type="button" className={styles.titleButton} onClick={() => onTaskClick?.(id)}>
+              {id} (ambiguous)
+            </button>
+          </li>)}
+        </ul>
+      )}
       {groups.length > 0 && (
         <div className={styles.table}>
           {groups.map((group) => (

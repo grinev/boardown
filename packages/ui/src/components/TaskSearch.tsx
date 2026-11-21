@@ -207,7 +207,7 @@ export function TaskSearch() {
               const TypeIcon = meta.icon;
               return (
                 <li
-                  key={task.frontmatter.id}
+                  key={taskListKey(task)}
                   id={`${optionIdPrefix}-${index}`}
                   role="option"
                   aria-selected={index === highlighted}
@@ -238,3 +238,4 @@ export function TaskSearch() {
     </div>
   );
 }
+import { taskListKey } from '@boardown/core';

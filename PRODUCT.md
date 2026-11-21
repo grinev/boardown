@@ -37,7 +37,7 @@ A single unit of work. Fields:
 
 | Field         | Type      | Notes                                                           |
 |---------------|-----------|-----------------------------------------------------------------|
-| `id`          | string    | `<prefix>-<n>`, e.g. `BD-1`. Stable, never changes.             |
+| `id`          | string    | `<prefix>-<n>`, e.g. `BD-1`. Stable except when a duplicate ID is repaired. |
 | `title`       | string    | The H2 heading of the task section in the md file.              |
 | `description` | string    | Plain text body below the frontmatter.                          |
 | `type`        | string    | One of the board's types — `bug`, `feature`, `docs`, `tech` unless `config.yaml` declares otherwise. Required. Stored as written: any non-empty string loads, so a task written under a type the board has since dropped is shown rather than repaired. See "Task types" under Configuration. |
@@ -195,7 +195,8 @@ write and the `minVersion` stamp, or not at all:
   slug>`, each `no_epic.md` task with no `epic` key, after whatever `backlog.md`
   already holds and in the Backlog's display order. Every other key boardown
   reads and the description travel as they were — a key it does not know is
-  dropped, as on any write to a file — and a task id found twice is carried twice;
+  dropped, as on any write to a file — except unresolved duplicate records, which
+  stay where they are without normalizing their task blocks;
 - every epic file loses its task sections and nothing else — the lines above
   its first task stay byte-identical;
 - text above `no_epic.md`'s first task goes above `backlog.md`'s first task,
@@ -203,7 +204,9 @@ write and the `minVersion` stamp, or not at all:
 
 A file holding a block the parser could not read is left untouched and its tasks
 stay shown; the rest converts, and that file converts on the first write after it
-is fixed. An unreadable `backlog.md` holds every old-layout file back. An
+is fixed. A readable legacy file with unresolved duplicate blocks can still
+convert its other task sections; after the IDs are fixed, the remaining blocks
+can convert on a subsequent write. An unreadable `backlog.md` holds every old-layout file back. An
 external change to any file the conversion touches refuses the whole write with
 the Reload modal / `CONFLICT`. The CLI's reply to the write is the one it always
 gives.
@@ -247,8 +250,8 @@ Everything lives under `.boardown/` at the project root:
 A task's **attachments** are the files in `attachments/<task id>/` and nothing
 else: no frontmatter key records them, so a file dropped into the folder by hand
 is listed like one added through boardown, and a subfolder there is not an
-attachment. A task id never changes, so moving a task between releases, epics and
-the backlog never moves its files. A stored name keeps the file's own name, in
+attachment. Moving a task between releases, epics and the backlog never moves
+its files. A duplicate-ID repair never reassigns attachments. A stored name keeps the file's own name, in
 Unicode NFC, with the characters a Windows filename cannot hold
 (`\ / : * ? " < > |`) turned into `_`, trailing dots and spaces dropped, and a
 reserved Windows name (`CON`, `NUL`, `COM1`…, judged by the part before the first
@@ -575,7 +578,8 @@ value that is not a boolean makes the config invalid, like every other key.
 
 `nextId` is fast-path; on startup the app scans existing tasks and bumps it
 to `max(existing) + 1` if it has fallen behind (e.g. someone authored tasks
-by hand).
+by hand). On a board with duplicate IDs the correction stays in memory until
+a guarded write persists it.
 
 ### Custom fields (beta)
 
@@ -670,6 +674,32 @@ one is valid and stays listed. A file that is not markdown is ignored by the tre
 and left untouched on disk.
 
 ## Behaviour rules
+
+### Duplicate task IDs
+
+Parallel changes to different task files can leave the same ID on more than one
+task. Opening or refreshing a board reports each group and each copy's title,
+container path and block position. It does not repair the board. Every copy
+is visible, but an ambiguous ID opens a conflict dialog rather than an editor
+and cannot be used to drag, edit or delete a copy. Lookup never picks the first
+copy, including task references and Web task jumps.
+
+**Repair IDs** checks one group. The uniquely oldest task keeps the original ID;
+the others receive unused numbers from the same allocator used for new tasks.
+Missing, invalid or tied creation dates block repair. A structured link can be
+repaired only when its relation and unique inverse identify one copy and an
+unambiguous peer. Rendered task references in descriptions, notes, custom
+fields and Docs, shared attachments, uninspectable data and frozen or unsafe
+files block repair. Blockers show their locations; repair never rewrites prose
+or guesses ownership. Markdown code and existing Markdown links are not scanned
+as task links. Docs are read for this preflight, not for board opening.
+
+An ordinary task write also repairs independently safe groups in the same
+guarded change, with the counter and mirror updates. An unrelated edit can
+proceed without changing blocked task blocks or their links, even in a shared
+file. Neither a no-op nor a refused ordinary edit leaves repairs behind. Only
+the UI that wrote a repair shows a one-time old-to-new mapping with the renamed
+titles, after any backlog-conversion notice.
 
 ### Lenient parsing
 
@@ -1664,7 +1694,14 @@ found id is `{ task, in }` in the order given — `in.kind` is `release` or
 `backlog` (every task in no release) and `in.file` the file the task sits in —
 an unknown id is listed in
 `missing`, both arrays are always present, and the call succeeds even when none
-of the ids exist. `TASK_NOT_FOUND` is not this command's code. A task's
+of the ids exist. `TASK_NOT_FOUND` is not this command's code. Any ambiguous
+argument fails the lookup with `AMBIGUOUS_TASK_ID`, as do ambiguous task mutation
+operands. `task repair-ids <id>` repairs one group explicitly, returning
+`{ repairs }` (empty for a unique task), `TASK_NOT_FOUND` for a missing task, or
+`DUPLICATE_ID_REPAIR_BLOCKED` with copies and blockers in `problems`. Each repair
+is `{ oldId, newId, title, file }`. An ordinary successful task write that repaired
+IDs adds top-level `repairs` without changing its `data`; terminal output shows
+the same renumbering. Board reads report duplicate groups in `problems`. A task's
 `createdAt` and `updatedAt` ride in its frontmatter in JSON and under `--full`,
 never in a summary; the human output adds `Created: …` and, while the board tracks
 it, `Updated: …` lines with the stored strings. Every command that changes a task

@@ -72,6 +72,15 @@ importers:
       js-yaml:
         specifier: ^4.3.2
         version: 4.3.2
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       zod:
         specifier: ^4.6.7
         version: 4.6.7

@@ -5,6 +5,8 @@ import type { FileStat, FsAdapter, FsEntry } from './fs-adapter.js';
 import { createConvertingFs } from './layout.js';
 import { loadBoard, type LoadBoardResult } from './loader.js';
 import { parseBacklog } from './parser.js';
+import { commitWithTaskIdRepairs } from './repair-task-ids.js';
+import { markdownTaskRefs, proseTaskRefs } from './refs.js';
 
 class InMemoryFs implements FsAdapter {
   async readBytes(path: string): Promise<Uint8Array> {
@@ -180,6 +182,140 @@ describe('the layout conversion, on load', () => {
   });
 });
 
+const taskBlock = (id: string, title: string, day?: number, extra = '', body = ''): string =>
+  `## ${title}\n\n---\nid: ${id}\ntype: tech\nstatus: todo\norder: 100\n${day === undefined ? '' : `createdAt: "2026-01-${String(day).padStart(2, '0')}T00:00:00.000Z"\n`}${extra}---\n\n${body}\n\n`;
+
+describe('duplicate task repairs', () => {
+  it('detects same-file and legacy occurrences without persisting a stale counter', async () => {
+    const disk = await board({
+      'backlog.md': taskBlock('BD-90', 'One', 1) + taskBlock('BD-90', 'Two', 2),
+      'epics/no_epic.md': taskBlock('BD-90', 'Three', 3),
+    });
+    const { result } = await open(disk);
+    expect(result.snapshot.config.nextId).toBe(91);
+    expect(disk.text('config.yaml')).toBe(CONFIG);
+    expect(result.problems.find((p) => p.duplicateTaskIds)?.duplicateTaskIds).toEqual({
+      id: 'BD-90',
+      copies: [
+        { file: 'backlog.md', taskIndex: 0, title: 'One' },
+        { file: 'backlog.md', taskIndex: 1, title: 'Two' },
+        { file: 'epics/no_epic.md', taskIndex: 0, title: 'Three' },
+      ],
+    });
+  });
+
+  it('renumbers only younger copies and rewrites a proven archived inverse, not task content or another relation', async () => {
+    const unchanged = taskBlock('BD-3', 'Unchanged', 2, 'unknown: "retain formatting" # untouched\n');
+    const disk = await board({
+      'backlog.md':
+        taskBlock('BD-1', 'Younger', 2, 'links:\n  - type: blocks\n    to: BD-2\n') +
+        taskBlock('BD-1', 'Oldest', 1, 'links:\n  - type: relates\n    to: BD-2\n'),
+      'releases/finished.md': '---\nstatus: finished\n---\n\n' +
+        taskBlock('BD-2', 'Peer', 3, 'links:\n  - type: blocked-by\n    to: BD-1\n  - type: relates\n    to: BD-1\n') + unchanged,
+    });
+    const { fs, result } = await open(disk);
+    const repairs = await commitWithTaskIdRepairs(fs, result.snapshot, { writes: [], removes: [] }, 'BD-1');
+    expect(repairs).toEqual([{ oldId: 'BD-1', newId: 'BD-20', title: 'Younger', file: 'backlog.md' }]);
+    expect(ids(disk.text('backlog.md'))).toEqual(['BD-20', 'BD-1']);
+    expect(disk.text('releases/finished.md')).toContain('type: blocked-by\n    to: BD-20\n  - type: relates\n    to: BD-1');
+    expect(disk.text('releases/finished.md')).toContain(unchanged);
+    expect(disk.text('config.yaml')).toContain('nextId: 21\n');
+  });
+
+  it('does not renumber a task in a frozen finished release', async () => {
+    const old = taskBlock('BD-1', 'Old', 1);
+    const finished = '---\nstatus: finished\n---\n\n' + taskBlock('BD-1', 'Young and frozen', 2);
+    const disk = await board({ 'backlog.md': old, 'releases/finished.md': finished });
+    const { result, fs } = await open(disk);
+    await expect(commitWithTaskIdRepairs(fs, result.snapshot, { writes: [], removes: [] }, 'BD-1'))
+      .rejects.toHaveProperty('problems.1.file', 'releases/finished.md');
+    expect(disk.text('releases/finished.md')).toBe(finished);
+    expect(disk.text('config.yaml')).toBe(CONFIG);
+  });
+
+  it('repairs a legacy record in place and retains the latest header and the untouched copy', async () => {
+    const old = taskBlock('BD-1', 'Old copy', 1, 'unknown: "keep this line" # exact\n');
+    const young = taskBlock('BD-1', 'Young copy', 2);
+    const header = '---\nname: Old name\ncolor: "#123456"\n---\n\nEpic description.';
+    const path = 'epics/old.md';
+    const disk = await board({ [path]: `${header}\n\n${old}${young}` });
+    const { result, fs } = await open(disk);
+    const current = header.replace('Old name', 'Current name');
+    await fs.write(path, `${current}\n\n${old}${young}`);
+    const repaired = await commitWithTaskIdRepairs(fs, result.snapshot, { writes: [], removes: [] }, 'BD-1');
+    expect(repaired).toEqual([{ oldId: 'BD-1', newId: 'BD-20', title: 'Young copy', file: path }]);
+    expect(disk.text(path)?.startsWith(`${current}\n\n${old}`)).toBe(true);
+    expect(disk.text(path)).toContain('## Young copy\n\n---\nid: BD-20\n');
+    expect(disk.text('backlog.md')).toBeUndefined();
+  });
+
+  it('writes unrelated edits and independent repairs without changing blocked task text in the same file', async () => {
+    const blockedA = taskBlock('BD-1', 'Blocked one', undefined, 'unknown: "preserve me" # own formatting\n');
+    const blockedB = taskBlock('BD-1', 'Blocked two', 2);
+    const safe = taskBlock('BD-2', 'Safe oldest', 1) + taskBlock('BD-2', 'Safe younger', 2);
+    const ordinary = taskBlock('BD-3', 'Ordinary edit', 3);
+    const disk = await board({ 'backlog.md': blockedA + blockedB + safe + ordinary });
+    const { fs, result } = await open(disk);
+    const writes = [{ path: 'backlog.md', content: blockedA + blockedB + safe + ordinary.replace('Ordinary edit', 'Updated') }];
+    expect(await commitWithTaskIdRepairs(fs, result.snapshot, { writes, removes: [] })).toEqual([
+      { oldId: 'BD-2', newId: 'BD-20', title: 'Safe younger', file: 'backlog.md' },
+    ]);
+    expect(disk.text('backlog.md')?.startsWith(blockedA + blockedB)).toBe(true);
+    expect(disk.text('backlog.md')).toContain('Updated');
+  });
+
+  it('reports the Docs path and attachment without writing, and excludes code and existing link labels', async () => {
+    const text = taskBlock('BD-1', 'Old', 1) + taskBlock('BD-1', 'Young', 2);
+    const disk = await board({
+      'backlog.md': text,
+      'docs/nested/refs.md': '`BD-1` [BD-1](https://example.com/) **BD-1**',
+      'attachments/BD-1/shot.png': 'bytes',
+    });
+    const { fs, result } = await open(disk);
+    const blocked: unknown = await commitWithTaskIdRepairs(fs, result.snapshot, { writes: [], removes: [] }, 'BD-1')
+      .catch((error: unknown) => error);
+    expect(blocked).toHaveProperty('problems.1.file', 'docs/nested/refs.md');
+    expect(blocked).toHaveProperty('problems.2.file', 'attachments/BD-1/shot.png');
+    expect(markdownTaskRefs('`BD-1`\n\n```\nBD-1\n```\n\n[BD-1](https://example.com) **BD-2**')).toEqual(['BD-2']);
+    expect(proseTaskRefs('[[BD-1]] https://example.com/BD-2 BD-3')).toEqual(['BD-3']);
+    expect(disk.text('backlog.md')).toBe(text);
+    expect(disk.text('config.yaml')).toBe(CONFIG);
+  });
+
+  it('drops a group whose attachments changed at commit but keeps another group and the ordinary write', async () => {
+    const original = taskBlock('BD-1', 'A', 1) + taskBlock('BD-1', 'B', 2) +
+      taskBlock('BD-2', 'C', 1) + taskBlock('BD-2', 'D', 2) + taskBlock('BD-3', 'Before', 3);
+    const disk = await board({ 'backlog.md': original });
+    const { fs, result } = await open(disk);
+    const list = disk.list.bind(disk);
+    let inspections = 0;
+    vi.spyOn(disk, 'list').mockImplementation(async (path) => {
+      if (path === 'attachments/BD-1' && ++inspections === 2)
+        await disk.write(`${path}/external.txt`, 'from another window');
+      return list(path);
+    });
+    const repairs = await commitWithTaskIdRepairs(fs, result.snapshot, {
+      writes: [{ path: 'backlog.md', content: original.replace('Before', 'After') }],
+      removes: [],
+    });
+    expect(repairs).toEqual([{ oldId: 'BD-2', newId: 'BD-20', title: 'D', file: 'backlog.md' }]);
+    expect(ids(disk.text('backlog.md'))).toEqual(['BD-1', 'BD-1', 'BD-2', 'BD-20', 'BD-3']);
+    expect(disk.text('backlog.md')).toContain('## After');
+  });
+
+  it('rolls back the ordinary write and repair together when the counter cannot be written', async () => {
+    const backlog = taskBlock('BD-1', 'Old', 1) + taskBlock('BD-1', 'Young', 2) + taskBlock('BD-3', 'Before', 3);
+    const disk = await board({ 'backlog.md': backlog });
+    const { fs, result } = await open(disk);
+    disk.failWrites = 'config.yaml';
+    await expect(commitWithTaskIdRepairs(fs, result.snapshot, {
+      writes: [{ path: 'backlog.md', content: backlog.replace('Before', 'After') }], removes: [],
+    })).rejects.toThrow('disk full');
+    expect(disk.text('backlog.md')).toBe(backlog);
+    expect(disk.text('config.yaml')).toBe(CONFIG);
+  });
+});
+
 describe('the layout conversion, on the first write', () => {
   it('lands with a write that touches none of the files it moves', async () => {
     const disk = await board({
@@ -328,14 +464,16 @@ Split the input.`);
     expect(disk.files.has('backlog.md')).toBe(false);
   });
 
-  it('carries a task id found twice twice', async () => {
+  it('leaves duplicate legacy blocks in place and still moves other records', async () => {
     const disk = await board({
       'epics/parser.md': PARSER,
       'epics/ui.md': UI.replace('BD-5', 'BD-4'),
     });
     const { fs } = await open(disk);
     await fs.write('docs/a.md', 'x\n');
-    expect(ids(disk.text('backlog.md'))).toEqual(['BD-4', 'BD-4', 'BD-2']);
+    expect(ids(disk.text('backlog.md'))).toEqual(['BD-2']);
+    expect(disk.text('epics/parser.md')).toContain(PARSER.slice(PARSER.indexOf('## Grammar')).trimEnd());
+    expect(disk.text('epics/ui.md')).toBe(UI.replace('BD-5', 'BD-4'));
   });
 
   it('never carries a deletion or a folder creation', async () => {
@@ -428,10 +566,11 @@ describe('the layout conversion, around unreadable files', () => {
   it('is incomplete while an epic file with unreadable metadata holds a task section', async () => {
     const disk = await board({
       'epics/ui.md': UI,
-      'epics/stuck.md': UI.replace('name: UI', 'name: ['),
+      'epics/stuck.md': UI.replace('name: UI', 'name: [').replace('BD-5', 'BD-6'),
     });
     const { result } = await open(disk);
     expect(result.snapshot.epics.map((e) => e.slug)).toEqual(['ui']);
+    expect(result.snapshot.heldBack[0]?.tasks[0]?.frontmatter.id).toBe('BD-6');
     expect(result.conversion!.complete).toBe(false);
   });
 

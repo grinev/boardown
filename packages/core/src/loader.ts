@@ -14,9 +14,10 @@ import {
   type LayoutConversion,
   type LegacyEpicFile,
 } from './layout.js';
-import { parseBacklog, parseEpic, parseRelease } from './parser.js';
+import { parseBacklog, parseEpic, parseLegacyTasks, parseRelease } from './parser.js';
 import { fileProblem, type ParseProblem } from './problems.js';
 import type { Backlog, BoardConfig, Epic, Release, Task } from './schemas.js';
+import { collectDuplicateProblems, inheritTaskSource } from './task-ids.js';
 
 export interface BoardSnapshot {
   config: BoardConfig;
@@ -43,10 +44,11 @@ export type LoadBoardResult =
   | { kind: 'failed'; problems: ParseProblem[] }
   | { kind: 'version-too-old'; required: string; running: string };
 
-const safeList = async (fs: FsAdapter, dir: string): Promise<FsEntry[]> => {
+const safeList = async (fs: FsAdapter, dir: string, problems: ParseProblem[]): Promise<FsEntry[]> => {
   try {
     return await fs.list(dir);
-  } catch {
+  } catch (err) {
+    problems.push(fileProblem(dir, `Cannot list directory: ${err instanceof Error ? err.message : String(err)}`));
     return [];
   }
 };
@@ -67,10 +69,10 @@ const collectTasks = (releases: Release[], backlog: Backlog | null, heldBack: Ba
 const withoutEpic = (task: Task): Task => {
   if (task.frontmatter.epic === undefined) return task;
   const { epic: _omit, ...rest } = task.frontmatter;
-  return { ...task, frontmatter: rest };
+  return inheritTaskSource(task, { ...task, frontmatter: rest });
 };
 
-export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
+export const loadBoard = async (fs: FsAdapter, readOnly = false): Promise<LoadBoardResult> => {
   const stat = await fs.stat(CONFIG_FILENAME);
   if (stat === null) {
     return { kind: 'missing-config' };
@@ -82,6 +84,18 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   const recordVersion = async (path: string): Promise<void> => {
     const s = await fs.stat(path);
     if (s !== null) fileVersions[path] = s.lastModified;
+  };
+  const readContainer = async (path: string): Promise<string> => {
+    const before = await fs.stat(path);
+    const text = await fs.read(path);
+    const after = await fs.stat(path);
+    if (before === null || after === null ||
+      before.lastModified !== after.lastModified || before.size !== after.size) {
+      problems.push(fileProblem(path, 'The container changed while it was being read.'));
+    } else {
+      fileVersions[path] = after.lastModified;
+    }
+    return text;
   };
 
   let configText: string;
@@ -106,8 +120,8 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   }
   let config = configResult.value;
 
-  const releaseFiles = fileNames(await safeList(fs, RELEASES_DIR)).filter(isMarkdownFile);
-  const epicFiles = fileNames(await safeList(fs, EPICS_DIR))
+  const releaseFiles = fileNames(await safeList(fs, RELEASES_DIR, problems)).filter(isMarkdownFile);
+  const epicFiles = fileNames(await safeList(fs, EPICS_DIR, problems))
     .filter(isMarkdownFile)
     .filter((name) => `${EPICS_DIR}/${name}` !== LEGACY_BACKLOG_PATH);
 
@@ -119,13 +133,12 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     const slug = name.replace(/\.md$/, '');
     let text: string;
     try {
-      text = await fs.read(path);
+      text = await readContainer(path);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
-    await recordVersion(path);
     const parsed = parseRelease(text, path, slug, customFields);
     problems.push(...parsed.problems);
     if (parsed.value !== null) releases.push(parsed.value);
@@ -138,53 +151,65 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
     const slug = name.replace(/\.md$/, '');
     let text: string;
     try {
-      text = await fs.read(path);
+      text = await readContainer(path);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       continue;
     }
-    await recordVersion(path);
     const parsed = parseEpic(text, path, slug, customFields);
     problems.push(...parsed.problems);
     if (parsed.value !== null) {
       epics.push(parsed.value.epic);
       legacyEpicFiles.push({ path, text, tasks: parsed.value.tasks });
     } else {
-      // No epic and nothing to move, but its task sections still count against a
-      // complete conversion.
-      legacyEpicFiles.push({ path, text, tasks: [] });
+      legacyEpicFiles.push({ path, text, tasks: parseLegacyTasks(text, path, customFields) });
     }
   }
 
   // Both are optional: a board with no unscheduled task has no backlog.md, and
   // only an older build ever wrote no_epic.md.
+  let legacyBacklogText = '';
   const readBacklogFile = async (path: string): Promise<Backlog | null> => {
     if ((await fs.stat(path)) === null) return null;
     let text: string;
     try {
-      text = await fs.read(path);
+      text = await readContainer(path);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       problems.push(fileProblem(path, `Cannot read file: ${message}`));
       return { filename: path, frontmatter: {}, preamble: '', tasks: [] };
     }
-    await recordVersion(path);
     const parsed = parseBacklog(text, path, customFields);
+    if (path === LEGACY_BACKLOG_PATH) legacyBacklogText = text;
     problems.push(...parsed.problems);
     return parsed.value;
   };
 
   const backlogFile = await readBacklogFile(BACKLOG_PATH);
-  const legacyBacklogFile = await readBacklogFile(LEGACY_BACKLOG_PATH);
+  const legacy = await readBacklogFile(LEGACY_BACKLOG_PATH);
+  const legacyBacklog = legacy === null ? null : { ...legacy, tasks: legacy.tasks.map(withoutEpic) };
+  const beforeLayout = {
+    config,
+    releases,
+    epics,
+    backlog: backlogFile,
+    heldBack: [
+      ...legacyEpicFiles.map(({ path, tasks }) => ({ filename: path, frontmatter: {}, preamble: '', tasks })),
+      ...(legacyBacklog === null ? [] : [legacyBacklog]),
+    ],
+    problems,
+  };
+  const duplicates = collectDuplicateProblems(beforeLayout);
+  const deferredIds = new Set(duplicates.flatMap((problem) => problem.taskId ? [problem.taskId] : []));
+  problems.push(...duplicates);
   const gathered = gatherLayout({
     backlog: backlogFile,
     epicFiles: legacyEpicFiles,
     // The old layout's rule: a task in no_epic.md has no epic, whatever it says.
-    legacyBacklog:
-      legacyBacklogFile === null
-        ? null
-        : { ...legacyBacklogFile, tasks: legacyBacklogFile.tasks.map(withoutEpic) },
+    legacyBacklog,
+    legacyBacklogText,
+    deferredIds,
     problems,
   });
   problems.push(...gathered.problems);
@@ -194,7 +219,10 @@ export const loadBoard = async (fs: FsAdapter): Promise<LoadBoardResult> => {
   // Through the raw adapter, never a shell's write path: opening a board must not
   // carry the layout conversion, which lands with the first write of content.
   if (verified.bumped) {
-    const next = withMinVersionStamp(verified.config);
+    config = verified.config;
+  }
+  if (verified.bumped && deferredIds.size === 0 && !readOnly) {
+    const next = withMinVersionStamp(config);
     try {
       await fs.write(CONFIG_FILENAME, serializeConfig(next));
       config = next;

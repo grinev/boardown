@@ -43,6 +43,7 @@ boardown task add <title>       Create a task (--type --priority --status --epic
 boardown task edit <id>         Edit a task; --release/--no-release and --epic/--no-epic also move it.
 boardown task status <id> <s>   Change a task status (one of the board's statuses).
 boardown task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
+boardown task repair-ids <id>   Safely repair one duplicate ID group.
 boardown task rm <id>           Delete a task, and its attachments folder.
 boardown task checklist <op>    Checklist: add | done | undone | rm (several) | edit (on <id>).
 boardown task notes <op>        Note: add | edit | rm (on <id>).
@@ -68,6 +69,14 @@ boardown schema                 Print the machine-readable command/enum contract
 boardown skill install <agent>… Install the agent skill: claude | codex | opencode | agents (--global for ~).
 boardown version                Print the CLI version (also --version / -v).
 ```
+
+Board reads report duplicate task IDs in `problems`. A command that addresses
+an ambiguous ID returns `AMBIGUOUS_TASK_ID`, never the first copy. Use
+`task repair-ids <id>` to check and repair one group explicitly. An unsafe repair
+returns `DUPLICATE_ID_REPAIR_BLOCKED` with the copies and blockers; nothing is
+written. A successful repair returns `data: { repairs }`, empty for a unique
+ID. An ordinary task write that also repairs IDs adds top-level `repairs`
+without changing `data`. Each repair contains `oldId`, `newId`, `title` and `file`.
 
 A finished release is frozen: every command that would change it or a task in it
 answers `ARCHIVED`. With `editFinishedReleases: true` in `config.yaml` those

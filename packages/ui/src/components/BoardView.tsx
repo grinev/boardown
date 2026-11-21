@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { isWipLimitReached, wipLimitFor, type StatusConfig } from '@boardown/core';
+import { isDuplicateTaskId, isWipLimitReached, taskListKey, wipLimitFor, type StatusConfig } from '@boardown/core';
 import type { BoardConfig, Epic, Release, Task, TaskStatus } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { taskTypeDisplay } from '../task-types';
@@ -13,6 +13,7 @@ import { useDroppableColumn } from '../dnd/useBoardSortable';
 import { UNKNOWN_COLUMN, boardCellKey, cellStatus, taskDragId } from '../dnd/ids';
 import { boardLanes, type BoardLane } from './board-lanes';
 import { SortableTaskCard } from './SortableTaskCard';
+import { TaskCard } from './TaskCard';
 import styles from './BoardView.module.css';
 
 interface BoardViewProps {
@@ -226,7 +227,8 @@ function BoardColumn({
   const readOnly = status === UNKNOWN_COLUMN;
   const blocked = useBlockedTargets().has(status);
   const { setNodeRef } = useDroppableColumn(status, blocked || readOnly);
-  const items = tasks.map((t) => taskDragId(t.frontmatter.id));
+  const snapshot = useBoardStore((s) => s.snapshot);
+  const items = tasks.filter((t) => !isDuplicateTaskId(snapshot, t.frontmatter.id)).map((t) => taskDragId(t.frontmatter.id));
   const atLimit = limit !== null && tasks.length >= limit;
 
   return (
@@ -253,11 +255,9 @@ function BoardColumn({
             <div className={styles.empty}>No tasks</div>
           ) : (
             tasks.map((task) => (
-              <SortableTaskCard
-                key={task.frontmatter.id}
-                task={task}
-                epic={epicOf(task, epicsBySlug)}
-              />
+              isDuplicateTaskId(snapshot, task.frontmatter.id)
+                ? <TaskCard key={taskListKey(task)} task={task} epic={epicOf(task, epicsBySlug)} />
+                : <SortableTaskCard key={taskListKey(task)} task={task} epic={epicOf(task, epicsBySlug)} />
             ))
           )}
         </SortableContext>
@@ -442,7 +442,8 @@ function BoardCell({ cell, laneKey, status, tasks, epicsBySlug, title }: BoardCe
   const readOnly = status === UNKNOWN_COLUMN;
   const blocked = useBlockedTargets().has(cell);
   const { setNodeRef } = useDroppableColumn(cell, blocked || readOnly);
-  const items = tasks.map((t) => taskDragId(t.frontmatter.id));
+  const snapshot = useBoardStore((s) => s.snapshot);
+  const items = tasks.filter((t) => !isDuplicateTaskId(snapshot, t.frontmatter.id)).map((t) => taskDragId(t.frontmatter.id));
   return (
     <div
       ref={setNodeRef}
@@ -452,11 +453,9 @@ function BoardCell({ cell, laneKey, status, tasks, epicsBySlug, title }: BoardCe
     >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
         {tasks.map((task) => (
-          <SortableTaskCard
-            key={task.frontmatter.id}
-            task={task}
-            epic={epicOf(task, epicsBySlug)}
-          />
+          isDuplicateTaskId(snapshot, task.frontmatter.id)
+            ? <TaskCard key={taskListKey(task)} task={task} epic={epicOf(task, epicsBySlug)} />
+            : <SortableTaskCard key={taskListKey(task)} task={task} epic={epicOf(task, epicsBySlug)} />
         ))}
       </SortableContext>
     </div>

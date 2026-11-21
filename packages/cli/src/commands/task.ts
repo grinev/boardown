@@ -7,6 +7,9 @@ import {
   removeAttachment,
   addTaskLink,
   BoardOpError,
+  commitWithTaskIdRepairs,
+  duplicateTaskIds,
+  DuplicateIdRepairBlocked,
   changeTaskStatus,
   createTaskWithLinks,
   deleteTaskWithLinks,
@@ -32,6 +35,7 @@ import {
   finishedReleases,
   taskMatchRank,
   taskMatchesFilters,
+  taskRepairFs,
   DEFAULT_LINK_TYPE,
   LINK_TYPES,
   LINK_TYPE_META,
@@ -56,6 +60,7 @@ import {
   type Release,
   type Task,
   type TaskLink,
+  type TaskIdRepair,
   type TaskPatch,
   type TaskPriority,
   type TaskStatus,
@@ -65,12 +70,12 @@ import { promises as fsp } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { flagBool, flagList, flagString, type ParsedArgs } from '../args';
 import { gitRunIn } from '../git-history';
-import { CliError } from '../output';
+import { CliError, renderRepairs } from '../output';
 import {
   epicMembers,
   findEpic,
   findRelease,
-  loadBoardOrThrow,
+  loadBoardOrThrow as readBoard,
   locateTask,
   resolveBoardRoot,
   serializeContainer,
@@ -87,7 +92,22 @@ import {
 import { isFull, statusMark, taskSummary } from '../summary';
 import type { CommandContext, CommandHandler, CommandOutput } from '../types';
 
-export const taskCommand: CommandHandler = (args, ctx) => {
+export const taskCommand: CommandHandler = async (args, ctx) => {
+  const repairs: TaskIdRepair[] = [];
+  const output = await dispatchTask(args, { ...ctx, reportRepairs: (entries) => repairs.push(...entries) });
+  if (repairs.length === 0) return output;
+  const repaired = new Set(repairs.map(({ oldId }) => oldId));
+  const problems = (output.problems ?? []).filter((problem) => !repaired.has(problem.duplicateTaskIds?.id ?? ''));
+  return { ...output, problems, repairs, human: `${output.human}\n${renderRepairs(repairs)}` };
+};
+
+const loadBoardOrThrow = async (root: string, ctx: CommandContext): Promise<LoadedBoard> => {
+  const board = await readBoard(root);
+  const fs = taskRepairFs(board.fs, () => board.snapshot, (repairs) => ctx.reportRepairs?.(repairs), (task) => board.fs.sourceOf(task));
+  return { ...board, fs };
+};
+
+const dispatchTask: CommandHandler = (args, ctx) => {
   const sub = args.positionals[1];
   switch (sub) {
     case 'get':
@@ -102,6 +122,8 @@ export const taskCommand: CommandHandler = (args, ctx) => {
       return taskEdit(args, ctx);
     case 'status':
       return taskStatus(args, ctx);
+    case 'repair-ids':
+      return repairIds(args, ctx);
     case 'reorder':
       return taskReorder(args, ctx);
     case 'rm':
@@ -128,11 +150,32 @@ export const taskCommand: CommandHandler = (args, ctx) => {
     default:
       throw new CliError(
         'USAGE',
-        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | label | commits | attachment.`,
+        `Unknown task subcommand "${sub ?? ''}". Use: get | list | add | edit | status | reorder | rm | checklist | notes | link | label | commits | attachment | repair-ids.`,
         2,
       );
   }
 };
+
+async function repairIds(args: ParsedArgs, ctx: CommandContext): Promise<CommandOutput> {
+  const id = args.positionals[2];
+  if (id === undefined || args.positionals.length !== 3)
+    throw new CliError('USAGE', 'Usage: boardown task repair-ids <id>.', 2);
+  const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
+  const { fs, snapshot } = await readBoard(root, true);
+  if (!duplicateTaskIds(snapshot, id) && locateTask(snapshot, id) === null)
+    throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
+  try {
+    const repairs = await commitWithTaskIdRepairs(fs, snapshot, { writes: [], removes: [] }, id, (task) => fs.sourceOf(task));
+    return {
+      data: { repairs },
+      human: repairs.length > 0 ? renderRepairs(repairs) : `${id} is unique.`,
+      ...problemsField(snapshot.problems.filter((problem) => problem.duplicateTaskIds?.id !== id)),
+    };
+  } catch (error) {
+    if (!(error instanceof DuplicateIdRepairBlocked)) throw error;
+    throw new CliError('DUPLICATE_ID_REPAIR_BLOCKED', error.message, 1, error.problems);
+  }
+}
 
 const isTaskPriority = (value: string): value is TaskPriority =>
   (TASK_PRIORITIES as readonly string[]).includes(value);
@@ -328,7 +371,7 @@ async function taskAdd(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   const attachments = await readAttachmentSources(ctx.cwd, flagList(args.flags, 'attach'));
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
 
   const typeFlag = flagString(args.flags, 'type');
   const type =
@@ -523,7 +566,7 @@ async function taskEdit(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const location = locateTask(snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
@@ -599,7 +642,7 @@ async function taskStatus(args: ParsedArgs, ctx: CommandContext): Promise<Comman
     throw new CliError('USAGE', 'Usage: boardown task status <id> <status>.', 2);
   }
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const status = requireStatus(snapshot.config, statusArg);
   const location = locateTask(snapshot, id);
   if (location === null) {
@@ -668,7 +711,7 @@ async function taskGet(args: ParsedArgs, ctx: CommandContext): Promise<CommandOu
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const board = await loadBoardOrThrow(root);
+  const board = await readBoard(root);
   const { snapshot, problems } = board;
 
   const tasks: { task: Task; in: { kind: string; file: string } }[] = [];
@@ -713,7 +756,7 @@ async function taskCommits(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const { snapshot, problems } = await readBoard(root);
   if (locateTask(snapshot, id) === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
@@ -811,7 +854,7 @@ async function taskList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
     textFlag !== undefined && normalizeSearchQuery(textFlag) !== '' ? textFlag : undefined;
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const board = await loadBoardOrThrow(root);
+  const board = await readBoard(root);
   const { snapshot, problems } = board;
 
   const types =
@@ -955,12 +998,13 @@ async function taskReorder(args: ParsedArgs, ctx: CommandContext): Promise<Comma
   const target = reorderTarget(args);
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const location = locateTask(snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
   }
 
+  if (target.kind === 'before' || target.kind === 'after') locateTask(snapshot, target.anchor);
   const beforeTaskId = beforeIdForReorder(location.container.tasks, id, target);
   if (beforeTaskId === undefined) {
     return {
@@ -987,7 +1031,7 @@ async function taskRm(args: ParsedArgs, ctx: CommandContext): Promise<CommandOut
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const location = locateTask(snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
@@ -1041,7 +1085,7 @@ async function mutateTask(
     throw new CliError('USAGE', usage, 2);
   }
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const location = locateTask(snapshot, taskId);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${taskId}".`);
@@ -1336,7 +1380,7 @@ function taskAttachment(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
 
 async function loadAttachmentTask(ctx: CommandContext, id: string) {
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const board = await loadBoardOrThrow(root);
+  const board = await loadBoardOrThrow(root, ctx);
   const location = locateTask(board.snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
@@ -1468,7 +1512,7 @@ async function linkMutate(
       : requireLinkType(flagString(args.flags, 'type') ?? '');
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const source = locateTask(snapshot, id);
   if (source === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);
@@ -1552,7 +1596,7 @@ async function labelMutate(
   const labels = requireLabels(args.positionals.slice(4), usage);
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { fs, snapshot, problems } = await loadBoardOrThrow(root);
+  const { fs, snapshot, problems } = await loadBoardOrThrow(root, ctx);
   const location = locateTask(snapshot, id);
   const task = location?.container.tasks.find((t) => t.frontmatter.id === id);
   if (location === null || task === undefined) {
@@ -1616,7 +1660,7 @@ function collectLinks(snapshot: BoardSnapshot, task: Task): LinkListEntry[] {
     const key = `${type}:${to}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const other = all.find((t) => t.frontmatter.id === to);
+    const other = locateTask(snapshot, to)?.container.tasks.find((t) => t.frontmatter.id === to);
     entries.push(
       other === undefined
         ? { type, to, missing: true }
@@ -1661,7 +1705,7 @@ async function linkList(args: ParsedArgs, ctx: CommandContext): Promise<CommandO
   }
 
   const root = await resolveBoardRoot(ctx.cwd, ctx.dataDir);
-  const { snapshot, problems } = await loadBoardOrThrow(root);
+  const { snapshot, problems } = await readBoard(root);
   const location = locateTask(snapshot, id);
   if (location === null) {
     throw new CliError('TASK_NOT_FOUND', `No task "${id}".`);

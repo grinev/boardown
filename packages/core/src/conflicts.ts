@@ -42,6 +42,8 @@ export interface GuardedWrite extends GuardedFile {
 export interface GuardedChange {
   writes: readonly GuardedWrite[];
   removes: readonly string[];
+  // A repair may depend on read-only evidence outside the files it writes.
+  verifyEvidence?: () => Promise<void>;
   // Things the loader never read, so there is no version to check them against —
   // a task's attachments. Removed as they stand on disk, a folder with everything
   // in it, after every other step. Only for a deletion the user confirmed with its
@@ -160,6 +162,7 @@ export function createGuardedFs(inner: FsAdapter, options: GuardOptions): Guarde
   const commit = async (change: GuardedChange): Promise<void> => {
     for (const file of change.writes) checkReadable(file.path);
     for (const path of change.removes) checkReadable(path);
+    if (change.verifyEvidence) await change.verifyEvidence();
     for (const file of change.writes) {
       if (file.createOnly && (await inner.stat(file.path)) !== null) {
         onConflict(file.path);

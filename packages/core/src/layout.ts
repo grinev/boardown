@@ -34,6 +34,8 @@ export interface OldLayout {
   epicFiles: LegacyEpicFile[];
   // `epics/no_epic.md`, its tasks already without an `epic` key; null when absent.
   legacyBacklog: Backlog | null;
+  legacyBacklogText?: string;
+  deferredIds?: ReadonlySet<string>;
   problems: readonly ParseProblem[];
 }
 
@@ -75,7 +77,7 @@ const joinText = (...parts: string[]): string =>
     .join('\n\n');
 
 export const gatherLayout = (layout: OldLayout): GatheredLayout => {
-  const { backlog, epicFiles, legacyBacklog } = layout;
+  const { backlog, epicFiles, legacyBacklog, deferredIds } = layout;
   const problems: ParseProblem[] = [];
   const heldBack: Backlog[] = [];
   const holdBack = (path: string, tasks: Task[]): void => {
@@ -111,6 +113,7 @@ export const gatherLayout = (layout: OldLayout): GatheredLayout => {
   // An epic file whose every task section failed to parse has no tasks to move or
   // show, yet still holds the old layout on disk.
   let strandedSections = false;
+  const deferred = (task: Task): boolean => deferredIds?.has(task.frontmatter.id) ?? false;
 
   for (const file of epicFiles) {
     if (file.tasks.length === 0) {
@@ -122,15 +125,32 @@ export const gatherLayout = (layout: OldLayout): GatheredLayout => {
       holdBack(file.path, file.tasks);
       continue;
     }
-    for (const task of file.tasks) moved.push({ task, path: file.path });
-    epicCuts.push({ path: file.path, content: kept });
+    const staying = file.tasks.filter(deferred);
+    const traveling = file.tasks.filter((task) => !deferred(task));
+    if (staying.length > 0) {
+      const remaining = { filename: file.path, frontmatter: {}, preamble: kept, tasks: staying };
+      heldBack.push(remaining);
+      if (traveling.length > 0)
+        epicCuts.push({ path: file.path, content: serializeBacklog(remaining) });
+    } else epicCuts.push({ path: file.path, content: kept });
+    for (const task of traveling) moved.push({ task, path: file.path });
   }
 
   if (legacyBacklog !== null) {
     if (isReadable(layout.problems, legacyBacklog.filename)) {
-      for (const task of legacyBacklog.tasks) moved.push({ task, path: legacyBacklog.filename });
-      movedText = legacyBacklog.preamble;
-      removes.push(legacyBacklog.filename);
+      const staying = legacyBacklog.tasks.filter(deferred);
+      const traveling = legacyBacklog.tasks.filter((task) => !deferred(task));
+      for (const task of traveling) moved.push({ task, path: legacyBacklog.filename });
+      if (staying.length > 0) {
+        const kept = textAboveFirstTask(layout.legacyBacklogText ?? '') ?? legacyBacklog.preamble;
+        const remaining = { ...legacyBacklog, preamble: kept, tasks: staying };
+        heldBack.push(remaining);
+        if (traveling.length > 0)
+          epicCuts.push({ path: legacyBacklog.filename, content: serializeBacklog(remaining) });
+      } else {
+        movedText = legacyBacklog.preamble;
+        removes.push(legacyBacklog.filename);
+      }
     } else {
       holdBack(legacyBacklog.filename, legacyBacklog.tasks);
     }

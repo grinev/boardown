@@ -23,6 +23,7 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
+import { isDuplicateTaskId } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { TaskCard } from '../components/TaskCard';
 import boardStyles from '../components/BoardView.module.css';
@@ -48,6 +49,7 @@ export function BoardDndContext({
   children,
 }: BoardDndContextProps) {
   const moveTask = useBoardStore((s) => s.moveTask);
+  const ambiguous = (id: string) => isDuplicateTaskId(useBoardStore.getState().snapshot, id);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [blockedTargets, setBlockedTargets] =
     useState<ReadonlySet<string>>(NO_BLOCKED_TARGETS);
@@ -75,6 +77,7 @@ export function BoardDndContext({
     const id = String(event.active.id);
     if (!isTaskDragId(id)) return;
     const taskId = parseTaskDragId(id);
+    if (ambiguous(taskId)) return;
     setActiveTaskId(taskId);
     const from = findCellOf(buckets, taskId);
     const blocked =
@@ -85,7 +88,7 @@ export function BoardDndContext({
 
   const onDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over) return;
+    if (!over || (activeTaskId !== null && ambiguous(activeTaskId))) return;
     setBuckets((prev) => {
       const next = applyDragOver(active, over, prev, blockedTargets);
       bucketsRef.current = next;
@@ -102,6 +105,7 @@ export function BoardDndContext({
     const activeId = String(event.active.id);
     if (!isTaskDragId(activeId)) return;
     const taskId = parseTaskDragId(activeId);
+    if (ambiguous(taskId)) return;
 
     let finalBuckets = bucketsRef.current;
     if (event.over) {
@@ -113,7 +117,7 @@ export function BoardDndContext({
       }
     }
 
-    const placement = findOverlayPlacement(finalBuckets, taskId);
+    const placement = findOverlayPlacement(finalBuckets, taskId, ambiguous);
     if (!placement) {
       if (original) {
         bucketsRef.current = original;
@@ -123,7 +127,7 @@ export function BoardDndContext({
     }
 
     const originalPlacement = original
-      ? findOverlayPlacement(original, taskId)
+      ? findOverlayPlacement(original, taskId, ambiguous)
       : null;
     if (
       originalPlacement &&
@@ -149,7 +153,7 @@ export function BoardDndContext({
     }
   };
 
-  const activeTask = activeTaskId
+  const activeTask = activeTaskId && !ambiguous(activeTaskId)
     ? findTaskInBuckets(buckets, activeTaskId)
     : null;
   const activeEpic =

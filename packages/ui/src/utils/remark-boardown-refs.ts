@@ -1,19 +1,12 @@
 import {
+  mapMarkdownText,
   splitRefs,
   type DocRefSegment,
+  type MdNode,
   type RepoRefSegment,
   type TaskRefSegment,
-} from './refs';
-
-// A structural view of the mdast nodes the walk touches. `@types/mdast` is not a
-// dependency of this package, and one traversal does not justify adding one.
-export interface MdNode {
-  type: string;
-  value?: string;
-  url?: string;
-  title?: string | null;
-  children?: MdNode[];
-}
+} from '@boardown/core';
+export type { MdNode } from '@boardown/core';
 
 export interface RefLink {
   href: string;
@@ -73,24 +66,7 @@ export const linkifyText = (value: string, toLink: ToRefLink): MdNode[] => {
 };
 
 export const linkifyTree = (node: MdNode, toLink: ToRefLink): void => {
-  const walk = (current: MdNode, insideLink: boolean): void => {
-    const children = current.children;
-    if (children === undefined) return;
-    const next: MdNode[] = [];
-    for (const child of children) {
-      if (child.type === 'text' && child.value !== undefined && !insideLink) {
-        next.push(...linkifyText(child.value, toLink));
-      } else {
-        walk(
-          child,
-          insideLink || child.type === 'link' || child.type === 'linkReference',
-        );
-        next.push(child);
-      }
-    }
-    current.children = next;
-  };
-  walk(node, false);
+  mapMarkdownText(node, (value) => linkifyText(value, toLink));
 };
 
 // Rewrites reference tokens inside `text` nodes into ordinary link nodes. Working

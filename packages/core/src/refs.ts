@@ -1,9 +1,8 @@
-import {
-  REPO_REF_PREFIX,
-  projectFileName,
-  projectFilePathFromRefToken,
-} from '@boardown/core';
-import { URL_PATTERN_SOURCE, trimUrlEnd } from './urls';
+import { REPO_REF_PREFIX, projectFileName, projectFilePathFromRefToken } from './project-file.js';
+import { URL_PATTERN_SOURCE, trimUrlEnd } from './urls.js';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 
 export interface TextSegment {
   kind: 'text';
@@ -40,12 +39,7 @@ export interface UrlSegment {
   url: string;
 }
 
-export type RefSegment =
-  | TextSegment
-  | TaskRefSegment
-  | DocRefSegment
-  | RepoRefSegment
-  | UrlSegment;
+export type RefSegment = TextSegment | TaskRefSegment | DocRefSegment | RepoRefSegment | UrlSegment;
 
 // One pass over both reference shapes, so `[[BD-7]]` cannot be claimed by two
 // scanners at once: the wiki token starts first at that position and wins.
@@ -113,4 +107,38 @@ export const splitRefs = (text: string): RefSegment[] => {
   pushText(text.slice(cursor));
 
   return segments;
+};
+
+export interface MdNode {
+  type: string;
+  value?: string;
+  url?: string;
+  title?: string | null | undefined;
+  children?: MdNode[];
+}
+
+export const mapMarkdownText = (root: MdNode, map: (value: string) => MdNode[]): void => {
+  const walk = (node: MdNode): void => {
+    if (!node.children || node.type === 'link' || node.type === 'linkReference') return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type === 'text' && child.value !== undefined) return map(child.value);
+      walk(child);
+      return [child];
+    });
+  };
+  walk(root);
+};
+
+export const proseTaskRefs = (text: string): string[] =>
+  splitRefs(text).flatMap((part) => (part.kind === 'task-ref' ? [part.id] : []));
+
+const markdown = unified().use(remarkParse).use(remarkGfm);
+
+export const markdownTaskRefs = (text: string): string[] => {
+  const refs: string[] = [];
+  mapMarkdownText(markdown.parse(text), (value) => {
+    refs.push(...proseTaskRefs(value));
+    return [{ type: 'text', value }];
+  });
+  return refs;
 };

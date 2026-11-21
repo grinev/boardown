@@ -96,13 +96,14 @@ export const findCellOf = (
 export const findOverlayPlacement = (
   buckets: Map<string, Task[]>,
   taskId: string,
+  skipAnchor: (id: string) => boolean = () => false,
 ): { status: TaskStatus; beforeTaskId: string | null } | null => {
   for (const [cell, tasks] of buckets) {
     const idx = tasks.findIndex((t) => t.frontmatter.id === taskId);
     if (idx !== -1) {
       return {
         status: cellStatus(cell),
-        beforeTaskId: tasks[idx + 1]?.frontmatter.id ?? null,
+        beforeTaskId: tasks.slice(idx + 1).find((task) => !skipAnchor(task.frontmatter.id))?.frontmatter.id ?? null,
       };
     }
   }

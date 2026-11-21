@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitRefs, type RefSegment } from './refs';
+import { splitRefs, type RefSegment } from '@boardown/core';
 
 const taskRefs = (segments: RefSegment[]): string[] =>
   segments.filter((s) => s.kind === 'task-ref').map((s) => s.id);

@@ -4,7 +4,7 @@ import { isTerminalStatus } from '@boardown/core';
 import { wikiDocLink } from '../docs-state';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
-import { splitRefs } from '../utils/refs';
+import { isDuplicateTaskId, splitRefs } from '@boardown/core';
 import styles from './LinkedText.module.css';
 
 interface LinkedTextProps {
@@ -98,10 +98,11 @@ export function LinkedText({ text }: LinkedTextProps) {
         }
 
         const target = snapshot ? findTaskById(snapshot, segment.id) : null;
-        if (!target) {
+        const ambiguous = isDuplicateTaskId(snapshot, segment.id);
+        if (!target && !ambiguous) {
           return <Fragment key={i}>{segment.id}</Fragment>;
         }
-        const done = isTerminalStatus(snapshot?.config, target.frontmatter.status);
+        const done = target !== null && isTerminalStatus(snapshot?.config, target.frontmatter.status);
         return (
           <button
             key={i}
@@ -113,7 +114,7 @@ export function LinkedText({ text }: LinkedTextProps) {
             }}
             onKeyDown={stopEditTrigger}
           >
-            {segment.id} {target.title}
+            {target ? `${segment.id} ${target.title}` : `${segment.id} (ambiguous)`}
           </button>
         );
       })}

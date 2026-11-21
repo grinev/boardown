@@ -6,7 +6,7 @@ import { useBoardStore } from '../store';
 import { DialogBackButton } from './DialogBackButton';
 import { MarkdownContent } from './MarkdownContent';
 import { Modal } from './Modal';
-import { splitUrls } from '../utils/urls';
+import { splitUrls } from '@boardown/core';
 import styles from './RepoFilePopupDialog.module.css';
 
 const log = createLogger('ui.repo-file');

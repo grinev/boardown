@@ -23,6 +23,7 @@ import {
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import type { Epic, Task, TaskStatus } from '@boardown/core';
+import { isDuplicateTaskId } from '@boardown/core';
 import { useBoardStore } from '../store';
 import { BacklogRowView } from '../components/BacklogRowView';
 import backlogStyles from '../components/BacklogView.module.css';
@@ -82,6 +83,7 @@ export function BacklogDndContext({
     const id = String(event.active.id);
     if (!isTaskDragId(id)) return;
     const taskId = parseTaskDragId(id);
+    if (ambiguous(taskId)) return;
     setActiveTaskId(taskId);
     // Only a card entering a full column of the destination breaches the limit;
     // a task already in that section is merely being reordered.
@@ -94,9 +96,10 @@ export function BacklogDndContext({
     originalBucketsRef.current = cloneBuckets(buckets);
   };
 
+  const ambiguous = (id: string) => isDuplicateTaskId(useBoardStore.getState().snapshot, id);
   const onDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over) return;
+    if (!over || (activeTaskId !== null && ambiguous(activeTaskId))) return;
     setBuckets((prev) => {
       const next = applyDragOverBacklog(active, over, prev, blockedSections);
       bucketsRef.current = next;
@@ -113,9 +116,10 @@ export function BacklogDndContext({
     const activeId = String(event.active.id);
     if (!isTaskDragId(activeId)) return;
     const taskId = parseTaskDragId(activeId);
+    if (ambiguous(taskId)) return;
 
     const finalBuckets = bucketsRef.current;
-    const placement = findBacklogPlacement(finalBuckets, taskId);
+    const placement = findBacklogPlacement(finalBuckets, taskId, ambiguous);
     if (!placement) {
       if (original) {
         bucketsRef.current = original;
@@ -125,7 +129,7 @@ export function BacklogDndContext({
     }
 
     const originalPlacement = original
-      ? findBacklogPlacement(original, taskId)
+      ? findBacklogPlacement(original, taskId, ambiguous)
       : null;
     if (
       originalPlacement &&
@@ -160,7 +164,7 @@ export function BacklogDndContext({
     }
   };
 
-  const activeTask = activeTaskId
+  const activeTask = activeTaskId && !ambiguous(activeTaskId)
     ? findTaskInBuckets(buckets, activeTaskId)
     : null;
   const activeEpic =

@@ -53,9 +53,10 @@ export const stampChangedTasks = (
 ): Task[] => {
   if (unchanged(previous, next)) return previous;
   const before = new Map(previous.map((t) => [t.frontmatter.id, t] as const));
+  const existing = new Set(previous);
   return next.map((task) => {
+    if (existing.has(task)) return task;
     const prior = before.get(task.frontmatter.id);
-    if (prior === task) return task;
     if (prior !== undefined && contentOf(prior) === contentOf(task)) return task;
     return withUpdatedAt(task, config, now);
   });

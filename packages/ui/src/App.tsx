@@ -7,13 +7,15 @@ import type {
   SharedThemeState,
   Theme,
 } from '@boardown/core';
-import { boardStatusKeys } from '@boardown/core';
+import { boardStatusKeys, duplicateTaskIds } from '@boardown/core';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import './theme/theme.css';
 import styles from './components/App.module.css';
 import { CompleteReleaseDialog } from './components/CompleteReleaseDialog';
 import { ConflictDialog } from './components/ConflictDialog';
 import { ConversionNoticeDialog } from './components/ConversionNoticeDialog';
+import { DuplicateTaskDialog } from './components/DuplicateTaskDialog';
+import { TaskIdRepairNotice } from './components/TaskIdRepairNotice';
 import { UnwritableFileDialog } from './components/UnwritableFileDialog';
 import { CreateEpicDialog } from './components/CreateEpicDialog';
 import { CreateReleaseDialog } from './components/CreateReleaseDialog';
@@ -113,7 +115,8 @@ export function App({
   // An error-level problem means the file is not written back until it is fixed
   // by hand, so it is a different message from a warning, not a louder one.
   const blocking = useMemo(() => problems.filter((p) => p.level === 'error'), [problems]);
-  const warnings = useMemo(() => problems.filter((p) => p.level !== 'error'), [problems]);
+  const warnings = useMemo(() => problems.filter((p) => p.level !== 'error' && p.duplicateTaskIds === undefined), [problems]);
+  const duplicates = useMemo(() => problems.filter((p) => p.duplicateTaskIds !== undefined), [problems]);
   const errorMessage = useBoardStore((s) => s.errorMessage);
   const activeTab = useBoardStore((s) => s.activeTab);
   const theme = useBoardStore((s) => s.theme);
@@ -133,6 +136,8 @@ export function App({
   // Owed until dismissed, shown only between dialogs: one opening on top of it
   // hides it, and it comes back once that one closes.
   const conversionNoticeShown = useBoardStore((s) => s.conversionNoticeOwed && !isAnyDialogOpen(s));
+  const repairNoticeShown = useBoardStore((s) =>
+    s.taskIdRepairs.length > 0 && !s.conversionNoticeOwed && !isAnyDialogOpen(s));
   const completeReleaseForFilename = useBoardStore((s) => s.completeReleaseForFilename);
   const closeCompleteRelease = useBoardStore((s) => s.closeCompleteRelease);
   const startReleaseForFilename = useBoardStore((s) => s.startReleaseForFilename);
@@ -259,6 +264,7 @@ export function App({
   }
 
   const selectedTask = selectedTaskId ? findTaskById(snapshot, selectedTaskId) : null;
+  const selectedDuplicate = selectedTaskId ? duplicateTaskIds(snapshot, selectedTaskId) : undefined;
   const selectedTaskEpicSlug = selectedTask?.frontmatter.epic;
   const selectedTaskEpic = selectedTaskEpicSlug
     ? snapshot.epics.find((e) => e.slug === selectedTaskEpicSlug)
@@ -334,6 +340,16 @@ export function App({
               </ul>
             </div>
           )}
+          {duplicates.length > 0 && (
+            <div className={styles.problemGroup} data-testid="problems-duplicate-ids">
+              <strong>Duplicate task IDs:</strong>
+              <ul>
+                {duplicates.map(({ message, duplicateTaskIds: group }) => group && (
+                  <li key={group.id}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
       {selectedTask && (
@@ -346,6 +362,7 @@ export function App({
           onTaskClick={openTask}
         />
       )}
+      {selectedDuplicate && <DuplicateTaskDialog key={selectedDuplicate.id} group={selectedDuplicate} onClose={closeTask} />}
       {selectedEpic && (
         <EpicDetailsDialog
           epic={selectedEpic}
@@ -399,6 +416,7 @@ export function App({
         )
       )}
       {conversionNoticeShown && <ConversionNoticeDialog />}
+      {repairNoticeShown && <TaskIdRepairNotice />}
     </main>
   );
 }

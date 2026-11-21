@@ -20,6 +20,7 @@ import {
   ConflictError,
   MIN_COMPATIBLE_VERSION,
   createGuardedFs,
+  isDuplicateTaskId,
   fileFrontmatterPrefix,
   serializeBacklog,
   serializeConfig,
@@ -368,6 +369,106 @@ const current = () => state().snapshot!;
 
 beforeEach(() => {
   useBoardStore.setState({ errorMessage: null });
+});
+
+describe('duplicate ID dialogs and writes', () => {
+  const duplicate = (title: string, day: string): Task => ({
+    ...task('BD-1'),
+    title,
+    frontmatter: { ...task('BD-1').frontmatter, createdAt: `2026-01-${day}T00:00:00.000Z` },
+  });
+
+  const openBoard = async () => {
+    const fs = new MemFs();
+    const unstamped = serializeConfig({ ...config(), nextId: 10 }).replace(/^minVersion: .*\n/, '');
+    await fs.write(CONFIG_FILENAME, unstamped);
+    await fs.write(BACKLOG_PATH, serializeBacklog(backlog([
+      duplicate('Old copy', '01'), duplicate('New copy', '02'), task('BD-2'),
+    ])));
+    fs.writes = [];
+    await state().load(fs);
+    return fs;
+  };
+
+  afterEach(() => {
+    const fs = state().rawFs;
+    if (fs) state().unload(fs);
+  });
+
+  it('opens an ambiguous case-insensitive jump but refuses to edit it', async () => {
+    const fs = await openBoard();
+    state().jumpToTask('bd-1');
+    expect(state().selectedTaskId).toBe('BD-1');
+    await state().updateTask('BD-1', { title: 'Wrong copy' });
+    expect(state().errorMessage).toMatch(/ambiguous/);
+    expect(state().taskIdRepairs).toEqual([]);
+    expect(fs.writes).toEqual([]);
+  });
+
+  it('commits an explicit repair, closes the conflict selection and records a local notice', async () => {
+    await openBoard();
+    state().openTask('BD-1');
+    expect(await state().repairTaskIds('BD-1')).toEqual([]);
+    expect(isDuplicateTaskId(current(), 'BD-1')).toBe(false);
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().taskIdRepairs).toEqual([{ oldId: 'BD-1', newId: 'BD-10', title: 'New copy', file: BACKLOG_PATH }]);
+    state().dismissTaskIdRepairs();
+    await state().reloadSilent();
+    expect(state().taskIdRepairs).toEqual([]);
+  });
+
+  it('does not emit a local notice when an external write resolves an open conflict', async () => {
+    const fs = await openBoard();
+    state().openTask('BD-1');
+    const text = await fs.read(BACKLOG_PATH);
+    await fs.write(BACKLOG_PATH, text.replace(/(## New copy[\s\S]*?id: )BD-1/, '$1BD-10'));
+    await state().reloadSilent();
+    expect(state().taskIdRepairs).toEqual([]);
+    expect(state().selectedTaskId).toBeNull();
+    expect(isDuplicateTaskId(current(), 'BD-1')).toBe(false);
+  });
+
+  it('names the physical legacy file of a reference that has not moved to the backlog', async () => {
+    const fs = await openBoard();
+    await fs.write('epics/old.md',
+      '---\nname: Old\ncolor: "#123456"\n---\n\n' +
+      '## Legacy task\n\n---\nid: BD-3\ntype: tech\nstatus: todo\norder: 100\n---\n\nSee BD-1.\n');
+    await state().reloadSilent();
+    state().openTask('BD-1');
+    const blockers = await state().repairTaskIds('BD-1');
+    expect(blockers[1]?.file).toBe('epics/old.md');
+    expect(state().selectedTaskId).toBe('BD-1');
+    expect(state().taskIdRepairs).toEqual([]);
+  });
+
+  it('adds automatic repairs to a real edit but not to an edit that fails', async () => {
+    const fs = await openBoard();
+    const before = await fs.read(BACKLOG_PATH);
+    fs.failWritesMatching = CONFIG_FILENAME;
+    await expect(state().updateTask('BD-2', { title: 'Failed edit' })).rejects.toThrow('disk full');
+    expect(await fs.read(BACKLOG_PATH)).toBe(before);
+    expect(state().taskIdRepairs).toEqual([]);
+    fs.failWritesMatching = null;
+    await state().updateTask('BD-2', { title: 'Saved edit' });
+    expect(isDuplicateTaskId(current(), 'BD-1')).toBe(false);
+    expect(current().config.nextId).toBe(11);
+    await state().updateTask('BD-1', { title: 'The keeper is editable' });
+    expect(await fs.read(BACKLOG_PATH)).toContain('## Saved edit');
+    expect(await fs.read(BACKLOG_PATH)).toContain('## The keeper is editable');
+    expect(await fs.read(CONFIG_FILENAME)).toContain(`minVersion: ${MIN_COMPATIBLE_VERSION}`);
+    expect(state().taskIdRepairs[0]?.newId).toBe('BD-10');
+  });
+
+  it('keeps both a deletion and its automatic repair in the immediate snapshot', async () => {
+    const fs = await openBoard();
+    state().openTask('BD-2');
+    await state().deleteTask('BD-2');
+    expect(current().backlog?.tasks.map(({ frontmatter }) => frontmatter.id)).toEqual(['BD-1', 'BD-10']);
+    expect(current().config.nextId).toBe(11);
+    expect(state().selectedTaskId).toBeNull();
+    expect(state().taskIdRepairs[0]).toMatchObject({ oldId: 'BD-1', newId: 'BD-10' });
+    expect(await fs.read(BACKLOG_PATH)).not.toContain('id: BD-2\n');
+  });
 });
 
 describe('deleteTask', () => {

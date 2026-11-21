@@ -209,6 +209,10 @@ directory. Where it sits in the package, nothing discovers it.
   a whole file there for an explicit metadata request but never passes its body
   to the webview in that mode. The shared write guard tracks stable lazy
   observations and protects a draft against the version it actually started on.
+  Duplicate task ID repair also reads Docs bodies, but only during repair
+  preflight and with the renderer's Markdown and task-token rules in `core`.
+  Board loading diagnoses duplicate groups from task containers without doing
+  that preflight or repairing them.
 - Lucide icon names that `config.yaml` may use live in
   `packages/core/src/lucide-icon-names.ts`, generated from lucide-react so core
   never imports it. After bumping lucide-react, run
@@ -269,6 +273,9 @@ directory. Where it sits in the package, nothing discovers it.
   folder with everything in it, after every other step and still undone on a
   failure; it is only for a deletion the user confirmed with its contents named,
   never a way around a conflict. Operation code never reaches the raw adapter.
+  A repair can add read-only evidence checks to `commit`, before any write.
+  Stale evidence excludes the affected repair, not an independent task edit.
+  The task edit, applicable repairs, mirrors and counter still commit together.
   Deletion is guarded the same way:
   `remove` checks the target first, and `removeAll` checks every file beneath a
   directory before removing it, so deleting a docs folder is all-or-nothing —

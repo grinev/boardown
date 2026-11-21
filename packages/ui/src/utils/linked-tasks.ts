@@ -1,11 +1,13 @@
 import {
   LINK_TYPE_META,
+  isDuplicateTaskId,
   type BoardSnapshot,
   type LinkType,
   type Task,
   type TaskLink,
 } from '@boardown/core';
 import { findReleaseOfTask } from './find-release-of-task';
+import { findTaskById } from './find-task';
 
 export interface LinkedTaskRow {
   task: Task;
@@ -66,8 +68,8 @@ export const collectLinkedTasks = (
   taskId: string,
 ): LinkedTaskRow[] => {
   const tasks = allTasks(snapshot);
-  const self = tasks.find((t) => t.frontmatter.id === taskId);
-  if (self === undefined) return [];
+  const self = findTaskById(snapshot, taskId);
+  if (self === null) return [];
 
   const seen = new Set<string>();
   const rows: LinkedTaskRow[] = [];
@@ -75,8 +77,8 @@ export const collectLinkedTasks = (
   const push = (type: LinkType, otherId: string): void => {
     const key = `${type}:${otherId}`;
     if (seen.has(key)) return;
-    const other = tasks.find((t) => t.frontmatter.id === otherId);
-    if (other === undefined) return;
+    const other = findTaskById(snapshot, otherId);
+    if (other === null) return;
     seen.add(key);
     rows.push({
       task: other,
@@ -107,6 +109,16 @@ export const collectLinkedTasks = (
   return rows;
 };
 
+export const ambiguousLinkedIds = (snapshot: BoardSnapshot, task: Task): string[] => {
+  const id = task.frontmatter.id;
+  const ids = new Set((task.frontmatter.links ?? []).map((link) => link.to));
+  for (const candidate of allTasks(snapshot)) {
+    if (candidate.frontmatter.links?.some((link) => link.to === id))
+      ids.add(candidate.frontmatter.id);
+  }
+  return [...ids].filter((other) => isDuplicateTaskId(snapshot, other));
+};
+
 // The rows of links picked for a task that does not exist yet, resolved against the
 // board as it is now: a pick whose task has gone from the board drops out, and the
 // rest show the task as it currently reads. Picks keep the order they were made in.
@@ -114,10 +126,9 @@ export const pickedLinkRows = (
   snapshot: BoardSnapshot,
   picked: readonly TaskLink[],
 ): LinkedTaskRow[] => {
-  const tasks = allTasks(snapshot);
   return picked.flatMap((link) => {
-    const other = tasks.find((t) => t.frontmatter.id === link.to);
-    if (other === undefined) return [];
+    const other = findTaskById(snapshot, link.to);
+    if (other === null) return [];
     return [{ task: other, type: link.type, archived: isTaskArchived(snapshot, link.to) }];
   });
 };

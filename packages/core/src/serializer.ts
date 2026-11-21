@@ -1,5 +1,6 @@
 import yaml from 'js-yaml';
 import type { Backlog, DocPage, Epic, Release, Task, TaskFrontmatter } from './schemas.js';
+import { originalTaskBlock, preservedTaskBlock } from './task-ids.js';
 
 const FENCE = '---';
 
@@ -60,16 +61,23 @@ export const serializeTask = (task: Task): string => {
 
 // A container file: an optional frontmatter block, the text above the first task,
 // then each task in the array's order — which is the file's block order.
-const buildFile = (fileFrontmatter: object | null, preamble: string, tasks: Task[]): string => {
+const buildFile = (fileFrontmatter: object | null, preamble: string, tasks: Task[], keepOriginalIn?: string): string => {
   const sections: string[] = [];
   if (fileFrontmatter !== null) sections.push(`${FENCE}\n${dumpYaml(fileFrontmatter)}\n${FENCE}`);
   const trimmedPreamble = preamble.trim();
   if (trimmedPreamble !== '') sections.push(trimmedPreamble);
-  for (const task of tasks) sections.push(serializeTask(task));
-  return sections.length === 0 ? '' : `${sections.join('\n\n')}\n`;
+  if (tasks.length === 0) return sections.length === 0 ? '' : `${sections.join('\n\n')}\n`;
+  let file = sections.length > 0 ? `${sections.join('\n\n')}\n\n` : '';
+  for (const [index, task] of tasks.entries()) {
+    const last = index === tasks.length - 1;
+    const original = keepOriginalIn === undefined ? preservedTaskBlock(task) : originalTaskBlock(task, keepOriginalIn);
+    if (original === undefined) file += `${serializeTask(task)}${last ? '\n' : '\n\n'}`;
+    else file += original + (!last && !original.endsWith('\n') ? '\n\n' : '');
+  }
+  return file;
 };
 
-export const serializeRelease = (release: Release): string => {
+export const serializeRelease = (release: Release, keepOriginal = false): string => {
   const fm: Record<string, unknown> = {
     status: release.frontmatter.status,
   };
@@ -77,18 +85,18 @@ export const serializeRelease = (release: Release): string => {
   if (release.frontmatter.description !== undefined) fm.description = release.frontmatter.description;
   if (release.frontmatter.startDate !== undefined) fm.startDate = release.frontmatter.startDate;
   if (release.frontmatter.endDate !== undefined) fm.endDate = release.frontmatter.endDate;
-  return buildFile(fm, release.preamble, release.tasks);
+  return buildFile(fm, release.preamble, release.tasks, keepOriginal ? release.filename : undefined);
 };
 
 // An epic file is the epic's frontmatter and description. Its tasks live in the
 // backlog or a release, each naming it in its own `epic` key.
-export const serializeEpic = (epic: Epic): string =>
-  buildFile({ name: epic.frontmatter.name, color: epic.frontmatter.color }, epic.preamble, []);
+export const serializeEpic = (epic: Epic, legacyTasks: Task[] = []): string =>
+  buildFile({ name: epic.frontmatter.name, color: epic.frontmatter.color }, epic.preamble, legacyTasks);
 
 // `backlog.md` carries no container frontmatter, and each task keeps its `epic`
 // key exactly as in a release file.
-export const serializeBacklog = (backlog: Backlog): string =>
-  buildFile(null, backlog.preamble, backlog.tasks);
+export const serializeBacklog = (backlog: Backlog, keepOriginal = false): string =>
+  buildFile(null, backlog.preamble, backlog.tasks, keepOriginal ? backlog.filename : undefined);
 
 export const serializeDocPage = (page: DocPage): string => {
   const title = page.frontmatter.title;

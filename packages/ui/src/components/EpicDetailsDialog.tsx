@@ -193,7 +193,7 @@ export function EpicDetailsDialog({
                 const typeMeta = taskTypeDisplay(config, type);
                 const TypeIcon = typeMeta.icon;
                 return (
-                  <Fragment key={id}>
+                  <Fragment key={taskListKey(task)}>
                     <TypeIcon
                       className={styles.taskTypeIcon}
                       style={typeMeta.style}
@@ -223,3 +223,4 @@ export function EpicDetailsDialog({
     </Modal>
   );
 }
+import { taskListKey } from '@boardown/core';

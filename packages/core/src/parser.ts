@@ -22,6 +22,7 @@ import {
   type ParseResult,
   taskProblem,
 } from './problems.js';
+import { inheritTaskSource, recordTaskSource } from './task-ids.js';
 
 const FRONTMATTER_FENCE = '---';
 const OPENING_FENCE = `${FRONTMATTER_FENCE}\n`;
@@ -83,6 +84,7 @@ interface RawTaskSegment {
   title: string;
   yamlText: string;
   description: string;
+  block: string;
 }
 
 interface BodySplit {
@@ -157,7 +159,8 @@ const splitBody = (body: string): BodySplit => {
     const descLines = lines.slice(k + 1, end);
     const description = descLines.join('\n').replace(/^\n+/, '').replace(/\n+$/, '');
 
-    segments.push({ title, yamlText, description });
+    const block = lines.slice(start, end).join('\n') + (end < lines.length ? '\n' : '');
+    segments.push({ title, yamlText, description, block });
   }
 
   return { preamble, segments };
@@ -256,11 +259,13 @@ const parseTasks = (
       }
     }
 
-    tasks.push({
+    const task = {
       title: segment.title,
       description: segment.description,
       frontmatter,
-    });
+    };
+    recordTaskSource(task, segment.block, filename, index);
+    tasks.push(task);
   });
 
   return { tasks, problems };
@@ -319,7 +324,13 @@ export const parseRelease = (
 const withEpicOnTask = (task: Task, slug: string): Task =>
   task.frontmatter.epic === slug
     ? task
-    : { ...task, frontmatter: { ...task.frontmatter, epic: slug } };
+    : inheritTaskSource(task, { ...task, frontmatter: { ...task.frontmatter, epic: slug } });
+
+export const parseLegacyTasks = (
+  text: string,
+  filename: string,
+  customFields: readonly CustomField[],
+): Task[] => parseTasks(splitBody(splitFileFrontmatter(text).body).segments, filename, customFields).tasks;
 
 export const parseBacklog = (
   text: string,

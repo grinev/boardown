@@ -55,8 +55,8 @@ in `in: { kind: release | backlog, file }`.
 ## Output contract
 
 When stdout is piped - always, for an agent - output is a JSON envelope:
-`{"ok":true,"data":{...}}`, with `problems` added when some board file could not
-be fully read, or `{"ok":false,"error":{"code":"...","message":"..."}}` with exit
+`{"ok":true,"data":{...}}`, with `problems` added for issues such as unreadable
+files or duplicate task IDs, or `{"ok":false,"error":{"code":"...","message":"..."}}` with exit
 code 1, or 2 for a usage error (`USAGE`, `RELEASE_INVALID`, `EPIC_INVALID`). A
 status or type this board does not declare is `USAGE`, and its message lists the
 valid values.
@@ -69,6 +69,14 @@ tasks where a listing shows summaries, summaries where it shows only counts
 an error. Mutating commands return the identifiers of what changed; after
 `release edit --name` that is the release's new slug, and the old one no longer
 resolves.
+
+A lookup or write by an ambiguous ID returns `AMBIGUOUS_TASK_ID`; no copy was
+selected. `task repair-ids <id>` returns `data: { repairs }` for one group or
+`DUPLICATE_ID_REPAIR_BLOCKED` with the reasons in `problems`. An existing unique
+ID returns an empty list and a missing one is `TASK_NOT_FOUND`. Successful
+ordinary task writes may also repair independently safe groups, adding
+top-level `repairs` without changing `data`. Each entry is
+`{ oldId, newId, title, file }`. Reads never repair IDs.
 
 A flag the CLI does not know is ignored, not refused: a misspelled flag, or one
 from a newer build, is a silent no-op while the rest of the command succeeds.
@@ -95,6 +103,7 @@ boardown task add <title> [--type T] [--priority P] [--status S] [--description 
 boardown task edit <id> [--title T] [--description D] [--type T] [--priority P] [--status S] [--epic SLUG | --no-epic] [--release <ref> | --no-release] [--field key=value]…
 boardown task status <id> <status>
 boardown task reorder <id> (--before ID | --after ID | --up | --down)
+boardown task repair-ids <id>
 boardown task rm <id>                                                    # also deletes its attachments
 boardown task checklist (add <id> <text>… | done <id> <item>… | undone <id> <item>… | edit <id> <item> <text> | rm <id> <item>…)   # items c1, c2, …
 boardown task notes (add <id> <text> | edit <id> <note> <text> | rm <id> <note>)                                                    # notes n1, n2, …

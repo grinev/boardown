@@ -1,10 +1,12 @@
 import {
   APP_VERSION,
+  ambiguousTaskMessage,
   CONFIG_FILENAME,
   checkMinVersion,
   configNeedsMinVersionStamp,
   createConvertingFs,
   createGuardedFs,
+  duplicateTaskIds,
   loadBoard,
   parseConfig,
   serializeBacklog,
@@ -86,9 +88,9 @@ export async function loadConfigIfAny(
   return parsed.value;
 }
 
-export async function loadBoardOrThrow(root: string): Promise<LoadedBoard> {
+export async function loadBoardOrThrow(root: string, readOnly = false): Promise<LoadedBoard> {
   const inner = new NodeFsAdapter(root);
-  const result = await loadBoard(inner);
+  const result = await loadBoard(inner, readOnly);
   if (result.kind === 'missing-config') {
     throw new CliError('NO_BOARD', `No board config at ${root}. Run \`boardown init\` first.`);
   }
@@ -157,6 +159,10 @@ export function epicMembers(snapshot: BoardSnapshot, epic: Epic): Task[] {
 }
 
 export function locateTask(snapshot: BoardSnapshot, taskId: string): ContainerRef | null {
+  if (duplicateTaskIds(snapshot, taskId) !== undefined) {
+    throw new CliError('AMBIGUOUS_TASK_ID', ambiguousTaskMessage(taskId), 1,
+      snapshot.problems.filter((problem) => problem.duplicateTaskIds?.id === taskId));
+  }
   return (
     allContainers(snapshot).find((ref) =>
       ref.container.tasks.some((t) => t.frontmatter.id === taskId),
@@ -251,14 +257,13 @@ export async function moveContainer(
   return next;
 }
 
-// An epic file holds no tasks, so it is written on its own rather than as a
-// container.
 export async function writeEpic(
   fs: GuardedFs,
   epic: Epic,
   config: BoardConfig,
+  legacyTasks?: Task[],
 ): Promise<BoardConfig> {
-  const files = stampFiles(config, [{ path: epic.filename, content: serializeEpic(epic) }]);
+  const files = stampFiles(config, [{ path: epic.filename, content: serializeEpic(epic, legacyTasks) }]);
   await fs.writeAll(files);
   return configNeedsMinVersionStamp(config) ? withMinVersionStamp(config) : config;
 }

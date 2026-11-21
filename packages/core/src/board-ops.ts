@@ -63,6 +63,7 @@ export const emptyBacklog = (): Backlog => ({
 
 export type BoardOpErrorCode =
   | 'ARCHIVED'
+  | 'AMBIGUOUS_TASK_ID'
   | 'STATUS_LOCKED'
   | 'WIP_LIMIT'
   | 'UNKNOWN_STATUS'
@@ -429,7 +430,18 @@ export const startRelease = (
   };
 };
 
-const findTask = (tasks: Task[], taskId: string): Task => {
+const refuseAmbiguous = (id: string): never => {
+  throw new BoardOpError('AMBIGUOUS_TASK_ID', ambiguousTaskMessage(id));
+};
+
+const assertUnambiguous = (tasks: readonly Task[], taskId: string): void => {
+  const copies = tasks.filter((task) => task.frontmatter.id === taskId);
+  if (copies.length > 1 || copies.some((task) => preservedTaskBlock(task) !== undefined))
+    refuseAmbiguous(taskId);
+};
+
+export const findTask = (tasks: Task[], taskId: string): Task => {
+  assertUnambiguous(tasks, taskId);
   const task = tasks.find((t) => t.frontmatter.id === taskId);
   if (task === undefined) throw new Error(`Task not found: ${taskId}`);
   return task;
@@ -482,6 +494,7 @@ const placeTaskInContainer = (
   if (args.beforeTaskId === null) {
     insertIdx = siblings.length;
   } else {
+    assertUnambiguous(siblings, args.beforeTaskId);
     const found = siblings.findIndex((t) => t.frontmatter.id === args.beforeTaskId);
     insertIdx = found === -1 ? siblings.length : found;
   }
@@ -531,6 +544,7 @@ const placeTaskInContainer = (
     moving,
     ...siblings.slice(insertIdx),
   ];
+  for (const task of visual) assertUnambiguous(visual, task.frontmatter.id);
   const renumbered = new Map(
     visual.map((t, i) => [t.frontmatter.id, (i + 1) * ORDER_STEP] as const),
   );
@@ -802,6 +816,7 @@ export const deleteTask = <C extends Container>(
   config: BoardConfig,
   taskId: string,
 ): C => {
+  assertUnambiguous(container.tasks, taskId);
   if (isFrozenRelease(container, config)) {
     throw new BoardOpError('ARCHIVED', 'Cannot delete a task in a finished release');
   }
@@ -1151,6 +1166,7 @@ export const createTaskWithLinks = (
   const indexOfTask = (list: readonly Container[], taskId: string): number =>
     list.findIndex((c) => c.tasks.some((t) => t.frontmatter.id === taskId));
   for (const link of links) {
+    assertUnambiguous(containers.flatMap((container) => container.tasks), link.to);
     if (indexOfTask(containers, link.to) === -1) throw new Error(`Task not found: ${link.to}`);
   }
 
@@ -1204,6 +1220,8 @@ export const deleteTaskWithLinks = (
   taskId: string,
   now: string = currentMoment(),
 ): DeleteTaskResult => {
+  const tasksOnBoard = containers.flatMap((container) => container.tasks);
+  assertUnambiguous(tasksOnBoard, taskId);
   const owner = containers.find((c) =>
     c.tasks.some((t) => t.frontmatter.id === taskId),
   );
@@ -1216,6 +1234,7 @@ export const deleteTaskWithLinks = (
   const stripLinks = <C extends Container>(container: C): C | null => {
     const tasks = container.tasks.map((t) => {
       const next = taskWithoutLinksTo(t, taskId);
+      if (next !== t) assertUnambiguous(tasksOnBoard, t.frontmatter.id);
       return next === t ? t : withUpdatedAt(next, config, now);
     });
     const changed = tasks.some((t, i) => t !== container.tasks[i]);
@@ -1263,6 +1282,7 @@ const locateBacklogTask = (
   containers: BacklogContainers,
   taskId: string,
 ): BacklogTaskLocation | null => {
+  assertUnambiguous(backlogContainerList(containers).flatMap((c) => c.tasks), taskId);
   for (const container of backlogContainerList(containers)) {
     const task = container.tasks.find((t) => t.frontmatter.id === taskId);
     if (task) return { container, task };
@@ -1333,6 +1353,7 @@ export const reorderTaskInBacklog = (
   if (beforeTaskId === null) {
     insertIdx = others.length;
   } else {
+    assertUnambiguous(others.map((entry) => entry.task), beforeTaskId);
     const found = others.findIndex((e) => e.task.frontmatter.id === beforeTaskId);
     insertIdx = found === -1 ? others.length : found;
   }
@@ -1365,6 +1386,8 @@ export const reorderTaskInBacklog = (
       insertedEntry,
       ...others.slice(insertIdx),
     ];
+    const tasks = finalOrder.map((entry) => entry.task);
+    for (const task of tasks) assertUnambiguous(tasks, task.frontmatter.id);
     return applyOrderMap(containers, buildSequentialOrderMap(finalOrder));
   }
 
@@ -1439,3 +1462,4 @@ export const completeRelease = (
     changedFilenames: [...changedFilenames],
   };
 };
+import { ambiguousTaskMessage, preservedTaskBlock } from './task-ids.js';

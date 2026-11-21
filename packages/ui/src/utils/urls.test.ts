@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitUrls, trimUrlEnd } from './urls';
+import { splitUrls, trimUrlEnd } from '@boardown/core';
 
 describe('trimUrlEnd', () => {
   it('keeps a URL that ends in nothing punctuation-like', () => {

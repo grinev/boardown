@@ -36,6 +36,7 @@ Tasks:
   task list              List/filter tasks (--status --type --priority --epic --label --release --backlog --text).
   task add <title>       Create a task (--type --priority --status --epic --release --description --label).
   task edit <id>         Edit a task; --release/--no-release also move it in/out of a release.
+  task repair-ids <id>   Safely repair one duplicate ID group.
   task status <id> <s>   Change a task status (one of the board's statuses).
   task reorder <id>      Change a task's position (--before | --after <id> | --up | --down).
   task rm <id>           Delete a task.
@@ -140,7 +141,7 @@ export async function run(argv: readonly string[], opts: RunOptions = {}): Promi
   try {
     const out = await handler(args, ctx);
     if (json) {
-      process.stdout.write(`${JSON.stringify(okEnvelope(out.data, out.problems ?? []))}\n`);
+      process.stdout.write(`${JSON.stringify(okEnvelope(out.data, out.problems ?? [], out.repairs))}\n`);
     } else {
       process.stdout.write(`${out.human}\n`);
       for (const problem of out.problems ?? []) {

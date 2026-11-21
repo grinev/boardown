@@ -98,13 +98,14 @@ export interface BacklogPlacement {
 export const findBacklogPlacement = (
   buckets: SectionBuckets,
   taskId: string,
+  skipAnchor: (id: string) => boolean = () => false,
 ): BacklogPlacement | null => {
   for (const [key, tasks] of buckets) {
     const idx = tasks.findIndex((t) => t.frontmatter.id === taskId);
     if (idx === -1) continue;
     return {
       sectionKey: key,
-      beforeTaskId: tasks[idx + 1]?.frontmatter.id ?? null,
+      beforeTaskId: tasks.slice(idx + 1).find((task) => !skipAnchor(task.frontmatter.id))?.frontmatter.id ?? null,
     };
   }
   return null;

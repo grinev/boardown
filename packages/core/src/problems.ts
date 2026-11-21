@@ -1,3 +1,5 @@
+import type { DuplicateTaskIds } from './task-ids.js';
+
 export type ProblemLevel = 'error' | 'warning';
 export type ProblemScope = 'file' | 'task';
 
@@ -8,6 +10,7 @@ export interface ParseProblem {
   taskIndex?: number;
   taskId?: string;
   message: string;
+  duplicateTaskIds?: DuplicateTaskIds;
 }
 
 export interface ParseResult<T> {

@@ -19,10 +19,12 @@ import {
   activeReleases,
   boardStatusKeys,
   futureReleases,
+  isDuplicateTaskId,
   isEnabledTaskType,
   isWipLimitReached,
   sortTasksByOrder,
   taskMatchesFilters,
+  taskListKey,
   unscheduledTasks,
 } from '@boardown/core';
 import { useBoardStore } from '../store';
@@ -367,7 +369,8 @@ function BacklogSection({
       ? 'No tasks yet'
       : 'No tasks match the filters';
   const ChevronIcon = collapsed ? ChevronRight : ChevronDown;
-  const itemIds = tasks.map((t) => taskDragId(t.frontmatter.id));
+  const snapshot = useBoardStore((s) => s.snapshot);
+  const itemIds = tasks.filter((t) => !isDuplicateTaskId(snapshot, t.frontmatter.id)).map((t) => taskDragId(t.frontmatter.id));
 
   return (
     <section
@@ -448,9 +451,10 @@ function BacklogSection({
               {tasks.map((task) => {
                 const epicSlug = task.frontmatter.epic;
                 const epic = epicSlug ? epicsBySlug.get(epicSlug) : undefined;
+                const Row = isDuplicateTaskId(snapshot, task.frontmatter.id) ? BacklogRowView : BacklogRow;
                 return (
-                  <BacklogRow
-                    key={task.frontmatter.id}
+                  <Row
+                    key={taskListKey(task)}
                     task={task}
                     epic={epic}
                     onOpenTask={onOpenTask}

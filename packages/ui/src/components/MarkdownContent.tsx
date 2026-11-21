@@ -2,7 +2,7 @@ import { FileCode2, FileText } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { isTerminalStatus } from '@boardown/core';
+import { isDuplicateTaskId, isTerminalStatus } from '@boardown/core';
 import { wikiDocLink } from '../docs-state';
 import { useBoardStore } from '../store';
 import { findTaskById } from '../utils/find-task';
@@ -57,6 +57,9 @@ export function MarkdownContent({ source, onDocRefClick }: MarkdownContentProps)
         return { href: `${REPO_HREF}${segment.path}`, label: segment.name };
       }
       const task = findTaskById(snapshot, segment.id);
+      if (isDuplicateTaskId(snapshot, segment.id)) {
+        return { href: `${TASK_HREF}${segment.id}`, label: `${segment.id} (ambiguous)` };
+      }
       return task === null
         ? null
         : { href: `${TASK_HREF}${segment.id}`, label: `${segment.id} ${task.title}` };
