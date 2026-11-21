@@ -60,7 +60,8 @@ desktop.ini
 # --- AI assistants (local-only state, not for commit) ---
 
 # Claude Code: agents, commands and skills are committed; local state is not.
-.claude/specs/
+# Match both a local directory and the symlink to the private manager checkout.
+/.claude/specs
 .claude/settings.local.json
 CLAUDE.local.md
 
